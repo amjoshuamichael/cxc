@@ -1,0 +1,17 @@
+[package]
+name = "serf"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+lalrpop = "0.19.7"
+
+[dependencies]
+lalrpop-util = { version = "0.19.8", features = ["lexer"] }
+regex = "1"
+logos = "0.12.0"
+syn = "1.0.95"
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm12-0"] }
+rand = "0.8.5"
+lazy_static = "1.4.0"
+num-bigint = "0.4.3"

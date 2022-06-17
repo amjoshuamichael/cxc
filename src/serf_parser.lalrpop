@@ -1,0 +1,163 @@
+use crate::lex::*;
+use crate::parse::*;
+
+grammar;
+
+// List macro
+List<T, S>: Vec<T> = { 
+    <v:(<T> S)*> <e:T?> => match e {
+        None=> v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+// Tier macro
+LeftTier<Op, NextTier>: Box<Expr> = {
+    LeftTier<Op,NextTier> Op NextTier => Box::new(Expr::BinOp(<>)),
+    NextTier,
+};
+
+RghtTier<Op, NextTier>: Box<Expr> = {
+    RghtTier<Op,NextTier> Op NextTier => Box::new(Expr::BinOp(<>)),
+    NextTier,
+};
+
+pub OneFuncProgram: Program = {
+    <Block> => Program::OneFunc(<>),
+}
+
+Block: Vec<Expr> = {
+    "{" <stmts:(Statement)*> "}" => {
+        let mut block = Vec::new();
+        
+        for stmt in stmts {
+            block.push(*stmt);
+        }
+
+        block
+    },
+}
+
+Statement: Box<Expr> = {
+    <ForExpr> ";",
+    <ForExpr>,
+}
+
+ForExpr: Box<Expr> = {
+    <f:ORExprTier> "@" <d:ForExpr> => Box::new(Expr::ForWhile(f, d)),
+    IFExpr,
+}
+
+IFExpr: Box<Expr> = {
+    <i:ORExprTier> "?" <t:IFExpr> => Box::new(Expr::IfThen(i, t)),
+    <i:ORExprTier> "?" <t:AssignmentExpr> ":" <e:IFExpr> => Box::new(Expr::IfThenElse(i, t, e)),
+    AssignmentExpr,
+}
+
+// An Assignment Expression (e.g. `f = 42 + 210 * 2`) is the final level of expression that does 
+// not involve control flow.
+AssignmentExpr = LeftTier<ASOp, ORExprTier>;
+ASOp: Opcode = { "=" => Opcode::Assignment, }
+
+ORExprTier = LeftTier<OROp, ANDExprTier>;
+OROp: Opcode = { "||" => Opcode::Or, };
+
+ANDExprTier = LeftTier<ANDOp, EQExprTier>;
+ANDOp: Opcode = { "&&" => Opcode::And, };
+
+EQExprTier = LeftTier<EQOp, COMPExprTier>;
+EQOp: Opcode = { "==" => Opcode::Equal, "!=" => Opcode::Inequal, }
+
+COMPExprTier = LeftTier<COMPOp, BitORExprTier>;
+COMPOp: Opcode = {
+    "<" => Opcode::LessThan,
+    ">" => Opcode::GrtrThan,
+    "<=" => Opcode::LessOrEqual,
+    ">=" => Opcode::GreaterOrEqual
+}
+
+BitORExprTier = LeftTier<BitOROp, BitXORExprTier>;
+BitOROp: Opcode = { "|" => Opcode::BitOR, };
+
+BitXORExprTier = LeftTier<BitXOROp, BitANDExprTier>;
+BitXOROp: Opcode = { "^" => Opcode::BitXOR };
+
+BitANDExprTier = LeftTier<BitANDOp, BitSExprTier>;
+BitANDOp: Opcode = { "&" => Opcode::BitAND };
+
+BitSExprTier = LeftTier<BitSOp, PMExprTier>;
+BitSOp: Opcode = { "<<" => Opcode::BitShiftL, ">>" => Opcode::BitShiftR, };
+
+PMExprTier = LeftTier<PMOp, MDExprTier>;
+PMOp: Opcode = { "+" => Opcode::Plus, "-" => Opcode::Minus, };
+
+MDExprTier = LeftTier<MDOp, ExpExprTier>;
+MDOp: Opcode = { "*" => Opcode::Multiplier, "/" => Opcode::Divider, }
+
+ExpExprTier = LeftTier<ExpOp, Term>;
+ExpOp: Opcode = { "**" => Opcode::Exponential, }
+
+pub Term: Box<Expr> = {
+    <n:int> => match n { 
+            Token::Int(n) => Box::new(Expr::Number(n)), 
+            _ => unreachable!(),
+        },
+    <i:ident> => match i {
+            Token::Ident(i) => Box::new(Expr::Ident(<>)),
+            _ => unreachable!(),
+        },
+        //TODO: make GOTO statements work according to spec
+//    <i:ident> ":" => match i {
+//            Token::Ident(i) => Box::new(Expr::Goto(<>)),
+//            _ => unreachable!(),
+//        },
+ //   "[" <i:ident> => match i {
+ //           Token::Ident(i) => Box::new(Expr::GotoMarker(<>)),
+ //           _ => unreachable!(),
+ //       },
+    <Block> => Box::new(Expr::Block(<>)),
+    "(" <IFExpr> ")" => <>,
+}
+
+extern {
+    type Location = usize;
+    type Error = LexicalError;
+
+    enum Token {
+        ident => Token::Ident(_),
+        int => Token::Int(_),
+        "=" => Token::Assignment,
+        "+" => Token::Plus,
+        "-" => Token::Minus,
+        "*" => Token::Multiplier,
+        "/" => Token::Divider,
+        "**" => Token::Exponential,
+        "<<" => Token::BitShiftL,
+        ">>" => Token::BitShiftR,
+        "&" => Token::BitAND,
+        "^" => Token::BitXOR,
+        "|" => Token::BitOR,
+        "<=" => Token::LessOrEqual,
+        ">=" => Token::GreaterOrEqual,
+        "==" => Token::Equal,
+        "!=" => Token::Inequal,
+        "||" => Token::Or,
+        "&&" => Token::And,
+        "?" => Token::Question,
+        ":" => Token::Colon,
+        "@" => Token::At,
+        "(" => Token::LeftParen,
+        ")" => Token::RghtParen,
+        "[" => Token::LeftBrack,
+        "]" => Token::RghtBrack,
+        "{" => Token::LeftCurly,
+        "}" => Token::RghtCurly,
+        "<" => Token::LeftAngle,
+        ">" => Token::RghtAngle,
+        ";" => Token::Semicolon,
+    }
+}
