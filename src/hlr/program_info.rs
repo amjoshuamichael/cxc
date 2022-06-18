@@ -2,12 +2,13 @@ use super::prelude::*;
 use inkwell::basic_block::BasicBlock;
 use inkwell::values::PointerValue;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct ProgramInfo<'ctx> {
     pub types: TypeGroup,
-    pub variables: HashMap<String, PointerValue<'ctx>>,
-    pub gotos: HashMap<String, BasicBlock<'ctx>>,
+    pub variables: HashMap<Arc<str>, PointerValue<'ctx>>,
+    pub gotos: HashMap<Arc<str>, BasicBlock<'ctx>>,
 }
 
 impl<'ctx> Default for ProgramInfo<'ctx> {
@@ -21,16 +22,7 @@ impl<'ctx> Default for ProgramInfo<'ctx> {
 }
 
 impl<'ctx> ProgramInfo<'ctx> {
-    pub fn force_grab_var(&self, name: &String) -> PointerValue {
-        let maybe_var = self.variables.get(name);
-
-        match maybe_var {
-            Some(var) => var.clone(),
-            None => panic!("could not find var {name}"),
-        }
-    }
-
-    pub fn force_grab_goto(&self, name: &String) -> BasicBlock {
+    pub fn force_grab_goto(&self, name: &str) -> BasicBlock {
         let maybe_goto = self.gotos.get(name);
 
         match maybe_goto {

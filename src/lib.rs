@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-
+#[allow(dead_code)]
 #[macro_use]
 extern crate lalrpop_util;
 #[macro_use]
@@ -22,4 +21,27 @@ pub fn compile_and_run(input: &str) -> i32 {
     let llvm = to_llvm::to_llvm(hlr);
 
     llvm
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn full_test() {
+        assert_eq!(
+            compile_and_run(
+                r#"
+            {
+                x = 0
+                x < 1000 @ {
+                    x = x + 1
+                }
+                x
+            }
+            "#
+            ),
+            1000
+        );
+    }
 }

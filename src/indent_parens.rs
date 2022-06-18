@@ -1,6 +1,7 @@
 /// Takes in an input like `(x = (1 + 2))` and converts it to:
 /// x =
 ///     1 + 2
+#[allow(dead_code)]
 pub fn indent_parens(input: String) -> String {
     let mut indentation_level = 2;
     let mut output = String::new();

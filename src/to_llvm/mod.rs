@@ -1,3 +1,4 @@
+use crate::hlr::expr_tree::{ExprID, ExprTree, NodeData::*};
 use crate::hlr::prelude::*;
 use crate::parse::prelude::Opcode;
 use inkwell::builder::Builder;
@@ -19,10 +20,6 @@ mod tests;
 
 type NumGeneratorFunc = unsafe extern "C" fn() -> i32;
 pub fn to_llvm<'a>(hlr: HLR) -> i32 {
-    for _e in &hlr.expressions {
-        //println!("HLR: {_e:?}");
-    }
-
     let mut ci = (Context::create(), ProgramInfo::default());
     let mut compiler = Compiler::from_context_and_info(&ci.0, &mut ci.1);
 
@@ -34,20 +31,14 @@ pub fn to_llvm<'a>(hlr: HLR) -> i32 {
     compiler.current_function = Some(function);
     compiler.builder.position_at_end(basic_block);
 
-    for expr_index in 0..(hlr.expressions.len() - 1) {
-        compiler.compile_expr(&hlr.expressions[expr_index]);
-    }
-
     let result = compiler
-        .compile_expr(hlr.expressions.last().unwrap())
-        .expect("no return")
+        .compile_expr(&hlr.tree, ExprID::ROOT)
+        .unwrap()
         .into_int_value();
     compiler.builder.build_return(Some(&result.clone()));
 
     let result = unsafe { compiler.execution_engine.get_function("fn").ok() };
     let result: JitFunction<NumGeneratorFunc> = result.unwrap();
-
-    println!("Running your function:");
 
     unsafe { result.call() }
 }
@@ -59,7 +50,6 @@ pub struct Compiler<'ctx> {
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
     pub current_function: Option<FunctionValue<'ctx>>,
-    scope: Vec<String>,
 }
 
 impl<'ctx> Compiler<'ctx> {
@@ -79,37 +69,29 @@ impl<'ctx> Compiler<'ctx> {
             builder: context.create_builder(),
             execution_engine,
             current_function: None,
-            scope: Vec::new(),
         }
     }
 
-    fn full_scope_string(&self) -> String {
-        let mut output = String::new();
+    pub fn compile_expr<'comp>(
+        &'comp self,
+        tree: &ExprTree,
+        expr: ExprID,
+    ) -> Option<AnyValueEnum<'comp>> {
+        let expr = tree.get(expr);
 
-        for s in &self.scope {
-            output += &(s.clone() + "::");
-        }
-
-        output
-    }
-
-    pub fn compile_expr<'comp>(&'comp self, expr: &Expr) -> Option<AnyValueEnum<'comp>> {
-        match &expr.kind {
-            ExprKind::Literal(literal) => {
+        match expr {
+            Number(ref literal) => {
                 //TODO: implement different int types
-                match expr.gen_ret_type() {
-                    PrimInt => Some(
-                        self.context
-                            .i32_type()
-                            .const_int(literal.expect_num(), false)
-                            .into(),
-                    ),
-                    _ => todo!(),
-                }
+                Some(
+                    self.context
+                        .i32_type()
+                        .const_int(literal.try_into().unwrap(), false)
+                        .into(),
+                )
             }
-            ExprKind::Ident(name) => {
+            Ident { ref name, .. } => {
                 let program_info = self.program_info.borrow();
-                let val = program_info.variables.get(name).unwrap().clone();
+                let val = program_info.variables.get(&**name).unwrap().clone();
                 let loaded = self.builder.build_load(val, "load");
 
                 match expr.gen_ret_type() {
@@ -117,27 +99,33 @@ impl<'ctx> Compiler<'ctx> {
                     _ => todo!(),
                 }
             }
-            ExprKind::VarDecl(_) => unreachable!(), // Var declarations should be caught in the "Equals" branch of BinOp
-            ExprKind::BinOp(lhs, op, rhs) => {
+            // Var declarations should be caught in the "Equals" branch of BinOp
+            VarDecl { .. } => unreachable!(),
+            BinOp {
+                ref lhs,
+                ref op,
+                ref rhs,
+                ..
+            } => {
                 use Opcode::*;
 
                 if *op == Assignment {
-                    let var_ptr = match &lhs.kind {
-                        ExprKind::Ident(name) => self
+                    let var_ptr = match tree.get(*lhs) {
+                        Ident { name, .. } => self
                             .program_info
                             .borrow()
                             .variables
-                            .get(name)
+                            .get(&*name)
                             .unwrap()
                             .clone(),
-                        ExprKind::VarDecl(name) => match expr.gen_ret_type() {
+                        VarDecl { name, .. } => match expr.gen_ret_type() {
                             PrimInt => {
                                 let var_ptr =
                                     self.builder.build_alloca(self.context.i32_type(), "alloca");
                                 self.program_info
                                     .borrow_mut()
                                     .variables
-                                    .insert(name.clone(), var_ptr);
+                                    .insert(name, var_ptr);
 
                                 var_ptr
                             }
@@ -146,9 +134,9 @@ impl<'ctx> Compiler<'ctx> {
                         _ => panic!("Cannot set non-ident"),
                     };
 
-                    let to_store = self.compile_expr(rhs)?;
+                    let to_store = self.compile_expr(tree, *rhs)?;
 
-                    match rhs.gen_ret_type() {
+                    match tree.get(*rhs).gen_ret_type() {
                         PrimInt => {
                             self.builder.build_store(var_ptr, to_store.into_int_value());
                         }
@@ -158,8 +146,8 @@ impl<'ctx> Compiler<'ctx> {
                     return Some(to_store);
                 }
 
-                let lhs = self.compile_expr(lhs).unwrap();
-                let rhs = self.compile_expr(rhs).unwrap();
+                let lhs = self.compile_expr(tree, *lhs).unwrap();
+                let rhs = self.compile_expr(tree, *rhs).unwrap();
 
                 match expr.gen_ret_type() {
                     PrimInt => {
@@ -192,10 +180,10 @@ impl<'ctx> Compiler<'ctx> {
                     _ => todo!(),
                 }
             }
-            ExprKind::IfThen(c, t) => {
+            IfThen { i, t, .. } => {
                 let current_func = self.current_function.unwrap();
 
-                let cond = self.compile_expr(c).unwrap().into_int_value();
+                let cond = self.compile_expr(tree, i).unwrap().into_int_value();
 
                 let then_block = self.context.append_basic_block(current_func, "then");
                 // Everything after the "then" statement. Is appended at the end.
@@ -205,17 +193,17 @@ impl<'ctx> Compiler<'ctx> {
                     .build_conditional_branch(cond, then_block, after_block);
 
                 self.builder.position_at_end(then_block);
-                self.compile_expr(t);
+                self.compile_expr(tree, t);
                 self.builder.build_unconditional_branch(after_block);
 
                 self.builder.position_at_end(after_block);
 
                 None
             }
-            ExprKind::IfThenElse(c, t, e) => {
+            IfThenElse { i, t, e, .. } => {
                 let current_func = self.current_function.unwrap();
 
-                let cond = self.compile_expr(c).unwrap().into_int_value();
+                let cond = self.compile_expr(tree, i).unwrap().into_int_value();
 
                 let then_block = self.context.append_basic_block(current_func, "then");
                 let else_block = self.context.append_basic_block(current_func, "else");
@@ -225,25 +213,25 @@ impl<'ctx> Compiler<'ctx> {
                     .build_conditional_branch(cond, then_block, else_block);
 
                 self.builder.position_at_end(then_block);
-                self.compile_expr(t);
+                self.compile_expr(tree, t);
                 self.builder.build_unconditional_branch(after_block);
 
                 self.builder.position_at_end(else_block);
-                self.compile_expr(e);
+                self.compile_expr(tree, e);
                 self.builder.build_unconditional_branch(after_block);
 
                 self.builder.position_at_end(after_block);
 
                 None
             }
-            ExprKind::Block(exprs) => {
-                for e in 0..(exprs.len() - 1) {
-                    self.compile_expr(&exprs[e]);
+            Block { stmts, .. } => {
+                for e in 0..(stmts.len() - 1) {
+                    self.compile_expr(tree, stmts[e]);
                 }
 
-                self.compile_expr(&exprs.last().unwrap())
+                self.compile_expr(tree, *stmts.last().unwrap())
             }
-            ExprKind::GotoMarker(name) => {
+            GotoMarker(name) => {
                 let current_func = self.current_function.unwrap();
 
                 let code_after = self.context.append_basic_block(current_func, "goto");
@@ -251,21 +239,21 @@ impl<'ctx> Compiler<'ctx> {
                 self.program_info
                     .borrow_mut()
                     .gotos
-                    .insert(name.clone(), code_after);
+                    .insert(name, code_after);
 
                 self.builder.build_unconditional_branch(code_after);
                 self.builder.position_at_end(code_after);
 
                 None
             }
-            ExprKind::Goto(name) => {
+            Goto(name) => {
                 let program_info = self.program_info.borrow();
-                let block = program_info.force_grab_goto(name).clone();
+                let block = program_info.force_grab_goto(&*name).clone();
                 self.builder.build_unconditional_branch(block);
 
                 None
             }
-            ExprKind::While(w, d) => {
+            While { w, d } => {
                 let current_func = self.current_function.unwrap();
 
                 let prewhile_block = self.context.append_basic_block(current_func, "prewhile");
@@ -275,19 +263,20 @@ impl<'ctx> Compiler<'ctx> {
                 self.builder.build_unconditional_branch(prewhile_block);
                 self.builder.position_at_end(prewhile_block);
 
-                let cond = self.compile_expr(w).unwrap().into_int_value();
+                let cond = self.compile_expr(tree, w).unwrap().into_int_value();
 
                 self.builder
                     .build_conditional_branch(cond, whilecode_block, postwhile_block);
 
                 self.builder.position_at_end(whilecode_block);
-                self.compile_expr(d);
+                self.compile_expr(tree, d);
                 self.builder.build_unconditional_branch(prewhile_block);
 
                 self.builder.position_at_end(postwhile_block);
 
                 None
             }
+            _ => todo!(),
         }
     }
 }

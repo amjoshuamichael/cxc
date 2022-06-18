@@ -16,18 +16,30 @@ pub struct HLR {
 }
 
 impl HLR {
-    fn from(expr: Expr) -> Self {
+    pub fn from(expr: Expr) -> Self {
         let mut new_hlr = HLR::default();
         new_hlr.add_expr(expr, ExprID::ROOT);
 
         new_hlr
     }
 
+    pub fn with_core_lib() -> Self {
+        let mut output = HLR::default();
+        output.types = TypeGroup::with_core_lib();
+        output
+    }
+
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
             Expr::Number(n) => self.tree.insert(parent, NodeData::Number(n.into())),
             Expr::Ident(name) => match self.identifiers.iter().find(|i| ***i == *name) {
-                Some(ident) => self.tree.insert(parent, NodeData::Ident(ident.clone())),
+                Some(ident) => self.tree.insert(
+                    parent,
+                    NodeData::Ident {
+                        var_type: CORE_LIB.force_get(&"#prim::u32".into()),
+                        name: ident.clone(),
+                    },
+                ),
                 None => {
                     let ident_arc: Arc<str> = Arc::from(&*name);
                     self.identifiers.push(ident_arc.clone());

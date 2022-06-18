@@ -75,9 +75,9 @@ pub enum Opcode {
 }
 
 pub fn parse(input: SerfLex) -> Program {
-    use crate::serf;
+    use crate::serf_parser;
 
-    serf::OneFuncProgramParser::new()
+    serf_parser::OneFuncProgramParser::new()
         .parse(input)
         .expect("unable to parse: ")
 }
@@ -86,6 +86,7 @@ pub fn parse(input: SerfLex) -> Program {
 mod tests {
     use crate::{lex::*, parse::prelude::*};
 
+    #[allow(dead_code)]
     fn space_separated<'a>(input: Program) -> Vec<String> {
         let unseparated = format!("{input:?}");
         unseparated
@@ -96,6 +97,7 @@ mod tests {
             .map(|str| (*str).into())
             .collect()
     }
+
     // TODO: write proper tests
     #[test]
     fn basic_parsing() {

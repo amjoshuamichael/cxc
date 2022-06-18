@@ -1,7 +1,8 @@
 use super::Type;
 use crate::parse::Opcode;
-use core::num::NonZeroUsize;
 use num_bigint::BigInt;
+use std::iter::Map;
+use std::slice::Iter;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -10,6 +11,15 @@ pub struct ExprTree {
 }
 
 impl ExprTree {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (ExprID, NodeData)> + 'a> {
+        Box::new(
+            self.nodes
+                .iter()
+                .enumerate()
+                .map(|(id, node)| (ExprID(id), node.data.clone())),
+        )
+    }
+
     pub fn empty() -> ExprTree {
         ExprTree::default()
     }
@@ -26,13 +36,17 @@ impl ExprTree {
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
         self.nodes.push(ExprNode {
             parent,
-            data: NodeData::None,
+            data: NodeData::NoData,
         });
         ExprID(self.nodes.len() - 1)
     }
+
+    pub fn get(&self, at: ExprID) -> NodeData {
+        self.nodes[at.0].data.clone()
+    }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ExprID(usize);
 
 impl ExprID {
@@ -44,11 +58,15 @@ struct ExprNode {
     data: NodeData,
 }
 
+#[derive(Clone, Debug)]
 pub enum NodeData {
-    None,
+    NoData,
     Number(BigInt),
     Strin(String),
-    Ident(Arc<str>),
+    Ident {
+        var_type: Arc<Type>,
+        name: Arc<str>,
+    },
     VarDecl {
         var_type: Arc<Type>,
         name: Arc<str>,
@@ -80,4 +98,55 @@ pub enum NodeData {
     },
     GotoMarker(Arc<str>),
     Goto(Arc<str>),
+}
+
+pub enum GeneralReturnType {
+    PrimInt,
+    PrimFloat,
+}
+
+use GeneralReturnType::*;
+use NodeData::*;
+
+impl NodeData {
+    pub fn gen_ret_type(&self) -> GeneralReturnType {
+        if matches!(self, Number(_)) {
+            return PrimInt;
+        }
+
+        if self.returns_primitive_int() {
+            return PrimInt;
+        } else if self.returns_primitive_float() {
+            return PrimFloat;
+        } else {
+            todo!()
+        }
+    }
+
+    fn returns_primitive_int(&self) -> bool {
+        match &*self.ret_type().unwrap().name {
+            "#prim::u8" | "#prim::u16" | "#prim::u32" | "#prim::u64" => true,
+            _ => false,
+        }
+    }
+
+    fn returns_primitive_float(&self) -> bool {
+        todo!();
+    }
+
+    fn is_primitive(&self) -> bool {
+        &self.ret_type().unwrap().name[0..5] == "#prim"
+    }
+
+    pub fn ret_type(&self) -> Option<Arc<Type>> {
+        match self {
+            Number(_) | Strin(_) | GotoMarker(_) | Goto(_) | Block { .. } => None,
+            Ident { var_type, .. } | VarDecl { var_type, .. } => Some(var_type.clone()),
+            BinOp { ret_type, .. }
+            | IfThen { ret_type, .. }
+            | IfThenElse { ret_type, .. }
+            | Block { ret_type, .. } => Some(ret_type.clone()),
+            _ => unreachable!(),
+        }
+    }
 }
