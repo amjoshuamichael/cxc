@@ -31,10 +31,7 @@ pub fn to_llvm<'a>(hlr: HLR) -> i32 {
     compiler.current_function = Some(function);
     compiler.builder.position_at_end(basic_block);
 
-    let result = compiler
-        .compile_expr(&hlr.tree, ExprID::ROOT)
-        .unwrap()
-        .into_int_value();
+    let result = compiler.compile_expr(&hlr.tree, ExprID::ROOT).unwrap().into_int_value();
     compiler.builder.build_return(Some(&result.clone()));
 
     let result = unsafe { compiler.execution_engine.get_function("fn").ok() };
@@ -53,10 +50,7 @@ pub struct Compiler<'ctx> {
 }
 
 impl<'ctx> Compiler<'ctx> {
-    pub fn from_context_and_info(
-        context: &'ctx Context,
-        program_info: &'ctx mut ProgramInfo<'ctx>,
-    ) -> Self {
+    pub fn from_context_and_info(context: &'ctx Context, program_info: &'ctx mut ProgramInfo<'ctx>) -> Self {
         let module = context.create_module("sum");
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
@@ -72,11 +66,7 @@ impl<'ctx> Compiler<'ctx> {
         }
     }
 
-    pub fn compile_expr<'comp>(
-        &'comp self,
-        tree: &ExprTree,
-        expr: ExprID,
-    ) -> Option<AnyValueEnum<'comp>> {
+    pub fn compile_expr<'comp>(&'comp self, tree: &ExprTree, expr: ExprID) -> Option<AnyValueEnum<'comp>> {
         let expr = tree.get(expr);
 
         match expr {
@@ -96,6 +86,7 @@ impl<'ctx> Compiler<'ctx> {
 
                 match expr.gen_ret_type() {
                     PrimInt => Some(loaded.into_int_value().into()),
+                    PrimFloat => Some(loaded.into_float_value().into()),
                     _ => todo!(),
                 }
             }
@@ -111,37 +102,28 @@ impl<'ctx> Compiler<'ctx> {
 
                 if *op == Assignment {
                     let var_ptr = match tree.get(*lhs) {
-                        Ident { name, .. } => self
-                            .program_info
-                            .borrow()
-                            .variables
-                            .get(&*name)
-                            .unwrap()
-                            .clone(),
-                        VarDecl { name, .. } => match expr.gen_ret_type() {
-                            PrimInt => {
-                                let var_ptr =
-                                    self.builder.build_alloca(self.context.i32_type(), "alloca");
-                                self.program_info
-                                    .borrow_mut()
-                                    .variables
-                                    .insert(name, var_ptr);
+                        Ident { name, .. } => self.program_info.borrow().variables.get(&*name).unwrap().clone(),
+                        VarDecl { name, .. } => {
+                            let var_ptr = match expr.gen_ret_type() {
+                                PrimInt => self.builder.build_alloca(self.context.i32_type(), "alloc"),
+                                PrimFloat => self.builder.build_alloca(self.context.f32_type(), "alloc"),
+                                _ => todo!(),
+                            };
 
-                                var_ptr
-                            }
-                            _ => todo!(),
-                        },
+                            self.program_info.borrow_mut().variables.insert(name, var_ptr);
+
+                            var_ptr
+                        }
                         _ => panic!("Cannot set non-ident"),
                     };
 
                     let to_store = self.compile_expr(tree, *rhs)?;
 
                     match tree.get(*rhs).gen_ret_type() {
-                        PrimInt => {
-                            self.builder.build_store(var_ptr, to_store.into_int_value());
-                        }
+                        PrimInt => self.builder.build_store(var_ptr, to_store.into_int_value()),
+                        PrimFloat => self.builder.build_store(var_ptr, to_store.into_float_value()),
                         _ => todo!(),
-                    }
+                    };
 
                     return Some(to_store);
                 }
@@ -151,8 +133,7 @@ impl<'ctx> Compiler<'ctx> {
 
                 match expr.gen_ret_type() {
                     PrimInt => {
-                        let lhs: inkwell::values::IntValue =
-                            lhs.try_into().expect("incorrect type for expression");
+                        let lhs: inkwell::values::IntValue = lhs.try_into().expect("incorrect type for expression");
                         let rhs = rhs.try_into().expect("incorrect type for expression");
 
                         let result = match op {
@@ -160,18 +141,30 @@ impl<'ctx> Compiler<'ctx> {
                             Minus => self.builder.build_int_sub(lhs, rhs, "sub"),
                             Multiplier => self.builder.build_int_mul(lhs, rhs, "mul"),
                             Divider => self.builder.build_int_unsigned_div(lhs, rhs, "div"),
-                            Equal => {
-                                self.builder
-                                    .build_int_compare(IntPredicate::EQ, lhs, rhs, "eq")
-                            }
-                            LessThan => {
-                                self.builder
-                                    .build_int_compare(IntPredicate::ULT, lhs, rhs, "lt")
-                            }
-                            GrtrThan => {
-                                self.builder
-                                    .build_int_compare(IntPredicate::UGT, lhs, rhs, "gt")
-                            }
+                            Modulus => self.builder.build_int_unsigned_rem(lhs, rhs, "mod"),
+                            Inequal => self.builder.build_int_compare(IntPredicate::NE, lhs, rhs, "eq"),
+                            Equal => self.builder.build_int_compare(IntPredicate::EQ, lhs, rhs, "eq"),
+                            LessThan => self.builder.build_int_compare(IntPredicate::ULT, lhs, rhs, "lt"),
+                            GrtrThan => self.builder.build_int_compare(IntPredicate::UGT, lhs, rhs, "gt"),
+                            _ => todo!(),
+                        };
+
+                        Some(AnyValueEnum::IntValue(result))
+                    }
+                    PrimInt => {
+                        let lhs = lhs.into_float_value();
+                        let rhs = rhs.try_into().expect("incorrect type for expression");
+
+                        let result = match op {
+                            Plus => self.builder.build_float_add(lhs, rhs, "sum"),
+                            Minus => self.builder.build_float_sub(lhs, rhs, "sub"),
+                            Multiplier => self.builder.build_float_mul(lhs, rhs, "mul"),
+                            Divider => self.builder.build_float_unsigned_div(lhs, rhs, "div"),
+                            Modulus => self.builder.build_float_unsigned_rem(lhs, rhs, "mod"),
+                            Inequal => self.builder.build_float_compare(IntPredicate::NE, lhs, rhs, "eq"),
+                            Equal => self.builder.build_float_compare(IntPredicate::EQ, lhs, rhs, "eq"),
+                            LessThan => self.builder.build_float_compare(IntPredicate::ULT, lhs, rhs, "lt"),
+                            GrtrThan => self.builder.build_float_compare(IntPredicate::UGT, lhs, rhs, "gt"),
                             _ => todo!(),
                         };
 
@@ -189,8 +182,7 @@ impl<'ctx> Compiler<'ctx> {
                 // Everything after the "then" statement. Is appended at the end.
                 let after_block = self.context.append_basic_block(current_func, "after");
 
-                self.builder
-                    .build_conditional_branch(cond, then_block, after_block);
+                self.builder.build_conditional_branch(cond, then_block, after_block);
 
                 self.builder.position_at_end(then_block);
                 self.compile_expr(tree, t);
@@ -209,8 +201,7 @@ impl<'ctx> Compiler<'ctx> {
                 let else_block = self.context.append_basic_block(current_func, "else");
                 let after_block = self.context.append_basic_block(current_func, "after");
 
-                self.builder
-                    .build_conditional_branch(cond, then_block, else_block);
+                self.builder.build_conditional_branch(cond, then_block, else_block);
 
                 self.builder.position_at_end(then_block);
                 self.compile_expr(tree, t);
@@ -230,28 +221,6 @@ impl<'ctx> Compiler<'ctx> {
                 }
 
                 self.compile_expr(tree, *stmts.last().unwrap())
-            }
-            GotoMarker(name) => {
-                let current_func = self.current_function.unwrap();
-
-                let code_after = self.context.append_basic_block(current_func, "goto");
-
-                self.program_info
-                    .borrow_mut()
-                    .gotos
-                    .insert(name, code_after);
-
-                self.builder.build_unconditional_branch(code_after);
-                self.builder.position_at_end(code_after);
-
-                None
-            }
-            Goto(name) => {
-                let program_info = self.program_info.borrow();
-                let block = program_info.force_grab_goto(&*name).clone();
-                self.builder.build_unconditional_branch(block);
-
-                None
             }
             While { w, d } => {
                 let current_func = self.current_function.unwrap();

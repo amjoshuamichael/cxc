@@ -17,7 +17,7 @@ pub fn parse_int(lex: &mut Lexer<Token>) -> Option<u128> {
     }
 }
 
-pub fn parse_float(lex: &mut Lexer<Token>) -> Option<String> {
+pub fn parse_float(lex: &mut Lexer<Token>) -> Option<f64> {
     let mut token = lex.slice().to_string();
     token = token.chars().filter(|c| *c != '_').collect();
 
@@ -27,7 +27,7 @@ pub fn parse_float(lex: &mut Lexer<Token>) -> Option<String> {
 
     // TODO: implement scientific notation
 
-    return Some(token);
+    return Some(token.parse().unwrap());
 }
 
 pub fn convert_base(input: &str, base: u128) -> Option<u128> {

@@ -13,6 +13,7 @@ pub enum Program {
 #[derive(PartialEq, Eq)]
 pub enum Expr {
     Number(u128),
+    Float(f64),
     Ident(String),
     BinOp(Box<Expr>, Opcode, Box<Expr>),
     IfThen(Box<Expr>, Box<Expr>),
@@ -29,6 +30,7 @@ impl Debug for Expr {
 
         match self {
             Number(n) => write!(fmt, "NUM: {n:?}"),
+            Float(f) => write!(fmt, "FLOAT: {n:?}"),
             Ident(i) => write!(fmt, "IDENT: {i}"),
             BinOp(ref l, op, ref r) => write!(fmt, "BINOP: ({l:?} {op:?} {r:?})"),
             IfThen(ref l, ref r) => write!(fmt, "(IF {l:?} THEN {r:?})"),
@@ -56,6 +58,7 @@ pub enum Opcode {
     Minus,
     Multiplier,
     Divider,
+    Modulus,
     BitAND,
     BitOR,
     BitXOR,

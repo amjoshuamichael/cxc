@@ -96,7 +96,7 @@ PMExprTier = LeftTier<PMOp, MDExprTier>;
 PMOp: Opcode = { "+" => Opcode::Plus, "-" => Opcode::Minus, };
 
 MDExprTier = LeftTier<MDOp, ExpExprTier>;
-MDOp: Opcode = { "*" => Opcode::Multiplier, "/" => Opcode::Divider, }
+MDOp: Opcode = { "*" => Opcode::Multiplier, "/" => Opcode::Divider, "%" => Opcode::Modulus }
 
 ExpExprTier = LeftTier<ExpOp, Term>;
 ExpOp: Opcode = { "**" => Opcode::Exponential, }
@@ -106,19 +106,14 @@ pub Term: Box<Expr> = {
             Token::Int(n) => Box::new(Expr::Number(n)), 
             _ => unreachable!(),
         },
+    <f:ident> => match f {
+            Token::Float(f) => Box::new(Expr::Float(f)),
+            _ => unreachable!(),
+        },
     <i:ident> => match i {
             Token::Ident(i) => Box::new(Expr::Ident(<>)),
             _ => unreachable!(),
         },
-        //TODO: make GOTO statements work according to spec
-//    <i:ident> ":" => match i {
-//            Token::Ident(i) => Box::new(Expr::Goto(<>)),
-//            _ => unreachable!(),
-//        },
- //   "[" <i:ident> => match i {
- //           Token::Ident(i) => Box::new(Expr::GotoMarker(<>)),
- //           _ => unreachable!(),
- //       },
     <Block> => Box::new(Expr::Block(<>)),
     "(" <IFExpr> ")" => <>,
 }
@@ -130,11 +125,13 @@ extern {
     enum Token {
         ident => Token::Ident(_),
         int => Token::Int(_),
+        float => Token::Float(_),
         "=" => Token::Assignment,
         "+" => Token::Plus,
         "-" => Token::Minus,
         "*" => Token::Multiplier,
         "/" => Token::Divider,
+        "%" => Token::Modulus,
         "**" => Token::Exponential,
         "<<" => Token::BitShiftL,
         ">>" => Token::BitShiftR,

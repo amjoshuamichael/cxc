@@ -8,7 +8,7 @@ use std::sync::Arc;
 #[derive(Default)]
 pub struct HLR {
     pub tree: ExprTree,
-    types: TypeGroup,
+    pub types: TypeGroup,
     pub identifiers: Vec<Arc<str>>,
 
     // used to find where variables are declared.
@@ -17,7 +17,7 @@ pub struct HLR {
 
 impl HLR {
     pub fn from(expr: Expr) -> Self {
-        let mut new_hlr = HLR::default();
+        let mut new_hlr = HLR::with_core_lib();
         new_hlr.add_expr(expr, ExprID::ROOT);
 
         new_hlr
@@ -62,7 +62,7 @@ impl HLR {
                     rhs: self.add_expr(*rhs, space),
                 };
 
-                self.tree.replace_data(space, new_binop);
+                self.tree.replace(space, new_binop);
                 space
             }
             Expr::IfThen(i, t) => {
@@ -74,7 +74,7 @@ impl HLR {
                     t: self.add_expr(*t, space),
                 };
 
-                self.tree.replace_data(space, new_binop);
+                self.tree.replace(space, new_binop);
                 space
             }
             Expr::IfThenElse(i, t, e) => {
@@ -87,7 +87,7 @@ impl HLR {
                     e: self.add_expr(*e, space),
                 };
 
-                self.tree.replace_data(space, new_binop);
+                self.tree.replace(space, new_binop);
                 space
             }
             Expr::ForWhile(w, d) => {
@@ -98,7 +98,7 @@ impl HLR {
                     d: self.add_expr(*d, space),
                 };
 
-                self.tree.replace_data(space, new_binop);
+                self.tree.replace(space, new_binop);
                 space
             }
             Expr::Block(stmts) => {
@@ -115,7 +115,7 @@ impl HLR {
                     stmts: statment_ids,
                 };
 
-                self.tree.replace_data(space, new_binop);
+                self.tree.replace(space, new_binop);
                 space
             }
             _ => todo!(),

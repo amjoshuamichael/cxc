@@ -16,6 +16,8 @@ pub enum Token {
     Multiplier,
     #[token("/")]
     Divider,
+    #[token("%")]
+    Modulus,
     #[token("&")]
     BitAND,
     #[token("|")]

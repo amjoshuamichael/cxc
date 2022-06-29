@@ -1,11 +1,12 @@
 use super::Type;
 use crate::parse::Opcode;
 use num_bigint::BigInt;
+use std::fmt::{Debug, Formatter};
 use std::iter::Map;
 use std::slice::Iter;
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExprTree {
     nodes: Vec<ExprNode>,
 }
@@ -20,16 +21,12 @@ impl ExprTree {
         )
     }
 
-    pub fn empty() -> ExprTree {
-        ExprTree::default()
-    }
-
     pub fn insert(&mut self, parent: ExprID, data: NodeData) -> ExprID {
         self.nodes.push(ExprNode { parent, data });
         ExprID(self.nodes.len() - 1)
     }
 
-    pub fn replace_data(&mut self, at: ExprID, with: NodeData) {
+    pub fn replace(&mut self, at: ExprID, with: NodeData) {
         self.nodes[at.0].data = with;
     }
 
@@ -44,9 +41,13 @@ impl ExprTree {
     pub fn get(&self, at: ExprID) -> NodeData {
         self.nodes[at.0].data.clone()
     }
+
+    pub fn parent(&self, of: ExprID) -> ExprID {
+        self.nodes[of.0].parent
+    }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ExprID(usize);
 
 impl ExprID {
@@ -56,6 +57,12 @@ impl ExprID {
 struct ExprNode {
     parent: ExprID,
     data: NodeData,
+}
+
+impl Debug for ExprNode {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        write!(fmt, "{:?}\n", self.data)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -96,8 +103,6 @@ pub enum NodeData {
         ret_type: Arc<Type>,
         stmts: Vec<ExprID>,
     },
-    GotoMarker(Arc<str>),
-    Goto(Arc<str>),
 }
 
 pub enum GeneralReturnType {

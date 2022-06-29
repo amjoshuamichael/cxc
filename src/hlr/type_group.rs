@@ -2,7 +2,7 @@ use super::Type;
 use std::sync::Arc;
 
 #[derive(Default, Clone)]
-pub struct TypeGroup(Vec<Arc<Type>>);
+pub struct TypeGroup(pub Vec<Arc<Type>>);
 
 impl TypeGroup {
     pub fn add(&mut self, t: Type) {
