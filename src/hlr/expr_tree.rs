@@ -1,23 +1,32 @@
-use super::Type;
+use super::prelude::*;
+use crate::core_lib::CORE_LIB;
 use crate::parse::Opcode;
 use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
-use std::iter::Map;
-use std::slice::Iter;
 use std::sync::Arc;
 
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct ExprTree {
     nodes: Vec<ExprNode>,
 }
 
 impl ExprTree {
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (ExprID, NodeData)> + 'a> {
+    pub fn top_down_iter<'a>(&'a mut self) -> Box<dyn Iterator<Item = (ExprID, &mut NodeData)> + 'a> {
         Box::new(
             self.nodes
-                .iter()
+                .iter_mut()
                 .enumerate()
-                .map(|(id, node)| (ExprID(id), node.data.clone())),
+                .map(|(id, node)| (ExprID(id), &mut node.data)),
+        )
+    }
+
+    pub fn bottom_up_iter<'a>(&'a mut self) -> Box<dyn Iterator<Item = (ExprID, &mut NodeData)> + 'a> {
+        Box::new(
+            self.nodes
+                .iter_mut()
+                .enumerate()
+                .rev()
+                .map(|(id, node)| (ExprID(id), &mut node.data)),
         )
     }
 
@@ -33,7 +42,7 @@ impl ExprTree {
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
         self.nodes.push(ExprNode {
             parent,
-            data: NodeData::NoData,
+            data: NodeData::Empty,
         });
         ExprID(self.nodes.len() - 1)
     }
@@ -45,9 +54,23 @@ impl ExprTree {
     pub fn parent(&self, of: ExprID) -> ExprID {
         self.nodes[of.0].parent
     }
+
+    pub fn node_count(&self) -> u32 {
+        self.nodes.len().try_into().unwrap()
+    }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+impl Debug for ExprTree {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        for (e, expr) in self.nodes.iter().enumerate() {
+            print!("{e}: {expr:?}");
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ExprID(usize);
 
 impl ExprID {
@@ -60,37 +83,62 @@ struct ExprNode {
 }
 
 impl Debug for ExprNode {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "{:?}\n", self.data)
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match &self.data {
+            Empty => println!("Empty"),
+            Number(n) => println!("{n}"),
+            Float(fl) => println!("{fl:?}"),
+            Strin(s) => println!("{s}"),
+            Ident { name, .. } => println!("{name}"),
+            VarDecl {
+                var_type, name, rhs, ..
+            } => println!("{name}: {var_type:?} = {rhs:?}"),
+            UnarOp { op, hs, .. } => println!("{op:?} {hs:?}"),
+            BinOp { lhs, op, rhs, .. } => println!("{lhs:?} {op:?} {rhs:?}"),
+            IfThen { i, t, .. } => println!("if {i:?} then {t:?}"),
+            IfThenElse { i, t, e, .. } => println!("if {i:?} then {t:?} else {e:?}"),
+            While { w, d, .. } => println!("while {w:?} do {d:?}"),
+            Block { stmts, .. } => println!("{{{stmts:?}}}"),
+        }
+
+        Ok(())
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum NodeData {
-    NoData,
+    Empty,
     Number(BigInt),
+    Float(f64),
     Strin(String),
     Ident {
-        var_type: Arc<Type>,
+        var_type: Type,
         name: Arc<str>,
     },
     VarDecl {
-        var_type: Arc<Type>,
+        type_spec: Option<(u8, String)>,
+        var_type: Type,
         name: Arc<str>,
+        rhs: ExprID,
+    },
+    UnarOp {
+        ret_type: Type,
+        op: Opcode,
+        hs: ExprID,
     },
     BinOp {
-        ret_type: Arc<Type>,
+        ret_type: Type,
         lhs: ExprID,
         op: Opcode,
         rhs: ExprID,
     },
     IfThen {
-        ret_type: Arc<Type>,
+        ret_type: Type,
         i: ExprID,
         t: ExprID,
     },
     IfThenElse {
-        ret_type: Arc<Type>,
+        ret_type: Type,
         i: ExprID,
         t: ExprID,
         e: ExprID,
@@ -100,7 +148,7 @@ pub enum NodeData {
         d: ExprID,
     },
     Block {
-        ret_type: Arc<Type>,
+        ret_type: Type,
         stmts: Vec<ExprID>,
     },
 }
@@ -108,6 +156,9 @@ pub enum NodeData {
 pub enum GeneralReturnType {
     PrimInt,
     PrimFloat,
+    PrimString,
+    PrimRef(Box<GeneralReturnType>),
+    Struct,
 }
 
 use GeneralReturnType::*;
@@ -119,39 +170,35 @@ impl NodeData {
             return PrimInt;
         }
 
-        if self.returns_primitive_int() {
-            return PrimInt;
-        } else if self.returns_primitive_float() {
+        if matches!(self, Float(_)) {
             return PrimFloat;
-        } else {
-            todo!()
         }
-    }
 
-    fn returns_primitive_int(&self) -> bool {
-        match &*self.ret_type().unwrap().name {
-            "#prim::u8" | "#prim::u16" | "#prim::u32" | "#prim::u64" => true,
-            _ => false,
+        fn type_from_name(input: &str) -> GeneralReturnType {
+            match input {
+                "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
+                "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
+                s if s.chars().next() == Some('&') => PrimRef(Box::new(type_from_name(&input[1..]))),
+                _ => todo!(),
+            }
         }
+
+        type_from_name(&*self.ret_type().unwrap().name())
     }
 
-    fn returns_primitive_float(&self) -> bool {
-        todo!();
-    }
-
-    fn is_primitive(&self) -> bool {
-        &self.ret_type().unwrap().name[0..5] == "#prim"
-    }
-
-    pub fn ret_type(&self) -> Option<Arc<Type>> {
+    pub fn ret_type(&self) -> Option<Type> {
         match self {
-            Number(_) | Strin(_) | GotoMarker(_) | Goto(_) | Block { .. } => None,
+            Number(_) => Some(CORE_LIB.force_get(&"prim::i32".into())),
+            Float(_) => Some(CORE_LIB.force_get(&"prim::f32".into())),
+            Strin(_) => todo!(),
             Ident { var_type, .. } | VarDecl { var_type, .. } => Some(var_type.clone()),
             BinOp { ret_type, .. }
+            | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
             | Block { ret_type, .. } => Some(ret_type.clone()),
-            _ => unreachable!(),
+            Empty => unreachable!(),
+            While { .. } => None,
         }
     }
 }

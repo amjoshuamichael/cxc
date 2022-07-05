@@ -6,103 +6,85 @@ pub mod program_info;
 mod tests;
 pub mod type_group;
 mod type_inference;
-mod type_precedence;
 
-use crate::parse::prelude as p;
-use num_bigint::BigInt;
+use crate::parse::prelude::*;
 use std::collections::HashSet;
+use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 pub mod prelude {
     pub use super::{
-        expr_tree::ExprID, expr_tree::GeneralReturnType::*, expr_tree::NodeData, hlr, hlr_data::HLR,
-        program_info::ProgramInfo, type_group::TypeGroup, type_inference::Constraint, type_inference::Constraints,
-        type_precedence::get_precedence, Field, Impl, Type,
+        expr_tree::ExprID, expr_tree::GeneralReturnType, expr_tree::GeneralReturnType::*, expr_tree::NodeData, hlr,
+        hlr_data::HLR, program_info::ProgramInfo, type_group::TypeGroup, type_inference::*, BaseType, Type,
     };
 }
 
 use prelude::*;
-use type_inference::do_type_inference;
 
-pub fn hlr(prog: p::Program) -> HLR {
-    match prog {
-        p::Program::OneFunc(p_exprs) => {
-            let func_as_expr = p::Expr::Block(p_exprs);
-
-            let mut output = HLR::from(func_as_expr);
-
-            output
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Type {
-    pub name: String,
-    impls: Impls,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Impls(HashSet<Impl>);
-
-macro_rules! ret_if {
-    ($cond:expr) => {
-        if $cond {
-            return false;
-        }
+pub fn hlr(prog: Script) -> HLR {
+    let func_as_expr = match &prog.0[0] {
+        Declaration::Function { code, .. } => code,
+        _ => unreachable!(),
     };
+
+    let mut output = HLR::from(func_as_expr.clone());
+    infer_types(&mut output);
+
+    if crate::DEBUG {
+        println!("--------HLR DATA--------");
+        println!("{:?}", output.tree);
+    }
+
+    output
 }
 
-impl Impls {
-    fn fits_constraints(&self, constraints: &Constraints) -> bool {
-        for constraint in constraints.0.iter() {
-            match constraint {
-                Constraint::FromIntLiteral(n) => {
-                    let implem = self
-                        .0
-                        .iter()
-                        .find(|implem| matches!(implem, Impl::FromIntLiteral { .. }));
-                    ret_if!(implem.is_none());
-
-                    match implem {
-                        Some(Impl::FromIntLiteral { min, max }) => ret_if!(!(min < n && n < max)),
-                        _ => unreachable!(),
-                    }
-                }
-                Constraint::AddToIntLiteral => {
-                    let implem = self
-                        .0
-                        .iter()
-                        .find(|implem| matches!(implem, Impl::AddToIntLiteral { .. }));
-                    ret_if!(implem.is_none());
-                }
-                Constraint::AddToType(_) => {}
-                _ => todo!(),
-            }
-        }
-
-        true
-    }
+#[derive(Clone, Default)]
+pub struct Type {
+    base: Arc<BaseType>,
+    pub ref_count: u8,
 }
 
 impl Type {
-    pub fn new_prim(name: &str) -> Self {
+    fn name(&self) -> String {
+        "&".repeat(self.ref_count.into()) + &self.base.name
+    }
+}
+
+impl Debug for Type {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        print!("Type({})", self.name());
+
+        Ok(())
+    }
+}
+
+impl From<&Arc<BaseType>> for Type {
+    fn from(base_type: &Arc<BaseType>) -> Type {
         Type {
-            name: String::from("#prim::") + name.into(),
-            impls: Impls::default(),
+            base: base_type.clone(),
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BaseType {
+    pub name: String,
+    pub fields: HashSet<String>,
+}
+
+impl BaseType {
+    pub fn new_prim(name: &str) -> Self {
+        BaseType {
+            name: String::from("prim::") + name.into(),
+            ..Default::default()
         }
     }
 
     pub fn new_under(name: &str) -> Self {
-        Type {
-            name: String::from("#_::") + name.into(),
-            impls: Impls::default(),
+        BaseType {
+            name: String::from("_::") + name.into(),
+            ..Default::default()
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Field {
-    name: String,
-    datatype: Arc<Type>,
 }

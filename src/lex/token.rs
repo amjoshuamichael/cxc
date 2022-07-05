@@ -3,8 +3,12 @@ use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
+    #[token(",")]
+    Comma,
     #[token(";")]
     Semicolon,
+    #[token("!")]
+    Bang,
 
     #[token("**")]
     Exponential,
@@ -71,7 +75,7 @@ pub enum Token {
     #[token("=")]
     Assignment,
 
-    #[regex("[A-Za-z_][A-Za-z0-9_]*", |lex| String::from(lex.slice()))]
+    #[regex("[A-Za-z:_][A-Za-z0-9:_]*", |lex| String::from(lex.slice()))]
     Ident(String),
 
     #[regex(
@@ -81,9 +85,9 @@ pub enum Token {
     Int(u128),
 
     #[regex(r"[0-9_]*\.[0-9_]*(e[0-9_]+)?", parse_num::parse_float)]
-    Float(String),
+    Float(f64),
 
     #[error]
-    #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"(#.*\n)|[ \t\n\f]+", logos::skip)]
     Error,
 }

@@ -1,7 +1,8 @@
 use super::expr_tree::*;
-use super::prelude::TypeGroup;
+use super::prelude::*;
 use crate::core_lib::CORE_LIB;
 use crate::parse::prelude::*;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 ///The HLR Data Type.
@@ -12,7 +13,7 @@ pub struct HLR {
     pub identifiers: Vec<Arc<str>>,
 
     // used to find where variables are declared.
-    pub assignments: Vec<ExprID>,
+    pub data_flow: HashMap<Arc<str>, (Type, Vec<ExprID>)>,
 }
 
 impl HLR {
@@ -32,31 +33,50 @@ impl HLR {
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
             Expr::Number(n) => self.tree.insert(parent, NodeData::Number(n.into())),
-            Expr::Ident(name) => match self.identifiers.iter().find(|i| ***i == *name) {
-                Some(ident) => self.tree.insert(
+            Expr::Float(n) => self.tree.insert(parent, NodeData::Float(n.into())),
+            Expr::Ident(name) => {
+                let ident = self.identifiers.iter().find(|i| ***i == *name).unwrap();
+                self.tree.insert(
                     parent,
                     NodeData::Ident {
-                        var_type: CORE_LIB.force_get(&"#prim::u32".into()),
+                        var_type: CORE_LIB.force_get(&"_::none".into()),
                         name: ident.clone(),
                     },
-                ),
-                None => {
-                    let ident_arc: Arc<str> = Arc::from(&*name);
-                    self.identifiers.push(ident_arc.clone());
-                    self.tree.insert(
-                        parent,
-                        NodeData::VarDecl {
-                            var_type: CORE_LIB.force_get(&"#prim::u32".into()),
-                            name: ident_arc,
-                        },
-                    )
-                }
-            },
+                )
+            }
+            Expr::VarDecl(t, n, e) => {
+                let space = self.tree.make_one_space(parent);
+
+                let ident_arc: Arc<str> = Arc::from(&*n);
+
+                self.identifiers.push(ident_arc.clone());
+                let new_decl = NodeData::VarDecl {
+                    type_spec: t,
+                    var_type: CORE_LIB.force_get(&"_::none".into()),
+                    name: ident_arc,
+                    rhs: self.add_expr(*e, space),
+                };
+
+                self.tree.replace(space, new_decl);
+                space
+            }
+            Expr::UnarOp(op, hs) => {
+                let space = self.tree.make_one_space(parent);
+
+                let new_binop = NodeData::UnarOp {
+                    ret_type: CORE_LIB.force_get(&"_::none".into()),
+                    op,
+                    hs: self.add_expr(*hs, space),
+                };
+
+                self.tree.replace(space, new_binop);
+                space
+            }
             Expr::BinOp(lhs, op, rhs) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::BinOp {
-                    ret_type: CORE_LIB.force_get(&"#prim::u32".into()),
+                    ret_type: CORE_LIB.force_get(&"_::none".into()),
                     lhs: self.add_expr(*lhs, space),
                     op,
                     rhs: self.add_expr(*rhs, space),
@@ -69,7 +89,7 @@ impl HLR {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThen {
-                    ret_type: CORE_LIB.force_get(&"#prim::u32".into()),
+                    ret_type: CORE_LIB.force_get(&"_::none".into()),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                 };
@@ -81,7 +101,7 @@ impl HLR {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThenElse {
-                    ret_type: CORE_LIB.force_get(&"#prim::u32".into()),
+                    ret_type: CORE_LIB.force_get(&"_::none".into()),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                     e: self.add_expr(*e, space),
@@ -111,7 +131,7 @@ impl HLR {
                 }
 
                 let new_binop = NodeData::Block {
-                    ret_type: CORE_LIB.force_get(&"#prim::u32".into()),
+                    ret_type: CORE_LIB.force_get(&"_::none".into()),
                     stmts: statment_ids,
                 };
 
@@ -121,15 +141,4 @@ impl HLR {
             _ => todo!(),
         }
     }
-}
-
-pub struct Identifier {
-    name: Arc<String>,
-    ident_type: IdentType,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum IdentType {
-    Variable,
-    Goto,
 }

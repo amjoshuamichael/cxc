@@ -22,7 +22,15 @@ impl<'input> Iterator for SerfLex<'input> {
     type Item = Spanned<Token, usize, LexicalError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let token = self.0.next()?;
+        let mut token = self.0.next()?;
+
+        while matches!(token.1, Token::Error) {
+            token = self.0.next()?;
+        }
+
+        if crate::DEBUG {
+            println!("lexing token: {:?}", token.1);
+        }
 
         Some(Ok((token.0, token.1, token.0 + 1)))
     }
@@ -30,4 +38,8 @@ impl<'input> Iterator for SerfLex<'input> {
 
 pub fn lex(input: &str) -> SerfLex {
     SerfLex(Token::lexer(input).enumerate())
+}
+
+pub mod prelude {
+    pub use super::lex;
 }

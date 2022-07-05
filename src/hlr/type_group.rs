@@ -1,26 +1,26 @@
-use super::Type;
+use super::prelude::*;
 use std::sync::Arc;
 
 #[derive(Default, Clone)]
-pub struct TypeGroup(pub Vec<Arc<Type>>);
+pub struct TypeGroup(pub Vec<Arc<BaseType>>);
 
 impl TypeGroup {
-    pub fn add(&mut self, t: Type) {
+    pub fn add(&mut self, t: BaseType) {
         let arc = Arc::new(t);
         self.0.push(arc);
     }
 
-    pub fn get(&self, name: &String) -> Option<Arc<Type>> {
+    pub fn get(&self, name: &String) -> Option<Type> {
         for t in &self.0 {
             if t.name == *name {
-                return Some(t.clone());
+                return Some(t.into());
             }
         }
 
         None
     }
 
-    pub fn force_get(&self, name: &String) -> Arc<Type> {
+    pub fn force_get(&self, name: &String) -> Type {
         match self.get(name) {
             Some(t) => t,
             None => panic!("could not find {}", name),

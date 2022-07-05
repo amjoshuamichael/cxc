@@ -1,154 +1,69 @@
 use super::prelude::*;
-use crate::parse::*;
-use num_bigint::BigInt;
+use crate::parse::prelude::*;
 use std::collections::HashMap;
-use std::sync::Arc;
 
-pub fn do_type_inference(hlr: &mut HLR) {
-    let var_locs = get_variable_locations(hlr);
+pub fn infer_types(hlr: &mut HLR) {
+    let mut types = HashMap::new();
 
-    println!("{var_locs:?}");
+    for (n, node) in hlr.tree.top_down_iter() {
+        match node {
+            NodeData::VarDecl {
+                type_spec,
+                ref mut var_type,
+                name,
+                ..
+            } => {
+                *var_type = match type_spec {
+                    Some(type_spec) => {
+                        let mut base = hlr.types.get(&type_spec.1).expect("wrong type, loser");
+                        base.ref_count = type_spec.0;
+                        base
+                    }
+                    None => hlr.data_flow.get_mut(&name.clone()).unwrap().0.clone(),
+                }
+                .clone();
 
-    let mut var_types = HashMap::new();
+                hlr.data_flow.insert(name.clone(), (var_type.clone(), vec![n]));
+            }
+            NodeData::Ident { ref mut var_type, name } => {
+                let instances = hlr.data_flow.get_mut(&name.clone()).unwrap();
+                instances.1.push(n);
 
-    for (name, locs) in &var_locs {
-        let constraints = find_constraints_for_var(hlr, locs);
-
-        let possible_types: Vec<Arc<Type>> = hlr
-            .types
-            .0
-            .iter()
-            .filter(|t| t.impls.fits_constraints(&constraints))
-            .map(|arc| arc.clone())
-            .collect();
-
-        let precedence_levels = possible_types
-            .iter()
-            .map(|t| get_precedence(t))
-            .collect::<Vec<usize>>();
-
-        let mut types_for_var = possible_types
-            .iter()
-            .zip(precedence_levels)
-            .collect::<Vec<(&Arc<Type>, usize)>>();
-
-        types_for_var.sort_by(|(_, p1), (_, p2)| p1.cmp(&p2));
-
-        let type_for_var = types_for_var[0].0.clone();
-
-        println!("&&&VARTYPE: {name}, {types_for_var:?}");
-
-        var_types.insert(name, type_for_var);
-    }
-
-    for (name, locs) in &var_locs {
-        let decl_data = NodeData::VarDecl {
-            var_type: var_types.get(&name).unwrap().clone(),
-            name: name.clone(),
+                *var_type = instances.0.clone();
+            }
+            _ => {}
         };
 
-        hlr.tree.replace(locs[0], decl_data);
-
-        let ident_data = NodeData::Ident {
-            var_type: var_types.get(&name).unwrap().clone(),
-            name: name.clone(),
-        };
-
-        for loc in locs.iter().skip(1) {
-            hlr.tree.replace(*loc, ident_data.clone());
+        if let Some(ret_type) = node.ret_type() {
+            types.insert(n, ret_type);
         }
     }
-}
 
-fn find_constraints_for_var(hlr: &HLR, locs: &Vec<ExprID>) -> Constraints {
-    use NodeData::*;
-
-    let mut constraints = Constraints::default();
-
-    for loc in locs {
-        match hlr.tree.get(hlr.tree.parent(*loc)) {
-            BinOp { lhs, rhs, op, .. } => {
-                let is_var_lhs = lhs == *loc;
-                let other_side = if is_var_lhs { rhs } else { lhs };
-                let other_side = hlr.tree.get(other_side);
+    for (n, node) in hlr.tree.bottom_up_iter() {
+        match node {
+            NodeData::BinOp {
+                ref mut ret_type, rhs, ..
+            } => {
+                *ret_type = types.get(rhs).unwrap().clone();
+                *types.get_mut(&n).unwrap() = ret_type.clone();
+            }
+            NodeData::UnarOp {
+                ref mut ret_type,
+                hs,
+                op,
+                ..
+            } => {
+                *ret_type = types.get(hs).unwrap().clone();
 
                 match op {
-                    Opcode::Assignment => {
-                        if is_var_lhs {
-                            let rhs = hlr.tree.get(rhs);
-
-                            match rhs.gen_ret_type() {
-                                PrimInt => {
-                                    if let Number(n) = rhs {
-                                        constraints.0.push(Constraint::FromIntLiteral(n))
-                                    }
-                                }
-                                _ => todo!(),
-                            }
-                        }
-                    }
-                    Opcode::Plus => match other_side {
-                        Number(_) => constraints.0.push(Constraint::AddToIntLiteral),
-                        Ident { name, .. } => constraints.0.push(Constraint::AddToType(name)),
-                        _ => todo!(),
-                    },
-                    // TODO: other operators
-                    _ => {}
+                    Opcode::Deref => ret_type.ref_count -= 1,
+                    Opcode::Ref => ret_type.ref_count += 1,
+                    _ => unreachable!(),
                 }
-            }
-            // TODO: other scenarios
-            _ => {}
-        };
-    }
 
-    constraints
-}
-
-#[derive(Default, Debug)]
-pub struct Constraints(pub Vec<Constraint>);
-
-#[derive(Debug)]
-pub enum Constraint {
-    FromIntLiteral(BigInt),
-    AddToIntLiteral,
-    AddToType(Arc<str>),
-}
-
-fn get_variable_locations(hlr: &HLR) -> HashMap<Arc<str>, Vec<ExprID>> {
-    let mut variable_locations = HashMap::<Arc<str>, Vec<ExprID>>::new();
-
-    for (id, data) in hlr.tree.iter() {
-        match data {
-            NodeData::Ident { name, .. } => {
-                variable_locations
-                    .entry(name.clone())
-                    .or_insert(vec![])
-                    .push(id);
+                *types.get_mut(&n).unwrap() = ret_type.clone();
             }
             _ => {}
         }
-    }
-
-    variable_locations
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lex::*;
-
-    #[test]
-    fn type_inference() {
-        let mut hlr = hlr(parse(lex("
-        {
-            x = 4893
-            x = x + 1
-            y = 55
-            x = y + x
-            z = 21
-        }
-        ")));
-
-        do_type_inference(&mut hlr);
     }
 }

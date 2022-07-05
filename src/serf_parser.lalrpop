@@ -1,12 +1,15 @@
+#[LALR]
+grammar;
+
 use crate::lex::*;
 use crate::parse::*;
-
-grammar;
+use crate::parse::Opcode::*;
+use crate::parse::Expr::*;
 
 // List macro
 List<T, S>: Vec<T> = { 
     <v:(<T> S)*> <e:T?> => match e {
-        None=> v,
+        None => v,
         Some(e) => {
             let mut v = v;
             v.push(e);
@@ -17,105 +20,157 @@ List<T, S>: Vec<T> = {
 
 // Tier macro
 LeftTier<Op, NextTier>: Box<Expr> = {
-    LeftTier<Op,NextTier> Op NextTier => Box::new(Expr::BinOp(<>)),
+    NextTier Op LeftTier<Op,NextTier> => Box::new(BinOp(<>)),
     NextTier,
 };
 
 RghtTier<Op, NextTier>: Box<Expr> = {
-    RghtTier<Op,NextTier> Op NextTier => Box::new(Expr::BinOp(<>)),
+    RghtTier<Op,NextTier> Op NextTier => Box::new(BinOp(<>)),
     NextTier,
 };
 
-pub OneFuncProgram: Program = {
-    <Block> => Program::OneFunc(<>),
+pub Root: Script = {
+    <funcs:Function*> => Script(<>),
 }
 
-Block: Vec<Expr> = {
-    "{" <stmts:(Statement)*> "}" => {
+Function: Declaration = {
+    <name:Var> <args:ParenList> <code:Block> => Declaration::Function { name, args, code: *code }
+}
+
+ParenList: Vec<(String, Option<(u8, String)>)> = {
+    "(" <List<Var, ",">> ")" => <>,
+}
+
+Block: Box<Expr> = {
+    "{" <stmts:(Statement)+> <ret:ImplicitReturn?> "}" => {
         let mut block = Vec::new();
         
         for stmt in stmts {
             block.push(*stmt);
         }
 
-        block
+        if let Some(ret) = ret {
+            block.push(*ret);
+        }
+
+        Box::new(Block(block))
     },
+    "{" <ret:ORExprTier> "}" => Box::new(Block(vec![*<>])),
+    "{" "}" => Box::new(Block(Vec::new())),
+}
+
+TypeSpecifier: (u8, String) = {
+    "&&" <TypeSpecifier> => (<>.0 + 2, <>.1),
+    "&" <TypeSpecifier> => (<>.0 + 1, <>.1),
+    <ident> => match <> {
+        Token::Ident(i) => (0, i),
+        _ => unreachable!(),
+    }
+}
+
+ImplicitReturn: Box<Expr> = {
+    "!" <ORExprTier>,
 }
 
 Statement: Box<Expr> = {
-    <ForExpr> ";",
     <ForExpr>,
 }
 
 ForExpr: Box<Expr> = {
-    <f:ORExprTier> "@" <d:ForExpr> => Box::new(Expr::ForWhile(f, d)),
+    "@" <f:ORExprTier> <b:Block> => Box::new(ForWhile(f, b)),
+    //"@" <f:ORExprTier> <d:ForExpr> => Box::new(ForWhile(f, d)),
     IFExpr,
 }
 
 IFExpr: Box<Expr> = {
-    <i:ORExprTier> "?" <t:IFExpr> => Box::new(Expr::IfThen(i, t)),
-    <i:ORExprTier> "?" <t:AssignmentExpr> ":" <e:IFExpr> => Box::new(Expr::IfThenElse(i, t, e)),
+    "?" <i:ORExprTier> <t:Block> => Box::new(IfThen(i, t)),
+    "?" <i:ORExprTier> <t:IFExpr> => Box::new(IfThen(i, t)),
+    "?" <i:ORExprTier> <t:Block> ":" <e:Block> => Box::new(IfThenElse(i, t, e)),
+    "?" <i:ORExprTier> <t:AssignmentExpr> ":" <e:IFExpr> => Box::new(IfThenElse(i, t, e)),
     AssignmentExpr,
+}
+
+Var: (String, Option<(u8, String)>) = {
+    <i:Ident> ":" <t:TypeSpecifier?> => (i, t),
+    <i:Ident> => (i, None),
 }
 
 // An Assignment Expression (e.g. `f = 42 + 210 * 2`) is the final level of expression that does 
 // not involve control flow.
-AssignmentExpr = LeftTier<ASOp, ORExprTier>;
-ASOp: Opcode = { "=" => Opcode::Assignment, }
+AssignmentExpr: Box<Expr> = {
+    <nv:Var> "=" <e:ORExprTier> => Box::new(VarDecl(nv.1, nv.0, e)),
+};
+ASOp: Opcode = { "=" => Assignment, }
 
 ORExprTier = LeftTier<OROp, ANDExprTier>;
-OROp: Opcode = { "||" => Opcode::Or, };
+OROp: Opcode = { "||" => Or, };
 
 ANDExprTier = LeftTier<ANDOp, EQExprTier>;
-ANDOp: Opcode = { "&&" => Opcode::And, };
+ANDOp: Opcode = { "&&" => And, };
 
 EQExprTier = LeftTier<EQOp, COMPExprTier>;
-EQOp: Opcode = { "==" => Opcode::Equal, "!=" => Opcode::Inequal, }
+EQOp: Opcode = { "==" => Equal, "!=" => Inequal, }
 
 COMPExprTier = LeftTier<COMPOp, BitORExprTier>;
 COMPOp: Opcode = {
-    "<" => Opcode::LessThan,
-    ">" => Opcode::GrtrThan,
-    "<=" => Opcode::LessOrEqual,
-    ">=" => Opcode::GreaterOrEqual
+    "<" => LessThan,
+    ">" => GrtrThan,
+    "<=" => LessOrEqual,
+    ">=" => GreaterOrEqual
 }
 
 BitORExprTier = LeftTier<BitOROp, BitXORExprTier>;
-BitOROp: Opcode = { "|" => Opcode::BitOR, };
+BitOROp: Opcode = { "|" => BitOR, };
 
 BitXORExprTier = LeftTier<BitXOROp, BitANDExprTier>;
-BitXOROp: Opcode = { "^" => Opcode::BitXOR };
+BitXOROp: Opcode = { "^" => BitXOR };
 
 BitANDExprTier = LeftTier<BitANDOp, BitSExprTier>;
-BitANDOp: Opcode = { "&" => Opcode::BitAND };
+BitANDOp: Opcode = { "&" => BitAND };
 
 BitSExprTier = LeftTier<BitSOp, PMExprTier>;
-BitSOp: Opcode = { "<<" => Opcode::BitShiftL, ">>" => Opcode::BitShiftR, };
+BitSOp: Opcode = { "<<" => BitShiftL, ">>" => BitShiftR, };
 
 PMExprTier = LeftTier<PMOp, MDExprTier>;
-PMOp: Opcode = { "+" => Opcode::Plus, "-" => Opcode::Minus, };
+PMOp: Opcode = { "+" => Plus, "-" => Minus, };
 
 MDExprTier = LeftTier<MDOp, ExpExprTier>;
-MDOp: Opcode = { "*" => Opcode::Multiplier, "/" => Opcode::Divider, "%" => Opcode::Modulus }
+MDOp: Opcode = { "*" => Multiplier, "/" => Divider, "%" => Modulus }
 
-ExpExprTier = LeftTier<ExpOp, Term>;
-ExpOp: Opcode = { "**" => Opcode::Exponential, }
+ExpExprTier = LeftTier<ExpOp, RefExprTier>;
+ExpOp: Opcode = { "**" => Exponential, }
+
+RefExprTier: Box<Expr> = {
+    "*" <RefExprTier> => Box::new(UnarOp(Deref, <>)),
+    "**" <RefExprTier> => Box::new(UnarOp(Deref, Box::new(UnarOp(Deref, <>)))),
+    "&" <RefExprTier> => Box::new(UnarOp(Ref, <>)),
+    "&&" <RefExprTier> => Box::new(UnarOp(Ref, Box::new(UnarOp(Ref, <>)))),
+    Term,
+}
 
 pub Term: Box<Expr> = {
     <n:int> => match n { 
-            Token::Int(n) => Box::new(Expr::Number(n)), 
+            Token::Int(n) => Box::new(Number(n)), 
             _ => unreachable!(),
         },
-    <f:ident> => match f {
-            Token::Float(f) => Box::new(Expr::Float(f)),
+    <f:float> => match f {
+            Token::Float(f) => Box::new(Float(f)),
             _ => unreachable!(),
         },
-    <i:ident> => match i {
-            Token::Ident(i) => Box::new(Expr::Ident(<>)),
-            _ => unreachable!(),
-        },
-    <Block> => Box::new(Expr::Block(<>)),
+    <i:Ident> => Box::new(Ident(<>)),
+    <Block> => <>,
     "(" <IFExpr> ")" => <>,
+}
+
+Ident: String = {
+    <i:ident> => match i {
+        Token::Ident(i) => i,
+        _ => unreachable!(),
+    },
+}
+
+Nothing: () = {
+    error => (),
 }
 
 extern {
@@ -126,6 +181,7 @@ extern {
         ident => Token::Ident(_),
         int => Token::Int(_),
         float => Token::Float(_),
+        error => Token::Error,
         "=" => Token::Assignment,
         "+" => Token::Plus,
         "-" => Token::Minus,
@@ -155,6 +211,8 @@ extern {
         "}" => Token::RghtCurly,
         "<" => Token::LeftAngle,
         ">" => Token::RghtAngle,
+        "," => Token::Comma,
         ";" => Token::Semicolon,
+        "!" => Token::Bang,
     }
 }
