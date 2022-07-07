@@ -14,11 +14,7 @@ pub fn infer_types(hlr: &mut HLR) {
                 ..
             } => {
                 *var_type = match type_spec {
-                    Some(type_spec) => {
-                        let mut base = hlr.types.get(&type_spec.1).expect("wrong type, loser");
-                        base.ref_count = type_spec.0;
-                        base
-                    }
+                    Some(type_spec) => hlr.types.get_spec(type_spec).unwrap().clone(),
                     None => hlr.data_flow.get_mut(&name.clone()).unwrap().0.clone(),
                 }
                 .clone();

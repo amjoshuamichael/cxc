@@ -174,16 +174,7 @@ impl NodeData {
             return PrimFloat;
         }
 
-        fn type_from_name(input: &str) -> GeneralReturnType {
-            match input {
-                "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
-                "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
-                s if s.chars().next() == Some('&') => PrimRef(Box::new(type_from_name(&input[1..]))),
-                _ => todo!(),
-            }
-        }
-
-        type_from_name(&*self.ret_type().unwrap().name())
+        self.ret_type().unwrap().gen_ret_type()
     }
 
     pub fn ret_type(&self) -> Option<Type> {

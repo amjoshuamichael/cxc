@@ -20,11 +20,10 @@ impl TypeGroup {
         None
     }
 
-    pub fn force_get(&self, name: &String) -> Type {
-        match self.get(name) {
-            Some(t) => t,
-            None => panic!("could not find {}", name),
-        }
+    pub fn get_spec(&self, type_spec: &(u8, String)) -> Option<Type> {
+        let mut base = self.get(&type_spec.1)?;
+        base.ref_count = type_spec.0;
+        Some(base)
     }
 
     pub fn with_core_lib() -> TypeGroup {

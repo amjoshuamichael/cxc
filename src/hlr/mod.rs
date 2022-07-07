@@ -8,14 +8,16 @@ pub mod type_group;
 mod type_inference;
 
 use crate::parse::prelude::*;
+use inkwell::types::*;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 pub mod prelude {
     pub use super::{
-        expr_tree::ExprID, expr_tree::GeneralReturnType, expr_tree::GeneralReturnType::*, expr_tree::NodeData, hlr,
-        hlr_data::HLR, program_info::ProgramInfo, type_group::TypeGroup, type_inference::*, BaseType, Type,
+        expr_tree::type_from_name, expr_tree::ExprID, expr_tree::ExprTree, expr_tree::GeneralReturnType,
+        expr_tree::GeneralReturnType::*, expr_tree::NodeData, hlr, hlr_data::HLR, program_info::ProgramInfo,
+        type_group::TypeGroup, type_inference::*, BaseType, Type,
     };
 }
 
@@ -47,6 +49,19 @@ pub struct Type {
 impl Type {
     fn name(&self) -> String {
         "&".repeat(self.ref_count.into()) + &self.base.name
+    }
+
+    pub fn gen_ret_type(&self) -> GeneralReturnType {
+        pub fn type_from_name(input: &str) -> GeneralReturnType {
+            match input {
+                "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
+                "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
+                s if s.chars().next() == Some('&') => PrimRef(Box::new(type_from_name(&input[1..]))),
+                _ => todo!(),
+            }
+        }
+
+        type_from_name(&self.name())
     }
 }
 
