@@ -2,30 +2,58 @@ use super::expr_tree::*;
 use super::prelude::*;
 use crate::core_lib::CORE_LIB;
 use crate::parse::prelude::*;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::sync::Arc;
 
-///The HLR Data Type.
+/// The HLR Data Type.
 #[derive(Default)]
-pub struct HLR {
+pub struct FuncRep {
     pub tree: ExprTree,
     pub types: TypeGroup,
     pub identifiers: Vec<Arc<str>>,
 
     // used to find where variables are declared.
-    pub data_flow: HashMap<Arc<str>, (Type, Vec<ExprID>)>,
+    pub data_flow: IndexMap<Arc<str>, DataFlowInfo>,
 }
 
-impl HLR {
-    pub fn from(expr: Expr) -> Self {
-        let mut new_hlr = HLR::with_core_lib();
+#[derive(Debug)]
+pub struct DataFlowInfo {
+    pub typ: Type,
+    pub ids: Vec<ExprID>,
+    pub is_func_param: bool,
+}
+
+impl FuncRep {
+    pub fn from(args: Vec<VarDecl>, expr: Expr) -> Self {
+        let mut new_hlr = FuncRep::with_core_lib();
+
+        for (arg_index, arg) in args.iter().enumerate() {
+            let name: Arc<str> = Arc::from(&*arg.var_name);
+
+            new_hlr.identifiers.push(name.clone());
+
+            let typ = match arg.type_spec {
+                Some(ref type_spec) => new_hlr.types.get_spec(&type_spec).unwrap(),
+                None => todo!(),
+            };
+
+            new_hlr.data_flow.insert(
+                name,
+                DataFlowInfo {
+                    typ,
+                    ids: Vec::new(),
+                    is_func_param: true,
+                },
+            );
+        }
+
         new_hlr.add_expr(expr, ExprID::ROOT);
 
         new_hlr
     }
 
     pub fn with_core_lib() -> Self {
-        let mut output = HLR::default();
+        let mut output = FuncRep::default();
         output.types = TypeGroup::with_core_lib();
         output
     }
@@ -35,48 +63,74 @@ impl HLR {
             Expr::Number(n) => self.tree.insert(parent, NodeData::Number(n.into())),
             Expr::Float(n) => self.tree.insert(parent, NodeData::Float(n.into())),
             Expr::Ident(name) => {
-                let ident = self.identifiers.iter().find(|i| ***i == *name).unwrap();
-                self.tree.insert(
-                    parent,
-                    NodeData::Ident {
-                        var_type: CORE_LIB.force_get(&"_::none".into()),
-                        name: ident.clone(),
-                    },
-                )
-            }
-            Expr::VarDecl(t, n, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let ident_arc: Arc<str> = Arc::from(&*n);
+                let name = self
+                    .identifiers
+                    .iter()
+                    .find(|i| ***i == *name)
+                    .unwrap()
+                    .clone();
 
-                self.identifiers.push(ident_arc.clone());
-                let new_decl = NodeData::VarDecl {
-                    type_spec: t,
-                    var_type: CORE_LIB.force_get(&"_::none".into()),
-                    name: ident_arc,
+                let data_flow_info = self.data_flow.get_mut(&name).unwrap();
+                data_flow_info.ids.push(space);
+
+                self.tree.replace(
+                    space,
+                    NodeData::Ident {
+                        var_type: Type::none(),
+                        name,
+                    },
+                );
+
+                space
+            },
+            Expr::SetVar(decl, e) => {
+                let space = self.tree.make_one_space(parent);
+
+                let var_name: Arc<str> = Arc::from(&*decl.var_name);
+
+                let var_type = Type::none();
+
+                if !self.data_flow.contains_key(&var_name) {
+                    let new_data_flow_info = DataFlowInfo {
+                        typ: var_type.clone(),
+                        ids: vec![space],
+                        is_func_param: false,
+                    };
+
+                    self.data_flow.insert(var_name.clone(), new_data_flow_info);
+                }
+
+                self.identifiers.push(var_name.clone());
+                let new_decl = NodeData::SetVar {
+                    type_spec: decl.type_spec,
+                    var_type,
+                    name: var_name.clone(),
                     rhs: self.add_expr(*e, space),
                 };
 
                 self.tree.replace(space, new_decl);
+
                 space
-            }
+            },
             Expr::UnarOp(op, hs) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::UnarOp {
-                    ret_type: CORE_LIB.force_get(&"_::none".into()),
+                    ret_type: Type::none(),
                     op,
                     hs: self.add_expr(*hs, space),
                 };
 
                 self.tree.replace(space, new_binop);
                 space
-            }
+            },
             Expr::BinOp(lhs, op, rhs) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::BinOp {
-                    ret_type: CORE_LIB.force_get(&"_::none".into()),
+                    ret_type: Type::none(),
                     lhs: self.add_expr(*lhs, space),
                     op,
                     rhs: self.add_expr(*rhs, space),
@@ -84,24 +138,24 @@ impl HLR {
 
                 self.tree.replace(space, new_binop);
                 space
-            }
+            },
             Expr::IfThen(i, t) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThen {
-                    ret_type: CORE_LIB.force_get(&"_::none".into()),
+                    ret_type: Type::none(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                 };
 
                 self.tree.replace(space, new_binop);
                 space
-            }
+            },
             Expr::IfThenElse(i, t, e) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThenElse {
-                    ret_type: CORE_LIB.force_get(&"_::none".into()),
+                    ret_type: Type::none(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                     e: self.add_expr(*e, space),
@@ -109,7 +163,7 @@ impl HLR {
 
                 self.tree.replace(space, new_binop);
                 space
-            }
+            },
             Expr::ForWhile(w, d) => {
                 let space = self.tree.make_one_space(parent);
 
@@ -120,7 +174,7 @@ impl HLR {
 
                 self.tree.replace(space, new_binop);
                 space
-            }
+            },
             Expr::Block(stmts) => {
                 let space = self.tree.make_one_space(parent);
 
@@ -131,14 +185,30 @@ impl HLR {
                 }
 
                 let new_binop = NodeData::Block {
-                    ret_type: CORE_LIB.force_get(&"_::none".into()),
+                    ret_type: Type::none(),
                     stmts: statment_ids,
                 };
 
                 self.tree.replace(space, new_binop);
                 space
-            }
-            _ => todo!(),
+            },
+            Expr::Call(func, args) => {
+                let space = self.tree.make_one_space(parent);
+
+                let mut arg_ids = Vec::new();
+
+                for arg in args {
+                    arg_ids.push(self.add_expr(arg, space));
+                }
+
+                let new_data = NodeData::Call {
+                    f: self.add_expr(*func, space),
+                    a: arg_ids,
+                };
+
+                self.tree.replace(space, new_data);
+                space
+            },
         }
     }
 }

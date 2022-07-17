@@ -1,1 +1,7 @@
-max_width = 120
+max_width = 85
+wrap_match_arms = false
+reorder_imports = true
+reorder_imported_names = true
+normalize_comments = true
+match_block_trailing_comma = true
+take_source_hints = false

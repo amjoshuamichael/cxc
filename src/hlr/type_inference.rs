@@ -2,32 +2,39 @@ use super::prelude::*;
 use crate::parse::prelude::*;
 use std::collections::HashMap;
 
-pub fn infer_types(hlr: &mut HLR) {
+pub fn infer_types(hlr: &mut FuncRep) {
     let mut types = HashMap::new();
 
     for (n, node) in hlr.tree.top_down_iter() {
         match node {
-            NodeData::VarDecl {
+            NodeData::SetVar {
                 type_spec,
                 ref mut var_type,
                 name,
                 ..
             } => {
                 *var_type = match type_spec {
-                    Some(type_spec) => hlr.types.get_spec(type_spec).unwrap().clone(),
-                    None => hlr.data_flow.get_mut(&name.clone()).unwrap().0.clone(),
+                    Some(type_spec) => {
+                        let var_type =
+                            hlr.types.get_spec(type_spec).unwrap().clone();
+                        hlr.data_flow.get_mut(&name.clone()).unwrap().typ =
+                            var_type.clone();
+                        var_type
+                    },
+                    None => {
+                        hlr.data_flow.get_mut(&name.clone()).unwrap().typ.clone()
+                    },
                 }
                 .clone();
-
-                hlr.data_flow.insert(name.clone(), (var_type.clone(), vec![n]));
-            }
-            NodeData::Ident { ref mut var_type, name } => {
+            },
+            NodeData::Ident {
+                ref mut var_type,
+                name,
+            } => {
                 let instances = hlr.data_flow.get_mut(&name.clone()).unwrap();
-                instances.1.push(n);
-
-                *var_type = instances.0.clone();
-            }
-            _ => {}
+                *var_type = instances.typ.clone();
+            },
+            _ => {},
         };
 
         if let Some(ret_type) = node.ret_type() {
@@ -35,14 +42,16 @@ pub fn infer_types(hlr: &mut HLR) {
         }
     }
 
-    for (n, node) in hlr.tree.bottom_up_iter() {
+    for (n, node) in hlr.tree.top_down_iter().rev() {
         match node {
             NodeData::BinOp {
-                ref mut ret_type, rhs, ..
+                ref mut ret_type,
+                rhs,
+                ..
             } => {
                 *ret_type = types.get(rhs).unwrap().clone();
                 *types.get_mut(&n).unwrap() = ret_type.clone();
-            }
+            },
             NodeData::UnarOp {
                 ref mut ret_type,
                 hs,
@@ -58,8 +67,8 @@ pub fn infer_types(hlr: &mut HLR) {
                 }
 
                 *types.get_mut(&n).unwrap() = ret_type.clone();
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 }

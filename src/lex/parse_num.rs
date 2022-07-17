@@ -1,73 +1,67 @@
 use crate::lex::Token;
 use logos::Lexer;
 
-pub fn parse_int(lex: &mut Lexer<Token>) -> Option<u128> {
-    let token_str = lex.slice();
-    let token = token_str.chars().filter(|c| *c != '_').collect::<String>();
+pub fn parse_int(token: &mut Lexer<Token>) -> Option<u128> {
+    let plain_number = token
+        .slice()
+        .chars()
+        .filter(|c| *c != '_')
+        .collect::<String>();
 
-    if token.len() == 1 {
-        return Some(token.parse().unwrap());
+    if plain_number.len() == 1 {
+        return plain_number.parse().ok();
     }
 
-    match token.chars().nth(1)? {
-        'b' => convert_base(&token[2..], 2),
-        'o' => convert_base(&token[2..], 8),
-        'x' => convert_base(&token[2..], 16),
-        _ => Some(token.parse().unwrap()),
+    match &plain_number[..2] {
+        "0b" => convert_base(&plain_number[2..], 2),
+        "0o" => convert_base(&plain_number[2..], 8),
+        "0x" => convert_base(&plain_number[2..], 16),
+        _ => plain_number.parse().ok(),
     }
 }
 
-pub fn parse_float(lex: &mut Lexer<Token>) -> Option<f64> {
-    let mut token = lex.slice().to_string();
-    token = token.chars().filter(|c| *c != '_').collect();
+pub fn parse_float(token: &mut Lexer<Token>) -> Option<f64> {
+    let num_text = token
+        .slice()
+        .chars()
+        .filter(|c| *c != '_' && *c != '+')
+        .collect::<String>();
 
-    if token.chars().nth(0)? == '.' {
-        token = format!("0{}", token);
+    match num_text.chars().position(|c| c == 'e') {
+        None => num_text.parse().ok(),
+        Some(e_pos) => parse_scientific_notation(num_text, e_pos),
     }
-
-    // TODO: implement scientific notation
-
-    return Some(token.parse().unwrap());
 }
 
-pub fn convert_base(input: &str, base: u128) -> Option<u128> {
+fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<f64> {
+    let coeff_str = &num_text[..e_pos];
+    let exp_str = &num_text[e_pos + 1..];
+
+    let without_decimal =
+        coeff_str.chars().filter(|c| *c != '.').collect::<String>();
+    let decimal_pos = coeff_str.chars().rev().position(|c| c == '.').unwrap();
+
+    let coefficient: f64 = without_decimal.parse::<f64>().ok()?;
+    let exponent: f64 = exp_str.parse::<f64>().ok()? - decimal_pos as f64;
+    let base: f64 = 10.0;
+
+    let output = coefficient * base.powf(exponent);
+
+    return Some(output);
+}
+
+fn convert_base(input: &str, base: u32) -> Option<u128> {
     let mut output: u128 = 0;
-    let mut base_multiplier = 1;
 
-    for c in input.chars().rev() {
-        output += base_multiplier * match_base16(c)?;
-        base_multiplier *= base;
+    for (digit_index, digit) in input.chars().rev().enumerate() {
+        let digit_index: u32 = digit_index.try_into().unwrap();
+        let base_multiplier: u128 = base.pow(digit_index).try_into().ok()?;
+        output += match_base16(digit)? * base_multiplier;
     }
 
     Some(output)
 }
 
-fn match_base16(char: char) -> Option<u128> {
-    let mut str_dest = [0; 1];
-
-    if let Ok(num) = char.encode_utf8(&mut str_dest).parse() {
-        return Some(num);
-    }
-
-    match char {
-        'a' => Some(10),
-        'b' => Some(11),
-        'c' => Some(12),
-        'd' => Some(13),
-        'e' => Some(14),
-        'f' => Some(15),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::convert_base;
-
-    #[test]
-    fn test_base_conversion() {
-        assert_eq!(convert_base("101010", 2).unwrap(), 42);
-        assert_eq!(convert_base("52", 8).unwrap(), 42);
-        assert_eq!(convert_base("2a", 16).unwrap(), 42);
-    }
+fn match_base16(digit: char) -> Option<u128> {
+    Some(digit.to_digit(16)?.into())
 }

@@ -33,16 +33,39 @@ pub Root: Script = {
     <funcs:Function*> => Script(<>),
 }
 
+Struct: Declaration = {
+    <name:ident> "{" <fields:TypedParenList> "}" => match name {
+        Token::Ident(name) => Declaration::Struct { name, fields },
+        _ => unreachable!(),
+        },
+}
+
 Function: Declaration = {
     <name:Var> <args:ParenList> <code:Block> => Declaration::Function { name, args, code: *code }
 }
 
-ParenList: Vec<(String, Option<(u8, String)>)> = {
-    "(" <List<Var, ",">> ")" => <>,
+TypedParenList: Vec<VarDecl> = {
+    "(" <List<TypedVar, ",">> ")",
+}
+
+ParenList: Vec<VarDecl> = {
+    "(" <List<Var, ",">> ")",
+}
+
+ExprList: Vec<Expr> = {
+    "(" <List<ORExprTier, ",">> ")" => {
+        let mut unboxed_vec = Vec::new();
+
+        for arg in <> {
+            unboxed_vec.push(*arg);
+        }
+
+        unboxed_vec
+    }
 }
 
 Block: Box<Expr> = {
-    "{" <stmts:(Statement)+> <ret:ImplicitReturn?> "}" => {
+    "{" <stmts:(Statement)+> <ret:Return?> "}" => {
         let mut block = Vec::new();
         
         for stmt in stmts {
@@ -55,50 +78,61 @@ Block: Box<Expr> = {
 
         Box::new(Block(block))
     },
-    "{" <ret:ORExprTier> "}" => Box::new(Block(vec![*<>])),
+    //"{" <ret:ORExprTier> "}" => Box::new(Block(vec![*<>])),
     "{" "}" => Box::new(Block(Vec::new())),
 }
 
-TypeSpecifier: (u8, String) = {
-    "&&" <TypeSpecifier> => (<>.0 + 2, <>.1),
-    "&" <TypeSpecifier> => (<>.0 + 1, <>.1),
-    <ident> => match <> {
-        Token::Ident(i) => (0, i),
-        _ => unreachable!(),
-    }
+TypeSpecifier: TypeSpec = {
+    "&&" <TypeSpecifier> => <>.reference().reference(),
+    "&" <TypeSpecifier> => <>.reference(),
+    <Ident> => TypeSpec::new(&*<>, 0),
 }
 
-ImplicitReturn: Box<Expr> = {
+Return: Box<Expr> = {
     "!" <ORExprTier>,
 }
 
 Statement: Box<Expr> = {
     <ForExpr>,
+    <CallExpr>,
 }
 
 ForExpr: Box<Expr> = {
     "@" <f:ORExprTier> <b:Block> => Box::new(ForWhile(f, b)),
-    //"@" <f:ORExprTier> <d:ForExpr> => Box::new(ForWhile(f, d)),
     IFExpr,
 }
 
 IFExpr: Box<Expr> = {
     "?" <i:ORExprTier> <t:Block> => Box::new(IfThen(i, t)),
-    "?" <i:ORExprTier> <t:IFExpr> => Box::new(IfThen(i, t)),
     "?" <i:ORExprTier> <t:Block> ":" <e:Block> => Box::new(IfThenElse(i, t, e)),
-    "?" <i:ORExprTier> <t:AssignmentExpr> ":" <e:IFExpr> => Box::new(IfThenElse(i, t, e)),
-    AssignmentExpr,
+    "?" <i:ORExprTier> <t:IFExpr> => Box::new(IfThen(i, t)),
+    "?" <i:ORExprTier> <t:FunctionalExpr> ":" <e:IFExpr> => Box::new(IfThenElse(i, t, e)),
+    FunctionalExpr,
 }
 
-Var: (String, Option<(u8, String)>) = {
-    <i:Ident> ":" <t:TypeSpecifier?> => (i, t),
-    <i:Ident> => (i, None),
+Var: VarDecl = {
+    <tv:TypedVar> => <>,
+    <i:Ident> => VarDecl {
+        var_name: i,
+        type_spec: None,
+    },
 }
 
-// An Assignment Expression (e.g. `f = 42 + 210 * 2`) is the final level of expression that does 
-// not involve control flow.
+TypedVar: VarDecl = {
+    <i:Ident> ":" <t:TypeSpecifier> => VarDecl {
+        var_name: i,
+        type_spec: Some(t),
+    },
+}
+
+FunctionalExpr: Box<Expr> = {
+    <AssignmentExpr>,
+}
+
+// An Assignment Expression (e.g. `f = 42 + 210 * 2`) is the final level of 
+// expression that does not involve control flow.
 AssignmentExpr: Box<Expr> = {
-    <nv:Var> "=" <e:ORExprTier> => Box::new(VarDecl(nv.1, nv.0, e)),
+    <decl:Var> "=" <e:ORExprTier> => Box::new(SetVar(decl, e)),
 };
 ASOp: Opcode = { "=" => Assignment, }
 
@@ -148,6 +182,11 @@ RefExprTier: Box<Expr> = {
     Term,
 }
 
+CallExpr: Box<Expr> = {
+    <i:Ident> <args:ExprList> => Box::new(Call(Box::new(Ident(i)), args)),
+    "(" <t:CallExpr> ")" <args:ExprList> => Box::new(Call(t, args)),
+}
+
 pub Term: Box<Expr> = {
     <n:int> => match n { 
             Token::Int(n) => Box::new(Number(n)), 
@@ -169,10 +208,6 @@ Ident: String = {
     },
 }
 
-Nothing: () = {
-    error => (),
-}
-
 extern {
     type Location = usize;
     type Error = LexicalError;
@@ -181,7 +216,6 @@ extern {
         ident => Token::Ident(_),
         int => Token::Int(_),
         float => Token::Float(_),
-        error => Token::Error,
         "=" => Token::Assignment,
         "+" => Token::Plus,
         "-" => Token::Minus,

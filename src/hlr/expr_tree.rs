@@ -1,5 +1,7 @@
 use super::prelude::*;
+use crate::core_lib;
 use crate::core_lib::CORE_LIB;
+use crate::parse::prelude::*;
 use crate::parse::Opcode;
 use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
@@ -11,21 +13,13 @@ pub struct ExprTree {
 }
 
 impl ExprTree {
-    pub fn top_down_iter<'a>(&'a mut self) -> Box<dyn Iterator<Item = (ExprID, &mut NodeData)> + 'a> {
+    pub fn top_down_iter<'a>(
+        &'a mut self,
+    ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &mut NodeData)> + 'a> {
         Box::new(
             self.nodes
                 .iter_mut()
                 .enumerate()
-                .map(|(id, node)| (ExprID(id), &mut node.data)),
-        )
-    }
-
-    pub fn bottom_up_iter<'a>(&'a mut self) -> Box<dyn Iterator<Item = (ExprID, &mut NodeData)> + 'a> {
-        Box::new(
-            self.nodes
-                .iter_mut()
-                .enumerate()
-                .rev()
                 .map(|(id, node)| (ExprID(id), &mut node.data)),
         )
     }
@@ -89,9 +83,13 @@ impl Debug for ExprNode {
             Number(n) => println!("{n}"),
             Float(fl) => println!("{fl:?}"),
             Strin(s) => println!("{s}"),
+            Call { f, a } => println!("{f:?}({a:?})"),
             Ident { name, .. } => println!("{name}"),
-            VarDecl {
-                var_type, name, rhs, ..
+            SetVar {
+                var_type,
+                name,
+                rhs,
+                ..
             } => println!("{name}: {var_type:?} = {rhs:?}"),
             UnarOp { op, hs, .. } => println!("{op:?} {hs:?}"),
             BinOp { lhs, op, rhs, .. } => println!("{lhs:?} {op:?} {rhs:?}"),
@@ -115,11 +113,15 @@ pub enum NodeData {
         var_type: Type,
         name: Arc<str>,
     },
-    VarDecl {
-        type_spec: Option<(u8, String)>,
+    SetVar {
+        type_spec: Option<TypeSpec>,
         var_type: Type,
         name: Arc<str>,
         rhs: ExprID,
+    },
+    Call {
+        f: ExprID,
+        a: Vec<ExprID>,
     },
     UnarOp {
         ret_type: Type,
@@ -157,7 +159,7 @@ pub enum GeneralReturnType {
     PrimInt,
     PrimFloat,
     PrimString,
-    PrimRef(Box<GeneralReturnType>),
+    PrimRef,
     Struct,
 }
 
@@ -179,10 +181,13 @@ impl NodeData {
 
     pub fn ret_type(&self) -> Option<Type> {
         match self {
-            Number(_) => Some(CORE_LIB.force_get(&"prim::i32".into())),
-            Float(_) => Some(CORE_LIB.force_get(&"prim::f32".into())),
+            Number(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::i32", 0)),
+            Float(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)),
             Strin(_) => todo!(),
-            Ident { var_type, .. } | VarDecl { var_type, .. } => Some(var_type.clone()),
+            Call { .. } => todo!(),
+            Ident { var_type, .. } | SetVar { var_type, .. } => {
+                Some(var_type.clone())
+            },
             BinOp { ret_type, .. }
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }

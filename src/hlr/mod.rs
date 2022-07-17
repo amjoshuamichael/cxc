@@ -1,35 +1,27 @@
 pub mod expr_tree;
 pub mod hlr_data;
-mod maybe_type;
-pub mod program_info;
-#[cfg(test)]
-mod tests;
 pub mod type_group;
 mod type_inference;
 
+use crate::core_lib::CORE_LIB;
 use crate::parse::prelude::*;
-use inkwell::types::*;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
 pub mod prelude {
     pub use super::{
-        expr_tree::type_from_name, expr_tree::ExprID, expr_tree::ExprTree, expr_tree::GeneralReturnType,
-        expr_tree::GeneralReturnType::*, expr_tree::NodeData, hlr, hlr_data::HLR, program_info::ProgramInfo,
-        type_group::TypeGroup, type_inference::*, BaseType, Type,
+        expr_tree::ExprID, expr_tree::ExprTree, expr_tree::GeneralReturnType,
+        expr_tree::GeneralReturnType::*, expr_tree::NodeData, hlr,
+        hlr_data::FuncRep, type_group::TypeGroup, type_inference::*, BaseType, Type,
     };
 }
 
+use indexmap::IndexMap;
 use prelude::*;
 
-pub fn hlr(prog: Script) -> HLR {
-    let func_as_expr = match &prog.0[0] {
-        Declaration::Function { code, .. } => code,
-        _ => unreachable!(),
-    };
-
-    let mut output = HLR::from(func_as_expr.clone());
+pub fn hlr(args: Vec<VarDecl>, code: Expr) -> FuncRep {
+    let mut output = FuncRep::from(args, code);
     infer_types(&mut output);
 
     if crate::DEBUG {
@@ -40,14 +32,14 @@ pub fn hlr(prog: Script) -> HLR {
     output
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Type {
     base: Arc<BaseType>,
     pub ref_count: u8,
 }
 
 impl Type {
-    fn name(&self) -> String {
+    pub fn name(&self) -> String {
         "&".repeat(self.ref_count.into()) + &self.base.name
     }
 
@@ -56,12 +48,16 @@ impl Type {
             match input {
                 "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
                 "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
-                s if s.chars().next() == Some('&') => PrimRef(Box::new(type_from_name(&input[1..]))),
-                _ => todo!(),
+                s if s[0..1] == *"&" => PrimRef,
+                _ => panic!("could not find type: {input}"),
             }
         }
 
         type_from_name(&self.name())
+    }
+
+    fn none() -> Self {
+        CORE_LIB.get_spec(&TypeSpec::new("_::none", 0)).unwrap()
     }
 }
 
@@ -73,19 +69,10 @@ impl Debug for Type {
     }
 }
 
-impl From<&Arc<BaseType>> for Type {
-    fn from(base_type: &Arc<BaseType>) -> Type {
-        Type {
-            base: base_type.clone(),
-            ..Default::default()
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct BaseType {
     pub name: String,
-    pub fields: HashSet<String>,
+    pub fields: IndexMap<String, Type>,
 }
 
 impl BaseType {

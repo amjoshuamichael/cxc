@@ -1,4 +1,5 @@
 use crate::hlr::prelude::*;
+use crate::parse::prelude::*;
 
 lazy_static! {
     pub static ref CORE_LIB: TypeGroup = {
@@ -18,5 +19,13 @@ lazy_static! {
         core_lib.add(BaseType::new_under("none"));
 
         core_lib
+    };
+
+    pub static ref I32: Type = {
+        CORE_LIB.get_spec(&TypeSpec::new("prim::i32", 0)).unwrap()
+    };
+
+    pub static ref F32: Type = {
+        CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)).unwrap()
     };
 }

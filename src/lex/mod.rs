@@ -1,4 +1,4 @@
-use logos::{Lexer, Logos};
+use logos::{Lexer as LogosLexer, Logos};
 use std::iter::Enumerate;
 pub use token::Token;
 
@@ -8,38 +8,34 @@ mod token;
 #[cfg(test)]
 mod tests;
 
-// Lalrpop forces you to put a lexical error enum (titled "LexicalError") into your crate and use
-// it in the iterator like this. This error is not actually used for anything. It also forces you
-// to use this "Spanned" type.
+// Spanned and LexicalError are types that are required by lalrpop to be in the crate.
 pub type Spanned<Tok, Loc, Error> = Result<(Loc, Tok, Loc), Error>;
 
 #[derive(PartialEq, Debug)]
 pub enum LexicalError {}
 
-pub struct SerfLex<'a>(pub Enumerate<Lexer<'a, Token>>);
+// Wrapper for the Lexer, allowing it to pass to lalrpop
+pub struct Lexer<'a>(pub Enumerate<LogosLexer<'a, Token>>);
 
-impl<'input> Iterator for SerfLex<'input> {
+impl Iterator for Lexer<'_> {
     type Item = Spanned<Token, usize, LexicalError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut token = self.0.next()?;
 
-        while matches!(token.1, Token::Error) {
+        // Skip over returns, whitespace, and comments
+        while matches!(token.1, Token::Whitespace) {
             token = self.0.next()?;
         }
 
         if crate::DEBUG {
-            println!("lexing token: {:?}", token.1);
+            println!("Lexing: {:?}", token.1);
         }
 
         Some(Ok((token.0, token.1, token.0 + 1)))
     }
 }
 
-pub fn lex(input: &str) -> SerfLex {
-    SerfLex(Token::lexer(input).enumerate())
-}
-
-pub mod prelude {
-    pub use super::lex;
+pub fn lex(input: &str) -> Lexer {
+    Lexer(Token::lexer(input).enumerate())
 }

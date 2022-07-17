@@ -1,19 +1,52 @@
-use crate::lex::SerfLex;
+use crate::indent_parens::indent_parens;
+use crate::lex::Lexer;
 use std::fmt::{Debug, Formatter};
 
 pub mod prelude {
-    pub use super::{parse, Declaration, Expr, Opcode, Script};
+    pub use super::{parse, Declaration, Expr, Opcode, Script, TypeSpec, VarDecl};
 }
 
 #[derive(Debug)]
 pub struct Script(pub Vec<Declaration>);
 
+#[derive(Clone, Debug)]
+pub struct TypeSpec {
+    pub ref_count: u8,
+    pub name: String,
+}
+
+impl TypeSpec {
+    pub fn new(name: &str, ref_count: u8) -> Self {
+        Self {
+            ref_count,
+            name: String::from(name),
+        }
+    }
+
+    pub fn reference(self) -> Self {
+        Self {
+            ref_count: self.ref_count + 1,
+            name: self.name,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct VarDecl {
+    pub var_name: String,
+    pub type_spec: Option<TypeSpec>,
+}
+
 #[derive(Debug)]
 pub enum Declaration {
     Function {
-        name: (String, Option<(u8, String)>),
-        args: Vec<(String, Option<(u8, String)>)>,
+        name: VarDecl,
+        args: Vec<VarDecl>,
         code: Expr,
+    },
+    Struct {
+        name: String,
+        fields: Vec<VarDecl>,
     },
 }
 
@@ -22,7 +55,8 @@ pub enum Expr {
     Number(u128),
     Float(f64),
     Ident(String),
-    VarDecl(Option<(u8, String)>, String, Box<Expr>),
+    SetVar(VarDecl, Box<Expr>),
+    Call(Box<Expr>, Vec<Expr>),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Box<Expr>, Opcode, Box<Expr>),
     IfThen(Box<Expr>, Box<Expr>),
@@ -36,25 +70,28 @@ impl Debug for Expr {
         use self::Expr::*;
 
         match self {
-            Number(n) => write!(fmt, "NUM: {n:?}"),
-            Float(f) => write!(fmt, "FLOAT: {f:?}"),
-            Ident(i) => write!(fmt, "IDENT: {i}"),
-            VarDecl(t, n, e) => write!(fmt, "DECLR: {n}: {t:?} = ({e:?})"),
-            UnarOp(op, ref r) => write!(fmt, "UNOP: ({op:?}, {r:?})"),
-            BinOp(ref l, op, ref r) => write!(fmt, "BINOP: ({l:?} {op:?} {r:?})"),
-            IfThen(ref l, ref r) => write!(fmt, "(IF {l:?} THEN {r:?})"),
-            IfThenElse(ref i, ref t, ref e) => write!(fmt, "(IF {i:?} THEN {t:?} ELSE {e:?})"),
-            ForWhile(ref f, ref d) => write!(fmt, "(FOR {f:?} DO {d:?}"),
+            Number(n) => print!("NUM: {n:?}"),
+            Float(f) => print!("FLOAT: {f:?}"),
+            Ident(i) => print!("IDENT: {i}"),
+            SetVar(d, e) => {
+                print!("SET: {}: {:?} = ({e:?})", d.var_name, d.type_spec)
+            },
+            Call(f, a) => print!("CALL: {f:?} WITH {a:?}"),
+            UnarOp(op, ref r) => print!("UNOP: ({op:?}, {r:?})"),
+            BinOp(ref l, op, ref r) => print!("BINOP: ({l:?} {op:?} {r:?})"),
+            IfThen(ref l, ref r) => print!("(IF {l:?} THEN {r:?})"),
+            IfThenElse(ref i, ref t, ref e) => {
+                print!("(IF {i:?} THEN {t:?} ELSE {e:?})")
+            },
+            ForWhile(ref f, ref d) => print!("(FOR {f:?} DO {d:?}"),
             Block(statements) => {
-                let mut output = String::from("BLOCK {");
-
                 for s in statements {
-                    output += &*format!("{:?}", s);
+                    print!("{s:?}");
                 }
+            },
+        };
 
-                write!(fmt, "{}}}", output)
-            }
-        }
+        Ok(())
     }
 }
 
@@ -86,49 +123,17 @@ pub enum Opcode {
     Deref,
 }
 
-pub fn parse(input: SerfLex) -> Script {
+pub fn parse(input: Lexer) -> Script {
     use crate::serf_parser;
 
-    let parsed = serf_parser::RootParser::new().parse(input).expect("unable to parse: ");
+    let parsed = serf_parser::RootParser::new()
+        .parse(input)
+        .expect("unable to parse: ");
 
     if crate::DEBUG {
-        let parse_data = crate::indent_parens::indent_parens(format!("{parsed:?}"));
         println!("--------PARSE DATA--------");
-        println!("{parse_data}");
+        println!("{}", indent_parens(format!("{parsed:?}")));
     }
 
     parsed
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{lex::*, parse::prelude::*};
-
-    #[allow(dead_code)]
-    fn space_separated<'a>(input: Script) -> Vec<String> {
-        let unseparated = format!("{input:?}");
-        unseparated
-            .clone()
-            .split_whitespace()
-            .collect::<Vec<&str>>()
-            .iter()
-            .map(|str| (*str).into())
-            .collect()
-    }
-
-    // TODO: write proper tests
-    #[test]
-    fn basic_parsing() {
-        let parsed = parse(lex("{ x + 42 }"));
-
-        println!("{parsed:?}");
-        assert_eq!(
-            Script::Function(vec![Expr::BinOp(
-                Box::new(Expr::Ident("x".into())),
-                Opcode::Plus,
-                Box::new(Expr::Number(42)),
-            )]),
-            parsed
-        );
-    }
 }

@@ -1,5 +1,7 @@
 use super::parse_num;
+use crate::parse::*;
 use logos::Logos;
+use syn::token::{And, Or};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
@@ -84,10 +86,34 @@ pub enum Token {
     )]
     Int(u128),
 
-    #[regex(r"[0-9_]*\.[0-9_]*(e[0-9_]+)?", parse_num::parse_float)]
+    #[regex(r"[0-9_]*\.[0-9_]*(e[+-]?[0-9_]+)?", parse_num::parse_float)]
     Float(f64),
 
     #[error]
-    #[regex(r"(#.*\n)|[ \t\n\f]+", logos::skip)]
     Error,
+
+    #[regex(r"(#.*\n)|[ \t\n\f]+", logos::skip)]
+    Whitespace,
+}
+
+impl Token {
+    pub fn get_opcode(&self) -> Option<Opcode> {
+        match self {
+            Plus => Some(Opcode::Plus),
+            Minus => Some(Opcode::Minus),
+            Multiplier => Some(Opcode::Multiplier),
+            Divider => Some(Opcode::Divider),
+            Modulus => Some(Opcode::Modulus),
+            BitAND => Some(Opcode::BitAND),
+            BitOR => Some(Opcode::BitOR),
+            BitXOR => Some(Opcode::BitXOR),
+            BitShiftR => Some(Opcode::BitShiftR),
+            BitShiftL => Some(Opcode::BitShiftL),
+            And => Some(Opcode::And),
+            Or => Some(Opcode::Or),
+            LessOrEqual => Some(Opcode::LessOrEqual),
+            GreaterOrEqual => Some(Opcode::GreaterOrEqual),
+            _ => None,
+        }
+    }
 }

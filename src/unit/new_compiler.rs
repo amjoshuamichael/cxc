@@ -1,36 +1,8 @@
 use super::*;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
-use crate::hlr::prelude::*;
-use crate::parse::Opcode::*;
-use crate::unit::to_basic_type;
-use core::cell::RefCell;
-use inkwell::builder::Builder;
-use inkwell::context::Context;
-use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
-use std::collections::HashMap;
-use std::sync::Arc;
-
-pub struct FunctionCompilationState<'f> {
-    pub tree: ExprTree,
-    pub variables: HashMap<Arc<str>, PointerValue<'f>>,
-    pub function: FunctionValue<'f>,
-    pub builder: Builder<'f>,
-    pub context: &'f Context,
-    pub arg_names: Vec<Arc<str>>,
-    pub llvm_ir_uuid: RefCell<u32>,
-}
-
-impl<'f> FunctionCompilationState<'f> {
-    fn new_uuid<'a>(&self) -> String {
-        let current_uuid = *self.llvm_ir_uuid.borrow();
-        let output = current_uuid.to_string();
-        self.llvm_ir_uuid.replace(current_uuid + 1);
-        String::from("t") + &*output
-    }
-}
 
 pub fn compile<'comp>(
     fcs: &mut FunctionCompilationState<'comp>,
@@ -111,7 +83,7 @@ pub fn compile<'comp>(
                     PrimFloat => {
                         fcs.builder.build_alloca(fcs.context.f32_type(), name)
                     },
-                    PrimRef => fcs.builder.build_alloca(
+                    PrimRef(_) => fcs.builder.build_alloca(
                         to_basic_type(fcs.context, &var_type.clone()),
                         name,
                     ),
@@ -133,6 +105,8 @@ pub fn compile<'comp>(
             ref rhs,
             ..
         } => {
+            use Opcode::*;
+
             let lhs = compile(fcs, *lhs).unwrap();
             let rhs = compile(fcs, *rhs).unwrap();
 
