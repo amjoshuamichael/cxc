@@ -1,5 +1,5 @@
 use crate::hlr::prelude::*;
-use crate::parse::prelude::*;
+use crate::parse::*;
 
 lazy_static! {
     pub static ref CORE_LIB: TypeGroup = {

@@ -1,29 +1,27 @@
-#![allow(warnings, unused)]
-#[macro_use]
-extern crate lalrpop_util;
+#![allow(warnings, dead_code)]
+#![feature(let_else)]
+#![feature(type_alias_impl_trait)]
+#![feature(box_syntax)]
 #[macro_use]
 extern crate lazy_static;
-
-lalrpop_mod!(pub serf_parser);
 
 pub static DEBUG: bool = true;
 
 mod hlr;
 mod lex;
 mod parse;
-mod parser;
 mod to_llvm;
 mod unit;
 
 mod core_lib;
 mod indent_parens;
 
-pub fn compile_and_run(input: &str) -> f32 {
-    let lexed = lex::lex(input);
-    let parsed = parse::parse(lexed);
-
-    0.0
-}
+// pub fn compile_and_run(input: &str) -> f32 {
+//    let lexed = lex::lex(input);
+//    let parsed = parse::parse(lexed);
+//
+//    0.0
+//}
 
 #[cfg(test)]
 mod tests {
@@ -100,10 +98,9 @@ mod tests {
 
         unit.push_script(
             "
-            seventy : prim::f32 () { 
-                # this calculates 70.0
-                output : prim::f32 = 60.0 + 10.0 
-                ! output 
+            seventy : prim::f32 () {
+                output : prim::f32 = 60.0 + 10.0
+                ! output
             }
             ",
         );
@@ -112,7 +109,7 @@ mod tests {
         assert_eq!(output, 70.0);
     }
 
-    //   #[test]
+    #[test]
     fn call_test() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
@@ -123,7 +120,7 @@ mod tests {
                 output : prim::i32 = num / 2
                 ! output
             }
-
+    
             main : prim::i32 () {
                 output : prim::i32 = divide_by_two(6)
                 ! output
@@ -134,19 +131,18 @@ mod tests {
         let mut output: f32 = unsafe { unit.get_fn("main")(()) };
         assert_eq!(output, 70.0);
     }
-
-    fn struct_test() {
-        let context = Context::create();
-        let mut unit = unit::Unit::new(&context);
-
-        unit.push_script(
-            "
-            Point2D {
-                x: prim::i32,
-                y: prim::i32,
-            }
-
-            ",
-        );
-    }
+    //    fn struct_test() {
+    //        let context = Context::create();
+    //        let mut unit = unit::Unit::new(&context);
+    //
+    //        unit.push_script(
+    //            "
+    //            Point2D {
+    //                x: prim::i32,
+    //                y: prim::i32,
+    //            }
+    //
+    //            ",
+    //        );
+    //    }
 }

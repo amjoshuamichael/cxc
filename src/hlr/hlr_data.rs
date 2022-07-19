@@ -1,12 +1,11 @@
 use super::expr_tree::*;
 use super::prelude::*;
-use crate::core_lib::CORE_LIB;
-use crate::parse::prelude::*;
+use crate::parse::*;
 use indexmap::IndexMap;
 use std::sync::Arc;
 
 /// The HLR Data Type.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct FuncRep {
     pub tree: ExprTree,
     pub types: TypeGroup,
@@ -27,7 +26,7 @@ impl FuncRep {
     pub fn from(args: Vec<VarDecl>, expr: Expr) -> Self {
         let mut new_hlr = FuncRep::with_core_lib();
 
-        for (arg_index, arg) in args.iter().enumerate() {
+        for arg in args.iter() {
             let name: Arc<str> = Arc::from(&*arg.var_name);
 
             new_hlr.identifiers.push(name.clone());
@@ -65,25 +64,29 @@ impl FuncRep {
             Expr::Ident(name) => {
                 let space = self.tree.make_one_space(parent);
 
-                let name = self
-                    .identifiers
-                    .iter()
-                    .find(|i| ***i == *name)
-                    .unwrap()
-                    .clone();
+                if let Some(name) = self.identifiers.iter().find(|i| ***i == *name) {
+                    let name = name.clone();
+                    let data_flow_info = self.data_flow.get_mut(&name).unwrap();
+                    data_flow_info.ids.push(space);
 
-                let data_flow_info = self.data_flow.get_mut(&name).unwrap();
-                data_flow_info.ids.push(space);
+                    self.tree.replace(
+                        space,
+                        NodeData::Ident {
+                            var_type: Type::none(),
+                            name,
+                        },
+                    );
 
-                self.tree.replace(
-                    space,
-                    NodeData::Ident {
-                        var_type: Type::none(),
-                        name,
-                    },
-                );
-
-                space
+                    space
+                } else {
+                    self.tree.insert(
+                        parent,
+                        NodeData::Global {
+                            var_type: Type::none(),
+                            name,
+                        },
+                    )
+                }
             },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
@@ -126,7 +129,7 @@ impl FuncRep {
                 self.tree.replace(space, new_binop);
                 space
             },
-            Expr::BinOp(lhs, op, rhs) => {
+            Expr::BinOp(op, lhs, rhs) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::BinOp {
@@ -209,6 +212,7 @@ impl FuncRep {
                 self.tree.replace(space, new_data);
                 space
             },
+            Expr::Op(_) => unreachable!(),
         }
     }
 }

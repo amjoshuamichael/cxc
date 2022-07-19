@@ -4,7 +4,7 @@ pub mod type_group;
 mod type_inference;
 
 use crate::core_lib::CORE_LIB;
-use crate::parse::prelude::*;
+use crate::parse::*;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -21,7 +21,9 @@ use indexmap::IndexMap;
 use prelude::*;
 
 pub fn hlr(args: Vec<VarDecl>, code: Expr) -> FuncRep {
+    dbg!(&code);
     let mut output = FuncRep::from(args, code);
+    dbg!(&output);
     infer_types(&mut output);
 
     if crate::DEBUG {

@@ -1,6 +1,6 @@
 use crate::hlr::prelude::*;
 use crate::lex::*;
-use crate::parse::prelude::*;
+use crate::parse::*;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::context::ContextRef;
@@ -45,7 +45,17 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let parsed = parse(lexed);
+        let parsed = crate::parse::file(
+            lexed
+                .map(|token| {
+                    if crate::DEBUG {
+                        println!("lexing: {:?}", token);
+                    }
+
+                    token
+                })
+                .peekable(),
+        );
 
         for decl in parsed.0 {
             match decl {

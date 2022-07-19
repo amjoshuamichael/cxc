@@ -1,5 +1,5 @@
 use super::parse_num;
-use crate::parse::*;
+use crate::parse::Opcode;
 use logos::Logos;
 use syn::token::{And, Or};
 
@@ -12,20 +12,16 @@ pub enum Token {
     #[token("!")]
     Bang,
 
-    #[token("**")]
-    Exponential,
     #[token("+")]
     Plus,
     #[token("-")]
     Minus,
-    #[token("*")]
-    Multiplier,
+    #[regex(r"\*+", |set| set.slice().len() as u8)]
+    AsterickSet(u8),
     #[token("/")]
     Divider,
     #[token("%")]
     Modulus,
-    #[token("&")]
-    BitAND,
     #[token("|")]
     BitOR,
     #[token("^")]
@@ -35,8 +31,8 @@ pub enum Token {
     #[token("<<")]
     BitShiftL,
 
-    #[token("&&")]
-    And,
+    #[regex(r"&+", |set| set.slice().len() as u8)]
+    AmpersandSet(u8),
     #[token("||")]
     Or,
 
@@ -97,22 +93,33 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn get_opcode(&self) -> Option<Opcode> {
+    pub fn get_un_opcode(&self) -> Option<Opcode> {
         match self {
-            Plus => Some(Opcode::Plus),
-            Minus => Some(Opcode::Minus),
-            Multiplier => Some(Opcode::Multiplier),
-            Divider => Some(Opcode::Divider),
-            Modulus => Some(Opcode::Modulus),
-            BitAND => Some(Opcode::BitAND),
-            BitOR => Some(Opcode::BitOR),
-            BitXOR => Some(Opcode::BitXOR),
-            BitShiftR => Some(Opcode::BitShiftR),
-            BitShiftL => Some(Opcode::BitShiftL),
-            And => Some(Opcode::And),
-            Or => Some(Opcode::Or),
-            LessOrEqual => Some(Opcode::LessOrEqual),
-            GreaterOrEqual => Some(Opcode::GreaterOrEqual),
+            Token::AsterickSet(count) => Some(Opcode::Deref(*count)),
+            Token::AmpersandSet(count) => Some(Opcode::Ref(*count)),
+            _ => None,
+        }
+    }
+
+    pub fn get_bin_opcode(&self) -> Option<Opcode> {
+        match self {
+            Token::AsterickSet(2) => Some(Opcode::Exponential),
+            Token::Plus => Some(Opcode::Plus),
+            Token::Minus => Some(Opcode::Minus),
+            Token::AsterickSet(1) => Some(Opcode::Multiplier),
+            Token::Divider => Some(Opcode::Divider),
+            Token::Modulus => Some(Opcode::Modulus),
+            Token::AmpersandSet(1) => Some(Opcode::BitAND),
+            Token::BitOR => Some(Opcode::BitOR),
+            Token::BitXOR => Some(Opcode::BitXOR),
+            Token::BitShiftR => Some(Opcode::BitShiftR),
+            Token::BitShiftL => Some(Opcode::BitShiftL),
+            Token::AmpersandSet(2) => Some(Opcode::BitAND),
+            Token::Or => Some(Opcode::Or),
+            Token::LeftAngle => Some(Opcode::LessThan),
+            Token::RghtAngle => Some(Opcode::GrtrThan),
+            Token::LessOrEqual => Some(Opcode::LessOrEqual),
+            Token::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
             _ => None,
         }
     }

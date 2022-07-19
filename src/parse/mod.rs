@@ -1,139 +1,150 @@
-use crate::indent_parens::indent_parens;
-use crate::lex::Lexer;
-use std::fmt::{Debug, Formatter};
+use crate::lex::Token;
+pub use opcode::Opcode;
+use std::iter::Peekable;
 
-pub mod prelude {
-    pub use super::{parse, Declaration, Expr, Opcode, Script, TypeSpec, VarDecl};
+mod expression;
+mod function;
+mod opcode;
+mod parsing_data;
+
+pub use expression::*;
+pub use function::*;
+pub use opcode::*;
+pub use parsing_data::*;
+
+pub fn file(mut lexer: Peekable<impl Iterator<Item = Token>>) -> Script {
+    let mut declarations = Vec::new();
+
+    loop {
+        let decl = parse_var_decl(&mut lexer);
+
+        match lexer.peek() {
+            Some(Token::LeftParen) => {
+                let parsed_func = parse_func(&mut lexer);
+                declarations.push(Declaration::Function {
+                    name: decl,
+                    args: parsed_func.0,
+                    code: parsed_func.1,
+                });
+            },
+            _ => panic!(),
+        }
+
+        println!("{:?}", lexer.peek());
+
+        if lexer.peek().is_none() {
+            return Script(declarations);
+        }
+    }
 }
 
-#[derive(Debug)]
-pub struct Script(pub Vec<Declaration>);
+fn parse_expr_list(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Vec<Expr> {
+    assert_eq!(lexer.next(), Some(Token::LeftParen));
 
-#[derive(Clone, Debug)]
-pub struct TypeSpec {
-    pub ref_count: u8,
-    pub name: String,
-}
+    if lexer.peek() == Some(&Token::RghtParen) {
+        lexer.next();
+        return Vec::new();
+    }
 
-impl TypeSpec {
-    pub fn new(name: &str, ref_count: u8) -> Self {
-        Self {
-            ref_count,
-            name: String::from(name),
+    let mut arg_list = vec![parse_math_expr(lexer)];
+
+    loop {
+        match lexer.next() {
+            Some(Token::Comma) => arg_list.push(parse_math_expr(lexer)),
+            Some(Token::RghtParen) => break,
+            _ => panic!(),
         }
     }
 
-    pub fn reference(self) -> Self {
-        Self {
-            ref_count: self.ref_count + 1,
-            name: self.name,
+    arg_list
+}
+
+fn parse_var_decl(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> VarDecl {
+    let var_name = match lexer.next() {
+        Some(Token::Ident(name)) => name,
+        _ => panic!(),
+    };
+
+    let type_spec = match lexer.peek() {
+        Some(Token::Colon) => {
+            lexer.next();
+
+            Some(parse_type_spec(lexer))
+        },
+        _ => None,
+    };
+
+    VarDecl {
+        var_name,
+        type_spec,
+    }
+}
+
+fn parse_type_spec(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> TypeSpec {
+    match lexer.next() {
+        Some(Token::AmpersandSet(ref_count)) => {
+            let Some(Token::Ident(name)) = lexer.next() else { panic!() };
+
+            TypeSpec { ref_count, name }
+        },
+        Some(Token::Ident(name)) => TypeSpec { ref_count: 0, name },
+        _ => panic!(),
+    }
+}
+
+fn parse_block(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
+    assert_eq!(lexer.next(), Some(Token::LeftCurly));
+
+    let mut stmts = Vec::new();
+
+    loop {
+        match lexer.peek() {
+            Some(Token::RghtCurly) => {
+                lexer.next();
+                return Expr::Block(stmts);
+            },
+            _ => stmts.push(parse_stmt(lexer)),
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct VarDecl {
-    pub var_name: String,
-    pub type_spec: Option<TypeSpec>,
-}
-
-#[derive(Debug)]
-pub enum Declaration {
-    Function {
-        name: VarDecl,
-        args: Vec<VarDecl>,
-        code: Expr,
-    },
-    Struct {
-        name: String,
-        fields: Vec<VarDecl>,
-    },
-}
-
-#[derive(Clone)]
-pub enum Expr {
-    Number(u128),
-    Float(f64),
-    Ident(String),
-    SetVar(VarDecl, Box<Expr>),
-    Call(Box<Expr>, Vec<Expr>),
-    UnarOp(Opcode, Box<Expr>),
-    BinOp(Box<Expr>, Opcode, Box<Expr>),
-    IfThen(Box<Expr>, Box<Expr>),
-    IfThenElse(Box<Expr>, Box<Expr>, Box<Expr>),
-    ForWhile(Box<Expr>, Box<Expr>),
-    Block(Vec<Expr>),
-}
-
-impl Debug for Expr {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        use self::Expr::*;
-
-        match self {
-            Number(n) => print!("NUM: {n:?}"),
-            Float(f) => print!("FLOAT: {f:?}"),
-            Ident(i) => print!("IDENT: {i}"),
-            SetVar(d, e) => {
-                print!("SET: {}: {:?} = ({e:?})", d.var_name, d.type_spec)
-            },
-            Call(f, a) => print!("CALL: {f:?} WITH {a:?}"),
-            UnarOp(op, ref r) => print!("UNOP: ({op:?}, {r:?})"),
-            BinOp(ref l, op, ref r) => print!("BINOP: ({l:?} {op:?} {r:?})"),
-            IfThen(ref l, ref r) => print!("(IF {l:?} THEN {r:?})"),
-            IfThenElse(ref i, ref t, ref e) => {
-                print!("(IF {i:?} THEN {t:?} ELSE {e:?})")
-            },
-            ForWhile(ref f, ref d) => print!("(FOR {f:?} DO {d:?}"),
-            Block(statements) => {
-                for s in statements {
-                    print!("{s:?}");
-                }
-            },
-        };
-
-        Ok(())
+fn parse_stmt(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
+    match lexer.peek() {
+        Some(Token::Ident(_)) => parse_setvar(lexer),
+        _ => parse_expr(lexer),
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Opcode {
-    Exponential,
-    Plus,
-    Minus,
-    Multiplier,
-    Divider,
-    Modulus,
-    BitAND,
-    BitOR,
-    BitXOR,
-    BitShiftL,
-    BitShiftR,
-    Or,
-    And,
-    LessThan,
-    GrtrThan,
-    LessOrEqual,
-    GreaterOrEqual,
-    Equal,
-    Inequal,
-    TernaryQuestion,
-    TernaryColon,
-    Assignment,
-    Ref,
-    Deref,
+fn parse_setvar(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
+    let var_decl = parse_var_decl(lexer);
+
+    assert_eq!(lexer.next(), Some(Token::Assignment));
+
+    let expr = parse_expr(lexer);
+
+    Expr::SetVar(var_decl, Box::new(expr))
 }
 
-pub fn parse(input: Lexer) -> Script {
-    use crate::serf_parser;
-
-    let parsed = serf_parser::RootParser::new()
-        .parse(input)
-        .expect("unable to parse: ");
-
-    if crate::DEBUG {
-        println!("--------PARSE DATA--------");
-        println!("{}", indent_parens(format!("{parsed:?}")));
+fn parse_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
+    match lexer.peek() {
+        Some(Token::Ident(_)) | Some(Token::Int(_)) | Some(Token::Float(_)) => {
+            parse_math_expr(lexer)
+        },
+        Some(op) if op.get_un_opcode().is_some() => parse_math_expr(lexer),
+        Some(Token::At) => parse_for(lexer),
+        Some(Token::Bang) => {
+            lexer.next();
+            parse_expr(lexer)
+        },
+        Some(_) => todo!(),
+        None => unreachable!(),
     }
+}
 
-    parsed
+fn parse_for(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
+    assert_eq!(lexer.next(), Some(Token::At));
+
+    let w = parse_expr(lexer);
+    let d = parse_block(lexer);
+    Expr::ForWhile(Box::new(w), Box::new(d))
 }

@@ -313,7 +313,7 @@ pub fn compile<'comp>(
             None
         },
         UnarOp { op, hs, .. } => match op {
-            crate::parse::Opcode::Ref => match fcs.tree.get(hs) {
+            crate::parse::Opcode::Ref(_) => match fcs.tree.get(hs) {
                 Ident { name, .. } => {
                     println!(
                         "TYPE OF {name}: {:?}",
@@ -323,7 +323,7 @@ pub fn compile<'comp>(
                 },
                 _ => todo!(),
             },
-            crate::parse::Opcode::Deref => {
+            crate::parse::Opcode::Deref(_) => {
                 let var_ptr = compile(fcs, hs).unwrap();
                 let val = fcs
                     .builder

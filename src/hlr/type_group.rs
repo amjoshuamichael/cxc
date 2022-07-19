@@ -2,7 +2,7 @@ use super::prelude::*;
 use crate::parse::*;
 use std::sync::Arc;
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct TypeGroup(pub Vec<Arc<BaseType>>);
 
 impl TypeGroup {

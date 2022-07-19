@@ -1,5 +1,5 @@
 use super::prelude::*;
-use crate::parse::prelude::*;
+use crate::parse::*;
 use std::collections::HashMap;
 
 pub fn infer_types(hlr: &mut FuncRep) {
@@ -61,8 +61,8 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 *ret_type = types.get(hs).unwrap().clone();
 
                 match op {
-                    Opcode::Deref => ret_type.ref_count -= 1,
-                    Opcode::Ref => ret_type.ref_count += 1,
+                    Opcode::Deref(count) => ret_type.ref_count -= *count,
+                    Opcode::Ref(count) => ret_type.ref_count += *count,
                     _ => unreachable!(),
                 }
 

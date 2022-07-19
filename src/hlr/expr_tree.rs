@@ -1,8 +1,6 @@
 use super::prelude::*;
-use crate::core_lib;
 use crate::core_lib::CORE_LIB;
-use crate::parse::prelude::*;
-use crate::parse::Opcode;
+use crate::parse::*;
 use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -55,7 +53,7 @@ impl ExprTree {
 }
 
 impl Debug for ExprTree {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, _: &mut Formatter) -> Result<(), std::fmt::Error> {
         for (e, expr) in self.nodes.iter().enumerate() {
             print!("{e}: {expr:?}");
         }
@@ -77,7 +75,7 @@ struct ExprNode {
 }
 
 impl Debug for ExprNode {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, _: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.data {
             Empty => println!("Empty"),
             Number(n) => println!("{n}"),
@@ -85,6 +83,7 @@ impl Debug for ExprNode {
             Strin(s) => println!("{s}"),
             Call { f, a } => println!("{f:?}({a:?})"),
             Ident { name, .. } => println!("{name}"),
+            Global { name, .. } => println!("{name}"),
             SetVar {
                 var_type,
                 name,
@@ -112,6 +111,10 @@ pub enum NodeData {
     Ident {
         var_type: Type,
         name: Arc<str>,
+    },
+    Global {
+        var_type: Type,
+        name: String,
     },
     SetVar {
         type_spec: Option<TypeSpec>,
@@ -185,9 +188,9 @@ impl NodeData {
             Float(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)),
             Strin(_) => todo!(),
             Call { .. } => todo!(),
-            Ident { var_type, .. } | SetVar { var_type, .. } => {
-                Some(var_type.clone())
-            },
+            Ident { var_type, .. }
+            | SetVar { var_type, .. }
+            | Global { var_type, .. } => Some(var_type.clone()),
             BinOp { ret_type, .. }
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
