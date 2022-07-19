@@ -53,9 +53,9 @@ impl ExprTree {
 }
 
 impl Debug for ExprTree {
-    fn fmt(&self, _: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         for (e, expr) in self.nodes.iter().enumerate() {
-            print!("{e}: {expr:?}");
+            writeln!(fmt, "{e}: {expr:?}");
         }
 
         Ok(())
@@ -75,28 +75,30 @@ struct ExprNode {
 }
 
 impl Debug for ExprNode {
-    fn fmt(&self, _: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.data {
-            Empty => println!("Empty"),
-            Number(n) => println!("{n}"),
-            Float(fl) => println!("{fl:?}"),
-            Strin(s) => println!("{s}"),
-            Call { f, a } => println!("{f:?}({a:?})"),
-            Ident { name, .. } => println!("{name}"),
-            Global { name, .. } => println!("{name}"),
+            Empty => writeln!(fmt, "Empty"),
+            Number(n) => writeln!(fmt, "{n}"),
+            Float(fl) => writeln!(fmt, "{fl:?}"),
+            Strin(s) => writeln!(fmt, "{s}"),
+            Call { f, a, .. } => writeln!(fmt, "{f:?}({a:?})"),
+            Ident { name, .. } => writeln!(fmt, "{name}"),
+            Global { name, .. } => writeln!(fmt, "{name}"),
             SetVar {
                 var_type,
                 name,
                 rhs,
                 ..
-            } => println!("{name}: {var_type:?} = {rhs:?}"),
-            UnarOp { op, hs, .. } => println!("{op:?} {hs:?}"),
-            BinOp { lhs, op, rhs, .. } => println!("{lhs:?} {op:?} {rhs:?}"),
-            IfThen { i, t, .. } => println!("if {i:?} then {t:?}"),
-            IfThenElse { i, t, e, .. } => println!("if {i:?} then {t:?} else {e:?}"),
-            While { w, d, .. } => println!("while {w:?} do {d:?}"),
-            Block { stmts, .. } => println!("{{{stmts:?}}}"),
-        }
+            } => writeln!(fmt, "{name}: {var_type:?} = {rhs:?}"),
+            UnarOp { op, hs, .. } => writeln!(fmt, "{op:?} {hs:?}"),
+            BinOp { lhs, op, rhs, .. } => writeln!(fmt, "{lhs:?} {op:?} {rhs:?}"),
+            IfThen { i, t, .. } => writeln!(fmt, "if {i:?} then {t:?}"),
+            IfThenElse { i, t, e, .. } => {
+                writeln!(fmt, "if {i:?} then {t:?} else {e:?}")
+            },
+            While { w, d, .. } => writeln!(fmt, "while {w:?} do {d:?}"),
+            Block { stmts, .. } => writeln!(fmt, "{{{stmts:?}}}"),
+        };
 
         Ok(())
     }
@@ -123,6 +125,7 @@ pub enum NodeData {
         rhs: ExprID,
     },
     Call {
+        ret_type: Type,
         f: ExprID,
         a: Vec<ExprID>,
     },
@@ -187,7 +190,6 @@ impl NodeData {
             Number(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::i32", 0)),
             Float(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)),
             Strin(_) => todo!(),
-            Call { .. } => todo!(),
             Ident { var_type, .. }
             | SetVar { var_type, .. }
             | Global { var_type, .. } => Some(var_type.clone()),
@@ -195,6 +197,7 @@ impl NodeData {
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
+            | Call { ret_type, .. }
             | Block { ret_type, .. } => Some(ret_type.clone()),
             Empty => unreachable!(),
             While { .. } => None,

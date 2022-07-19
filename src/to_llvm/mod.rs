@@ -2,10 +2,11 @@ use super::*;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
 use crate::parse::Opcode::*;
-use crate::unit::to_basic_type;
+use crate::unit::*;
 use core::cell::RefCell;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::FloatPredicate;
@@ -19,6 +20,7 @@ pub struct FunctionCompilationState<'f> {
     pub function: FunctionValue<'f>,
     pub builder: Builder<'f>,
     pub context: &'f Context,
+    pub globals: &'f Globals<'f>,
     pub arg_names: Vec<Arc<str>>,
     pub llvm_ir_uuid: RefCell<u32>,
 }
@@ -30,12 +32,14 @@ impl<'f> FunctionCompilationState<'f> {
         self.llvm_ir_uuid.replace(current_uuid + 1);
         String::from("t") + &*output
     }
+
+    pub fn delete(self) {}
 }
 
 pub fn compile<'comp>(
     fcs: &mut FunctionCompilationState<'comp>,
     expr_id: ExprID,
-) -> Option<BasicValueEnum<'comp>> {
+) -> Option<AnyValueEnum<'comp>> {
     let expr = fcs.tree.get(expr_id);
 
     if crate::DEBUG {
@@ -83,20 +87,23 @@ pub fn compile<'comp>(
             ..
         } => {
             let to_store = compile(fcs, *rhs).unwrap();
+            let to_store_basic: BasicValueEnum = to_store.try_into().unwrap();
 
             if fcs.arg_names.contains(name) {
                 let param = fcs.function.get_nth_param(0).unwrap();
-                fcs.builder.build_store(param.try_into().unwrap(), to_store);
+                fcs.builder
+                    .build_store(param.try_into().unwrap(), to_store_basic);
                 return Some(to_store);
             }
 
             if let Some(val) = fcs.variables.get(&**name) {
                 if var_type.ref_count > 0 {
                     let tmp = fcs.builder.build_load(*val, &*fcs.new_uuid());
-                    fcs.builder.build_store(tmp.into_pointer_value(), to_store);
+                    fcs.builder
+                        .build_store(tmp.into_pointer_value(), to_store_basic);
                     return Some(to_store);
                 }
-                fcs.builder.build_store(*val, to_store);
+                fcs.builder.build_store(*val, to_store_basic);
 
                 return Some(to_store);
             }
@@ -123,7 +130,7 @@ pub fn compile<'comp>(
                 var_ptr
             };
 
-            fcs.builder.build_store(var_ptr, to_store);
+            fcs.builder.build_store(var_ptr, to_store_basic);
 
             return Some(to_store);
         },
@@ -315,10 +322,6 @@ pub fn compile<'comp>(
         UnarOp { op, hs, .. } => match op {
             crate::parse::Opcode::Ref(_) => match fcs.tree.get(hs) {
                 Ident { name, .. } => {
-                    println!(
-                        "TYPE OF {name}: {:?}",
-                        fcs.variables.get(&*name).unwrap()
-                    );
                     Some(fcs.variables.get(&*name).unwrap().clone().into())
                 },
                 _ => todo!(),
@@ -332,6 +335,27 @@ pub fn compile<'comp>(
             },
             _ => todo!(),
         },
+        Call { f, a, .. } => {
+            let function = compile(fcs, f).unwrap();
+            let function: FunctionValue = function.try_into().unwrap();
+
+            let mut arg_vals = Vec::new();
+
+            for arg in a {
+                let basic_arg: BasicValueEnum =
+                    compile(fcs, arg).unwrap().try_into().unwrap();
+                let basic_meta_arg: BasicMetadataValueEnum =
+                    basic_arg.try_into().unwrap();
+                arg_vals.push(basic_meta_arg);
+            }
+
+            Some(
+                fcs.builder
+                    .build_call(function, &arg_vals[..], "call")
+                    .as_any_value_enum(),
+            )
+        },
+        Global { name, .. } => fcs.globals.get_value(name),
         _ => todo!(),
     };
 

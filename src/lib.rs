@@ -116,20 +116,36 @@ mod tests {
 
         unit.push_script(
             "
-            divide_by_two : prim::i32 (num : prim::i32) {
-                output : prim::i32 = num / 2
+            divide_by_two : prim::f32 (num : prim::f32) {
+                output : prim::f32 = num / 2.0
+                ! output
+            }
+
+            mul_by_two : prim::i32 (num : prim::i32) {
+                output : prim::i32 = num * 2
                 ! output
             }
     
             main : prim::i32 () {
-                output : prim::i32 = divide_by_two(6)
-                ! output
+                correct_count : prim::i32 = 0
+                
+                six_times_two : prim::i32 = mul_by_two(6)
+                ? six_times_two == 12 {
+                    correct_count = correct_count + 1
+                }
+
+                six_div_two_f : prim::f32 = divide_by_two(6.0)
+                ? six_div_two_f == 3.0 {
+                    correct_count = correct_count + 1
+                }
+
+                ! correct_count
             }
             ",
         );
 
-        let mut output: f32 = unsafe { unit.get_fn("main")(()) };
-        assert_eq!(output, 70.0);
+        let mut correct_count: i32 = unsafe { unit.get_fn("main")(()) };
+        assert_eq!(correct_count, 2);
     }
     //    fn struct_test() {
     //        let context = Context::create();

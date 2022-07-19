@@ -132,6 +132,7 @@ fn parse_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
         },
         Some(op) if op.get_un_opcode().is_some() => parse_math_expr(lexer),
         Some(Token::At) => parse_for(lexer),
+        Some(Token::Question) => parse_if(lexer),
         Some(Token::Bang) => {
             lexer.next();
             parse_expr(lexer)
@@ -147,4 +148,13 @@ fn parse_for(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
     let w = parse_expr(lexer);
     let d = parse_block(lexer);
     Expr::ForWhile(Box::new(w), Box::new(d))
+}
+
+fn parse_if(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
+    assert_eq!(lexer.next(), Some(Token::Question));
+
+    let i = parse_expr(lexer);
+    let t = parse_block(lexer);
+
+    Expr::IfThen(Box::new(i), Box::new(t))
 }

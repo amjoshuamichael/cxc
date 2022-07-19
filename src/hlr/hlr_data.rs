@@ -62,9 +62,9 @@ impl FuncRep {
             Expr::Number(n) => self.tree.insert(parent, NodeData::Number(n.into())),
             Expr::Float(n) => self.tree.insert(parent, NodeData::Float(n.into())),
             Expr::Ident(name) => {
-                let space = self.tree.make_one_space(parent);
-
                 if let Some(name) = self.identifiers.iter().find(|i| ***i == *name) {
+                    let space = self.tree.make_one_space(parent);
+
                     let name = name.clone();
                     let data_flow_info = self.data_flow.get_mut(&name).unwrap();
                     data_flow_info.ids.push(space);
@@ -205,6 +205,7 @@ impl FuncRep {
                 }
 
                 let new_data = NodeData::Call {
+                    ret_type: Type::none(),
                     f: self.add_expr(*func, space),
                     a: arg_ids,
                 };

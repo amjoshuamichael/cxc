@@ -14,9 +14,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+mod globals;
 mod to_basic_type;
 
 use crate::to_llvm::*;
+pub use globals::Globals;
 pub use to_basic_type::to_basic_type;
 
 pub struct Unit<'u> {
@@ -24,6 +26,7 @@ pub struct Unit<'u> {
     pub types: TypeGroup,
     pub context: &'u Context,
     pub module: Module<'u>,
+    pub globals: Globals<'u>,
 }
 
 type NumGeneratorFunc = unsafe extern "C" fn(&mut i32) -> usize;
@@ -40,6 +43,7 @@ impl<'u> Unit<'u> {
             types: TypeGroup::with_core_lib(),
             execution_engine,
             module,
+            globals: Globals::default(),
         }
     }
 
@@ -60,7 +64,7 @@ impl<'u> Unit<'u> {
         for decl in parsed.0 {
             match decl {
                 Declaration::Function { name, args, code } => {
-                    let hlr = hlr(args, code);
+                    let hlr = hlr(args, code, &self.globals);
 
                     let mut arg_types: Vec<Type> = Vec::new();
                     let mut arg_names: Vec<Arc<str>> = Vec::new();
@@ -76,9 +80,9 @@ impl<'u> Unit<'u> {
                         hlr.types.get_spec(&name.type_spec.unwrap()).unwrap();
 
                     let mut fcs = self.new_func_comp_state(
-                        &*name.var_name,
-                        func_ret_type,
-                        arg_types,
+                        &*name.var_name.clone(),
+                        func_ret_type.clone(),
+                        arg_types.clone(),
                         arg_names,
                         hlr.tree,
                     );
@@ -88,11 +92,25 @@ impl<'u> Unit<'u> {
                     fcs.builder.position_at_end(basic_block);
 
                     let output = compile(&mut fcs, ExprID::ROOT).unwrap();
+                    let output: BasicValueEnum = output.try_into().unwrap();
                     fcs.builder.build_return(Some(&output));
 
                     if crate::DEBUG {
                         fcs.function.print_to_stderr();
                     }
+
+                    fcs.delete();
+
+                    let function =
+                        self.module.get_function(&*name.var_name).unwrap();
+
+                    let function_type = func_ret_type.func_with_args(arg_types);
+
+                    self.globals.insert(
+                        Arc::from(&*name.var_name),
+                        function.into(),
+                        function_type,
+                    );
                 },
                 Declaration::Struct { name, fields } => {},
             }
@@ -121,6 +139,7 @@ impl<'u> Unit<'u> {
             function,
             builder: self.context.create_builder(),
             context: &self.context,
+            globals: &self.globals,
             llvm_ir_uuid: RefCell::new(0),
             arg_names,
         }

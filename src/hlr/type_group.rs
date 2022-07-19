@@ -25,6 +25,7 @@ impl TypeGroup {
         Some(Type {
             base: self.get_base(&type_spec.name)?,
             ref_count: type_spec.ref_count,
+            function_args: None,
         })
     }
 

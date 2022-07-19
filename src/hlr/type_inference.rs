@@ -1,9 +1,10 @@
 use super::prelude::*;
 use crate::parse::*;
+use crate::unit::Globals;
 use std::collections::HashMap;
 
-pub fn infer_types(hlr: &mut FuncRep) {
-    let mut types = HashMap::new();
+pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
+    let mut type_by_id = HashMap::new();
 
     for (n, node) in hlr.tree.top_down_iter() {
         match node {
@@ -34,11 +35,17 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 let instances = hlr.data_flow.get_mut(&name.clone()).unwrap();
                 *var_type = instances.typ.clone();
             },
+            NodeData::Global {
+                ref mut var_type,
+                name,
+            } => {
+                *var_type = globals.get_type(name.clone()).unwrap();
+            },
             _ => {},
         };
 
         if let Some(ret_type) = node.ret_type() {
-            types.insert(n, ret_type);
+            type_by_id.insert(n, ret_type);
         }
     }
 
@@ -49,8 +56,8 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 rhs,
                 ..
             } => {
-                *ret_type = types.get(rhs).unwrap().clone();
-                *types.get_mut(&n).unwrap() = ret_type.clone();
+                *ret_type = type_by_id.get(rhs).unwrap().clone();
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             NodeData::UnarOp {
                 ref mut ret_type,
@@ -58,7 +65,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 op,
                 ..
             } => {
-                *ret_type = types.get(hs).unwrap().clone();
+                *ret_type = type_by_id.get(hs).unwrap().clone();
 
                 match op {
                     Opcode::Deref(count) => ret_type.ref_count -= *count,
@@ -66,7 +73,17 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     _ => unreachable!(),
                 }
 
-                *types.get_mut(&n).unwrap() = ret_type.clone();
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
+            },
+            NodeData::Call {
+                ref mut ret_type,
+                f,
+                ..
+            } => {
+                let function_type = type_by_id.get(f).unwrap();
+                *ret_type = function_type.func_ret_type();
+
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             _ => {},
         }

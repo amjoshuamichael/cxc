@@ -120,6 +120,7 @@ impl Token {
             Token::RghtAngle => Some(Opcode::GrtrThan),
             Token::LessOrEqual => Some(Opcode::LessOrEqual),
             Token::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
+            Token::Equal => Some(Opcode::Equal),
             _ => None,
         }
     }

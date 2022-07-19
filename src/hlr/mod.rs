@@ -5,6 +5,7 @@ mod type_inference;
 
 use crate::core_lib::CORE_LIB;
 use crate::parse::*;
+use crate::unit::Globals;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -20,11 +21,10 @@ pub mod prelude {
 use indexmap::IndexMap;
 use prelude::*;
 
-pub fn hlr(args: Vec<VarDecl>, code: Expr) -> FuncRep {
-    dbg!(&code);
+pub fn hlr(args: Vec<VarDecl>, code: Expr, globals: &Globals) -> FuncRep {
     let mut output = FuncRep::from(args, code);
     dbg!(&output);
-    infer_types(&mut output);
+    infer_types(&mut output, globals);
 
     if crate::DEBUG {
         println!("--------HLR DATA--------");
@@ -38,6 +38,7 @@ pub fn hlr(args: Vec<VarDecl>, code: Expr) -> FuncRep {
 pub struct Type {
     base: Arc<BaseType>,
     pub ref_count: u8,
+    pub function_args: Option<Vec<Type>>,
 }
 
 impl Type {
@@ -58,8 +59,26 @@ impl Type {
         type_from_name(&self.name())
     }
 
+    pub fn func_ret_type(&self) -> Self {
+        assert!(self.function_args.is_some());
+
+        Self {
+            base: self.base.clone(),
+            ref_count: self.ref_count,
+            function_args: None,
+        }
+    }
+
     fn none() -> Self {
         CORE_LIB.get_spec(&TypeSpec::new("_::none", 0)).unwrap()
+    }
+
+    pub fn func_with_args(&self, args: Vec<Type>) -> Self {
+        Self {
+            base: self.base.clone(),
+            ref_count: self.ref_count,
+            function_args: Some(args),
+        }
     }
 }
 
