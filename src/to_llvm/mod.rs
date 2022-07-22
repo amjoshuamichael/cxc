@@ -6,7 +6,7 @@ use crate::unit::*;
 use core::cell::RefCell;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::types::BasicMetadataTypeEnum;
+use inkwell::types::*;
 use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::FloatPredicate;
@@ -46,7 +46,7 @@ pub fn compile<'comp>(
         println!("compiling: {expr_id:?}, {expr:?}");
     }
 
-    let output = match expr {
+    let output: Option<AnyValueEnum> = match expr {
         Number(ref literal) => {
             // TODO: implement different int types
             Some(
@@ -67,7 +67,6 @@ pub fn compile<'comp>(
                     .iter()
                     .position(|arg_name| arg_name == name)
                     .unwrap();
-                println!("NAME {name}, INDEX {param_index}");
                 let param = fcs
                     .function
                     .get_nth_param(param_index.try_into().unwrap())
@@ -80,7 +79,7 @@ pub fn compile<'comp>(
 
             Some(loaded.into())
         },
-        SetVar {
+        MakeVar {
             ref var_type,
             ref name,
             ref rhs,
@@ -109,20 +108,11 @@ pub fn compile<'comp>(
             }
 
             let var_ptr = {
-                let var_ptr = match expr.gen_ret_type() {
-                    PrimInt => {
-                        let x =
-                            fcs.builder.build_alloca(fcs.context.i32_type(), name);
-                        x
-                    },
-                    PrimFloat => {
-                        fcs.builder.build_alloca(fcs.context.f32_type(), name)
-                    },
-                    PrimRef => fcs.builder.build_alloca(
-                        to_basic_type(fcs.context, &var_type.clone()),
+                let var_ptr = {
+                    fcs.builder.build_alloca(
+                        expr.ret_type().unwrap().to_basic_type(fcs.context),
                         name,
-                    ),
-                    _ => todo!(),
+                    )
                 };
 
                 fcs.variables.insert(name.clone(), var_ptr);
@@ -134,16 +124,51 @@ pub fn compile<'comp>(
 
             return Some(to_store);
         },
+        SetVar {
+            ref lhs, ref rhs, ..
+        } => {
+            let var_ptr = compile_as_ptr(fcs, *lhs);
+
+            let rhs = compile(fcs, *rhs).unwrap();
+            let rhs_basic: BasicValueEnum = rhs.try_into().unwrap();
+            fcs.builder.build_store(var_ptr, rhs_basic);
+
+            Some(rhs)
+        },
         BinOp {
             ref lhs,
             ref op,
             ref rhs,
             ..
         } => {
-            let lhs = compile(fcs, *lhs).unwrap();
-            let rhs = compile(fcs, *rhs).unwrap();
+            let mut lhs = compile(fcs, *lhs).unwrap();
+            let mut rhs = compile(fcs, *rhs).unwrap();
 
-            match expr.gen_ret_type() {
+            if lhs.is_pointer_value() {
+                lhs = fcs
+                    .builder
+                    .build_ptr_to_int(
+                        lhs.into_pointer_value(),
+                        fcs.context.i32_type(),
+                        "cast",
+                    )
+                    .as_any_value_enum();
+            }
+
+            if rhs.is_pointer_value() {
+                rhs = fcs
+                    .builder
+                    .build_ptr_to_int(
+                        rhs.into_pointer_value(),
+                        fcs.context.i32_type(),
+                        "cast",
+                    )
+                    .as_any_value_enum();
+            }
+
+            dbg!(&rhs);
+
+            match PrimInt /*expr.gen_ret_type()*/ {
                 PrimInt => {
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");
@@ -320,11 +345,8 @@ pub fn compile<'comp>(
             None
         },
         UnarOp { op, hs, .. } => match op {
-            crate::parse::Opcode::Ref(_) => match fcs.tree.get(hs) {
-                Ident { name, .. } => {
-                    Some(fcs.variables.get(&*name).unwrap().clone().into())
-                },
-                _ => todo!(),
+            crate::parse::Opcode::Ref(_) => {
+                Some(compile_as_ptr(fcs, hs).as_any_value_enum())
             },
             crate::parse::Opcode::Deref(_) => {
                 let var_ptr = compile(fcs, hs).unwrap();
@@ -356,6 +378,42 @@ pub fn compile<'comp>(
             )
         },
         Global { name, .. } => fcs.globals.get_value(name),
+        Member {
+            ret_type,
+            object,
+            field,
+        } => {
+            let ptr = compile_as_ptr(fcs, expr_id);
+            let val = fcs.builder.build_load(ptr, "load");
+
+            Some(val.as_any_value_enum())
+        },
+        StructLit {
+            struct_type,
+            fields,
+            ..
+        } => {
+            let mut compiled_fields = Vec::new();
+
+            // TODO: sort during funcrep
+            for field_index in 0..struct_type.field_count() {
+                let field = fields
+                    .iter()
+                    .find(|(f, _)| struct_type.get_field_index(f) == field_index)
+                    .unwrap();
+
+                let compiled_field: BasicValueEnum =
+                    compile(fcs, field.1).unwrap().try_into().unwrap();
+                compiled_fields.push(compiled_field);
+            }
+
+            dbg!(&compiled_fields);
+            Some(
+                fcs.context
+                    .const_struct(&compiled_fields[..], true)
+                    .as_any_value_enum(),
+            )
+        },
         _ => todo!(),
     };
 
@@ -364,4 +422,32 @@ pub fn compile<'comp>(
     }
 
     output
+}
+
+fn compile_as_ptr<'comp>(
+    fcs: &mut FunctionCompilationState<'comp>,
+    expr_id: ExprID,
+) -> PointerValue<'comp> {
+    match fcs.tree.get(expr_id) {
+        Ident { name, .. } => fcs.variables.get(&*name).unwrap().clone(),
+        Member {
+            ret_type,
+            object,
+            field,
+        } => {
+            let field_index = fcs
+                .tree
+                .get(object)
+                .ret_type()
+                .unwrap()
+                .get_field_index(&field);
+
+            let object = compile_as_ptr(fcs, object);
+
+            fcs.builder
+                .build_struct_gep(object, field_index as u32, "access")
+                .unwrap()
+        },
+        _ => todo!(),
+    }
 }

@@ -26,6 +26,7 @@ pub enum Opcode {
     Assignment,
     Ref(u8),
     Deref(u8),
+    Dot,
 }
 
 impl Opcode {

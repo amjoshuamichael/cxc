@@ -1,5 +1,7 @@
 #![allow(warnings, dead_code)]
 #![feature(let_else)]
+#![feature(let_chains)]
+#![feature(once_cell)]
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 #[macro_use]
@@ -147,18 +149,86 @@ mod tests {
         let mut correct_count: i32 = unsafe { unit.get_fn("main")(()) };
         assert_eq!(correct_count, 2);
     }
-    //    fn struct_test() {
-    //        let context = Context::create();
-    //        let mut unit = unit::Unit::new(&context);
-    //
-    //        unit.push_script(
-    //            "
-    //            Point2D {
-    //                x: prim::i32,
-    //                y: prim::i32,
-    //            }
-    //
-    //            ",
-    //        );
-    //    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[repr(align(16))]
+    struct Point2D {
+        x: i32,
+        y: i32,
+    }
+
+    #[test]
+    fn structs() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.push_script(
+            "
+            Point2D {
+                x : prim::i32,
+                y : prim::i32
+            }
+
+            main : Point2D () {
+                new_point : Point2D = Point2D { x = 0, y = 0 }
+
+                new_point.y = 20
+                #x_ptr : &prim::i32 = &new_point.x
+                #x_ptr_2 : &prim::i32 = x_ptr
+                #x_ptr_2 = 128
+
+                #y_ptr : &prim::i32 = &new_point.y
+                #y_ptr_2 : &prim::i32 = y_ptr
+                #y_ptr_2 = 128
+
+                #x_ptr_int : &prim::i32 = &new_point.x + 4
+                #y_ptr_int : &prim::i32 = &new_point.y
+                #x_ptr_int : &prim::i32 = y_ptr_int
+                #x_ptr_int = 128
+
+                ! new_point
+            }
+            ",
+        );
+
+        let mut new_point_y: [u8; 16] = unsafe { unit.get_fn("main")(()) };
+        dbg!(new_point_y);
+        let mut new_point_y = Point2D {
+            x: 0b10000000,
+            y: 0b10000000,
+        };
+        let mut new_point_y: [u8; 16] = unsafe { std::mem::transmute(new_point_y) };
+        dbg!(new_point_y);
+        // let mut new_point_y = (0b10000000, 0b10000000);
+        // let mut new_point_y: [u8; 16] = unsafe { std::mem::transmute(new_point_y) };
+        // dbg!(new_point_y);
+
+        // assert_eq!(new_point_y, Point2D { x: 0, y: 50 });
+    }
+
+    #[test]
+    fn return_struct() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.push_script(
+            "
+            Point2D {
+                x : prim::i32,
+                y : prim::i32
+            }
+
+            main : Point2D () {
+                new_point : Point2D = Point2D { x = 0, y = 0 }
+                new_point.x = 128
+                new_point.y = 128
+                ! new_point
+            }
+            ",
+        );
+        let mut new_point: Point2D = unsafe { unit.get_fn("main")(()) };
+        // assert_eq!(new_point, (6000, 42));
+        // let mut new_point: Point2D = unsafe { unit.get_fn("main")(()) };
+        // assert_eq!(new_point, Point2D { x: 6000, y: 42 })
+    }
 }

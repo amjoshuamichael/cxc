@@ -30,6 +30,10 @@ pub enum Token {
     BitShiftR,
     #[token("<<")]
     BitShiftL,
+    // Dots require a higher priority than floats, because "." technically
+    // classifies as a float under the current regex statement.
+    #[token(".", priority = 3)]
+    Dot,
 
     #[regex(r"&+", |set| set.slice().len() as u8)]
     AmpersandSet(u8),
@@ -121,6 +125,7 @@ impl Token {
             Token::LessOrEqual => Some(Opcode::LessOrEqual),
             Token::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
             Token::Equal => Some(Opcode::Equal),
+            Token::Dot => Some(Opcode::Dot),
             _ => None,
         }
     }

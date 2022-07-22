@@ -81,22 +81,29 @@ impl Debug for ExprNode {
             Number(n) => writeln!(fmt, "{n}"),
             Float(fl) => writeln!(fmt, "{fl:?}"),
             Strin(s) => writeln!(fmt, "{s}"),
+            StructLit {
+                type_name, fields, ..
+            } => {
+                writeln!(fmt, "{type_name:?} {{ {fields:?} }}")
+            },
             Call { f, a, .. } => writeln!(fmt, "{f:?}({a:?})"),
             Ident { name, .. } => writeln!(fmt, "{name}"),
             Global { name, .. } => writeln!(fmt, "{name}"),
-            SetVar {
+            MakeVar {
                 var_type,
                 name,
                 rhs,
                 ..
             } => writeln!(fmt, "{name}: {var_type:?} = {rhs:?}"),
+            SetVar { lhs, rhs, .. } => writeln!(fmt, "{lhs:?} = {rhs:?}"),
+            Member { object, field, .. } => writeln!(fmt, "{object:?}.{field}"),
             UnarOp { op, hs, .. } => writeln!(fmt, "{op:?} {hs:?}"),
             BinOp { lhs, op, rhs, .. } => writeln!(fmt, "{lhs:?} {op:?} {rhs:?}"),
-            IfThen { i, t, .. } => writeln!(fmt, "if {i:?} then {t:?}"),
+            IfThen { i, t, .. } => writeln!(fmt, "? {i:?} {t:?}"),
             IfThenElse { i, t, e, .. } => {
-                writeln!(fmt, "if {i:?} then {t:?} else {e:?}")
+                writeln!(fmt, "? {i:?} {t:?} : {e:?}")
             },
-            While { w, d, .. } => writeln!(fmt, "while {w:?} do {d:?}"),
+            While { w, d, .. } => writeln!(fmt, "@ {w:?} {d:?}"),
             Block { stmts, .. } => writeln!(fmt, "{{{stmts:?}}}"),
         };
 
@@ -109,6 +116,11 @@ pub enum NodeData {
     Empty,
     Number(BigInt),
     Float(f64),
+    StructLit {
+        struct_type: Type,
+        type_name: String,
+        fields: Vec<(String, ExprID)>,
+    },
     Strin(String),
     Ident {
         var_type: Type,
@@ -118,16 +130,26 @@ pub enum NodeData {
         var_type: Type,
         name: String,
     },
-    SetVar {
+    MakeVar {
         type_spec: Option<TypeSpec>,
         var_type: Type,
         name: Arc<str>,
+        rhs: ExprID,
+    },
+    SetVar {
+        ret_type: Type,
+        lhs: ExprID,
         rhs: ExprID,
     },
     Call {
         ret_type: Type,
         f: ExprID,
         a: Vec<ExprID>,
+    },
+    Member {
+        ret_type: Type,
+        object: ExprID,
+        field: String,
     },
     UnarOp {
         ret_type: Type,
@@ -189,16 +211,19 @@ impl NodeData {
         match self {
             Number(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::i32", 0)),
             Float(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)),
+            StructLit { struct_type, .. } => Some(struct_type.clone()),
             Strin(_) => todo!(),
             Ident { var_type, .. }
-            | SetVar { var_type, .. }
+            | MakeVar { var_type, .. }
             | Global { var_type, .. } => Some(var_type.clone()),
             BinOp { ret_type, .. }
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
+            | SetVar { ret_type, .. }
             | Call { ret_type, .. }
-            | Block { ret_type, .. } => Some(ret_type.clone()),
+            | Block { ret_type, .. }
+            | Member { ret_type, .. } => Some(ret_type.clone()),
             Empty => unreachable!(),
             While { .. } => None,
         }

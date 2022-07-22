@@ -1,13 +1,10 @@
 [package]
-name = "serf"
+name = "cxc"
 version = "0.1.0"
 edition = "2021"
 
-[build-dependencies]
-lalrpop = "0.19.7"
 
 [dependencies]
-lalrpop-util = { version = "0.19.8", features = ["lexer"] }
 regex = "1"
 logos = "0.12.0"
 syn = "1.0.95"

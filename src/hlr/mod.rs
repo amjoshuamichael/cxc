@@ -6,8 +6,13 @@ mod type_inference;
 use crate::core_lib::CORE_LIB;
 use crate::parse::*;
 use crate::unit::Globals;
+use inkwell::context::Context;
+use inkwell::types::*;
+use inkwell::values::BasicValue;
+use inkwell::AddressSpace;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
+use std::lazy::Lazy;
 use std::sync::Arc;
 
 pub mod prelude {
@@ -21,8 +26,13 @@ pub mod prelude {
 use indexmap::IndexMap;
 use prelude::*;
 
-pub fn hlr(args: Vec<VarDecl>, code: Expr, globals: &Globals) -> FuncRep {
-    let mut output = FuncRep::from(args, code);
+pub fn hlr(
+    args: Vec<VarDecl>,
+    code: Expr,
+    globals: &Globals,
+    types: &TypeGroup,
+) -> FuncRep {
+    let mut output = FuncRep::from(args, code, types);
     dbg!(&output);
     infer_types(&mut output, globals);
 
@@ -47,16 +57,12 @@ impl Type {
     }
 
     pub fn gen_ret_type(&self) -> GeneralReturnType {
-        pub fn type_from_name(input: &str) -> GeneralReturnType {
-            match input {
-                "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
-                "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
-                s if s[0..1] == *"&" => PrimRef,
-                _ => panic!("could not find type: {input}"),
-            }
+        match &*self.name() {
+            "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
+            "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
+            s if s[0..1] == *"&" => PrimRef,
+            _ => Struct,
         }
-
-        type_from_name(&self.name())
     }
 
     pub fn func_ret_type(&self) -> Self {
@@ -80,11 +86,67 @@ impl Type {
             function_args: Some(args),
         }
     }
+
+    pub fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
+        self.to_any_type(context).try_into().unwrap()
+    }
+
+    pub fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        match self.gen_ret_type() {
+            PrimInt => context.i32_type().into(),
+            PrimFloat => context.f32_type().into(),
+            PrimRef => {
+                let mut pointed_to_type = self.clone();
+                pointed_to_type.ref_count = 0;
+                pointed_to_type
+                    .to_basic_type(context)
+                    .ptr_type(AddressSpace::Global)
+                    .into()
+            },
+            Struct => {
+                let field_types: Vec<BasicTypeEnum> = self
+                    .base
+                    .fields
+                    .iter()
+                    .map(|(_, typ)| typ.to_basic_type(context))
+                    .collect();
+
+                context
+                    .struct_type(&field_types[..], true)
+                    .as_any_type_enum()
+            },
+            _ => todo!(),
+        }
+    }
+
+    pub fn get_field_type(&self, field_name: &String) -> &Type {
+        if !matches!(self.gen_ret_type(), Struct) {
+            panic!("object is not struct");
+        }
+
+        self.base.fields.get(field_name).unwrap()
+    }
+
+    pub fn get_field_index(&self, field_name: &String) -> usize {
+        if !matches!(self.gen_ret_type(), Struct) {
+            panic!("object is not struct");
+        }
+
+        self.base.fields.get_index_of(field_name).unwrap()
+    }
+
+    pub fn field_count(&self) -> usize {
+        if !matches!(self.gen_ret_type(), Struct) {
+            panic!("object is not struct");
+        }
+
+        self.base.fields.len()
+    }
 }
 
 impl Debug for Type {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        print!("Type({})", self.name());
+        write!(fmt, "Type({})", self.name());
 
         Ok(())
     }
@@ -108,6 +170,16 @@ impl BaseType {
         BaseType {
             name: String::from("_::") + name.into(),
             ..Default::default()
+        }
+    }
+
+    pub fn new_struct(
+        name: String,
+        fields: impl Iterator<Item = (String, Type)>,
+    ) -> Self {
+        BaseType {
+            name,
+            fields: fields.collect(),
         }
     }
 }

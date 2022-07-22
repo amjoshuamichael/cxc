@@ -4,13 +4,17 @@ use std::iter::Peekable;
 
 mod expression;
 mod function;
+mod list;
 mod opcode;
 mod parsing_data;
+mod structure;
 
 pub use expression::*;
 pub use function::*;
+pub use list::*;
 pub use opcode::*;
 pub use parsing_data::*;
+pub use structure::*;
 
 pub fn file(mut lexer: Peekable<impl Iterator<Item = Token>>) -> Script {
     let mut declarations = Vec::new();
@@ -21,16 +25,23 @@ pub fn file(mut lexer: Peekable<impl Iterator<Item = Token>>) -> Script {
         match lexer.peek() {
             Some(Token::LeftParen) => {
                 let parsed_func = parse_func(&mut lexer);
+
                 declarations.push(Declaration::Function {
                     name: decl,
                     args: parsed_func.0,
                     code: parsed_func.1,
                 });
             },
+            Some(Token::LeftCurly) => {
+                let fields = parse_structure(&mut lexer);
+
+                declarations.push(Declaration::Struct {
+                    name: decl.var_name,
+                    fields,
+                });
+            },
             _ => panic!(),
         }
-
-        println!("{:?}", lexer.peek());
 
         if lexer.peek().is_none() {
             return Script(declarations);
@@ -38,32 +49,22 @@ pub fn file(mut lexer: Peekable<impl Iterator<Item = Token>>) -> Script {
     }
 }
 
-fn parse_expr_list(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Vec<Expr> {
-    assert_eq!(lexer.next(), Some(Token::LeftParen));
+enum Assignable {
+    Declare(VarDecl),
+    Get(Expr),
+}
 
-    if lexer.peek() == Some(&Token::RghtParen) {
-        lexer.next();
-        return Vec::new();
-    }
-
-    let mut arg_list = vec![parse_math_expr(lexer)];
-
-    loop {
-        match lexer.next() {
-            Some(Token::Comma) => arg_list.push(parse_math_expr(lexer)),
-            Some(Token::RghtParen) => break,
+impl Assignable {
+    pub fn force_declare(&self) -> VarDecl {
+        match self {
+            Assignable::Declare(vd) => vd.clone(),
             _ => panic!(),
         }
     }
-
-    arg_list
 }
 
 fn parse_var_decl(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> VarDecl {
-    let var_name = match lexer.next() {
-        Some(Token::Ident(name)) => name,
-        _ => panic!(),
-    };
+    let Some(Token::Ident(var_name)) = lexer.next() else { panic!() };
 
     let type_spec = match lexer.peek() {
         Some(Token::Colon) => {
@@ -80,6 +81,30 @@ fn parse_var_decl(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> VarDecl 
     }
 }
 
+fn parse_assignable(
+    lexer: &mut Peekable<impl Iterator<Item = Token>>,
+) -> Assignable {
+    let lhs = parse_expr(lexer);
+
+    if let Expr::Ident(var_name) = lhs {
+        let type_spec = match lexer.peek() {
+            Some(Token::Colon) => {
+                lexer.next();
+
+                Some(parse_type_spec(lexer))
+            },
+            _ => None,
+        };
+
+        Assignable::Declare(VarDecl {
+            var_name,
+            type_spec,
+        })
+    } else {
+        Assignable::Get(lhs)
+    }
+}
+
 fn parse_type_spec(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> TypeSpec {
     match lexer.next() {
         Some(Token::AmpersandSet(ref_count)) => {
@@ -93,19 +118,13 @@ fn parse_type_spec(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> TypeSpe
 }
 
 fn parse_block(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
-    assert_eq!(lexer.next(), Some(Token::LeftCurly));
-
-    let mut stmts = Vec::new();
-
-    loop {
-        match lexer.peek() {
-            Some(Token::RghtCurly) => {
-                lexer.next();
-                return Expr::Block(stmts);
-            },
-            _ => stmts.push(parse_stmt(lexer)),
-        }
-    }
+    Expr::Block(parse_list(
+        Token::LeftCurly,
+        None,
+        Token::RghtCurly,
+        parse_stmt,
+        lexer,
+    ))
 }
 
 fn parse_stmt(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
@@ -116,13 +135,16 @@ fn parse_stmt(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
 }
 
 fn parse_setvar(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
-    let var_decl = parse_var_decl(lexer);
+    let assignable = parse_assignable(lexer);
 
     assert_eq!(lexer.next(), Some(Token::Assignment));
 
-    let expr = parse_expr(lexer);
+    let rhs = parse_expr(lexer);
 
-    Expr::SetVar(var_decl, Box::new(expr))
+    match assignable {
+        Assignable::Declare(d) => Expr::MakeVar(d, box rhs),
+        Assignable::Get(lhs) => Expr::SetVar(box lhs, box rhs),
+    }
 }
 
 fn parse_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {

@@ -23,8 +23,8 @@ pub struct DataFlowInfo {
 }
 
 impl FuncRep {
-    pub fn from(args: Vec<VarDecl>, expr: Expr) -> Self {
-        let mut new_hlr = FuncRep::with_core_lib();
+    pub fn from(args: Vec<VarDecl>, expr: Expr, types: &TypeGroup) -> Self {
+        let mut new_hlr = FuncRep::with_types(types.clone());
 
         for arg in args.iter() {
             let name: Arc<str> = Arc::from(&*arg.var_name);
@@ -55,6 +55,13 @@ impl FuncRep {
         let mut output = FuncRep::default();
         output.types = TypeGroup::with_core_lib();
         output
+    }
+
+    fn with_types(types: TypeGroup) -> Self {
+        FuncRep {
+            types,
+            ..Default::default()
+        }
     }
 
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
@@ -88,7 +95,7 @@ impl FuncRep {
                     )
                 }
             },
-            Expr::SetVar(decl, e) => {
+            Expr::MakeVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
                 let var_name: Arc<str> = Arc::from(&*decl.var_name);
@@ -106,7 +113,7 @@ impl FuncRep {
                 }
 
                 self.identifiers.push(var_name.clone());
-                let new_decl = NodeData::SetVar {
+                let new_decl = NodeData::MakeVar {
                     type_spec: decl.type_spec,
                     var_type,
                     name: var_name.clone(),
@@ -114,6 +121,19 @@ impl FuncRep {
                 };
 
                 self.tree.replace(space, new_decl);
+
+                space
+            },
+            Expr::SetVar(lhs, rhs) => {
+                let space = self.tree.make_one_space(parent);
+
+                let new_set = NodeData::SetVar {
+                    ret_type: Type::none(),
+                    lhs: self.add_expr(*lhs, space),
+                    rhs: self.add_expr(*rhs, space),
+                };
+
+                self.tree.replace(space, new_set);
 
                 space
             },
@@ -213,7 +233,37 @@ impl FuncRep {
                 self.tree.replace(space, new_data);
                 space
             },
-            Expr::Op(_) => unreachable!(),
+            Expr::Member(object, field) => {
+                let space = self.tree.make_one_space(parent);
+
+                let new_member = NodeData::Member {
+                    ret_type: Type::none(),
+                    object: self.add_expr(*object, space),
+                    field,
+                };
+
+                self.tree.replace(space, new_member);
+                space
+            },
+            Expr::Struct(name, expr_fields) => {
+                let space = self.tree.make_one_space(parent);
+
+                let mut fields = Vec::new();
+
+                for field in expr_fields {
+                    fields.push((field.0, self.add_expr(field.1, space)));
+                }
+
+                let new_struct = NodeData::StructLit {
+                    struct_type: Type::none(),
+                    type_name: name,
+                    fields,
+                };
+
+                self.tree.replace(space, new_struct);
+                space
+            },
+            Expr::Op(_) | Expr::ArgList(_) => unreachable!(),
         }
     }
 }
