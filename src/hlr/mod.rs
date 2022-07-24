@@ -58,8 +58,8 @@ impl Type {
 
     pub fn gen_ret_type(&self) -> GeneralReturnType {
         match &*self.name() {
-            "prim::i8" | "prim::i16" | "prim::i32" | "prim::i64" => PrimInt,
-            "prim::f8" | "prim::f16" | "prim::f32" | "prim::f64" => PrimFloat,
+            "prim:i8" | "prim:i16" | "prim:i32" | "prim:i64" => PrimInt,
+            "prim:f8" | "prim:f16" | "prim:f32" | "prim:f64" => PrimFloat,
             s if s[0..1] == *"&" => PrimRef,
             _ => Struct,
         }
@@ -76,7 +76,7 @@ impl Type {
     }
 
     fn none() -> Self {
-        CORE_LIB.get_spec(&TypeSpec::new("_::none", 0)).unwrap()
+        CORE_LIB.get_spec(&TypeSpec::new("_:none", 0)).unwrap()
     }
 
     pub fn func_with_args(&self, args: Vec<Type>) -> Self {
@@ -161,14 +161,14 @@ pub struct BaseType {
 impl BaseType {
     pub fn new_prim(name: &str) -> Self {
         BaseType {
-            name: String::from("prim::") + name.into(),
+            name: String::from("prim:") + name.into(),
             ..Default::default()
         }
     }
 
     pub fn new_under(name: &str) -> Self {
         BaseType {
-            name: String::from("_::") + name.into(),
+            name: String::from("_:") + name.into(),
             ..Default::default()
         }
     }

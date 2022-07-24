@@ -22,10 +22,10 @@ lazy_static! {
     };
 
     pub static ref I32: Type = {
-        CORE_LIB.get_spec(&TypeSpec::new("prim::i32", 0)).unwrap()
+        CORE_LIB.get_spec(&TypeSpec::new("prim:i32", 0)).unwrap()
     };
 
     pub static ref F32: Type = {
-        CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)).unwrap()
+        CORE_LIB.get_spec(&TypeSpec::new("prim:f32", 0)).unwrap()
     };
 }

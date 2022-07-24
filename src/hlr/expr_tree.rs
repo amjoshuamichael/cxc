@@ -209,8 +209,8 @@ impl NodeData {
 
     pub fn ret_type(&self) -> Option<Type> {
         match self {
-            Number(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::i32", 0)),
-            Float(_) => CORE_LIB.get_spec(&TypeSpec::new("prim::f32", 0)),
+            Number(_) => CORE_LIB.get_spec(&TypeSpec::new("prim:i32", 0)),
+            Float(_) => CORE_LIB.get_spec(&TypeSpec::new("prim:f32", 0)),
             StructLit { struct_type, .. } => Some(struct_type.clone()),
             Strin(_) => todo!(),
             Ident { var_type, .. }

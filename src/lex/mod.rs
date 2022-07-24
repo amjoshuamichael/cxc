@@ -3,7 +3,6 @@ use logos::{Lexer, Logos};
 use syn::token::{And, Or};
 
 pub mod parse_num;
-mod token;
 
 pub fn lex(input: &str) -> Lexer<Token> {
     Token::lexer(input)
@@ -83,7 +82,7 @@ pub enum Token {
     #[token("=")]
     Assignment,
 
-    #[regex("[A-Za-z:_][A-Za-z0-9:_]*", |lex| String::from(lex.slice()))]
+    #[regex(r"[A-Za-z_][A-Za-z0-9_]+(:[A-Za-z0-9_]+)*", |lex| String::from(lex.slice()))]
     Ident(String),
 
     #[regex(

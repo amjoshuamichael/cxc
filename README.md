@@ -8,9 +8,9 @@ This repository contians the compiler. The compiler uses [inkwell](https://githu
 
 `prime.cxc`
 ```ruby
-is_prime : prim::i32 (num : prim::i32) {
-    divider : prim::i32 = 0
-    output : prim::i32 = 1
+is_prime : prim:i32 (num : prim:i32) {
+    divider : prim:i32 = 0
+    output : prim:i32 = 1
 
     @ divider < num {
         ? num % div == 0 {
