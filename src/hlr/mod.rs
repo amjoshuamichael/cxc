@@ -100,7 +100,7 @@ impl Type {
                 pointed_to_type.ref_count = 0;
                 pointed_to_type
                     .to_basic_type(context)
-                    .ptr_type(AddressSpace::Global)
+                    .ptr_type(AddressSpace::Generic)
                     .into()
             },
             Struct => {

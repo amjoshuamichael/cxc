@@ -151,59 +151,16 @@ mod tests {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    #[repr(align(16))]
     struct Point2D {
         x: i32,
         y: i32,
     }
 
-    #[test]
-    fn structs() {
-        let context = Context::create();
-        let mut unit = unit::Unit::new(&context);
-
-        unit.push_script(
-            "
-            Point2D {
-                x : prim::i32,
-                y : prim::i32
-            }
-
-            main : Point2D () {
-                new_point : Point2D = Point2D { x = 0, y = 0 }
-
-                new_point.y = 20
-                #x_ptr : &prim::i32 = &new_point.x
-                #x_ptr_2 : &prim::i32 = x_ptr
-                #x_ptr_2 = 128
-
-                #y_ptr : &prim::i32 = &new_point.y
-                #y_ptr_2 : &prim::i32 = y_ptr
-                #y_ptr_2 = 128
-
-                #x_ptr_int : &prim::i32 = &new_point.x + 4
-                #y_ptr_int : &prim::i32 = &new_point.y
-                #x_ptr_int : &prim::i32 = y_ptr_int
-                #x_ptr_int = 128
-
-                ! new_point
-            }
-            ",
-        );
-
-        let mut new_point_y: [u8; 16] = unsafe { unit.get_fn("main")(()) };
-        dbg!(new_point_y);
-        let mut new_point_y = Point2D {
-            x: 0b10000000,
-            y: 0b10000000,
-        };
-        let mut new_point_y: [u8; 16] = unsafe { std::mem::transmute(new_point_y) };
-        dbg!(new_point_y);
-        // let mut new_point_y = (0b10000000, 0b10000000);
-        // let mut new_point_y: [u8; 16] = unsafe { std::mem::transmute(new_point_y) };
-        // dbg!(new_point_y);
-
-        // assert_eq!(new_point_y, Point2D { x: 0, y: 50 });
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Point3D {
+        x: i32,
+        y: i32,
+        z: i32,
     }
 
     #[test]
@@ -213,22 +170,55 @@ mod tests {
 
         unit.push_script(
             "
+            Point3D {
+                x : prim::i32,
+                y : prim::i32,
+                z : prim::i32
+            }
+
+            main : &Point3D () {
+                new_point : Point3D = Point3D { x = 30 * 2, y = 52, z = 99999 }
+                
+                ! &new_point
+            }
+            ",
+        );
+
+        let mut new_point_y: Point3D =
+            unsafe { *unit.get_fn::<(), &mut Point3D>("main")(()) };
+        assert_eq!(
+            new_point_y,
+            Point3D {
+                x: 60,
+                y: 52,
+                z: 99999
+            }
+        );
+    }
+
+    #[test]
+    fn struct_pointer() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.push_script(
+            "
             Point2D {
                 x : prim::i32,
                 y : prim::i32
             }
 
-            main : Point2D () {
-                new_point : Point2D = Point2D { x = 0, y = 0 }
-                new_point.x = 128
-                new_point.y = 128
-                ! new_point
+            sqr_magnitude_of : prim::i32 (in_ptr : &Point2D) {
+                in : Point2D = *in_ptr
+
+                ! in.x * in.x + in.y * in.y
             }
             ",
         );
-        let mut new_point: Point2D = unsafe { unit.get_fn("main")(()) };
-        // assert_eq!(new_point, (6000, 42));
-        // let mut new_point: Point2D = unsafe { unit.get_fn("main")(()) };
-        // assert_eq!(new_point, Point2D { x: 6000, y: 42 })
+
+        let point = Point2D { x: 2, y: 3 };
+
+        let mut sqr_mag: i32 = unsafe { unit.get_fn("sqr_magnitude_of")(&point) };
+        assert_eq!(sqr_mag, 13);
     }
 }

@@ -113,6 +113,8 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 let object_type = type_by_id.get(object).unwrap();
 
                 *ret_type = object_type.get_field_type(field).clone();
+
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             _ => {},
         }

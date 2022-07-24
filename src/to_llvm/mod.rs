@@ -144,31 +144,7 @@ pub fn compile<'comp>(
             let mut lhs = compile(fcs, *lhs).unwrap();
             let mut rhs = compile(fcs, *rhs).unwrap();
 
-            if lhs.is_pointer_value() {
-                lhs = fcs
-                    .builder
-                    .build_ptr_to_int(
-                        lhs.into_pointer_value(),
-                        fcs.context.i32_type(),
-                        "cast",
-                    )
-                    .as_any_value_enum();
-            }
-
-            if rhs.is_pointer_value() {
-                rhs = fcs
-                    .builder
-                    .build_ptr_to_int(
-                        rhs.into_pointer_value(),
-                        fcs.context.i32_type(),
-                        "cast",
-                    )
-                    .as_any_value_enum();
-            }
-
-            dbg!(&rhs);
-
-            match PrimInt /*expr.gen_ret_type()*/ {
+            match expr.gen_ret_type() {
                 PrimInt => {
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");

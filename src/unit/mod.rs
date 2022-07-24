@@ -47,7 +47,6 @@ impl<'u> Unit<'u> {
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .unwrap();
 
-        Target::initialize_arm(&InitializationConfig::default());
         let triple = TargetMachine::get_default_triple();
         let target = Target::from_triple(&triple).unwrap();
         let machine = target
@@ -60,17 +59,6 @@ impl<'u> Unit<'u> {
                 CodeModel::Default,
             )
             .unwrap();
-        machine.set_asm_verbosity(true);
-        let target_data = machine.get_target_data();
-        dbg!(target_data.get_data_layout());
-        let target_data = TargetData::create(
-            "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128",
-        );
-        //"E-m:o-p:32:32-Fi8-f64:32:64-v64:32:64-v128:32:128-a:0:32-n32-S32",
-        let target_data = TargetData::create(
-            "e-m:o-p270:32:32-p271:32:32-p272:32:32-Fi8-f64:32:64-v64:32:64-v128:32:128-i32:64:64-a:0:32-n32-S32",
-        );
-        module.set_data_layout(&target_data.get_data_layout());
 
         Self {
             context,
@@ -128,61 +116,12 @@ impl<'u> Unit<'u> {
 
                     let output = compile(&mut fcs, ExprID::ROOT).unwrap();
                     let output: BasicValueEnum = output.try_into().unwrap();
-                    let point2d = self
-                        .types
-                        .get_spec(&TypeSpec::new("Point2D", 0))
-                        .unwrap()
-                        .to_any_type(self.context)
-                        .into_struct_type()
-                        .get_field_type_at_index(0)
-                        .unwrap();
 
-                    dbg!(self
-                        .types
-                        .get_spec(&TypeSpec::new("Point2D", 0))
-                        .unwrap()
-                        .to_any_type(self.context)
-                        .into_struct_type()
-                        .get_field_type_at_index(0));
-
-                    // fcs.builder.build_return(Some(&point2d.size_of().unwrap()));
                     fcs.builder.build_return(Some(&output));
                     fcs.delete();
 
                     if crate::DEBUG {
-                        println!(
-                            "{}",
-                            format!("{:?}", self.module).replace("\\n", "\n")
-                        );
                         self.module.print_to_stderr();
-                        println!("{:?}", self.module.get_triple());
-                        println!("{:?}", self.module.get_data_layout());
-                        println!(
-                            "{:?}",
-                            self.execution_engine
-                                .get_target_data()
-                                .get_data_layout()
-                        );
-                        let target_data = TargetData::create(
-            "e-m:o-p270:32:32-Fi8-f64:32:64-v64:32:64-v128:32:128-i32:64:64-a:0:32-n32-S32",
-                        );
-                        let target_data = self.execution_engine.get_target_data();
-                        let point2d = self
-                            .types
-                            .get_spec(&TypeSpec::new("Point2D", 0))
-                            .unwrap();
-                        let offset = target_data.offset_of_element(
-                            &point2d.to_any_type(self.context).into_struct_type(),
-                            1,
-                        );
-                        println!("{offset:?}");
-                        self.machine
-                            .write_to_file(
-                                &self.module,
-                                FileType::Assembly,
-                                "out.asm".as_ref(),
-                            )
-                            .unwrap();
                     }
 
                     let function =
