@@ -82,7 +82,7 @@ pub enum Token {
     #[token("=")]
     Assignment,
 
-    #[regex(r"[A-Za-z_][A-Za-z0-9_]+(:[A-Za-z0-9_]+)*", |lex| String::from(lex.slice()))]
+    #[regex(r"[A-Za-z_][A-Za-z0-9_]+(:[A-Za-z0-9_]+)*|[A-za-z_]", |lex| String::from(lex.slice()))]
     Ident(String),
 
     #[regex(

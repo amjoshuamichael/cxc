@@ -30,9 +30,11 @@ fn main() {
     let context = Context::create();
     let mut unit = unit::Unit::new(&context);
 
-    unit.push_script(include_str!("prime.cxc");
+    unit.push_script(include_str!("prime.cxc"));
 
     let is_prime = unit.get_fn("is_prime");
     assert_eq!(is_prime(29), 1);
 }
 ```
+
+One of the future goals of `cxc` is to implement [a large-scale type inference system](https://www.youtube.com/watch?v=fDTt_uo0F-g) so that neither variable types nor function parameter types have to be declared. This would allow the language to be written like a dynamic language, with concise syntax, but run with statically typed speed, without any type errors at runtime. 
