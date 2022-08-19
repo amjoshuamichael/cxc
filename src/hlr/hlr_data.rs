@@ -17,7 +17,7 @@ pub struct FuncRep {
 
 #[derive(Debug)]
 pub struct DataFlowInfo {
-    pub typ: Type,
+    pub typ: TypeEnum,
     pub ids: Vec<ExprID>,
     pub is_func_param: bool,
 }
@@ -53,7 +53,7 @@ impl FuncRep {
 
     pub fn with_core_lib() -> Self {
         let mut output = FuncRep::default();
-        output.types = TypeGroup::with_core_lib();
+        output.types = TypeGroup::default();
         output
     }
 
@@ -66,8 +66,20 @@ impl FuncRep {
 
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
-            Expr::Number(n) => self.tree.insert(parent, NodeData::Number(n.into())),
-            Expr::Float(n) => self.tree.insert(parent, NodeData::Float(n.into())),
+            Expr::Number(n) => self.tree.insert(
+                parent,
+                NodeData::Number {
+                    value: n.into(),
+                    size: 32,
+                },
+            ),
+            Expr::Float(n) => self.tree.insert(
+                parent,
+                NodeData::Float {
+                    value: n.into(),
+                    size: 32,
+                },
+            ),
             Expr::Ident(name) => {
                 if let Some(name) = self.identifiers.iter().find(|i| ***i == *name) {
                     let space = self.tree.make_one_space(parent);
@@ -79,7 +91,7 @@ impl FuncRep {
                     self.tree.replace(
                         space,
                         NodeData::Ident {
-                            var_type: Type::none(),
+                            var_type: TypeEnum::Never,
                             name,
                         },
                     );
@@ -89,7 +101,7 @@ impl FuncRep {
                     self.tree.insert(
                         parent,
                         NodeData::Global {
-                            var_type: Type::none(),
+                            var_type: TypeEnum::Never,
                             name,
                         },
                     )
@@ -100,7 +112,7 @@ impl FuncRep {
 
                 let var_name: Arc<str> = Arc::from(&*decl.var_name);
 
-                let var_type = Type::none();
+                let var_type = TypeEnum::Never;
 
                 if !self.data_flow.contains_key(&var_name) {
                     let new_data_flow_info = DataFlowInfo {
@@ -128,7 +140,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_set = NodeData::SetVar {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     lhs: self.add_expr(*lhs, space),
                     rhs: self.add_expr(*rhs, space),
                 };
@@ -141,7 +153,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::UnarOp {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     op,
                     hs: self.add_expr(*hs, space),
                 };
@@ -153,7 +165,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::BinOp {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     lhs: self.add_expr(*lhs, space),
                     op,
                     rhs: self.add_expr(*rhs, space),
@@ -166,7 +178,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThen {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                 };
@@ -178,7 +190,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThenElse {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                     e: self.add_expr(*e, space),
@@ -208,7 +220,7 @@ impl FuncRep {
                 }
 
                 let new_binop = NodeData::Block {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     stmts: statment_ids,
                 };
 
@@ -225,7 +237,7 @@ impl FuncRep {
                 }
 
                 let new_data = NodeData::Call {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     f: self.add_expr(*func, space),
                     a: arg_ids,
                 };
@@ -237,7 +249,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_member = NodeData::Member {
-                    ret_type: Type::none(),
+                    ret_type: TypeEnum::Never,
                     object: self.add_expr(*object, space),
                     field,
                 };
@@ -255,7 +267,7 @@ impl FuncRep {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    struct_type: Type::none(),
+                    struct_type: TypeEnum::Never,
                     type_name: name,
                     fields,
                 };

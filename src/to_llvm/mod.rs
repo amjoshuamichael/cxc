@@ -47,18 +47,18 @@ pub fn compile<'comp>(
     }
 
     let output: Option<AnyValueEnum> = match expr {
-        Number(ref literal) => {
+        Number { ref value, .. } => {
             // TODO: implement different int types
             Some(
                 fcs.context
                     .i32_type()
-                    .const_int(literal.try_into().unwrap(), false)
+                    .const_int(value.try_into().unwrap(), false)
                     .into(),
             )
         },
-        Float(ref literal) => {
+        Float { ref value, .. } => {
             // TODO: implement different int types
-            Some(fcs.context.f32_type().const_float(*literal).into())
+            Some(fcs.context.f32_type().const_float(*value).into())
         },
         Ident { ref name, .. } => {
             if fcs.arg_names.contains(name) {
@@ -96,7 +96,7 @@ pub fn compile<'comp>(
             }
 
             if let Some(val) = fcs.variables.get(&**name) {
-                if var_type.ref_count > 0 {
+                if matches!(var_type, TypeEnum::Ref(_)) {
                     let tmp = fcs.builder.build_load(*val, &*fcs.new_uuid());
                     fcs.builder
                         .build_store(tmp.into_pointer_value(), to_store_basic);
@@ -371,6 +371,8 @@ pub fn compile<'comp>(
         } => {
             let mut compiled_fields = Vec::new();
 
+            let TypeEnum::Struct(struct_type) = struct_type else { panic!() };
+
             // TODO: sort during funcrep
             for field_index in 0..struct_type.field_count() {
                 let field = fields
@@ -383,7 +385,6 @@ pub fn compile<'comp>(
                 compiled_fields.push(compiled_field);
             }
 
-            dbg!(&compiled_fields);
             Some(
                 fcs.context
                     .const_struct(&compiled_fields[..], true)
@@ -411,12 +412,11 @@ fn compile_as_ptr<'comp>(
             object,
             field,
         } => {
-            let field_index = fcs
-                .tree
-                .get(object)
-                .ret_type()
-                .unwrap()
-                .get_field_index(&field);
+            let object_type = fcs.tree.get(object).ret_type().unwrap();
+
+            let TypeEnum::Struct(struct_type) = object_type else { panic!() };
+
+            let field_index = struct_type.get_field_index(&field);
 
             let object = compile_as_ptr(fcs, object);
 

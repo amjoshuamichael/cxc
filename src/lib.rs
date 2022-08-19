@@ -7,7 +7,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
 mod hlr;
 mod lex;
@@ -15,7 +15,6 @@ mod parse;
 mod to_llvm;
 mod unit;
 
-mod core_lib;
 mod indent_parens;
 
 // pub fn compile_and_run(input: &str) -> f32 {
@@ -38,9 +37,9 @@ mod tests {
 
         unit.push_script(
             "
-            factorial: prim:i32 (of_num : prim:i32) {
-                current: prim:i32 = of_num
-                output: prim:i32 = 1
+            factorial: i32 (of_num : i32) {
+                current: i32 = of_num
+                output: i32 = 1
 
                 @ current > 0 {
                     output = output * current
