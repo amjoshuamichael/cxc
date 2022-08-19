@@ -33,6 +33,7 @@ pub fn hlr(
     types: &TypeGroup,
 ) -> FuncRep {
     let mut output = FuncRep::from(args, code, types);
+    dbg!(&output);
     infer_types(&mut output, globals);
     dbg!(&output);
 
@@ -73,7 +74,7 @@ impl Debug for TypeEnum {
 
 impl TypeEnum {
     pub fn ref_x_times(&self, count: u8) -> TypeEnum {
-        let mut output = TypeEnum::Never;
+        let mut output = self.clone();
 
         for _ in 0..count {
             output = output.get_ref();
@@ -82,8 +83,25 @@ impl TypeEnum {
         output
     }
 
+    pub fn deref_x_times(&self, count: u8) -> Option<TypeEnum> {
+        let mut output = self.clone();
+
+        for _ in 0..count {
+            output = output.get_deref()?;
+        }
+
+        Some(output)
+    }
+
     pub fn get_ref(&self) -> TypeEnum {
         TypeEnum::Ref(box RefType { base: self.clone() })
+    }
+
+    pub fn get_deref(&self) -> Option<TypeEnum> {
+        match self {
+            TypeEnum::Ref(t) => Some(t.base.as_type_enum()),
+            _ => None,
+        }
     }
 
     pub fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
@@ -170,8 +188,8 @@ pub struct FuncType {
 
 impl Type for FuncType {
     fn name(&self) -> String {
-        unimplemented!()
         // TODO: make this good
+        "a function".to_string()
         // let args_names = self.args.iter().map(|t| t.name()).sum();
         // let ret_name = self.return_type.name();
 

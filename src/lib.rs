@@ -17,13 +17,6 @@ mod unit;
 
 mod indent_parens;
 
-// pub fn compile_and_run(input: &str) -> f32 {
-//    let lexed = lex::lex(input);
-//    let parsed = parse::parse(lexed);
-//
-//    0.0
-//}
-
 #[cfg(test)]
 mod tests {
     use inkwell::context::Context;
@@ -62,7 +55,7 @@ mod tests {
 
         unit.push_script(
             "
-            square: prim:i32 (num : &prim:i32) {
+            square: i32 (num : &i32) {
                 num = *num * *num
                 ! 0
             }
@@ -81,8 +74,8 @@ mod tests {
 
         unit.push_script(
             "
-            sum: prim:i32 (a: prim:i32, b: prim:i32) {
-                output: prim:i32 = a + b
+            sum: i32 (a: i32, b: i32) {
+                output: i32 = a + b
                 ! output
             }
             ",
@@ -99,8 +92,8 @@ mod tests {
 
         unit.push_script(
             "
-            seventy: prim:f32 () {
-                output: prim:f32 = 60.0 + 10.0
+            seventy: f32 () {
+                output: f32 = 60.0 + 10.0
                 ! output
             }
             ",
@@ -117,25 +110,25 @@ mod tests {
 
         unit.push_script(
             "
-            divide_by_two: prim:f32 (num: prim:f32) {
-                output: prim:f32 = num / 2.0
+            divide_by_two: f32 (num: f32) {
+                output: f32 = num / 2.0
                 ! output
             }
 
-            mul_by_two: prim:i32 (num: prim:i32) {
-                output: prim:i32 = num * 2
+            mul_by_two: i32 (num: i32) {
+                output: i32 = num * 2
                 ! output
             }
     
-            main: prim:i32 () {
-                correct_count: prim:i32 = 0
+            main: i32 () {
+                correct_count: i32 = 0
                 
-                six_times_two: prim:i32 = mul_by_two(6)
+                six_times_two: i32 = mul_by_two(6)
                 ? six_times_two == 12 {
                     correct_count = correct_count + 1
                 }
 
-                six_div_two_f: prim:f32 = divide_by_two(6.0)
+                six_div_two_f: f32 = divide_by_two(6.0)
                 ? six_div_two_f == 3.0 {
                     correct_count = correct_count + 1
                 }
@@ -170,13 +163,17 @@ mod tests {
         unit.push_script(
             "
             Point3D {
-                x: prim:i32,
-                y: prim:i32,
-                z: prim:i32
+                x: i32,
+                y: i32,
+                z: i32,
             }
 
             main: &Point3D () {
-                new_point: Point3D = Point3D { x = 30 * 2, y = 52, z = 99999 }
+                new_point: Point3D = Point3D { 
+                    x = 30 * 2, 
+                    y = 52, 
+                    z = 99999,
+                }
                 
                 ! &new_point
             }
@@ -203,11 +200,11 @@ mod tests {
         unit.push_script(
             "
             Point2D {
-                x: prim:i32,
-                y: prim:i32
+                x: i32,
+                y: i32,
             }
 
-            sqr_magnitude_of: prim:i32 (in_ptr: &Point2D) {
+            sqr_magnitude_of: i32 (in_ptr: &Point2D) {
                 in: Point2D = *in_ptr
 
                 ! in.x * in.x + in.y * in.y

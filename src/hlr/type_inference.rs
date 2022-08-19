@@ -77,7 +77,9 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 *ret_type = type_by_id.get(hs).unwrap().clone();
 
                 match op {
-                    Opcode::Deref(count) => unimplemented!(),
+                    Opcode::Deref(count) => {
+                        *ret_type = ret_type.deref_x_times(*count).unwrap();
+                    },
                     Opcode::Ref(count) => *ret_type = ret_type.ref_x_times(*count),
                     _ => unreachable!(),
                 }

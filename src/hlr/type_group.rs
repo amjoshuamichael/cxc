@@ -22,7 +22,6 @@ impl TypeGroup {
     }
 
     pub fn get_spec(&self, type_spec: &TypeSpec) -> Option<TypeEnum> {
-        dbg!(type_spec);
         let first_char = type_spec.name.chars().next();
 
         match first_char {
@@ -38,10 +37,14 @@ impl TypeGroup {
                         .unwrap();
 
                     return match first_char {
-                        Some('u') | Some('i') => {
-                            Some(TypeEnum::int_of_size(bit_width))
-                        },
-                        Some('f') => Some(TypeEnum::float_of_size(bit_width)),
+                        Some('u') | Some('i') => Some(
+                            TypeEnum::int_of_size(bit_width)
+                                .ref_x_times(type_spec.ref_count),
+                        ),
+                        Some('f') => Some(
+                            TypeEnum::float_of_size(bit_width)
+                                .ref_x_times(type_spec.ref_count),
+                        ),
                         _ => unreachable!(),
                     };
                 }

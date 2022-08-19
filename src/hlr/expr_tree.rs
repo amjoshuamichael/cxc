@@ -76,35 +76,37 @@ struct ExprNode {
 impl Debug for ExprNode {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.data {
-            Empty => writeln!(fmt, "Empty"),
-            Number { value, .. } => writeln!(fmt, "{value}"),
-            Float { value, .. } => writeln!(fmt, "{value:?}"),
-            Strin(s) => writeln!(fmt, "{s}"),
+            Empty => write!(fmt, "Empty"),
+            Number { value, .. } => write!(fmt, "{value}"),
+            Float { value, .. } => write!(fmt, "{value:?}"),
+            Strin(s) => write!(fmt, "{s}"),
             StructLit {
                 type_name, fields, ..
             } => {
-                writeln!(fmt, "{type_name:?} {{ {fields:?} }}")
+                write!(fmt, "{type_name:?} {{ {fields:?} }}")
             },
-            Call { f, a, .. } => writeln!(fmt, "{f:?}({a:?})"),
-            Ident { name, .. } => writeln!(fmt, "{name}"),
-            Global { name, .. } => writeln!(fmt, "{name}"),
+            Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
+            Ident { name, .. } => write!(fmt, "{name}"),
+            Global { name, .. } => write!(fmt, "{name}"),
             MakeVar {
                 var_type,
                 name,
                 rhs,
                 ..
-            } => writeln!(fmt, "{name}: {var_type:?} = {rhs:?}"),
-            SetVar { lhs, rhs, .. } => writeln!(fmt, "{lhs:?} = {rhs:?}"),
-            Member { object, field, .. } => writeln!(fmt, "{object:?}.{field}"),
-            UnarOp { op, hs, .. } => writeln!(fmt, "{op:?} {hs:?}"),
-            BinOp { lhs, op, rhs, .. } => writeln!(fmt, "{lhs:?} {op:?} {rhs:?}"),
-            IfThen { i, t, .. } => writeln!(fmt, "? {i:?} {t:?}"),
+            } => write!(fmt, "{name}: {var_type:?} = {rhs:?}"),
+            SetVar { lhs, rhs, .. } => write!(fmt, "{lhs:?} = {rhs:?}"),
+            Member { object, field, .. } => write!(fmt, "{object:?}.{field}"),
+            UnarOp { op, hs, .. } => write!(fmt, "{op:?} {hs:?}"),
+            BinOp { lhs, op, rhs, .. } => write!(fmt, "{lhs:?} {op:?} {rhs:?}"),
+            IfThen { i, t, .. } => write!(fmt, "? {i:?} {t:?}"),
             IfThenElse { i, t, e, .. } => {
-                writeln!(fmt, "? {i:?} {t:?} : {e:?}")
+                write!(fmt, "? {i:?} {t:?} : {e:?}")
             },
-            While { w, d, .. } => writeln!(fmt, "@ {w:?} {d:?}"),
-            Block { stmts, .. } => writeln!(fmt, "{{{stmts:?}}}"),
+            While { w, d, .. } => write!(fmt, "@ {w:?} {d:?}"),
+            Block { stmts, .. } => write!(fmt, "{{{stmts:?}}}"),
         };
+
+        writeln!(fmt, " | with type: {:?}", self.data.ret_type());
 
         Ok(())
     }

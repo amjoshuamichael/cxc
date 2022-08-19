@@ -237,7 +237,10 @@ pub fn compile<'comp>(
 
                     Some(result.into())
                 },
-                _ => todo!(),
+                _ => {
+                    dbg!(&expr);
+                    unimplemented!();
+                },
             }
         },
         IfThen { i, t, .. } => {

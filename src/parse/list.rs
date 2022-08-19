@@ -24,7 +24,15 @@ where
     if let Some(separator) = separator {
         loop {
             match lexer.next() {
-                Some(s) if s == separator => list.push(parser(lexer)),
+                Some(s) if s == separator => {
+                    if lexer.peek() == Some(&closer) {
+                        // trailing separators
+                        lexer.next();
+                        break;
+                    }
+
+                    list.push(parser(lexer))
+                },
                 Some(s) if s == closer => break,
                 _ => panic!(),
             }
