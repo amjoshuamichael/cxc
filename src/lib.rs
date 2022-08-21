@@ -5,7 +5,6 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 #[macro_use]
-extern crate lazy_static;
 
 pub static DEBUG: bool = false;
 

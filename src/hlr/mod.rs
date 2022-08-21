@@ -14,7 +14,6 @@ use inkwell::values::BasicValue;
 use inkwell::AddressSpace;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
-use std::lazy::Lazy;
 use std::ops::Deref;
 use std::sync::Arc;
 
