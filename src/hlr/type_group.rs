@@ -1,5 +1,6 @@
 use super::prelude::*;
 use crate::parse::*;
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -11,56 +12,35 @@ impl TypeGroup {
         self.0.insert(name, t);
     }
 
-    pub fn get_base(&self, name: &String) -> Option<Type> {
-        for t in &self.0 {
-            if t.0 == name {
-                return Some(t.1.clone());
-            }
-        }
-
-        None
+    pub fn get_by_name(&self, name: &String) -> Option<Type> {
+        self.0.get(name).cloned()
     }
 
-    pub fn get_spec(&self, type_spec: &TypeSpec) -> Option<Type> {
-        let first_char = type_spec.name.chars().next();
+    pub fn get_spec(&self, alias: &TypeAlias) -> Option<Type> {
+        dbg!(alias);
+        let typ = match alias {
+            TypeAlias::Named(name) => self.get_by_name(&name)?,
+            TypeAlias::Int(size) => Type::int_of_size(*size),
+            TypeAlias::Float(size) => Type::float_of_size(*size),
+            TypeAlias::Ref(base) => self.get_spec(base)?.get_ref(),
+            TypeAlias::Struct(fields) => {
+                let mut typed_fields: IndexMap<String, Type> = IndexMap::new();
 
-        match first_char {
-            Some('i') | Some('u') | Some('f') => {
-                if type_spec.name.chars().skip(1).all(|c| c.is_digit(10)) {
-                    // TypeSpec is accessing a primitive value
-                    let bit_width: u32 = type_spec
-                        .name
-                        .chars()
-                        .skip(1)
-                        .collect::<String>()
-                        .parse()
-                        .unwrap();
-
-                    return match first_char {
-                        Some('u') | Some('i') => Some(
-                            Type::int_of_size(bit_width)
-                                .ref_x_times(type_spec.ref_count),
-                        ),
-                        Some('f') => Some(
-                            Type::float_of_size(bit_width)
-                                .ref_x_times(type_spec.ref_count),
-                        ),
-                        _ => unreachable!(),
-                    };
+                for field in fields {
+                    let field_type = self.get_spec(field.1)?;
+                    typed_fields.insert(field.0.clone(), field_type);
                 }
-            },
-            _ => {},
-        }
 
-        Some(
-            self.get_base(&type_spec.name)?
-                .ref_x_times(type_spec.ref_count),
-        )
+                Type::new_struct(typed_fields)
+            },
+        };
+
+        Some(typ)
     }
 
     pub fn add_types(&mut self, rhs: &TypeGroup) {
         for t in &rhs.0 {
-            if self.get_base(&t.0).is_none() {
+            if self.get_by_name(&t.0).is_none() {
                 self.add(t.0.clone(), t.1.clone())
             }
         }

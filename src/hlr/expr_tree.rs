@@ -81,9 +81,11 @@ impl Debug for ExprNode {
             Float { value, .. } => write!(fmt, "{value:?}"),
             Strin(s) => write!(fmt, "{s}"),
             StructLit {
-                type_name, fields, ..
+                var_type: struct_type,
+                fields,
+                ..
             } => {
-                write!(fmt, "{type_name:?} {{ {fields:?} }}")
+                write!(fmt, "{struct_type:?} {{ {fields:?} }}")
             },
             Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
             Ident { name, .. } => write!(fmt, "{name}"),
@@ -124,8 +126,7 @@ pub enum NodeData {
         size: u32,
     },
     StructLit {
-        struct_type: Type,
-        type_name: String,
+        var_type: Type,
         fields: Vec<(String, ExprID)>,
     },
     Strin(String),
@@ -138,7 +139,7 @@ pub enum NodeData {
         name: String,
     },
     MakeVar {
-        type_spec: Option<TypeSpec>,
+        type_spec: Option<TypeAlias>,
         var_type: Type,
         name: Arc<str>,
         rhs: ExprID,
@@ -197,7 +198,10 @@ impl NodeData {
         match self {
             Number { size, .. } => Some(Type::int_of_size(*size)),
             Float { size, .. } => Some(Type::float_of_size(*size)),
-            StructLit { struct_type, .. } => Some(struct_type.clone()),
+            StructLit {
+                var_type: struct_type,
+                ..
+            } => Some(struct_type.clone()),
             Strin(_) => todo!(),
             Ident { var_type, .. }
             | MakeVar { var_type, .. }

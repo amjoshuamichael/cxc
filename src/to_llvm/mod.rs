@@ -370,7 +370,7 @@ pub fn compile<'comp>(
             Some(val.as_any_value_enum())
         },
         StructLit {
-            struct_type,
+            var_type: struct_type,
             fields,
             ..
         } => {

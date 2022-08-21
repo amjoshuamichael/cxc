@@ -46,7 +46,7 @@ pub fn parse_math_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Exp
 
             atoms.pop();
 
-            Expr::Struct(struct_name, fields)
+            Expr::Struct(TypeAlias::Named(struct_name), fields)
         } else {
             let Some(possible_opcode) = lexer.peek() else { break; };
             let Some(opcode) = possible_opcode.get_bin_opcode() else { break; };

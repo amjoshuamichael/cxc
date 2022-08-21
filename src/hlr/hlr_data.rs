@@ -257,7 +257,7 @@ impl FuncRep {
                 self.tree.replace(space, new_member);
                 space
             },
-            Expr::Struct(name, expr_fields) => {
+            Expr::Struct(type_alias, expr_fields) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut fields = Vec::new();
@@ -267,8 +267,7 @@ impl FuncRep {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    struct_type: Type::never(),
-                    type_name: name,
+                    var_type: self.types.get_spec(&type_alias).unwrap(),
                     fields,
                 };
 

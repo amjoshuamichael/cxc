@@ -6,7 +6,7 @@
 #![feature(box_syntax)]
 #[macro_use]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 
 mod hlr;
 mod lex;
@@ -142,6 +142,12 @@ mod tests {
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Square {
+        position: Point2D,
+        size: i32,
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct Point2D {
         x: i32,
         y: i32,
@@ -215,5 +221,26 @@ mod tests {
 
         let mut sqr_mag: i32 = unsafe { unit.get_fn("sqr_magnitude_of")(&point) };
         assert_eq!(sqr_mag, 13);
+    }
+
+    #[test]
+    fn type_aliasing() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.push_script(
+            "
+            Square { position: { x: i32, y: i32, }, size: i32, } Point2D { x: i32, y: i32, } make_square: &{ position: { x: i32, y: i32, }, size: i32, } () { new_square: Square = Square { position = Point2D { x = 43, y = 92, }, size = 4, } ! &new_square }
+            ",
+        );
+
+        let square = Square {
+            position: Point2D { x: 43, y: 92 },
+            size: 4,
+        };
+
+        let mut new_square: Square =
+            unsafe { *unit.get_fn::<(), &Square>("make_square")(()) };
+        assert_eq!(new_square, square);
     }
 }

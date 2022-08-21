@@ -135,17 +135,8 @@ impl<'u> Unit<'u> {
                         function_type,
                     );
                 },
-                Declaration::Struct { name, fields } => {
-                    let fields = fields
-                        .iter()
-                        .map(|f| {
-                            let spec = f.type_spec.as_ref().unwrap();
-                            let typ = self.types.get_spec(spec).unwrap();
-                            (f.var_name.clone(), typ)
-                        })
-                        .collect();
-
-                    self.types.add(name, Type::new_struct(fields));
+                Declaration::Struct { name, typ } => {
+                    self.types.add(name, self.types.get_spec(&typ).unwrap());
                 },
             }
         }

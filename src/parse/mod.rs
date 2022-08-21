@@ -33,11 +33,11 @@ pub fn file(mut lexer: Peekable<impl Iterator<Item = Token>>) -> Script {
                 });
             },
             Some(Token::LeftCurly) => {
-                let fields = parse_structure(&mut lexer);
+                let typ = parse_type_alias(&mut lexer);
 
                 declarations.push(Declaration::Struct {
                     name: decl.var_name,
-                    fields,
+                    typ,
                 });
             },
             _ => panic!(),
@@ -70,10 +70,12 @@ fn parse_var_decl(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> VarDecl 
         Some(Token::Colon) => {
             lexer.next();
 
-            Some(parse_type_spec(lexer))
+            Some(parse_type_alias(lexer))
         },
         _ => None,
     };
+
+    dbg!(&type_spec);
 
     VarDecl {
         var_name,
@@ -91,7 +93,7 @@ fn parse_assignable(
             Some(Token::Colon) => {
                 lexer.next();
 
-                Some(parse_type_spec(lexer))
+                Some(parse_type_alias(lexer))
             },
             _ => None,
         };
@@ -102,18 +104,6 @@ fn parse_assignable(
         })
     } else {
         Assignable::Get(lhs)
-    }
-}
-
-fn parse_type_spec(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> TypeSpec {
-    match lexer.next() {
-        Some(Token::AmpersandSet(ref_count)) => {
-            let Some(Token::Ident(name)) = lexer.next() else { panic!() };
-
-            TypeSpec { ref_count, name }
-        },
-        Some(Token::Ident(name)) => TypeSpec { ref_count: 0, name },
-        _ => panic!(),
     }
 }
 
@@ -158,6 +148,22 @@ fn parse_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
         Some(Token::Bang) => {
             lexer.next();
             parse_expr(lexer)
+        },
+        Some(Token::LeftCurly) => {
+            parse_list(
+                Token::LeftCurly,
+                Some(Token::Comma),
+                Token::RghtCurly,
+                |lexer| {
+                    let Some(Token::Ident(field)) = lexer.next() else { panic!() };
+                    assert_eq!(lexer.next(), Some(Token::Assignment));
+                    let rhs = parse_expr(lexer);
+                    (field, rhs)
+                },
+                lexer,
+            );
+
+            todo!()
         },
         Some(_) => todo!(),
         None => unreachable!(),

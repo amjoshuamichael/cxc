@@ -40,15 +40,8 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 ref mut var_type,
                 name,
             } => {
+                dbg!(&name);
                 *var_type = globals.get_type(name.clone()).unwrap();
-            },
-            NodeData::StructLit {
-                ref mut struct_type,
-                type_name,
-                ..
-            } => {
-                *struct_type =
-                    hlr.types.get_spec(&TypeSpec::new(&*type_name, 0)).unwrap();
             },
             _ => {},
         };

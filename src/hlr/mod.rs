@@ -259,7 +259,7 @@ pub struct FloatType {
 
 impl Type for FloatType {
     fn name(&self) -> String {
-        String::from("todo")
+        format!("float of size {}", self.size)
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
