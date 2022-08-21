@@ -66,7 +66,11 @@ pub fn parse_math_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Exp
     unops(&mut atoms);
     binops(&mut atoms);
 
-    dbg!(&atoms);
+    if crate::DEBUG {
+        println!("parsed math expression: ");
+        dbg!(&atoms);
+    }
+
     assert_eq!(atoms.len(), 1);
     return atoms[0].clone();
 }

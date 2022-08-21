@@ -23,7 +23,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn full_test() {
+    fn basic_test() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
 
@@ -230,7 +230,36 @@ mod tests {
 
         unit.push_script(
             "
-            Square { position: { x: i32, y: i32, }, size: i32, } Point2D { x: i32, y: i32, } make_square: &{ position: { x: i32, y: i32, }, size: i32, } () { new_square: Square = Square { position = Point2D { x = 43, y = 92, }, size = 4, } ! &new_square }
+            Square {
+                position: {
+                    x: i32,
+                    y: i32,
+                },
+                size: i32,
+            }
+
+            Point2D {
+                x: i32,
+                y: i32,
+            }
+
+            make_square: &{
+                position: {
+                    x: i32,
+                    y: i32,
+                },
+                size: i32,
+            } () {
+                new_square: Square = Square {
+                    position = Point2D {
+                        x = 43,
+                        y = 92,
+                    },
+                    size = 4,
+                }
+
+                ! &new_square
+            }
             ",
         );
 

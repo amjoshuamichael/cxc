@@ -8,8 +8,10 @@ use crate::unit::Globals;
 use inkwell::context::Context;
 use inkwell::types::AnyType;
 use inkwell::types::AnyTypeEnum;
+use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
+use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValue;
 use inkwell::AddressSpace;
 use std::collections::HashSet;
@@ -35,20 +37,23 @@ pub fn hlr(
     types: &TypeGroup,
 ) -> FuncRep {
     let mut output = FuncRep::from(args, code, types);
-    dbg!(&output);
     infer_types(&mut output, globals);
-    dbg!(&output);
 
     if crate::DEBUG {
-        println!("--------HLR DATA--------");
-        println!("{:?}", output.tree);
+        dbg!(&output);
     }
 
     output
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TypeArc(Arc<TypeEnum>);
+
+impl Debug for TypeArc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 impl TypeArc {
     pub fn ref_x_times(mut self, count: u8) -> TypeArc {
@@ -142,7 +147,7 @@ pub enum TypeEnum {
 
 impl Debug for TypeEnum {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "Type({})", self.name());
+        write!(fmt, "{}", self.name());
 
         Ok(())
     }
@@ -187,16 +192,26 @@ pub struct FuncType {
 
 impl Type for FuncType {
     fn name(&self) -> String {
-        // TODO: make this good
-        "a function".to_string()
-        // let args_names = self.args.iter().map(|t| t.name()).sum();
-        // let ret_name = self.return_type.name();
+        let args_names: String = self
+            .args
+            .iter()
+            .map(|t| t.name())
+            .collect::<Vec<String>>()
+            .join(", ");
+        let ret_name = self.return_type.name();
 
-        // args_names + "->" + ret_name
+        format!("({args_names}) -> {ret_name}")
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        todo!()
+        let return_type = self.return_type.to_basic_type(context);
+        let args: Vec<BasicMetadataTypeEnum> = self
+            .args
+            .iter()
+            .map(|t| t.to_basic_type(context).into())
+            .collect();
+
+        return_type.fn_type(&args[..], true).try_into().unwrap()
     }
 }
 
@@ -220,8 +235,16 @@ impl StructType {
 
 impl Type for StructType {
     fn name(&self) -> String {
-        // TODO: make this good lmao
-        "TODO".to_string()
+        // the indexmap crate formats a struct like this:
+        // { x: i32, y: i32, }
+        //
+        // to this:
+        // { "x": i32, "y": i32, }
+        //
+        // here, we remove the quotes.
+        let struct_with_quotes = format!("{:?}", self.fields);
+
+        struct_with_quotes.chars().filter(|c| *c != '"').collect()
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -244,7 +267,7 @@ pub struct IntType {
 
 impl Type for IntType {
     fn name(&self) -> String {
-        String::from("int")
+        format!("i{}", self.size)
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -253,13 +276,12 @@ impl Type for IntType {
 }
 
 pub struct FloatType {
-    // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
 }
 
 impl Type for FloatType {
     fn name(&self) -> String {
-        format!("float of size {}", self.size)
+        format!("f{}", self.size)
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {

@@ -40,15 +40,12 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 ref mut var_type,
                 name,
             } => {
-                dbg!(&name);
                 *var_type = globals.get_type(name.clone()).unwrap();
             },
             _ => {},
         };
 
-        if let Some(ret_type) = node.ret_type() {
-            type_by_id.insert(n, ret_type);
-        }
+        type_by_id.insert(n, node.ret_type());
     }
 
     for (n, node) in hlr.tree.top_down_iter().rev() {

@@ -46,8 +46,6 @@ pub fn compile<'comp>(
         println!("compiling: {expr_id:?}, {expr:?}");
     }
 
-    dbg!(&expr);
-
     let output: Option<AnyValueEnum> = match expr {
         Number { ref value, .. } => {
             // TODO: implement different int types
@@ -112,7 +110,7 @@ pub fn compile<'comp>(
             let var_ptr = {
                 let var_ptr = {
                     fcs.builder.build_alloca(
-                        expr.ret_type().unwrap().to_basic_type(fcs.context),
+                        expr.ret_type().to_basic_type(fcs.context),
                         name,
                     )
                 };
@@ -239,10 +237,7 @@ pub fn compile<'comp>(
 
                     Some(result.into())
                 },
-                _ => {
-                    dbg!(&expr);
-                    unimplemented!();
-                },
+                _ => unimplemented!(),
             }
         },
         IfThen { i, t, .. } => {
@@ -399,7 +394,6 @@ pub fn compile<'comp>(
         _ => todo!(),
     };
 
-    println!("done compiling: {expr_id:?}");
     if crate::DEBUG {
         println!("done compiling: {expr_id:?}");
     }
@@ -411,7 +405,6 @@ fn compile_as_ptr<'comp>(
     fcs: &mut FunctionCompilationState<'comp>,
     expr_id: ExprID,
 ) -> PointerValue<'comp> {
-    println!("doing a round of compilation as pointer...");
     match fcs.tree.get(expr_id) {
         Ident { name, .. } => fcs.variables.get(&*name).unwrap().clone(),
         Member {
@@ -419,7 +412,7 @@ fn compile_as_ptr<'comp>(
             object,
             field,
         } => {
-            let typ = fcs.tree.get(object).ret_type().unwrap();
+            let typ = fcs.tree.get(object).ret_type();
             let object_type = typ.as_type_enum();
 
             let TypeEnum::Struct(struct_type) = object_type else { panic!() };

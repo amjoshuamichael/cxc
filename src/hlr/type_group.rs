@@ -17,7 +17,6 @@ impl TypeGroup {
     }
 
     pub fn get_spec(&self, alias: &TypeAlias) -> Option<Type> {
-        dbg!(alias);
         let typ = match alias {
             TypeAlias::Named(name) => self.get_by_name(&name)?,
             TypeAlias::Int(size) => Type::int_of_size(*size),

@@ -108,9 +108,7 @@ impl Debug for ExprNode {
             Block { stmts, .. } => write!(fmt, "{{{stmts:?}}}"),
         };
 
-        writeln!(fmt, " | with type: {:?}", self.data.ret_type());
-
-        Ok(())
+        writeln!(fmt, " :: {:?}", self.data.ret_type())
     }
 }
 
@@ -194,18 +192,18 @@ pub enum NodeData {
 use NodeData::*;
 
 impl NodeData {
-    pub fn ret_type(&self) -> Option<Type> {
+    pub fn ret_type(&self) -> Type {
         match self {
-            Number { size, .. } => Some(Type::int_of_size(*size)),
-            Float { size, .. } => Some(Type::float_of_size(*size)),
+            Number { size, .. } => Type::int_of_size(*size),
+            Float { size, .. } => Type::float_of_size(*size),
             StructLit {
                 var_type: struct_type,
                 ..
-            } => Some(struct_type.clone()),
+            } => struct_type.clone(),
             Strin(_) => todo!(),
             Ident { var_type, .. }
             | MakeVar { var_type, .. }
-            | Global { var_type, .. } => Some(var_type.clone()),
+            | Global { var_type, .. } => var_type.clone(),
             BinOp { ret_type, .. }
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
@@ -213,9 +211,9 @@ impl NodeData {
             | SetVar { ret_type, .. }
             | Call { ret_type, .. }
             | Block { ret_type, .. }
-            | Member { ret_type, .. } => Some(ret_type.clone()),
+            | Member { ret_type, .. } => ret_type.clone(),
             Empty => unreachable!(),
-            While { .. } => None,
+            While { .. } => Type::never(),
         }
     }
 }

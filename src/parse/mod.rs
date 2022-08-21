@@ -75,8 +75,6 @@ fn parse_var_decl(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> VarDecl 
         _ => None,
     };
 
-    dbg!(&type_spec);
-
     VarDecl {
         var_name,
         type_spec,
