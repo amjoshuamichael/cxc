@@ -124,58 +124,58 @@ pub enum NodeData {
         size: u32,
     },
     StructLit {
-        struct_type: TypeEnum,
+        struct_type: Type,
         type_name: String,
         fields: Vec<(String, ExprID)>,
     },
     Strin(String),
     Ident {
-        var_type: TypeEnum,
+        var_type: Type,
         name: Arc<str>,
     },
     Global {
-        var_type: TypeEnum,
+        var_type: Type,
         name: String,
     },
     MakeVar {
         type_spec: Option<TypeSpec>,
-        var_type: TypeEnum,
+        var_type: Type,
         name: Arc<str>,
         rhs: ExprID,
     },
     SetVar {
-        ret_type: TypeEnum,
+        ret_type: Type,
         lhs: ExprID,
         rhs: ExprID,
     },
     Call {
-        ret_type: TypeEnum,
+        ret_type: Type,
         f: ExprID,
         a: Vec<ExprID>,
     },
     Member {
-        ret_type: TypeEnum,
+        ret_type: Type,
         object: ExprID,
         field: String,
     },
     UnarOp {
-        ret_type: TypeEnum,
+        ret_type: Type,
         op: Opcode,
         hs: ExprID,
     },
     BinOp {
-        ret_type: TypeEnum,
+        ret_type: Type,
         lhs: ExprID,
         op: Opcode,
         rhs: ExprID,
     },
     IfThen {
-        ret_type: TypeEnum,
+        ret_type: Type,
         i: ExprID,
         t: ExprID,
     },
     IfThenElse {
-        ret_type: TypeEnum,
+        ret_type: Type,
         i: ExprID,
         t: ExprID,
         e: ExprID,
@@ -185,40 +185,18 @@ pub enum NodeData {
         d: ExprID,
     },
     Block {
-        ret_type: TypeEnum,
+        ret_type: Type,
         stmts: Vec<ExprID>,
     },
 }
 
-pub enum GenType {
-    PrimInt,
-    PrimFloat,
-    PrimString,
-    PrimRef,
-    Func,
-    Struct,
-}
-
-use GenType::*;
 use NodeData::*;
 
 impl NodeData {
-    pub fn gen_ret_type(&self) -> GenType {
-        if matches!(self, Number { .. }) {
-            return PrimInt;
-        }
-
-        if matches!(self, Float { .. }) {
-            return PrimFloat;
-        }
-
-        self.ret_type().unwrap().gen_ret_type()
-    }
-
-    pub fn ret_type(&self) -> Option<TypeEnum> {
+    pub fn ret_type(&self) -> Option<Type> {
         match self {
-            Number { size, .. } => Some(TypeEnum::int_of_size(*size)),
-            Float { size, .. } => Some(TypeEnum::float_of_size(*size)),
+            Number { size, .. } => Some(Type::int_of_size(*size)),
+            Float { size, .. } => Some(Type::float_of_size(*size)),
             StructLit { struct_type, .. } => Some(struct_type.clone()),
             Strin(_) => todo!(),
             Ident { var_type, .. }

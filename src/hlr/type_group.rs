@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Default, Clone)]
-pub struct TypeGroup(pub HashMap<String, TypeEnum>);
+pub struct TypeGroup(pub HashMap<String, Type>);
 
 impl TypeGroup {
-    pub fn add(&mut self, name: String, t: TypeEnum) {
+    pub fn add(&mut self, name: String, t: Type) {
         self.0.insert(name, t);
     }
 
-    pub fn get_base(&self, name: &String) -> Option<TypeEnum> {
+    pub fn get_base(&self, name: &String) -> Option<Type> {
         for t in &self.0 {
             if t.0 == name {
                 return Some(t.1.clone());
@@ -21,7 +21,7 @@ impl TypeGroup {
         None
     }
 
-    pub fn get_spec(&self, type_spec: &TypeSpec) -> Option<TypeEnum> {
+    pub fn get_spec(&self, type_spec: &TypeSpec) -> Option<Type> {
         let first_char = type_spec.name.chars().next();
 
         match first_char {
@@ -38,11 +38,11 @@ impl TypeGroup {
 
                     return match first_char {
                         Some('u') | Some('i') => Some(
-                            TypeEnum::int_of_size(bit_width)
+                            Type::int_of_size(bit_width)
                                 .ref_x_times(type_spec.ref_count),
                         ),
                         Some('f') => Some(
-                            TypeEnum::float_of_size(bit_width)
+                            Type::float_of_size(bit_width)
                                 .ref_x_times(type_spec.ref_count),
                         ),
                         _ => unreachable!(),

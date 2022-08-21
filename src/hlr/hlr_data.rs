@@ -17,7 +17,7 @@ pub struct FuncRep {
 
 #[derive(Debug)]
 pub struct DataFlowInfo {
-    pub typ: TypeEnum,
+    pub typ: Type,
     pub ids: Vec<ExprID>,
     pub is_func_param: bool,
 }
@@ -91,7 +91,7 @@ impl FuncRep {
                     self.tree.replace(
                         space,
                         NodeData::Ident {
-                            var_type: TypeEnum::Never,
+                            var_type: Type::never(),
                             name,
                         },
                     );
@@ -101,7 +101,7 @@ impl FuncRep {
                     self.tree.insert(
                         parent,
                         NodeData::Global {
-                            var_type: TypeEnum::Never,
+                            var_type: Type::never(),
                             name,
                         },
                     )
@@ -112,7 +112,7 @@ impl FuncRep {
 
                 let var_name: Arc<str> = Arc::from(&*decl.var_name);
 
-                let var_type = TypeEnum::Never;
+                let var_type = Type::never();
 
                 if !self.data_flow.contains_key(&var_name) {
                     let new_data_flow_info = DataFlowInfo {
@@ -140,7 +140,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_set = NodeData::SetVar {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     lhs: self.add_expr(*lhs, space),
                     rhs: self.add_expr(*rhs, space),
                 };
@@ -153,7 +153,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::UnarOp {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     op,
                     hs: self.add_expr(*hs, space),
                 };
@@ -165,7 +165,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::BinOp {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     lhs: self.add_expr(*lhs, space),
                     op,
                     rhs: self.add_expr(*rhs, space),
@@ -178,7 +178,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThen {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                 };
@@ -190,7 +190,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThenElse {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                     e: self.add_expr(*e, space),
@@ -220,7 +220,7 @@ impl FuncRep {
                 }
 
                 let new_binop = NodeData::Block {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     stmts: statment_ids,
                 };
 
@@ -237,7 +237,7 @@ impl FuncRep {
                 }
 
                 let new_data = NodeData::Call {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     f: self.add_expr(*func, space),
                     a: arg_ids,
                 };
@@ -249,7 +249,7 @@ impl FuncRep {
                 let space = self.tree.make_one_space(parent);
 
                 let new_member = NodeData::Member {
-                    ret_type: TypeEnum::Never,
+                    ret_type: Type::never(),
                     object: self.add_expr(*object, space),
                     field,
                 };
@@ -267,7 +267,7 @@ impl FuncRep {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    struct_type: TypeEnum::Never,
+                    struct_type: Type::never(),
                     type_name: name,
                     fields,
                 };

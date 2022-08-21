@@ -7,12 +7,12 @@ use std::sync::Arc;
 pub struct Globals<'a>(HashMap<Arc<str>, Global<'a>>);
 
 struct Global<'a> {
-    typ: TypeEnum,
+    typ: Type,
     value: AnyValueEnum<'a>,
 }
 
 impl<'a> Globals<'a> {
-    pub fn insert(&mut self, key: Arc<str>, value: AnyValueEnum<'a>, typ: TypeEnum) {
+    pub fn insert(&mut self, key: Arc<str>, value: AnyValueEnum<'a>, typ: Type) {
         self.0.insert(key, Global { value, typ });
     }
 
@@ -24,7 +24,7 @@ impl<'a> Globals<'a> {
         Some(self.0.get(&Arc::from(&*key))?.value.clone())
     }
 
-    pub fn get_type(&self, key: String) -> Option<TypeEnum> {
+    pub fn get_type(&self, key: String) -> Option<Type> {
         Some(self.0.get(&Arc::from(&*key))?.typ.clone())
     }
 }

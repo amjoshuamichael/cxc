@@ -6,7 +6,10 @@ mod type_inference;
 use crate::parse::*;
 use crate::unit::Globals;
 use inkwell::context::Context;
-use inkwell::types::*;
+use inkwell::types::AnyType;
+use inkwell::types::AnyTypeEnum;
+use inkwell::types::BasicType;
+use inkwell::types::BasicTypeEnum;
 use inkwell::values::BasicValue;
 use inkwell::AddressSpace;
 use std::collections::HashSet;
@@ -17,9 +20,9 @@ use std::sync::Arc;
 
 pub mod prelude {
     pub use super::{
-        expr_tree::ExprID, expr_tree::ExprTree, expr_tree::GenType,
-        expr_tree::GenType::*, expr_tree::NodeData, hlr, hlr_data::FuncRep,
-        type_group::TypeGroup, type_inference::*, StructType, Type, TypeEnum,
+        expr_tree::ExprID, expr_tree::ExprTree, expr_tree::NodeData, hlr,
+        hlr_data::FuncRep, type_group::TypeGroup, type_inference::*, StructType,
+        Type as TypeTrait, TypeArc as Type, TypeEnum,
     };
 }
 
@@ -45,20 +48,94 @@ pub fn hlr(
     output
 }
 
-pub trait Type {
-    fn name(&self) -> String;
-    fn gen_ret_type(&self) -> GenType;
-    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t>;
-    fn as_type_enum(&self) -> TypeEnum;
+#[derive(Clone, Debug)]
+pub struct TypeArc(Arc<TypeEnum>);
+
+impl TypeArc {
+    pub fn ref_x_times(mut self, count: u8) -> TypeArc {
+        for _ in 0..count {
+            self = self.get_ref();
+        }
+
+        self
+    }
+
+    pub fn deref_x_times(self, count: u8) -> Option<TypeArc> {
+        let mut output = self.clone();
+
+        for _ in 0..count {
+            output = output.get_deref()?;
+        }
+
+        Some(output)
+    }
+
+    pub fn get_ref(self) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Ref(RefType { base: self })))
+    }
+
+    pub fn get_deref(self) -> Option<TypeArc> {
+        match &*self.0 {
+            TypeEnum::Ref(t) => Some(t.base.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
+        self.to_any_type(context).try_into().unwrap()
+    }
+
+    pub fn int_of_size(size: u32) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Int(IntType { size })))
+    }
+
+    pub fn float_of_size(size: u32) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Float(FloatType { size })))
+    }
+
+    pub fn new_struct(fields: IndexMap<String, TypeArc>) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Struct(StructType { fields })))
+    }
+
+    pub fn never() -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Never))
+    }
+
+    pub fn func_with_args(self, args: Vec<TypeArc>) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Func(FuncType {
+            return_type: self,
+            args,
+        })))
+    }
+
+    pub fn as_type_enum<'a>(&self) -> &TypeEnum {
+        let output = &*self.0;
+        output
+    }
 }
 
-#[derive(Clone, Default)]
+impl Type for TypeArc {
+    fn name(&self) -> String {
+        self.as_type_enum().name()
+    }
+
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        self.as_type_enum().to_any_type(context)
+    }
+}
+
+pub trait Type {
+    fn name(&self) -> String;
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t>;
+}
+
+#[derive(Default)]
 pub enum TypeEnum {
-    Int(Box<IntType>),
-    Float(Box<FloatType>),
-    Struct(Box<StructType>),
-    Ref(Box<RefType>),
-    Func(Box<FuncType>),
+    Int(IntType),
+    Float(FloatType),
+    Struct(StructType),
+    Ref(RefType),
+    Func(FuncType),
 
     #[default]
     Never,
@@ -72,100 +149,28 @@ impl Debug for TypeEnum {
     }
 }
 
-impl TypeEnum {
-    pub fn ref_x_times(&self, count: u8) -> TypeEnum {
-        let mut output = self.clone();
+impl Deref for TypeEnum {
+    type Target = dyn Type;
 
-        for _ in 0..count {
-            output = output.get_ref();
-        }
-
-        output
-    }
-
-    pub fn deref_x_times(&self, count: u8) -> Option<TypeEnum> {
-        let mut output = self.clone();
-
-        for _ in 0..count {
-            output = output.get_deref()?;
-        }
-
-        Some(output)
-    }
-
-    pub fn get_ref(&self) -> TypeEnum {
-        TypeEnum::Ref(box RefType { base: self.clone() })
-    }
-
-    pub fn get_deref(&self) -> Option<TypeEnum> {
+    fn deref(&self) -> &Self::Target {
         match self {
-            TypeEnum::Ref(t) => Some(t.base.as_type_enum()),
-            _ => None,
-        }
-    }
-
-    pub fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
-        self.to_any_type(context).try_into().unwrap()
-    }
-
-    pub fn int_of_size(size: u32) -> TypeEnum {
-        TypeEnum::Int(box IntType { size })
-    }
-
-    pub fn float_of_size(size: u32) -> TypeEnum {
-        TypeEnum::Float(box FloatType { size })
-    }
-
-    pub fn func_with_args(&self, args: Vec<TypeEnum>) -> TypeEnum {
-        FuncType {
-            return_type: self.clone(),
-            args: args.clone(),
-        }
-        .as_type_enum()
-    }
-
-    pub fn as_dyn(&self) -> Box<dyn Type> {
-        match self {
-            TypeEnum::Int(t) => t.clone(),
-            TypeEnum::Float(t) => t.clone(),
-            TypeEnum::Struct(t) => t.clone(),
-            TypeEnum::Ref(t) => t.clone(),
-            TypeEnum::Func(t) => t.clone(),
-            _ => box NeverType(),
+            TypeEnum::Int(t) => t,
+            TypeEnum::Float(t) => t,
+            TypeEnum::Func(t) => t,
+            TypeEnum::Struct(t) => t,
+            TypeEnum::Ref(t) => t,
+            _ => &NEVER_STATIC,
         }
     }
 }
 
-impl Type for TypeEnum {
-    fn name(&self) -> String {
-        self.as_dyn().name()
-    }
-
-    fn gen_ret_type(&self) -> GenType {
-        self.as_dyn().gen_ret_type()
-    }
-
-    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        self.as_dyn().to_any_type(context)
-    }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        self.as_dyn().as_type_enum()
-    }
-}
-
-#[derive(Clone)]
 pub struct RefType {
-    base: TypeEnum,
+    base: TypeArc,
 }
 
 impl Type for RefType {
     fn name(&self) -> String {
         "&".to_string() + &*self.base.name()
-    }
-
-    fn gen_ret_type(&self) -> GenType {
-        PrimRef
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -174,16 +179,11 @@ impl Type for RefType {
             .ptr_type(AddressSpace::Generic)
             .into()
     }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        TypeEnum::Ref(box self.clone())
-    }
 }
 
-#[derive(Clone)]
 pub struct FuncType {
-    pub return_type: TypeEnum,
-    pub args: Vec<TypeEnum>,
+    pub return_type: TypeArc,
+    pub args: Vec<TypeArc>,
 }
 
 impl Type for FuncType {
@@ -196,26 +196,17 @@ impl Type for FuncType {
         // args_names + "->" + ret_name
     }
 
-    fn gen_ret_type(&self) -> GenType {
-        GenType::Func
-    }
-
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         todo!()
     }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        TypeEnum::Func(box self.clone())
-    }
 }
 
-#[derive(Clone, Debug)]
 pub struct StructType {
-    pub fields: IndexMap<String, TypeEnum>,
+    pub fields: IndexMap<String, TypeArc>,
 }
 
 impl StructType {
-    pub fn get_field_type(&self, field_name: &String) -> TypeEnum {
+    pub fn get_field_type(&self, field_name: &String) -> TypeArc {
         self.fields.get(field_name).unwrap().clone()
     }
 
@@ -234,10 +225,6 @@ impl Type for StructType {
         "TODO".to_string()
     }
 
-    fn gen_ret_type(&self) -> GenType {
-        GenType::Struct
-    }
-
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         let field_types: Vec<BasicTypeEnum> = self
             .fields
@@ -249,13 +236,8 @@ impl Type for StructType {
             .struct_type(&field_types[..], true)
             .as_any_type_enum()
     }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        TypeEnum::Struct(box self.clone())
-    }
 }
 
-#[derive(Clone)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
@@ -266,20 +248,11 @@ impl Type for IntType {
         String::from("int")
     }
 
-    fn gen_ret_type(&self) -> GenType {
-        GenType::PrimInt
-    }
-
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.custom_width_int_type(self.size).as_any_type_enum()
     }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        TypeEnum::Int(box self.clone())
-    }
 }
 
-#[derive(Clone)]
 pub struct FloatType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
@@ -290,37 +263,22 @@ impl Type for FloatType {
         String::from("todo")
     }
 
-    fn gen_ret_type(&self) -> GenType {
-        GenType::PrimFloat
-    }
-
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         // TODO: implement different sized floats
         context.f32_type().as_any_type_enum()
     }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        TypeEnum::Float(box self.clone())
-    }
 }
 
-#[derive(Clone)]
 pub struct NeverType();
+
+pub static NEVER_STATIC: NeverType = NeverType();
 
 impl Type for NeverType {
     fn name(&self) -> String {
         String::from("NEVER")
     }
 
-    fn gen_ret_type(&self) -> GenType {
-        panic!()
-    }
-
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         panic!()
-    }
-
-    fn as_type_enum(&self) -> TypeEnum {
-        TypeEnum::Never
     }
 }

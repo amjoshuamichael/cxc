@@ -89,7 +89,7 @@ impl<'u> Unit<'u> {
                 Declaration::Function { name, args, code } => {
                     let hlr = hlr(args, code, &self.globals, &self.types);
 
-                    let mut arg_types: Vec<TypeEnum> = Vec::new();
+                    let mut arg_types: Vec<Type> = Vec::new();
                     let mut arg_names: Vec<Arc<str>> = Vec::new();
 
                     for (var_name, var) in hlr.data_flow.iter() {
@@ -136,20 +136,16 @@ impl<'u> Unit<'u> {
                     );
                 },
                 Declaration::Struct { name, fields } => {
-                    self.types.add(
-                        name,
-                        crate::hlr::StructType {
-                            fields: fields
-                                .iter()
-                                .map(|f| {
-                                    let spec = f.type_spec.as_ref().unwrap();
-                                    let typ = self.types.get_spec(spec).unwrap();
-                                    (f.var_name.clone(), typ)
-                                })
-                                .collect(),
-                        }
-                        .as_type_enum(),
-                    );
+                    let fields = fields
+                        .iter()
+                        .map(|f| {
+                            let spec = f.type_spec.as_ref().unwrap();
+                            let typ = self.types.get_spec(spec).unwrap();
+                            (f.var_name.clone(), typ)
+                        })
+                        .collect();
+
+                    self.types.add(name, Type::new_struct(fields));
                 },
             }
         }
@@ -158,8 +154,8 @@ impl<'u> Unit<'u> {
     fn new_func_comp_state<'s>(
         &'s self,
         name: &str,
-        ret_type: TypeEnum,
-        arg_types: Vec<TypeEnum>,
+        ret_type: Type,
+        arg_types: Vec<Type>,
         arg_names: Vec<Arc<str>>,
         tree: ExprTree,
     ) -> FunctionCompilationState<'s> {

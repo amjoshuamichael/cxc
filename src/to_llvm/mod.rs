@@ -46,6 +46,8 @@ pub fn compile<'comp>(
         println!("compiling: {expr_id:?}, {expr:?}");
     }
 
+    dbg!(&expr);
+
     let output: Option<AnyValueEnum> = match expr {
         Number { ref value, .. } => {
             // TODO: implement different int types
@@ -96,7 +98,7 @@ pub fn compile<'comp>(
             }
 
             if let Some(val) = fcs.variables.get(&**name) {
-                if matches!(var_type, TypeEnum::Ref(_)) {
+                if matches!(var_type.clone().as_type_enum(), TypeEnum::Ref(_)) {
                     let tmp = fcs.builder.build_load(*val, &*fcs.new_uuid());
                     fcs.builder
                         .build_store(tmp.into_pointer_value(), to_store_basic);
@@ -139,13 +141,13 @@ pub fn compile<'comp>(
             ref lhs,
             ref op,
             ref rhs,
-            ..
+            ref ret_type,
         } => {
             let mut lhs = compile(fcs, *lhs).unwrap();
             let mut rhs = compile(fcs, *rhs).unwrap();
 
-            match expr.gen_ret_type() {
-                PrimInt => {
+            match ret_type.as_type_enum() {
+                TypeEnum::Int(_) => {
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");
 
@@ -188,7 +190,7 @@ pub fn compile<'comp>(
 
                     Some(result.into())
                 },
-                PrimFloat => {
+                TypeEnum::Float(_) => {
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");
 
@@ -374,7 +376,7 @@ pub fn compile<'comp>(
         } => {
             let mut compiled_fields = Vec::new();
 
-            let TypeEnum::Struct(struct_type) = struct_type else { panic!() };
+            let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
 
             // TODO: sort during funcrep
             for field_index in 0..struct_type.field_count() {
@@ -397,6 +399,7 @@ pub fn compile<'comp>(
         _ => todo!(),
     };
 
+    println!("done compiling: {expr_id:?}");
     if crate::DEBUG {
         println!("done compiling: {expr_id:?}");
     }
@@ -408,6 +411,7 @@ fn compile_as_ptr<'comp>(
     fcs: &mut FunctionCompilationState<'comp>,
     expr_id: ExprID,
 ) -> PointerValue<'comp> {
+    println!("doing a round of compilation as pointer...");
     match fcs.tree.get(expr_id) {
         Ident { name, .. } => fcs.variables.get(&*name).unwrap().clone(),
         Member {
@@ -415,7 +419,8 @@ fn compile_as_ptr<'comp>(
             object,
             field,
         } => {
-            let object_type = fcs.tree.get(object).ret_type().unwrap();
+            let typ = fcs.tree.get(object).ret_type().unwrap();
+            let object_type = typ.as_type_enum();
 
             let TypeEnum::Struct(struct_type) = object_type else { panic!() };
 

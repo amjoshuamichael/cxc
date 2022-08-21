@@ -78,9 +78,11 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
 
                 match op {
                     Opcode::Deref(count) => {
-                        *ret_type = ret_type.deref_x_times(*count).unwrap();
+                        *ret_type = ret_type.clone().deref_x_times(*count).unwrap();
                     },
-                    Opcode::Ref(count) => *ret_type = ret_type.ref_x_times(*count),
+                    Opcode::Ref(count) => {
+                        *ret_type = ret_type.clone().ref_x_times(*count)
+                    },
                     _ => unreachable!(),
                 }
 
@@ -100,7 +102,8 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 f,
                 ..
             } => {
-                let object_type = type_by_id.get(f).unwrap();
+                let typ = type_by_id.get(f).unwrap().clone();
+                let object_type = typ.as_type_enum();
                 let TypeEnum::Func(func_type) = object_type else { panic!() };
 
                 *ret_type = func_type.return_type.clone();
@@ -113,8 +116,9 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 object,
                 field,
             } => {
-                let object_type = type_by_id.get(object).unwrap();
-                let TypeEnum::Struct(struct_type) = object_type else { panic!() };
+                let typ = type_by_id.get(object).unwrap().clone();
+                let type_enum = typ.as_type_enum();
+                let TypeEnum::Struct(struct_type) = type_enum else { panic!() };
 
                 *ret_type = struct_type.get_field_type(field).clone();
 
