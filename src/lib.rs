@@ -29,7 +29,7 @@ mod tests {
 
         unit.push_script(
             "
-            factorial: i32 (of_num : i32) {
+            factorial(of_num: i32): i32  {
                 current: i32 = of_num
                 output: i32 = 1
 
@@ -54,7 +54,7 @@ mod tests {
 
         unit.push_script(
             "
-            square: i32 (num : &i32) {
+            square(num: &i32): i32 {
                 num = *num * *num
                 ! 0
             }
@@ -73,7 +73,7 @@ mod tests {
 
         unit.push_script(
             "
-            sum: i32 (a: i32, b: i32) {
+            sum(a: i32, b: i32): i32 {
                 output: i32 = a + b
                 ! output
             }
@@ -91,7 +91,7 @@ mod tests {
 
         unit.push_script(
             "
-            seventy: f32 () {
+            seventy(): f32 {
                 output: f32 = 60.0 + 10.0
                 ! output
             }
@@ -109,36 +109,34 @@ mod tests {
 
         unit.push_script(
             "
-            divide_by_two: f32 (num: f32) {
+            divide_by_two(num: f32): f32 {
                 output: f32 = num / 2.0
                 ! output
             }
 
-            mul_by_two: i32 (num: i32) {
+            mul_by_two(num: i32): i32 {
                 output: i32 = num * 2
                 ! output
             }
     
-            main: i32 () {
-                correct_count: i32 = 0
-                
+            everything_works(): i32 {
                 six_times_two: i32 = mul_by_two(6)
-                ? six_times_two == 12 {
-                    correct_count = correct_count + 1
+                ? six_times_two != 12 {
+                    ! 0
                 }
 
                 six_div_two_f: f32 = divide_by_two(6.0)
-                ? six_div_two_f == 3.0 {
-                    correct_count = correct_count + 1
+                ? six_div_two_f != 3.0 {
+                    ! 0
                 }
 
-                ! correct_count
+                ! 1
             }
             ",
         );
 
-        let mut correct_count: i32 = unsafe { unit.get_fn("main")(()) };
-        assert_eq!(correct_count, 2);
+        let mut does_it_work: i32 = unsafe { unit.get_fn("everything_works")(()) };
+        assert_eq!(does_it_work, 1);
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,6 +149,12 @@ mod tests {
     struct Point2D {
         x: i32,
         y: i32,
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct GenPoint2D<T> {
+        x: T,
+        y: T,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -173,7 +177,7 @@ mod tests {
                 z: i32,
             }
 
-            main: &Point3D () {
+            main(): &Point3D {
                 new_point: Point3D = Point3D { 
                     x = 30 * 2, 
                     y = 52, 
@@ -209,7 +213,7 @@ mod tests {
                 y: i32,
             }
 
-            sqr_magnitude_of: i32 (in_ptr: &Point2D) {
+            sqr_magnitude_of(in_ptr: &Point2D): i32 {
                 in: Point2D = *in_ptr
 
                 ! in.x * in.x + in.y * in.y
@@ -243,13 +247,13 @@ mod tests {
                 y: i32,
             }
 
-            make_square: &{
+            make_square(): &{
                 position: {
                     x: i32,
                     y: i32,
                 },
                 size: i32,
-            } () {
+            } {
                 new_square: Square = Square {
                     position = Point2D {
                         x = 43,
@@ -271,5 +275,47 @@ mod tests {
         let mut new_square: Square =
             unsafe { *unit.get_fn::<(), &Square>("make_square")(()) };
         assert_eq!(new_square, square);
+    }
+
+    #[test]
+    fn generics() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.push_script(
+            "
+            Point2D<T> {
+                x: T,
+                y: T,
+            }
+
+            int_point(): &Point2D<i32> {
+                new_point: Point2D<i32> = Point2D<i32> {
+                    x = 42, y = 32
+                }
+
+                ! &new_point
+            }
+
+            float_point(): &Point2D<f32> {
+                new_point: Point2D<f32> = Point2D<f32> {
+                    x = 42.8, y = 32.2
+                }
+
+                ! &new_point
+            }
+        ",
+        );
+
+        let mut int_point =
+            unsafe { *unit.get_fn::<(), &GenPoint2D<i32>>("int_point")(()) };
+        assert_eq!(int_point.x, 42);
+        assert_eq!(int_point.y, 32);
+
+        let mut float_point =
+            unsafe { *unit.get_fn::<(), &GenPoint2D<f32>>("float_point")(()) };
+
+        assert_eq!(float_point.x, 42.8);
+        assert_eq!(float_point.y, 32.2);
     }
 }

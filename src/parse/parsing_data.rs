@@ -16,6 +16,7 @@ pub enum Expr {
     IfThenElse(Box<Expr>, Box<Expr>, Box<Expr>),
     ForWhile(Box<Expr>, Box<Expr>),
     Block(Vec<Expr>),
+    Return(Box<Expr>),
 
     // These are used during to make parsing easier, but are not outputted after
     // parsing.
@@ -35,12 +36,14 @@ pub struct Script(pub Vec<Declaration>);
 #[derive(Debug)]
 pub enum Declaration {
     Function {
-        name: VarDecl,
+        name: String,
+        ret_type: TypeAlias,
         args: Vec<VarDecl>,
         code: Expr,
     },
     Struct {
         name: String,
         typ: TypeAlias,
+        contains_generics: bool,
     },
 }

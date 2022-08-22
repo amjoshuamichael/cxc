@@ -86,7 +86,12 @@ impl<'u> Unit<'u> {
 
         for decl in parsed.0 {
             match decl {
-                Declaration::Function { name, args, code } => {
+                Declaration::Function {
+                    name,
+                    args,
+                    code,
+                    ret_type,
+                } => {
                     let hlr = hlr(args, code, &self.globals, &self.types);
 
                     let mut arg_types: Vec<Type> = Vec::new();
@@ -99,11 +104,10 @@ impl<'u> Unit<'u> {
                         }
                     }
 
-                    let func_ret_type =
-                        hlr.types.get_spec(&name.type_spec.unwrap()).unwrap();
+                    let func_ret_type = hlr.types.get_spec(&ret_type).unwrap();
 
                     let mut fcs = self.new_func_comp_state(
-                        &*name.var_name.clone(),
+                        &*name.clone(),
                         func_ret_type.clone(),
                         arg_types.clone(),
                         arg_names,
@@ -114,29 +118,33 @@ impl<'u> Unit<'u> {
                         fcs.context.append_basic_block(fcs.function, "entry");
                     fcs.builder.position_at_end(basic_block);
 
-                    let output = compile(&mut fcs, ExprID::ROOT).unwrap();
-                    let output: BasicValueEnum = output.try_into().unwrap();
-
-                    fcs.builder.build_return(Some(&output));
+                    let output = compile(&mut fcs, ExprID::ROOT);
                     fcs.delete();
 
                     if crate::DEBUG {
                         self.module.print_to_stderr();
                     }
 
-                    let function =
-                        self.module.get_function(&*name.var_name).unwrap();
+                    let function = self.module.get_function(&*name).unwrap();
 
                     let function_type = func_ret_type.func_with_args(arg_types);
 
                     self.globals.insert(
-                        Arc::from(&*name.var_name),
+                        Arc::from(&*name),
                         function.into(),
                         function_type,
                     );
                 },
-                Declaration::Struct { name, typ } => {
-                    self.types.add(name, self.types.get_spec(&typ).unwrap());
+                Declaration::Struct {
+                    name,
+                    typ,
+                    contains_generics,
+                } => {
+                    if contains_generics {
+                        self.types.add_generic_alias(name, typ);
+                    } else {
+                        self.types.add(name, self.types.get_spec(&typ).unwrap());
+                    }
                 },
             }
         }

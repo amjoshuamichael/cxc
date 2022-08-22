@@ -1,16 +1,15 @@
 use crate::lex::Token;
 pub use opcode::Opcode;
+use std::collections::HashMap;
 use std::iter::Peekable;
 
 mod expression;
-mod function;
 mod list;
 mod opcode;
 mod parsing_data;
 mod structure;
 
 pub use expression::*;
-pub use function::*;
 pub use list::*;
 pub use opcode::*;
 pub use parsing_data::*;
@@ -20,25 +19,62 @@ pub fn file(mut lexer: Peekable<impl Iterator<Item = Token>>) -> Script {
     let mut declarations = Vec::new();
 
     loop {
-        let decl = parse_var_decl(&mut lexer);
+        let Some(Token::Ident(decl_name)) = lexer.next() else { panic!() };
+
+        let generic_list = if lexer.peek() == Some(&Token::LeftAngle) {
+            parse_list(
+                Token::LeftAngle,
+                Some(Token::Comma),
+                Token::RghtAngle,
+                |lexer| match lexer.next() {
+                    Some(Token::Ident(name)) => name,
+                    _ => panic!(),
+                },
+                &mut lexer,
+            )
+        } else {
+            Vec::new()
+        };
+
+        let mut generic_labels = HashMap::new();
+
+        for (index, name) in generic_list.iter().enumerate() {
+            generic_labels.insert(name.clone(), index as u8);
+        }
 
         match lexer.peek() {
             Some(Token::LeftParen) => {
-                let parsed_func = parse_func(&mut lexer);
+                let args = parse_list(
+                    Token::LeftParen,
+                    Some(Token::Comma),
+                    Token::RghtParen,
+                    parse_var_decl,
+                    &mut lexer,
+                );
+
+                assert_eq!(lexer.next(), Some(Token::Colon));
+
+                let ret_type = parse_type_alias(&mut lexer);
+
+                let code = parse_block(&mut lexer);
 
                 declarations.push(Declaration::Function {
-                    name: decl,
-                    args: parsed_func.0,
-                    code: parsed_func.1,
+                    name: decl_name,
+                    ret_type,
+                    args,
+                    code,
                 });
             },
             Some(Token::LeftCurly) => {
-                let typ = parse_type_alias(&mut lexer);
+                let typ = parse_generic_alias(&mut lexer, &generic_labels);
 
-                declarations.push(Declaration::Struct {
-                    name: decl.var_name,
+                let strct = Declaration::Struct {
+                    name: decl_name,
                     typ,
-                });
+                    contains_generics: generic_labels.len() > 0,
+                };
+
+                declarations.push(strct);
             },
             _ => panic!(),
         }
@@ -145,7 +181,7 @@ fn parse_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
         Some(Token::Question) => parse_if(lexer),
         Some(Token::Bang) => {
             lexer.next();
-            parse_expr(lexer)
+            Expr::Return(box parse_expr(lexer))
         },
         Some(Token::LeftCurly) => {
             parse_list(
@@ -173,6 +209,7 @@ fn parse_for(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Expr {
 
     let w = parse_expr(lexer);
     let d = parse_block(lexer);
+
     Expr::ForWhile(Box::new(w), Box::new(d))
 }
 

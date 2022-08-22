@@ -30,26 +30,16 @@ pub fn parse_math_expr(lexer: &mut Peekable<impl Iterator<Item = Token>>) -> Exp
 
             Expr::ArgList(params)
         } else if let Expr::Ident(struct_name) = last_atom 
-            && matches!(lexer.peek(), Some(Token::LeftCurly)) {
-            let fields = parse_list(
-                Token::LeftCurly,
-                Some(Token::Comma),
-                Token::RghtCurly,
-                |lexer| {
-                    let Some(Token::Ident(field)) = lexer.next() else { panic!() };
-                    assert_eq!(lexer.next(), Some(Token::Assignment));
-                    let rhs = parse_expr(lexer);
-                    (field, rhs)
-                },
-                lexer,
-            );
+            && matches!(lexer.peek(), Some(Token::LeftCurly) | Some(Token::LeftAngle)) {
+            let struct_literal = parse_struct_literal(lexer, struct_name);
 
             atoms.pop();
 
-            Expr::Struct(TypeAlias::Named(struct_name), fields)
+            struct_literal
         } else {
             let Some(possible_opcode) = lexer.peek() else { break; };
             let Some(opcode) = possible_opcode.get_bin_opcode() else { break; };
+            dbg!(opcode);
 
             lexer.next();
 
@@ -138,4 +128,37 @@ pub fn binops(atoms: &mut Vec<Expr>) {
             atoms[opcode_pos - 1] = new_binop;
         }
     }
+}
+
+pub fn parse_struct_literal(lexer: &mut Peekable<impl Iterator<Item = Token>>, struct_name: String) -> Expr {
+    let generics = if lexer.peek() == Some(&Token::LeftAngle) {
+        Some(parse_list(
+            Token::LeftAngle,
+            Some(Token::Comma),
+            Token::RghtAngle,
+            parse_type_alias,
+            lexer,
+        ))
+    } else { None };
+
+    let fields = parse_list(
+        Token::LeftCurly,
+        Some(Token::Comma),
+        Token::RghtCurly,
+        |lexer| {
+            let Some(Token::Ident(field)) = lexer.next() else { panic!() };
+            assert_eq!(lexer.next(), Some(Token::Assignment));
+            let rhs = parse_expr(lexer);
+            (field, rhs)
+        },
+        lexer,
+    );
+
+    let output = if let Some(generics) = generics {
+        Expr::Struct(TypeAlias::Generic(struct_name, generics), fields)
+    } else {
+        Expr::Struct(TypeAlias::Named(struct_name), fields)
+    };
+    dbg!(&output);
+    output
 }

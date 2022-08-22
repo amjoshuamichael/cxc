@@ -130,6 +130,7 @@ impl Token {
             Token::LessOrEqual => Some(Opcode::LessOrEqual),
             Token::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
             Token::Equal => Some(Opcode::Equal),
+            Token::Inequal => Some(Opcode::Inequal),
             Token::Dot => Some(Opcode::Dot),
             _ => None,
         }

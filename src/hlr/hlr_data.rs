@@ -274,6 +274,17 @@ impl FuncRep {
                 self.tree.replace(space, new_struct);
                 space
             },
+            Expr::Return(to_return) => {
+                let space = self.tree.make_one_space(parent);
+
+                let new_return = NodeData::Return {
+                    ret_type: Type::never(),
+                    to_return: self.add_expr(*to_return, space),
+                };
+
+                self.tree.replace(space, new_return);
+                space
+            },
             Expr::Op(_) | Expr::ArgList(_) => unreachable!(),
         }
     }

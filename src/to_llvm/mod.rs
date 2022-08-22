@@ -283,12 +283,8 @@ pub fn compile<'comp>(
         Block { stmts, .. } => {
             let mut stmts = stmts.iter().peekable();
 
-            while let Some(e) = stmts.next() {
-                if stmts.peek().is_some() {
-                    compile(fcs, *e);
-                } else {
-                    return compile(fcs, *e);
-                }
+            for stmt in stmts {
+                compile(fcs, *stmt);
             }
 
             return None;
@@ -390,6 +386,13 @@ pub fn compile<'comp>(
                     .const_struct(&compiled_fields[..], true)
                     .as_any_value_enum(),
             )
+        },
+        Return { to_return, .. } => {
+            let return_value: BasicValueEnum =
+                compile(fcs, to_return).unwrap().try_into().unwrap();
+
+            fcs.builder.build_return(Some(&return_value));
+            None
         },
         _ => todo!(),
     };

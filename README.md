@@ -1,8 +1,8 @@
 # cxc
 
-`cxc` is an experimental scripting language designed from the ground up for speed: both of writing code, and of running code. It is built to be used as a scripting language with Rust as its host, and as such, it is designed for full interoperability with a simple api. Also as a scripting language, compile times are much shorter than they would be in other compiled languages. Syntax is concise and low-level intention is inferred, not explicitly stated by the programmer. Like Rust, `cxc` compiles down to [LLVM](llvm.org) and then to machine code. This makes for code that reads simply, but runs quickly.
+`cxc` is a high-performance scripting language designed for speed: both of writing code, and of running code. It is built to be used as a Rust-hosted scripting language and as such, it has full interoperability with rust. `cxc` syntax is concise and low-level intention is inferred, not explicitly stated by the programmer. Like Rust, `cxc` compiles down to [LLVM](llvm.org) and then to machine code. This makes for code that reads simply, but runs quickly.
 
-This repository contians the compiler. The compiler uses [inkwell](https://github.com/TheDan64/inkwell), so if you wish to contribute, ensure you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path.
+This repository contians the compiler. The compiler uses [inkwell](https://github.com/TheDan64/inkwell), so if you wish to contribute, ensure you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. [cxc_notes](https://amjoshuamichael.github.io/cxc_notes) describes the design principles and specifications for the langauge. 
 
 ## Example
 
@@ -10,19 +10,18 @@ This repository contians the compiler. The compiler uses [inkwell](https://githu
 ```ruby
 # function that takes a 32 bit integer and returns a 32 bit integer
 # Returns 1 if num is prime and 0 if num is composite.
-is_prime : i32 (num : i32) { 
-    divider : i32 = 2 # declare two variables
-    output : i32 = 1
+is_prime(num: i32): i32 { 
+    divider: i32 = 2 # declare two variables
 
     @ divider < num { # while divider is less than num
         ? num % divider == 0 { # if num is divisible by divider
-            output = 0 # set output to 1, because number is not prime
+            ! 0 # number is not prime, so return 0
         }
 
         divider = divider + 1 # increment divider
     }
 
-    ! output # return output
+    ! 1 # num is not divisible by any numbers, so return 1
 }
 ```
 

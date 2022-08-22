@@ -106,6 +106,7 @@ impl Debug for ExprNode {
             },
             While { w, d, .. } => write!(fmt, "@ {w:?} {d:?}"),
             Block { stmts, .. } => write!(fmt, "{{{stmts:?}}}"),
+            Return { to_return, .. } => write!(fmt, "! {to_return:?}"),
         };
 
         writeln!(fmt, " :: {:?}", self.data.ret_type())
@@ -187,6 +188,10 @@ pub enum NodeData {
         ret_type: Type,
         stmts: Vec<ExprID>,
     },
+    Return {
+        ret_type: Type,
+        to_return: ExprID,
+    },
 }
 
 use NodeData::*;
@@ -205,6 +210,7 @@ impl NodeData {
             | MakeVar { var_type, .. }
             | Global { var_type, .. } => var_type.clone(),
             BinOp { ret_type, .. }
+            | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
