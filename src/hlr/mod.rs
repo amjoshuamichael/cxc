@@ -300,6 +300,6 @@ impl Type for NeverType {
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        panic!()
+        context.i32_type().as_any_type_enum()
     }
 }

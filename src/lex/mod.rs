@@ -1,11 +1,51 @@
 use crate::parse::Opcode;
-use logos::{Lexer, Logos};
+use logos::{Lexer as LogosLexer, Logos};
 use syn::token::{And, Or};
 
 pub mod parse_num;
 
-pub fn lex(input: &str) -> Lexer<Token> {
-    Token::lexer(input)
+pub struct Lexer {
+    inner: Vec<Token>,
+    current_ptr: usize,
+}
+
+impl Lexer {
+    pub fn next(&mut self) -> Option<Token> {
+        let out = self.get(self.current_ptr, true);
+        self.current_ptr += 1;
+        out
+    }
+
+    pub fn peek(&self) -> Option<Token> {
+        self.get(self.current_ptr, false)
+    }
+
+    pub fn peek_by(&self, offset: usize) -> Option<Token> {
+        self.get(self.current_ptr + offset, false)
+    }
+
+    fn get(&self, at: usize, log: bool) -> Option<Token> {
+        let token = self.inner.get(at).map(|t| t.clone());
+
+        if crate::DEBUG && log && let Some(token) = token.clone() {
+            println!("lexing: {:?}", token);
+        }
+
+        token
+    }
+}
+
+impl From<LogosLexer<'_, Token>> for Lexer {
+    fn from(og: LogosLexer<Token>) -> Self {
+        Lexer {
+            inner: og.collect(),
+            current_ptr: 0,
+        }
+    }
+}
+
+pub fn lex(input: &str) -> Lexer {
+    Lexer::from(Token::lexer(input))
 }
 
 #[derive(Logos, Debug, PartialEq, Clone)]

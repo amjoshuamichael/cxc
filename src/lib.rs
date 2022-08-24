@@ -318,4 +318,41 @@ mod tests {
         assert_eq!(float_point.x, 42.8);
         assert_eq!(float_point.y, 32.2);
     }
+
+    #[test]
+    fn external_function() {
+        use crate::hlr::prelude::Type;
+
+        pub fn print_num(input: i64) {
+            println!("{input}");
+        }
+
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unsafe {
+            unit.add_external_function(
+                "print_num",
+                print_num as *const usize,
+                &[Type::int_of_size(64)],
+                Type::never(),
+            );
+        }
+
+        unit.push_script(
+            "
+            call(): i64 {
+                x: i64 = 0
+                @ x < 100 {
+                    print_num(x)
+                    x = x + 1
+                }
+
+                ! x
+            }
+        ",
+        );
+
+        unsafe { unit.get_fn::<(), i64>("call")(()) };
+    }
 }

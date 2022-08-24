@@ -331,7 +331,12 @@ pub fn compile<'comp>(
         },
         Call { f, a, .. } => {
             let function = compile(fcs, f).unwrap();
-            let function: FunctionValue = function.try_into().unwrap();
+            let is_extern = matches!(function, AnyValueEnum::PointerValue(_));
+            let function = match function {
+                AnyValueEnum::FunctionValue(f) => CallableValue::from(f),
+                AnyValueEnum::PointerValue(p) => CallableValue::try_from(p).unwrap(),
+                _ => panic!(),
+            };
 
             let mut arg_vals = Vec::new();
 
@@ -343,11 +348,22 @@ pub fn compile<'comp>(
                 arg_vals.push(basic_meta_arg);
             }
 
-            Some(
-                fcs.builder
-                    .build_call(function, &arg_vals[..], "call")
-                    .as_any_value_enum(),
-            )
+            let output = fcs
+                .builder
+                .build_call(function, &*arg_vals, "call")
+                .as_any_value_enum();
+
+            // For external functions, we need to store the output (even
+            // if the output is void) in a temporary variable in order
+            // to prevent llvm from optimizing it out.
+            // TODO: make this only happen if function returns void
+            if is_extern {
+                let x = fcs.builder.build_alloca(fcs.context.i32_type(), "temp");
+                let output_basic: BasicValueEnum = output.try_into().unwrap();
+                fcs.builder.build_store(x, output_basic);
+            }
+
+            Some(output)
         },
         Global { name, .. } => fcs.globals.get_value(name),
         Member {

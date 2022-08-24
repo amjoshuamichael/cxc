@@ -15,7 +15,7 @@ pub enum TypeAlias {
 }
 
 pub fn parse_generic_alias(
-    mut lexer: &mut Peekable<impl Iterator<Item = Token>>,
+    mut lexer: &mut Lexer,
     generic_labels: &HashMap<String, u8>,
 ) -> TypeAlias {
     let beginning_of_alias = lexer.peek().unwrap().clone();
@@ -73,15 +73,13 @@ pub fn parse_generic_alias(
     }
 }
 
-pub fn parse_type_alias(
-    lexer: &mut Peekable<impl Iterator<Item = Token>>,
-) -> TypeAlias {
+pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
     let empty_hashmap = HashMap::new();
     parse_generic_alias(lexer, &empty_hashmap)
 }
 
 pub fn parse_struct(
-    mut lexer: &mut Peekable<impl Iterator<Item = Token>>,
+    mut lexer: &mut Lexer,
     generic_labels: &HashMap<String, u8>,
 ) -> IndexMap<String, TypeAlias> {
     let mut fields_vec = parse_list(

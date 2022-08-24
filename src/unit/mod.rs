@@ -22,6 +22,7 @@ use inkwell::OptimizationLevel;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
 mod globals;
 
@@ -72,17 +73,7 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let parsed = crate::parse::file(
-            lexed
-                .map(|token| {
-                    if crate::DEBUG {
-                        println!("lexing: {:?}", token);
-                    }
-
-                    token
-                })
-                .peekable(),
-        );
+        let parsed = crate::parse::file(lexed);
 
         for decl in parsed.0 {
             match decl {
@@ -148,6 +139,43 @@ impl<'u> Unit<'u> {
                 },
             }
         }
+    }
+
+    pub fn add_external_function(
+        &mut self,
+        name: &str,
+        function: *const usize,
+        arg_types: &[Type],
+        ret_type: Type,
+    ) {
+        let function_address = function as u64;
+
+        let arg_types: Vec<BasicMetadataTypeEnum> = arg_types
+            .iter()
+            .map(|t| t.to_basic_type(self.context).into())
+            .collect();
+
+        let fn_type = match ret_type.to_any_type(self.context) {
+            AnyTypeEnum::VoidType(void) => void.fn_type(&*arg_types, false),
+            other_any_type => {
+                let basic: BasicTypeEnum = other_any_type.try_into().unwrap();
+                basic.fn_type(&*arg_types, false)
+            },
+        }
+        .ptr_type(AddressSpace::Global);
+        let function_pointer = self
+            .context
+            .i64_type()
+            .const_int(function_address, false)
+            .const_to_pointer(fn_type);
+        let callable_value: CallableValue =
+            CallableValue::try_from(function_pointer).unwrap();
+
+        self.globals.insert(
+            Arc::from(&*name),
+            callable_value.as_any_value_enum(),
+            Type::int_of_size(64).func_with_args(Vec::new()),
+        );
     }
 
     fn new_func_comp_state<'s>(
