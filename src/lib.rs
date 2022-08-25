@@ -43,7 +43,7 @@ mod tests {
         ",
         );
 
-        let output: i32 = unit.run_fn("factorial", 5);
+        let output = unsafe { unit.get_fn::<i32, i32>("factorial")(5) };
         assert_eq!(output, 120);
     }
 
@@ -62,7 +62,7 @@ mod tests {
         );
 
         let mut num = 4;
-        unit.run_fn::<&mut i32, i32>("square", &mut num);
+        unsafe { unit.get_fn::<&mut i32, i32>("square")(&mut num) };
         assert_eq!(num, 16);
     }
 
@@ -334,7 +334,7 @@ mod tests {
             unit.add_external_function(
                 "print_num",
                 print_num as *const usize,
-                &[Type::int_of_size(64)],
+                vec![Type::int_of_size(64)],
                 Type::never(),
             );
         }
@@ -354,5 +354,48 @@ mod tests {
         );
 
         unsafe { unit.get_fn::<(), i64>("call")(()) };
+    }
+
+    #[test]
+    fn function_overload() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.push_script(
+            "
+            # method overload 1
+            confusion() : i32 {
+                ! 40
+            }
+
+            # method overload 2
+            confusion(in: i32) : f32 {
+                ? in == 40 {
+                    ! 34.9
+                }
+
+                ! 43.3
+            }
+
+            # method overload 3
+            confusion(in: f32) : i32 {
+                ? in == 34.9 {
+                    ! 42
+                }
+
+                ! 6
+            }
+
+            shine_a_little_love(): i32 {
+                # should pass output of 1 into 2, 
+                # and then ouput of 2 into 3
+                ! confusion(confusion(confusion()))
+            }
+            ",
+        );
+
+        let output = unsafe { unit.get_fn::<(), i32>("shine_a_little_love")(()) };
+
+        assert_eq!(output, 42);
     }
 }

@@ -20,7 +20,7 @@ pub struct FunctionCompilationState<'f> {
     pub function: FunctionValue<'f>,
     pub builder: Builder<'f>,
     pub context: &'f Context,
-    pub globals: &'f Globals<'f>,
+    pub globals: &'f Functions<'f>,
     pub arg_names: Vec<Arc<str>>,
     pub llvm_ir_uuid: RefCell<u32>,
 }
@@ -329,14 +329,9 @@ pub fn compile<'comp>(
             },
             _ => todo!(),
         },
-        Call { f, a, .. } => {
-            let function = compile(fcs, f).unwrap();
-            let is_extern = matches!(function, AnyValueEnum::PointerValue(_));
-            let function = match function {
-                AnyValueEnum::FunctionValue(f) => CallableValue::from(f),
-                AnyValueEnum::PointerValue(p) => CallableValue::try_from(p).unwrap(),
-                _ => panic!(),
-            };
+        Call { name, a, def, .. } => {
+            let function = fcs.globals.get_value(def.unwrap()).unwrap();
+            let is_extern = function.as_any_value_enum().is_pointer_value();
 
             let mut arg_vals = Vec::new();
 
@@ -365,7 +360,6 @@ pub fn compile<'comp>(
 
             Some(output)
         },
-        Global { name, .. } => fcs.globals.get_value(name),
         Member {
             ret_type,
             object,

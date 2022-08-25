@@ -4,7 +4,9 @@ pub mod type_group;
 mod type_inference;
 
 use crate::parse::*;
-use crate::unit::Globals;
+use crate::unit::Functions;
+use core::hash::Hash;
+use core::hash::Hasher;
 use inkwell::context::Context;
 use inkwell::types::AnyType;
 use inkwell::types::AnyTypeEnum;
@@ -33,7 +35,7 @@ use prelude::*;
 pub fn hlr(
     args: Vec<VarDecl>,
     code: Expr,
-    globals: &Globals,
+    globals: &Functions,
     types: &TypeGroup,
 ) -> FuncRep {
     let mut output = FuncRep::from(args, code, types);
@@ -46,7 +48,7 @@ pub fn hlr(
     output
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct TypeArc(Arc<TypeEnum>);
 
 impl Debug for TypeArc {
@@ -133,7 +135,7 @@ pub trait Type {
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t>;
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq, Hash)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -168,6 +170,7 @@ impl Deref for TypeEnum {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct RefType {
     base: TypeArc,
 }
@@ -185,6 +188,7 @@ impl Type for RefType {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct FuncType {
     pub return_type: TypeArc,
     pub args: Vec<TypeArc>,
@@ -215,8 +219,17 @@ impl Type for FuncType {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub struct StructType {
     pub fields: IndexMap<String, TypeArc>,
+}
+
+// TODO: make this faster
+impl Hash for StructType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let vec_fields: Vec<(&String, &TypeArc)> = self.fields.iter().collect();
+        vec_fields.hash(state)
+    }
 }
 
 impl StructType {
@@ -260,6 +273,7 @@ impl Type for StructType {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
@@ -275,6 +289,7 @@ impl Type for IntType {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct FloatType {
     pub size: u32,
 }
@@ -290,6 +305,7 @@ impl Type for FloatType {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
 pub struct NeverType();
 
 pub static NEVER_STATIC: NeverType = NeverType();

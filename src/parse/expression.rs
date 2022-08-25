@@ -41,7 +41,6 @@ pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
         } else {
             let Some(possible_opcode) = next else { break; };
             let Some(opcode) = possible_opcode.get_bin_opcode() else { break; };
-            dbg!(opcode);
 
             lexer.next();
 
@@ -87,9 +86,9 @@ pub fn calls(atoms: &mut Vec<Expr>) {
     {
         let Expr::ArgList(args) = atoms.remove(args_pos) else { unreachable!() };
 
-        let new_call = Expr::Call(box atoms.remove(args_pos - 1), args);
-
-        atoms.push(new_call);
+        if let Expr::Ident(name) = atoms.remove(args_pos - 1) {
+            atoms.push(Expr::Call(name, args));
+        }
     }
 }
 

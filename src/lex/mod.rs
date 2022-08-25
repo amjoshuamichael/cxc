@@ -1,6 +1,5 @@
 use crate::parse::Opcode;
 use logos::{Lexer as LogosLexer, Logos};
-use syn::token::{And, Or};
 
 pub mod parse_num;
 

@@ -27,14 +27,14 @@ use std::sync::Arc;
 mod globals;
 
 use crate::to_llvm::*;
-pub use globals::Globals;
+pub use globals::{FunctionDef, Functions};
 
 pub struct Unit<'u> {
     pub execution_engine: ExecutionEngine<'u>,
     pub types: TypeGroup,
     pub context: &'u Context,
     pub module: Module<'u>,
-    pub globals: Globals<'u>,
+    pub globals: Functions<'u>,
     pub machine: TargetMachine,
 }
 
@@ -66,7 +66,7 @@ impl<'u> Unit<'u> {
             types: TypeGroup::default(),
             execution_engine,
             module,
-            globals: Globals::default(),
+            globals: Functions::default(),
             machine,
         }
     }
@@ -95,10 +95,12 @@ impl<'u> Unit<'u> {
                         }
                     }
 
+                    let function_name: String =
+                        llvm_function_name(&name, &arg_types);
                     let func_ret_type = hlr.types.get_spec(&ret_type).unwrap();
 
                     let mut fcs = self.new_func_comp_state(
-                        &*name.clone(),
+                        &*function_name,
                         func_ret_type.clone(),
                         arg_types.clone(),
                         arg_names,
@@ -116,14 +118,13 @@ impl<'u> Unit<'u> {
                         self.module.print_to_stderr();
                     }
 
-                    let function = self.module.get_function(&*name).unwrap();
-
-                    let function_type = func_ret_type.func_with_args(arg_types);
+                    let function =
+                        self.module.get_function(&*function_name).unwrap();
 
                     self.globals.insert(
-                        Arc::from(&*name),
-                        function.into(),
-                        function_type,
+                        FunctionDef { name, arg_types },
+                        func_ret_type,
+                        CallableValue::from(function),
                     );
                 },
                 Declaration::Struct {
@@ -145,21 +146,21 @@ impl<'u> Unit<'u> {
         &mut self,
         name: &str,
         function: *const usize,
-        arg_types: &[Type],
+        arg_types: Vec<Type>,
         ret_type: Type,
     ) {
         let function_address = function as u64;
 
-        let arg_types: Vec<BasicMetadataTypeEnum> = arg_types
+        let ink_arg_types: Vec<BasicMetadataTypeEnum> = arg_types
             .iter()
             .map(|t| t.to_basic_type(self.context).into())
             .collect();
 
         let fn_type = match ret_type.to_any_type(self.context) {
-            AnyTypeEnum::VoidType(void) => void.fn_type(&*arg_types, false),
+            AnyTypeEnum::VoidType(void) => void.fn_type(&*ink_arg_types, false),
             other_any_type => {
                 let basic: BasicTypeEnum = other_any_type.try_into().unwrap();
-                basic.fn_type(&*arg_types, false)
+                basic.fn_type(&*ink_arg_types, false)
             },
         }
         .ptr_type(AddressSpace::Global);
@@ -172,9 +173,12 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap();
 
         self.globals.insert(
-            Arc::from(&*name),
-            callable_value.as_any_value_enum(),
-            Type::int_of_size(64).func_with_args(Vec::new()),
+            FunctionDef {
+                name: String::from(name),
+                arg_types,
+            },
+            ret_type,
+            callable_value,
         );
     }
 
@@ -208,9 +212,14 @@ impl<'u> Unit<'u> {
     }
 
     pub fn get_fn<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
+        let arg_types = &self.globals.funcs_with_name(name.into())[0].arg_types;
+        let func_name = llvm_function_name(&name.into(), arg_types);
+
         unsafe {
-            let func_addr =
-                self.execution_engine.get_function_address(name).unwrap();
+            let func_addr = self
+                .execution_engine
+                .get_function_address(&*func_name)
+                .unwrap();
             let function = std::mem::transmute::<
                 usize,
                 unsafe extern "C" fn(_: I, ...) -> O,
@@ -219,19 +228,11 @@ impl<'u> Unit<'u> {
             function
         }
     }
+}
 
-    pub fn run_fn<I, O: Copy>(&self, name: &str, mut args: I) -> O {
-        type Func = unsafe extern "C" fn(usize) -> usize;
-
-        unsafe {
-            let params = std::mem::transmute::<&mut I, &mut usize>(&mut args);
-            let func_addr =
-                self.execution_engine.get_function_address(name).unwrap();
-            let function = std::mem::transmute::<usize, Func>(func_addr);
-
-            let mut output = function(*params);
-
-            *std::mem::transmute::<&mut usize, &mut O>(&mut output)
-        }
-    }
+pub fn llvm_function_name(og_name: &String, arg_types: &Vec<Type>) -> String {
+    format!("{:?}{:?}", og_name, arg_types)
+        .chars()
+        .filter(|c| !matches!(*c, ' ' | '[' | ']' | '"'))
+        .collect()
 }

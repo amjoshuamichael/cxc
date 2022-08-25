@@ -1,10 +1,11 @@
 use super::prelude::*;
 use crate::parse::*;
-use crate::unit::Globals;
+use crate::unit::FunctionDef;
+use crate::unit::Functions;
 use std::any::type_name;
 use std::collections::HashMap;
 
-pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
+pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
     let mut type_by_id = HashMap::new();
 
     for (n, node) in hlr.tree.top_down_iter() {
@@ -35,12 +36,6 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
             } => {
                 let instances = hlr.data_flow.get_mut(&name.clone()).unwrap();
                 *var_type = instances.typ.clone();
-            },
-            NodeData::Global {
-                ref mut var_type,
-                name,
-            } => {
-                *var_type = globals.get_type(name.clone()).unwrap();
             },
             _ => {},
         };
@@ -87,20 +82,6 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
-            NodeData::Call {
-                ref mut ret_type,
-                f,
-                ..
-            } => {
-                let typ = type_by_id.get(f).unwrap().clone();
-                let object_type = typ.as_type_enum();
-                let TypeEnum::Func(func_type) = object_type else { panic!() };
-
-                *ret_type = func_type.return_type.clone();
-
-                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
-            },
-
             NodeData::Member {
                 ref mut ret_type,
                 object,
@@ -111,6 +92,29 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Globals) {
                 let TypeEnum::Struct(struct_type) = type_enum else { panic!() };
 
                 *ret_type = struct_type.get_field_type(field).clone();
+
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
+            },
+            NodeData::Call {
+                ref mut ret_type,
+                name,
+                a,
+                def,
+            } => {
+                let arg_types = a
+                    .iter()
+                    .map(|id| type_by_id.get_mut(&id).unwrap().clone())
+                    .collect();
+
+                let new_def = FunctionDef {
+                    name: name.clone(),
+                    arg_types,
+                };
+
+                let return_type = globals.get_type(new_def.clone()).unwrap();
+
+                *ret_type = return_type.clone();
+                *def = Some(new_def);
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },

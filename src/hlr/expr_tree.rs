@@ -1,5 +1,6 @@
 use super::prelude::*;
 use crate::parse::*;
+use crate::unit::FunctionDef;
 use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -61,8 +62,13 @@ impl Debug for ExprTree {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ExprID(usize);
+impl Debug for ExprID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ID_{}", self.0)
+    }
+}
 
 impl ExprID {
     pub const ROOT: ExprID = ExprID(0);
@@ -87,9 +93,8 @@ impl Debug for ExprNode {
             } => {
                 write!(fmt, "{struct_type:?} {{ {fields:?} }}")
             },
-            Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
+            Call { name, a, .. } => write!(fmt, "{name:?}({a:?})"),
             Ident { name, .. } => write!(fmt, "{name}"),
-            Global { name, .. } => write!(fmt, "{name}"),
             MakeVar {
                 var_type,
                 name,
@@ -109,7 +114,7 @@ impl Debug for ExprNode {
             Return { to_return, .. } => write!(fmt, "! {to_return:?}"),
         };
 
-        writeln!(fmt, " :: {:?}", self.data.ret_type())
+        write!(fmt, " :: {:?}", self.data.ret_type())
     }
 }
 
@@ -133,10 +138,6 @@ pub enum NodeData {
         var_type: Type,
         name: Arc<str>,
     },
-    Global {
-        var_type: Type,
-        name: String,
-    },
     MakeVar {
         type_spec: Option<TypeAlias>,
         var_type: Type,
@@ -150,8 +151,9 @@ pub enum NodeData {
     },
     Call {
         ret_type: Type,
-        f: ExprID,
+        name: String,
         a: Vec<ExprID>,
+        def: Option<FunctionDef>,
     },
     Member {
         ret_type: Type,
@@ -206,9 +208,7 @@ impl NodeData {
                 ..
             } => struct_type.clone(),
             Strin(_) => todo!(),
-            Ident { var_type, .. }
-            | MakeVar { var_type, .. }
-            | Global { var_type, .. } => var_type.clone(),
+            Ident { var_type, .. } | MakeVar { var_type, .. } => var_type.clone(),
             BinOp { ret_type, .. }
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }

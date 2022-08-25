@@ -153,7 +153,7 @@ fn parse_block(lexer: &mut Lexer) -> Expr {
 fn parse_stmt(lexer: &mut Lexer) -> Expr {
     let next = lexer.peek().unwrap();
     let after_that = lexer.peek_by(1).unwrap();
-    dbg!((&next, &after_that));
+
     match (next, after_that) {
         (Token::Ident(_), Token::Colon | Token::Assignment) => parse_setvar(lexer),
         _ => parse_expr(lexer),

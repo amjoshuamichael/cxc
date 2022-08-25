@@ -8,7 +8,7 @@ pub enum Expr {
     Struct(TypeAlias, Vec<(String, Expr)>),
     MakeVar(VarDecl, Box<Expr>),
     SetVar(Box<Expr>, Box<Expr>),
-    Call(Box<Expr>, Vec<Expr>),
+    Call(String, Vec<Expr>),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
     Member(Box<Expr>, String),
