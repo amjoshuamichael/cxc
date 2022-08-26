@@ -81,22 +81,32 @@ impl FuncRep {
                 },
             ),
             Expr::Ident(name) => {
-                let name = self.identifiers.iter().find(|i| ***i == *name).unwrap();
-                let space = self.tree.make_one_space(parent);
+                match self.identifiers.iter().find(|i| ***i == *name) {
+                    Some(name) => {
+                        let space = self.tree.make_one_space(parent);
 
-                let name = name.clone();
-                let data_flow_info = self.data_flow.get_mut(&name).unwrap();
-                data_flow_info.ids.push(space);
+                        let name = name.clone();
+                        let data_flow_info = self.data_flow.get_mut(&name).unwrap();
+                        data_flow_info.ids.push(space);
 
-                self.tree.replace(
-                    space,
-                    NodeData::Ident {
-                        var_type: Type::never(),
-                        name,
+                        self.tree.replace(
+                            space,
+                            NodeData::Ident {
+                                var_type: Type::never(),
+                                name,
+                            },
+                        );
+
+                        space
                     },
-                );
-
-                space
+                    None => self.tree.insert(
+                        parent,
+                        NodeData::Ident {
+                            var_type: Type::never(),
+                            name: Arc::from(&*name),
+                        },
+                    ),
+                }
             },
             Expr::MakeVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
@@ -218,7 +228,7 @@ impl FuncRep {
                 self.tree.replace(space, new_binop);
                 space
             },
-            Expr::Call(name, args) => {
+            Expr::Call(f, args) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut arg_ids = Vec::new();
@@ -229,7 +239,7 @@ impl FuncRep {
 
                 let new_data = NodeData::Call {
                     ret_type: Type::never(),
-                    name,
+                    f,
                     a: arg_ids,
                     def: None,
                 };

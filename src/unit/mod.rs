@@ -22,6 +22,7 @@ use inkwell::OptimizationLevel;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::{Debug, Display};
 use std::path::Path;
 use std::sync::Arc;
 mod globals;
@@ -140,6 +141,8 @@ impl<'u> Unit<'u> {
                 },
             }
         }
+
+        self.module.print_to_stderr();
     }
 
     pub fn add_external_function(
@@ -228,11 +231,54 @@ impl<'u> Unit<'u> {
             function
         }
     }
+
+    // TODO: this is only being used for testing functions.
+    // Other rust functions should be added as well.
+    pub fn add_std_lib(&mut self) {
+        self.add_external_function(
+            "print",
+            print::<i32> as *const usize,
+            vec![Type::int_of_size(32)],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "print",
+            print::<f32> as *const usize,
+            vec![Type::float_of_size(32)],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "assert_eq",
+            assert::<i32> as *const usize,
+            vec![Type::int_of_size(32), Type::int_of_size(32)],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "assert_eq",
+            assert::<f32> as *const usize,
+            vec![Type::float_of_size(32), Type::float_of_size(32)],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "sqrt",
+            f32::sqrt as *const usize,
+            vec![Type::float_of_size(32)],
+            Type::float_of_size(32),
+        )
+    }
 }
 
+fn print<T: Display>(num: T) { println!("{num}") }
+fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }
+
 pub fn llvm_function_name(og_name: &String, arg_types: &Vec<Type>) -> String {
+    // TODO: make these nescessarily unique
     format!("{:?}{:?}", og_name, arg_types)
         .chars()
-        .filter(|c| !matches!(*c, ' ' | '[' | ']' | '"'))
+        .filter(|c| c.is_alphanumeric() || matches!(c, '_'))
         .collect()
 }

@@ -141,10 +141,11 @@ pub fn compile<'comp>(
             ref rhs,
             ref ret_type,
         } => {
+            let lhs_type = fcs.tree.get(*lhs).ret_type().clone();
             let mut lhs = compile(fcs, *lhs).unwrap();
             let mut rhs = compile(fcs, *rhs).unwrap();
 
-            match ret_type.as_type_enum() {
+            match lhs_type.as_type_enum() {
                 TypeEnum::Int(_) => {
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");
@@ -329,7 +330,7 @@ pub fn compile<'comp>(
             },
             _ => todo!(),
         },
-        Call { name, a, def, .. } => {
+        Call { f, a, def, .. } => {
             let function = fcs.globals.get_value(def.unwrap()).unwrap();
             let is_extern = function.as_any_value_enum().is_pointer_value();
 
@@ -361,9 +362,7 @@ pub fn compile<'comp>(
             Some(output)
         },
         Member {
-            ret_type,
-            object,
-            field,
+            ret_type, object, ..
         } => {
             let ptr = compile_as_ptr(fcs, expr_id);
             let val = fcs.builder.build_load(ptr, "load");
@@ -419,7 +418,19 @@ fn compile_as_ptr<'comp>(
     expr_id: ExprID,
 ) -> PointerValue<'comp> {
     match fcs.tree.get(expr_id) {
-        Ident { name, .. } => fcs.variables.get(&*name).unwrap().clone(),
+        Ident { name, .. } => match fcs.variables.get(&*name) {
+            Some(var) => var.clone(),
+            None => {
+                let ident_no_ptr: BasicValueEnum =
+                    compile(fcs, expr_id).unwrap().try_into().unwrap();
+
+                let ident_type =
+                    fcs.tree.get(expr_id).ret_type().to_basic_type(fcs.context);
+                let new_temp = fcs.builder.build_alloca(ident_type, "temp");
+                fcs.builder.build_store(new_temp, ident_no_ptr);
+                new_temp
+            },
+        },
         Member {
             ret_type,
             object,

@@ -47,3 +47,12 @@ pub enum Declaration {
         contains_generics: bool,
     },
 }
+
+impl Declaration {
+    pub fn name(&self) -> String {
+        match self {
+            Declaration::Function { name, .. } => name.clone(),
+            Declaration::Struct { name, .. } => name.clone(),
+        }
+    }
+}

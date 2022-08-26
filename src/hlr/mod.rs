@@ -99,13 +99,14 @@ impl TypeArc {
         TypeArc(Arc::new(TypeEnum::Float(FloatType { size })))
     }
 
-    pub fn new_struct(fields: IndexMap<String, TypeArc>) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Struct(StructType { fields })))
+    pub fn new_struct(
+        fields: IndexMap<String, TypeArc>,
+        methods: HashSet<String>,
+    ) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Struct(StructType { fields, methods })))
     }
 
-    pub fn never() -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Never))
-    }
+    pub fn never() -> TypeArc { TypeArc(Arc::new(TypeEnum::Never)) }
 
     pub fn func_with_args(self, args: Vec<TypeArc>) -> TypeArc {
         TypeArc(Arc::new(TypeEnum::Func(FuncType {
@@ -121,9 +122,7 @@ impl TypeArc {
 }
 
 impl Type for TypeArc {
-    fn name(&self) -> String {
-        self.as_type_enum().name()
-    }
+    fn name(&self) -> String { self.as_type_enum().name() }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         self.as_type_enum().to_any_type(context)
@@ -176,9 +175,7 @@ pub struct RefType {
 }
 
 impl Type for RefType {
-    fn name(&self) -> String {
-        "&".to_string() + &*self.base.name()
-    }
+    fn name(&self) -> String { "&".to_string() + &*self.base.name() }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         self.base
@@ -219,31 +216,36 @@ impl Type for FuncType {
     }
 }
 
+// TODO: save name of struct into struct so that method name lookup is more
+// consistant
 #[derive(PartialEq, Eq)]
 pub struct StructType {
     pub fields: IndexMap<String, TypeArc>,
+    pub methods: HashSet<String>,
 }
 
 // TODO: make this faster
 impl Hash for StructType {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let vec_fields: Vec<(&String, &TypeArc)> = self.fields.iter().collect();
-        vec_fields.hash(state)
+        self.fields.iter().collect::<Vec<_>>().hash(state);
+        self.methods.iter().collect::<Vec<_>>().hash(state);
     }
 }
 
 impl StructType {
-    pub fn get_field_type(&self, field_name: &String) -> TypeArc {
-        self.fields.get(field_name).unwrap().clone()
+    pub fn get_field_type(&self, field_name: &String) -> Option<TypeArc> {
+        self.fields.get(field_name).map(|t| t.clone())
+    }
+
+    pub fn get_full_method_name(&self, field_name: &String) -> Option<&String> {
+        self.methods.iter().find(|m| m.find(field_name).is_some())
     }
 
     pub fn get_field_index(&self, field_name: &String) -> usize {
         self.fields.get_index_of(field_name).unwrap()
     }
 
-    pub fn field_count(&self) -> usize {
-        self.fields.len()
-    }
+    pub fn field_count(&self) -> usize { self.fields.len() }
 }
 
 impl Type for StructType {
@@ -255,7 +257,7 @@ impl Type for StructType {
         // { "x": i32, "y": i32, }
         //
         // here, we remove the quotes.
-        let struct_with_quotes = format!("{:?}", self.fields);
+        let struct_with_quotes = format!("{:?} | {:?}", self.fields, self.methods);
 
         struct_with_quotes.chars().filter(|c| *c != '"').collect()
     }
@@ -280,9 +282,7 @@ pub struct IntType {
 }
 
 impl Type for IntType {
-    fn name(&self) -> String {
-        format!("i{}", self.size)
-    }
+    fn name(&self) -> String { format!("i{}", self.size) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.custom_width_int_type(self.size).as_any_type_enum()
@@ -295,9 +295,7 @@ pub struct FloatType {
 }
 
 impl Type for FloatType {
-    fn name(&self) -> String {
-        format!("f{}", self.size)
-    }
+    fn name(&self) -> String { format!("f{}", self.size) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         // TODO: implement different sized floats
@@ -311,9 +309,7 @@ pub struct NeverType();
 pub static NEVER_STATIC: NeverType = NeverType();
 
 impl Type for NeverType {
-    fn name(&self) -> String {
-        String::from("NEVER")
-    }
+    fn name(&self) -> String { String::from("NEVER") }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.i32_type().as_any_type_enum()

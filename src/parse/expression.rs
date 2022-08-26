@@ -84,10 +84,16 @@ pub fn calls(atoms: &mut Vec<Expr>) {
         .iter()
         .position(|atom| matches!(atom, Expr::ArgList(_)))
     {
-        let Expr::ArgList(args) = atoms.remove(args_pos) else { unreachable!() };
+        let Expr::ArgList(mut args) = atoms.remove(args_pos) else { unreachable!() };
 
-        if let Expr::Ident(name) = atoms.remove(args_pos - 1) {
+        let being_called = atoms.remove(args_pos - 1);
+
+        if let Expr::Ident(name) = being_called {
             atoms.push(Expr::Call(name, args));
+        } else if let Expr::Member(object, field) = being_called {
+            let mut args_with_obj = vec![*object];
+            args_with_obj.append(&mut args);
+            atoms.push(Expr::Call(field, args_with_obj));
         }
     }
 }

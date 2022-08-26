@@ -1,7 +1,12 @@
 max_width = 85
+fn_call_width = 85
 wrap_match_arms = false
 reorder_imports = true
 reorder_imported_names = true
 normalize_comments = true
 match_block_trailing_comma = true
 take_source_hints = false
+fn_single_line = true
+wrap_comments = true
+condense_wildcard_suffixes = true
+format_code_in_doc_comments = true

@@ -30,7 +30,7 @@ impl<'a> Functions<'a> {
     }
 
     pub fn name_exists(&self, name: String) -> bool {
-        self.funcs_with_name(name).len() >= 0
+        self.funcs_with_name(name).len() > 0
     }
 
     pub fn count_with_name(&self, name: String) -> usize {
@@ -42,10 +42,24 @@ impl<'a> Functions<'a> {
     }
 
     pub fn get_value(&self, def: FunctionDef) -> Option<CallableValue<'a>> {
-        Some(self.0.get(&def)?.val.clone())
+        self.get_func(def).map(|t| t.val.clone())
     }
 
-    pub fn get_type(&self, def: FunctionDef) -> Option<Type> {
-        Some(self.0.get(&def)?.ret_type.clone())
+    pub fn get_type(&self, mut def: FunctionDef) -> Option<Type> {
+        self.get_func(def).map(|t| t.ret_type.clone())
+    }
+
+    pub fn get_func(&self, mut def: FunctionDef) -> Option<&FuncValAndType<'a>> {
+        if let Some(func) = self.0.get(&def) {
+            Some(func)
+        } else {
+            if def.arg_types.len() == 0 {
+                return None;
+            }
+
+            let TypeEnum::Struct(st) = def.arg_types[0].as_type_enum() else { panic!() };
+            def.name = st.get_full_method_name(&def.name)?.clone();
+            self.0.get(&def)
+        }
     }
 }

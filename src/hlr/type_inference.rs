@@ -48,9 +48,15 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
             NodeData::BinOp {
                 ref mut ret_type,
                 rhs,
+                op,
                 ..
             } => {
-                *ret_type = type_by_id.get(rhs).unwrap().clone();
+                use crate::parse::Opcode::*;
+                *ret_type = match op {
+                    Equal | Inequal | GrtrThan | GreaterOrEqual | LessThan
+                    | LessOrEqual => Type::int_of_size(64),
+                    _ => type_by_id.get(rhs).unwrap().clone(),
+                };
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             NodeData::UnarOp {
@@ -91,13 +97,13 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
                 let type_enum = typ.as_type_enum();
                 let TypeEnum::Struct(struct_type) = type_enum else { panic!() };
 
-                *ret_type = struct_type.get_field_type(field).clone();
+                *ret_type = struct_type.get_field_type(field).unwrap().clone();
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             NodeData::Call {
                 ref mut ret_type,
-                name,
+                f,
                 a,
                 def,
             } => {
@@ -107,7 +113,7 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
                     .collect();
 
                 let new_def = FunctionDef {
-                    name: name.clone(),
+                    name: f.clone(),
                     arg_types,
                 };
 

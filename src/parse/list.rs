@@ -13,20 +13,19 @@ where
 {
     assert_eq!(lexer.next(), Some(opener));
 
-    if lexer.peek() == Some(closer.clone()) {
-        lexer.next();
+    if lexer.next_if(|t| t == closer).is_some() {
         return Vec::new();
     }
 
     let mut list = vec![parser(lexer)];
 
     if let Some(separator) = separator {
+        // parse with separator
+
         loop {
             match lexer.next() {
                 Some(s) if s == separator => {
-                    if lexer.peek() == Some(closer.clone()) {
-                        // trailing separators
-                        lexer.next();
+                    if lexer.next_if(|t| t == closer).is_some() {
                         break;
                     }
 
@@ -37,9 +36,10 @@ where
             }
         }
     } else {
+        // parse without separator
         loop {
             match lexer.peek() {
-                Some(s) if s == closer => {
+                Some(c) if c == closer => {
                     lexer.next();
                     break;
                 },

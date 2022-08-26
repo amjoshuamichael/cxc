@@ -11,9 +11,7 @@ pub struct TypeGroup {
 }
 
 impl TypeGroup {
-    pub fn add(&mut self, name: String, t: Type) {
-        self.types.insert(name, t);
-    }
+    pub fn add(&mut self, name: String, t: Type) { self.types.insert(name, t); }
 
     pub fn add_generic_alias(&mut self, name: String, a: TypeAlias) {
         self.generic_alias.insert(name, a);
@@ -38,7 +36,7 @@ impl TypeGroup {
             TypeAlias::Int(size) => Type::int_of_size(*size),
             TypeAlias::Float(size) => Type::float_of_size(*size),
             TypeAlias::Ref(base) => self.get_gen_spec(base, generics)?.get_ref(),
-            TypeAlias::Struct(fields) => {
+            TypeAlias::Struct(fields, methods) => {
                 let mut typed_fields: IndexMap<String, Type> = IndexMap::new();
 
                 for field in fields {
@@ -46,7 +44,7 @@ impl TypeGroup {
                     typed_fields.insert(field.0.clone(), field_type);
                 }
 
-                Type::new_struct(typed_fields)
+                Type::new_struct(typed_fields, methods.clone())
             },
             TypeAlias::Generic(name, generics) => {
                 self.get_gen_spec(self.generic_alias.get(name)?, generics)?

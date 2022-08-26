@@ -5,7 +5,7 @@ use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ExprTree {
     nodes: Vec<ExprNode>,
 }
@@ -39,17 +39,11 @@ impl ExprTree {
         ExprID(self.nodes.len() - 1)
     }
 
-    pub fn get(&self, at: ExprID) -> NodeData {
-        self.nodes[at.0].data.clone()
-    }
+    pub fn get(&self, at: ExprID) -> NodeData { self.nodes[at.0].data.clone() }
 
-    pub fn parent(&self, of: ExprID) -> ExprID {
-        self.nodes[of.0].parent
-    }
+    pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
 
-    pub fn node_count(&self) -> u32 {
-        self.nodes.len().try_into().unwrap()
-    }
+    pub fn node_count(&self) -> u32 { self.nodes.len().try_into().unwrap() }
 }
 
 impl Debug for ExprTree {
@@ -74,6 +68,7 @@ impl ExprID {
     pub const ROOT: ExprID = ExprID(0);
 }
 
+#[derive(Clone)]
 struct ExprNode {
     parent: ExprID,
     data: NodeData,
@@ -93,7 +88,7 @@ impl Debug for ExprNode {
             } => {
                 write!(fmt, "{struct_type:?} {{ {fields:?} }}")
             },
-            Call { name, a, .. } => write!(fmt, "{name:?}({a:?})"),
+            Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
             Ident { name, .. } => write!(fmt, "{name}"),
             MakeVar {
                 var_type,
@@ -151,7 +146,7 @@ pub enum NodeData {
     },
     Call {
         ret_type: Type,
-        name: String,
+        f: String,
         a: Vec<ExprID>,
         def: Option<FunctionDef>,
     },

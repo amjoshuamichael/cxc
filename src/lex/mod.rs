@@ -15,9 +15,18 @@ impl Lexer {
         out
     }
 
-    pub fn peek(&self) -> Option<Token> {
-        self.get(self.current_ptr, false)
+    pub fn next_if<F: Fn(Token) -> bool>(&mut self, cond: F) -> Option<Token> {
+        let next = self.peek()?;
+
+        if cond(next.clone()) {
+            self.next();
+            Some(next)
+        } else {
+            None
+        }
     }
+
+    pub fn peek(&self) -> Option<Token> { self.get(self.current_ptr, false) }
 
     pub fn peek_by(&self, offset: usize) -> Option<Token> {
         self.get(self.current_ptr + offset, false)
@@ -43,9 +52,7 @@ impl From<LogosLexer<'_, Token>> for Lexer {
     }
 }
 
-pub fn lex(input: &str) -> Lexer {
-    Lexer::from(Token::lexer(input))
-}
+pub fn lex(input: &str) -> Lexer { Lexer::from(Token::lexer(input)) }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {

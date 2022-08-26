@@ -45,29 +45,16 @@ pub fn file(mut lexer: Lexer) -> Script {
 
         match lexer.peek() {
             Some(Token::LeftParen) => {
-                let args = parse_list(
-                    Token::LeftParen,
-                    Some(Token::Comma),
-                    Token::RghtParen,
-                    parse_var_decl,
-                    &mut lexer,
-                );
-
-                assert_eq!(lexer.next(), Some(Token::Colon));
-
-                let ret_type = parse_type_alias(&mut lexer);
-
-                let code = parse_block(&mut lexer);
-
-                declarations.push(Declaration::Function {
-                    name: decl_name,
-                    ret_type,
-                    args,
-                    code,
-                });
+                declarations.push(parse_func(&mut lexer, decl_name));
             },
             Some(Token::LeftCurly) => {
-                let typ = parse_generic_alias(&mut lexer, &generic_labels);
+                let (typ, methods) = parse_generic_alias(
+                    &mut lexer,
+                    &StructParsingContext {
+                        generics: generic_labels.clone(),
+                        name: decl_name.clone(),
+                    },
+                );
 
                 let strct = Declaration::Struct {
                     name: decl_name,
@@ -76,6 +63,10 @@ pub fn file(mut lexer: Lexer) -> Script {
                 };
 
                 declarations.push(strct);
+
+                for m in methods {
+                    declarations.push(m);
+                }
             },
             _ => panic!(),
         }
@@ -83,6 +74,29 @@ pub fn file(mut lexer: Lexer) -> Script {
         if lexer.peek().is_none() {
             return Script(declarations);
         }
+    }
+}
+
+pub fn parse_func(lexer: &mut Lexer, name: String) -> Declaration {
+    let args = parse_list(
+        Token::LeftParen,
+        Some(Token::Comma),
+        Token::RghtParen,
+        parse_var_decl,
+        lexer,
+    );
+
+    assert_eq!(lexer.next(), Some(Token::Colon));
+
+    let ret_type = parse_type_alias(lexer);
+
+    let code = parse_block(lexer);
+
+    Declaration::Function {
+        name,
+        ret_type,
+        args,
+        code,
     }
 }
 

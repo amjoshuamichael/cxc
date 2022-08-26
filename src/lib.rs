@@ -106,6 +106,7 @@ mod tests {
     fn call_test() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
+        unit.add_std_lib();
 
         unit.push_script(
             "
@@ -121,22 +122,17 @@ mod tests {
     
             everything_works(): i32 {
                 six_times_two: i32 = mul_by_two(6)
-                ? six_times_two != 12 {
-                    ! 0
-                }
+                assert_eq(six_times_two, 12) 
 
-                six_div_two_f: f32 = divide_by_two(6.0)
-                ? six_div_two_f != 3.0 {
-                    ! 0
-                }
+                six_div_two: f32 = divide_by_two(6.0)
+                assert_eq(six_div_two, 3.0)
 
-                ! 1
+                ! 0
             }
             ",
         );
 
-        let mut does_it_work: i32 = unsafe { unit.get_fn("everything_works")(()) };
-        assert_eq!(does_it_work, 1);
+        unsafe { unit.get_fn::<(), i32>("everything_works")(()) };
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -172,9 +168,9 @@ mod tests {
         unit.push_script(
             "
             Point3D {
-                x: i32,
-                y: i32,
-                z: i32,
+                x: i32
+                y: i32
+                z: i32
             }
 
             main(): &Point3D {
@@ -209,8 +205,8 @@ mod tests {
         unit.push_script(
             "
             Point2D {
-                x: i32,
-                y: i32,
+                x: i32
+                y: i32
             }
 
             sqr_magnitude_of(in_ptr: &Point2D): i32 {
@@ -236,23 +232,23 @@ mod tests {
             "
             Square {
                 position: {
-                    x: i32,
-                    y: i32,
-                },
-                size: i32,
+                    x: i32
+                    y: i32
+                }
+                size: i32
             }
 
             Point2D {
-                x: i32,
-                y: i32,
+                x: i32
+                y: i32
             }
 
             make_square(): &{
                 position: {
-                    x: i32,
-                    y: i32,
-                },
-                size: i32,
+                    x: i32
+                    y: i32
+                }
+                size: i32
             } {
                 new_square: Square = Square {
                     position = Point2D {
@@ -285,8 +281,8 @@ mod tests {
         unit.push_script(
             "
             Point2D<T> {
-                x: T,
-                y: T,
+                x: T
+                y: T
             }
 
             int_point(): &Point2D<i32> {
@@ -397,5 +393,43 @@ mod tests {
         let output = unsafe { unit.get_fn::<(), i32>("shine_a_little_love")(()) };
 
         assert_eq!(output, 42);
+    }
+
+    #[test]
+    fn methods() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_std_lib();
+
+        unit.push_script(
+            "
+            Point2D {
+                x: f32
+                y: f32
+
+                .hypotenuse(): f32 {
+                    ! sqrt(self.x * self.x + self.y * self.y)
+                }
+
+                .scaled(by: f32): Point2D {
+                    ! Point2D { x = self.x * by, y = self.y * by }
+                }
+            }
+
+            main(): i32 {
+                original: Point2D = Point2D { x = 4.0, y = 3.0 }
+
+                hypotenuse: f32 = original.hypotenuse()
+                assert_eq(hypotenuse, 5.0)
+
+                scaled_by_2: Point2D = original.scaled(1.5)
+                assert_eq(scaled_by_2.x, 6.0)
+                assert_eq(scaled_by_2.y, 4.5)
+
+                ! 0
+            }
+            ",
+        );
+        unsafe { unit.get_fn::<(), i32>("main")(()) };
     }
 }
