@@ -4,18 +4,18 @@ use logos::{Lexer as LogosLexer, Logos};
 pub mod parse_num;
 
 pub struct Lexer {
-    inner: Vec<Token>,
+    inner: Vec<Tok>,
     current_ptr: usize,
 }
 
 impl Lexer {
-    pub fn next(&mut self) -> Option<Token> {
+    pub fn next(&mut self) -> Option<Tok> {
         let out = self.get(self.current_ptr, true);
         self.current_ptr += 1;
         out
     }
 
-    pub fn next_if<F: Fn(Token) -> bool>(&mut self, cond: F) -> Option<Token> {
+    pub fn next_if<F: Fn(Tok) -> bool>(&mut self, cond: F) -> Option<Tok> {
         let next = self.peek()?;
 
         if cond(next.clone()) {
@@ -26,13 +26,13 @@ impl Lexer {
         }
     }
 
-    pub fn peek(&self) -> Option<Token> { self.get(self.current_ptr, false) }
+    pub fn peek(&self) -> Option<Tok> { self.get(self.current_ptr, false) }
 
-    pub fn peek_by(&self, offset: usize) -> Option<Token> {
+    pub fn peek_by(&self, offset: usize) -> Option<Tok> {
         self.get(self.current_ptr + offset, false)
     }
 
-    fn get(&self, at: usize, log: bool) -> Option<Token> {
+    fn get(&self, at: usize, log: bool) -> Option<Tok> {
         let token = self.inner.get(at).map(|t| t.clone());
 
         if crate::DEBUG && log && let Some(token) = token.clone() {
@@ -43,8 +43,8 @@ impl Lexer {
     }
 }
 
-impl From<LogosLexer<'_, Token>> for Lexer {
-    fn from(og: LogosLexer<Token>) -> Self {
+impl From<LogosLexer<'_, Tok>> for Lexer {
+    fn from(og: LogosLexer<Tok>) -> Self {
         Lexer {
             inner: og.collect(),
             current_ptr: 0,
@@ -52,10 +52,10 @@ impl From<LogosLexer<'_, Token>> for Lexer {
     }
 }
 
-pub fn lex(input: &str) -> Lexer { Lexer::from(Token::lexer(input)) }
+pub fn lex(input: &str) -> Lexer { Lexer::from(Tok::lexer(input)) }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
-pub enum Token {
+pub enum Tok {
     #[token(",")]
     Comma,
     #[token(";")]
@@ -147,37 +147,48 @@ pub enum Token {
     Whitespace,
 }
 
-impl Token {
+impl Tok {
     pub fn get_un_opcode(&self) -> Option<Opcode> {
         match self {
-            Token::AsterickSet(count) => Some(Opcode::Deref(*count)),
-            Token::AmpersandSet(count) => Some(Opcode::Ref(*count)),
+            Tok::AsterickSet(count) => Some(Opcode::Deref(*count)),
+            Tok::AmpersandSet(count) => Some(Opcode::Ref(*count)),
             _ => None,
         }
     }
 
+    pub fn is_un_op(&self) -> bool { self.get_un_opcode().is_some() }
+
     pub fn get_bin_opcode(&self) -> Option<Opcode> {
         match self {
-            Token::AsterickSet(2) => Some(Opcode::Exponential),
-            Token::Plus => Some(Opcode::Plus),
-            Token::Minus => Some(Opcode::Minus),
-            Token::AsterickSet(1) => Some(Opcode::Multiplier),
-            Token::Divider => Some(Opcode::Divider),
-            Token::Modulus => Some(Opcode::Modulus),
-            Token::AmpersandSet(1) => Some(Opcode::BitAND),
-            Token::BitOR => Some(Opcode::BitOR),
-            Token::BitXOR => Some(Opcode::BitXOR),
-            Token::BitShiftR => Some(Opcode::BitShiftR),
-            Token::BitShiftL => Some(Opcode::BitShiftL),
-            Token::AmpersandSet(2) => Some(Opcode::BitAND),
-            Token::Or => Some(Opcode::Or),
-            Token::LeftAngle => Some(Opcode::LessThan),
-            Token::RghtAngle => Some(Opcode::GrtrThan),
-            Token::LessOrEqual => Some(Opcode::LessOrEqual),
-            Token::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
-            Token::Equal => Some(Opcode::Equal),
-            Token::Inequal => Some(Opcode::Inequal),
-            Token::Dot => Some(Opcode::Dot),
+            Tok::AsterickSet(2) => Some(Opcode::Exponential),
+            Tok::Plus => Some(Opcode::Plus),
+            Tok::Minus => Some(Opcode::Minus),
+            Tok::AsterickSet(1) => Some(Opcode::Multiplier),
+            Tok::Divider => Some(Opcode::Divider),
+            Tok::Modulus => Some(Opcode::Modulus),
+            Tok::AmpersandSet(1) => Some(Opcode::BitAND),
+            Tok::BitOR => Some(Opcode::BitOR),
+            Tok::BitXOR => Some(Opcode::BitXOR),
+            Tok::BitShiftR => Some(Opcode::BitShiftR),
+            Tok::BitShiftL => Some(Opcode::BitShiftL),
+            Tok::AmpersandSet(2) => Some(Opcode::BitAND),
+            Tok::Or => Some(Opcode::Or),
+            Tok::LeftAngle => Some(Opcode::LessThan),
+            Tok::RghtAngle => Some(Opcode::GrtrThan),
+            Tok::LessOrEqual => Some(Opcode::LessOrEqual),
+            Tok::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
+            Tok::Equal => Some(Opcode::Equal),
+            Tok::Inequal => Some(Opcode::Inequal),
+            Tok::Dot => Some(Opcode::Dot),
+            _ => None,
+        }
+    }
+
+    pub fn is_bin_op(&self) -> bool { self.get_bin_opcode().is_some() }
+
+    pub fn ident_name(self) -> Option<String> {
+        match self {
+            Tok::Ident(name) => Some(name),
             _ => None,
         }
     }

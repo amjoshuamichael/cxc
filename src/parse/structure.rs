@@ -1,5 +1,5 @@
 use super::*;
-use crate::lex::Token;
+use crate::lex::Tok;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,7 +22,7 @@ pub struct StructParsingContext {
     pub name: String,
 }
 
-pub fn parse_generic_alias(
+pub fn parse_advanced_alias(
     mut lexer: &mut Lexer,
     context: &StructParsingContext,
 ) -> (TypeAlias, Vec<Declaration>) {
@@ -30,15 +30,15 @@ pub fn parse_generic_alias(
 
     let mut declarations = Vec::default();
     let type_alias = match beginning_of_alias {
-        Token::LeftCurly => {
+        Tok::LeftCurly => {
             let strct = parse_struct(lexer, context);
             declarations = strct.1;
             strct.0
         },
-        Token::AmpersandSet(count) => {
+        Tok::AmpersandSet(count) => {
             lexer.next();
 
-            let mut output = parse_generic_alias(lexer, context).0;
+            let mut output = parse_advanced_alias(lexer, context).0;
 
             for _ in 0..count {
                 output = TypeAlias::Ref(box output);
@@ -46,13 +46,13 @@ pub fn parse_generic_alias(
 
             output
         },
-        Token::Ident(name) => {
+        Tok::Ident(name) => {
             lexer.next();
-            let first_char = name.chars().next();
+            let first_char = name.chars().next().unwrap();
 
             if let Some(generic_index) = context.generics.get(&name) {
                 TypeAlias::GenParam(*generic_index)
-            } else if matches!(first_char, Some('i') | Some('u') | Some('f'))
+            } else if matches!(first_char, 'i' | 'u' | 'f')
                 && name.chars().skip(1).all(|c| c.is_digit(10))
             {
                 // TypeSpec is accessing a primitive value
@@ -60,22 +60,21 @@ pub fn parse_generic_alias(
                     name.chars().skip(1).collect::<String>().parse().unwrap();
 
                 match first_char {
-                    Some('u') | Some('i') => TypeAlias::Int(bit_width),
-                    Some('f') => TypeAlias::Float(bit_width),
+                    'u' | 'i' => TypeAlias::Int(bit_width),
+                    'f' => TypeAlias::Float(bit_width),
                     _ => unreachable!(),
                 }
-            } else if let Some(Token::LeftAngle) = lexer.peek() {
+            } else if let Some(Tok::LeftAngle) = lexer.peek() {
                 let generics = parse_list(
-                    Token::LeftAngle,
-                    Some(Token::Comma),
-                    Token::RghtAngle,
-                    |lexer| parse_generic_alias(lexer, context).0,
+                    (Tok::LeftAngle, Tok::RghtAngle),
+                    Some(Tok::Comma),
+                    |lexer| parse_advanced_alias(lexer, context).0,
                     lexer,
                 );
 
-                TypeAlias::Generic(name.clone(), generics)
+                TypeAlias::Generic(name, generics)
             } else {
-                TypeAlias::Named(name.clone())
+                TypeAlias::Named(name)
             }
         },
         _ => panic!(),
@@ -84,9 +83,9 @@ pub fn parse_generic_alias(
     let suffix = lexer.peek().unwrap().clone();
 
     let type_alias = match suffix {
-        Token::LeftBrack => {
+        Tok::LeftBrack => {
             lexer.next();
-            let Some(Token::Int(count)) = lexer.next() else { panic!() };
+            let Some(Tok::Int(count)) = lexer.next() else { panic!() };
             lexer.next();
 
             TypeAlias::Array(box type_alias, count.try_into().unwrap())
@@ -97,11 +96,12 @@ pub fn parse_generic_alias(
     (type_alias, declarations)
 }
 
+
 // TODO: introduce a "parse type alias without methods or generics" option,
 // which does require a context, so no name or generic labels
 pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
     let context = StructParsingContext::default();
-    parse_generic_alias(lexer, &context).0
+    parse_advanced_alias(lexer, &context).0
 }
 
 pub fn parse_struct(
@@ -109,9 +109,8 @@ pub fn parse_struct(
     generic_labels: &StructParsingContext,
 ) -> (TypeAlias, Vec<Declaration>) {
     let mut parts = parse_list(
-        Token::LeftCurly,
+        (Tok::LeftCurly, Tok::RghtCurly),
         None,
-        Token::RghtCurly,
         |lexer| parse_struct_part(lexer, generic_labels),
         lexer,
     );
@@ -144,28 +143,29 @@ fn parse_struct_part(
     lexer: &mut Lexer,
     context: &StructParsingContext,
 ) -> StructPart {
-    if let Some(Token::Ident(name)) = lexer.next_if(|t| matches!(t, Token::Ident(_)))
-    {
-        assert_eq!(Some(Token::Colon), lexer.next());
-        let typ = parse_generic_alias(lexer, context).0;
+    let beginning_of_part = lexer.peek().unwrap();
+
+    if let Some(name) = beginning_of_part.clone().ident_name() {
+        lexer.next();
+        assert_eq!(Some(Tok::Colon), lexer.next());
+        let typ = parse_advanced_alias(lexer, context).0;
 
         StructPart::Field { name, typ }
-    } else if lexer.next_if(|t| matches!(t, Token::Dot)).is_some() {
-        let Some(Token::Ident(name)) = lexer.next() else { panic!() };
+    } else if beginning_of_part == Tok::Dot {
+        lexer.next();
+        let name = lexer.next().unwrap().ident_name().unwrap();
         let name = context.name.clone() + &*name;
 
         let mut decl = parse_func(lexer, name);
-        match decl {
-            Declaration::Function { ref mut args, .. } => {
-                let mut og_args = args.clone();
-                *args = vec![VarDecl {
-                    var_name: "self".into(),
-                    type_spec: Some(TypeAlias::Named(context.name.clone())),
-                }];
-                args.append(&mut og_args);
-            },
-            _ => unreachable!(),
-        }
+
+        let Declaration::Function { args: ref mut decl_args_ref, .. } = &mut decl 
+            else { unreachable!() };
+
+        decl_args_ref.push(VarDecl {
+            var_name: "self".into(),
+            type_spec: Some(TypeAlias::Named(context.name.clone())),
+        });
+
         StructPart::Method {
             is_static: false,
             decl,

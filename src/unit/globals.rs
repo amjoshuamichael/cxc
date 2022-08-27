@@ -53,13 +53,13 @@ impl<'a> Functions<'a> {
         if let Some(func) = self.0.get(&def) {
             Some(func)
         } else {
-            if def.arg_types.len() == 0 {
-                return None;
+            match def.arg_types.last()?.as_type_enum() {
+                TypeEnum::Struct(st) => {
+                    def.name = st.get_full_method_name(&def.name)?.clone();
+                    self.0.get(&def)
+                },
+                _ => None,
             }
-
-            let TypeEnum::Struct(st) = def.arg_types[0].as_type_enum() else { panic!() };
-            def.name = st.get_full_method_name(&def.name)?.clone();
-            self.0.get(&def)
         }
     }
 }

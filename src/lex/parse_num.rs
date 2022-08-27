@@ -1,7 +1,7 @@
-use crate::lex::Token;
+use crate::lex::Tok;
 use logos::Lexer;
 
-pub fn parse_int(token: &mut Lexer<Token>) -> Option<u128> {
+pub fn parse_int(token: &mut Lexer<Tok>) -> Option<u128> {
     let plain_number = token
         .slice()
         .chars()
@@ -20,7 +20,7 @@ pub fn parse_int(token: &mut Lexer<Token>) -> Option<u128> {
     }
 }
 
-pub fn parse_float(token: &mut Lexer<Token>) -> Option<f64> {
+pub fn parse_float(token: &mut Lexer<Tok>) -> Option<f64> {
     let num_text = token
         .slice()
         .chars()
@@ -62,6 +62,4 @@ fn convert_base(input: &str, base: u32) -> Option<u128> {
     Some(output)
 }
 
-fn match_base16(digit: char) -> Option<u128> {
-    Some(digit.to_digit(16)?.into())
-}
+fn match_base16(digit: char) -> Option<u128> { Some(digit.to_digit(16)?.into()) }

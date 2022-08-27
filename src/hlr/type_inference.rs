@@ -117,6 +117,7 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
                     arg_types,
                 };
 
+                dbg!(&new_def);
                 let return_type = globals.get_type(new_def.clone()).unwrap();
 
                 *ret_type = return_type.clone();
