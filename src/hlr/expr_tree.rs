@@ -82,11 +82,12 @@ impl Debug for ExprNode {
             Float { value, .. } => write!(fmt, "{value:?}"),
             Strin(s) => write!(fmt, "{s}"),
             StructLit {
-                var_type: struct_type,
-                fields,
-                ..
+                var_type, fields, ..
             } => {
-                write!(fmt, "{struct_type:?} {{ {fields:?} }}")
+                write!(fmt, "{var_type:?} {{ {fields:?} }}")
+            },
+            ArrayLit { var_type, parts } => {
+                write!(fmt, "{parts:?}")
             },
             Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
             Ident { name, .. } => write!(fmt, "{name}"),
@@ -98,6 +99,7 @@ impl Debug for ExprNode {
             } => write!(fmt, "{name}: {var_type:?} = {rhs:?}"),
             SetVar { lhs, rhs, .. } => write!(fmt, "{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => write!(fmt, "{object:?}.{field}"),
+            Index { object, index, .. } => write!(fmt, "{object:?}[{index:?}]"),
             UnarOp { op, hs, .. } => write!(fmt, "{op:?} {hs:?}"),
             BinOp { lhs, op, rhs, .. } => write!(fmt, "{lhs:?} {op:?} {rhs:?}"),
             IfThen { i, t, .. } => write!(fmt, "? {i:?} {t:?}"),
@@ -128,6 +130,10 @@ pub enum NodeData {
         var_type: Type,
         fields: Vec<(String, ExprID)>,
     },
+    ArrayLit {
+        var_type: Type,
+        parts: Vec<ExprID>,
+    },
     Strin(String),
     Ident {
         var_type: Type,
@@ -154,6 +160,11 @@ pub enum NodeData {
         ret_type: Type,
         object: ExprID,
         field: String,
+    },
+    Index {
+        ret_type: Type,
+        object: ExprID,
+        index: ExprID,
     },
     UnarOp {
         ret_type: Type,
@@ -198,12 +209,11 @@ impl NodeData {
         match self {
             Number { size, .. } => Type::int_of_size(*size),
             Float { size, .. } => Type::float_of_size(*size),
-            StructLit {
-                var_type: struct_type,
-                ..
-            } => struct_type.clone(),
             Strin(_) => todo!(),
-            Ident { var_type, .. } | MakeVar { var_type, .. } => var_type.clone(),
+            Ident { var_type, .. }
+            | StructLit { var_type, .. }
+            | ArrayLit { var_type, .. }
+            | MakeVar { var_type, .. } => var_type.clone(),
             BinOp { ret_type, .. }
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
@@ -212,6 +222,7 @@ impl NodeData {
             | SetVar { ret_type, .. }
             | Call { ret_type, .. }
             | Block { ret_type, .. }
+            | Index { ret_type, .. }
             | Member { ret_type, .. } => ret_type.clone(),
             Empty => unreachable!(),
             While { .. } => Type::never(),

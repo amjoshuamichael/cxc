@@ -124,6 +124,26 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
+            NodeData::Index {
+                ref mut ret_type,
+                object,
+                index,
+            } => {
+                let object_type = type_by_id.get_mut(&object).unwrap().clone();
+                let TypeEnum::Array(array_type) = object_type.as_type_enum() 
+                    else { panic!() };
+
+                *ret_type = array_type.base().clone();
+
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
+            },
+            NodeData::ArrayLit {
+                ref mut var_type,
+                parts,
+            } => {
+                *var_type = type_by_id.get(&parts[0]).unwrap().clone().get_array(parts.len() as u32);
+                *type_by_id.get_mut(&n).unwrap() = var_type.clone();
+            }
             _ => {},
         }
     }

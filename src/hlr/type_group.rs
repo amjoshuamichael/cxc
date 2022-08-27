@@ -52,6 +52,9 @@ impl TypeGroup {
             TypeAlias::GenParam(index) => {
                 self.get_spec(&generics[*index as usize])?
             },
+            TypeAlias::Array(base, count) => {
+                self.get_gen_spec(base, generics)?.get_array(*count)
+            },
         };
 
         Some(typ)

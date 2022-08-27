@@ -13,6 +13,7 @@ pub enum TypeAlias {
     Float(u32),
     Ref(Box<TypeAlias>),
     Struct(IndexMap<String, TypeAlias>, HashSet<String>),
+    Array(Box<TypeAlias>, u32),
 }
 
 #[derive(Default)]
@@ -78,6 +79,19 @@ pub fn parse_generic_alias(
             }
         },
         _ => panic!(),
+    };
+
+    let suffix = lexer.peek().unwrap().clone();
+
+    let type_alias = match suffix {
+        Token::LeftBrack => {
+            lexer.next();
+            let Some(Token::Int(count)) = lexer.next() else { panic!() };
+            lexer.next();
+
+            TypeAlias::Array(box type_alias, count.try_into().unwrap())
+        },
+        _ => type_alias,
     };
 
     (type_alias, declarations)

@@ -8,17 +8,26 @@ pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
         let next = lexer.peek();
 
         let atom = if matches!(last_atom, Expr::Op(_)) {
-            let atom = match next {
-                Some(Token::Int(val)) => Expr::Number(val),
-                Some(Token::Float(val)) => Expr::Float(val),
-                Some(Token::Ident(val)) => Expr::Ident(val.clone()),
-                Some(opcode) if opcode.get_un_opcode().is_some() => {
+            let atom = match next.unwrap() {
+                Token::Int(val) => Expr::Number(val),
+                Token::Float(val) => Expr::Float(val),
+                Token::Ident(val) => Expr::Ident(val.clone()),
+                Token::LeftBrack => Expr::Array(parse_list(
+                    Token::LeftBrack,
+                    Some(Token::Comma),
+                    Token::RghtBrack,
+                    parse_expr,
+                    lexer,
+                )),
+                opcode if opcode.get_un_opcode().is_some() => {
                     Expr::Op(opcode.get_un_opcode().unwrap())
                 },
                 _ => break,
             };
 
-            lexer.next();
+            if !matches!(atom, Expr::Array(_)) {
+                lexer.next();
+            }
 
             atom
         } else if matches!(next, Some(Token::LeftParen)) {
@@ -31,6 +40,14 @@ pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
             );
 
             Expr::ArgList(params)
+        } else if let Expr::Ident(var_name) = last_atom.clone() && matches!(next, Some(Token::LeftBrack)) {
+            assert_eq!(lexer.next(), Some(Token::LeftBrack));
+            let index = parse_expr(lexer);
+            assert_eq!(lexer.next(), Some(Token::RghtBrack));
+
+            let object = atoms.pop().unwrap();
+
+            Expr::Index(box object, box index)
         } else if let Expr::Ident(struct_name) = last_atom 
             && (matches!(next, Some(Token::LeftCurly)) || check_for_generics(lexer)){
             let struct_literal = parse_struct_literal(lexer, struct_name);

@@ -430,6 +430,83 @@ mod tests {
             }
             ",
         );
+
+        unsafe { unit.get_fn::<(), i32>("main")(()) };
+    }
+
+    #[test]
+    fn arrays() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_std_lib();
+
+        unit.push_script(
+            "
+            main(): i32 {
+                original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
+
+                assert_eq(original[3], 15)
+                assert_eq(original[0], 1)
+                assert_eq(original[6], 42)
+                
+                index: i32 = 0
+                @ index < 7 {
+                    original[index] = index * 2
+
+                    index = index + 1
+                }
+
+                assert_eq(original[0], 0)
+                assert_eq(original[1], 2)
+                assert_eq(original[3], 6)
+                assert_eq(original[6], 12)
+
+                ! 0
+            }
+            ",
+        );
+
+        unsafe { unit.get_fn::<(), i32>("main")(()) };
+    }
+
+    #[test]
+    fn struct_arrays() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_std_lib();
+
+        unit.push_script(
+            "
+            Point2D {
+                x: i32
+                y: i32
+            }
+
+            main(): i32 {
+                points: Point2D[3] = [
+                    Point2D { x = 43, y = 15 }, 
+                    Point2D { x = 327, y = 413 }, 
+                    Point2D { x = 1672, y = 2526 },
+                ]
+
+                assert_eq(points[0].x, 43)
+                assert_eq(points[0].y, 15)
+
+                points[0].x = 94
+
+                assert_eq(points[0].x, 94)
+                assert_eq(points[0].y, 15)
+
+                points[1] = Point2D { x = 4, y = 6 }
+
+                assert_eq(points[1].x, 4)
+                assert_eq(points[1].y, 6)
+
+                ! 0
+            }
+            ",
+        );
+
         unsafe { unit.get_fn::<(), i32>("main")(()) };
     }
 }

@@ -6,6 +6,8 @@ pub enum Expr {
     Float(f64),
     Ident(String),
     Struct(TypeAlias, Vec<(String, Expr)>),
+    Array(Vec<Expr>),
+    Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
     SetVar(Box<Expr>, Box<Expr>),
     Call(String, Vec<Expr>),

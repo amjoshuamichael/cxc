@@ -141,8 +141,6 @@ impl<'u> Unit<'u> {
                 },
             }
         }
-
-        self.module.print_to_stderr();
     }
 
     pub fn add_external_function(
@@ -236,14 +234,14 @@ impl<'u> Unit<'u> {
     // Other rust functions should be added as well.
     pub fn add_std_lib(&mut self) {
         self.add_external_function(
-            "print",
+            "stdprint",
             print::<i32> as *const usize,
             vec![Type::int_of_size(32)],
             Type::never(),
         );
 
         self.add_external_function(
-            "print",
+            "stdprint",
             print::<f32> as *const usize,
             vec![Type::float_of_size(32)],
             Type::never(),

@@ -169,7 +169,9 @@ fn parse_stmt(lexer: &mut Lexer) -> Expr {
     let after_that = lexer.peek_by(1).unwrap();
 
     match (next, after_that) {
-        (Token::Ident(_), Token::Colon | Token::Assignment) => parse_setvar(lexer),
+        (Token::Ident(_), Token::LeftBrack | Token::Colon | Token::Assignment) => {
+            parse_setvar(lexer)
+        },
         _ => parse_expr(lexer),
     }
 }
@@ -189,9 +191,10 @@ fn parse_setvar(lexer: &mut Lexer) -> Expr {
 
 fn parse_expr(lexer: &mut Lexer) -> Expr {
     match lexer.peek() {
-        Some(Token::Ident(_)) | Some(Token::Int(_)) | Some(Token::Float(_)) => {
-            parse_math_expr(lexer)
-        },
+        Some(Token::Ident(_))
+        | Some(Token::Int(_))
+        | Some(Token::Float(_))
+        | Some(Token::LeftBrack) => parse_math_expr(lexer),
         Some(op) if op.get_un_opcode().is_some() => parse_math_expr(lexer),
         Some(Token::At) => parse_for(lexer),
         Some(Token::Question) => parse_if(lexer),
@@ -199,24 +202,8 @@ fn parse_expr(lexer: &mut Lexer) -> Expr {
             lexer.next();
             Expr::Return(box parse_expr(lexer))
         },
-        Some(Token::LeftCurly) => {
-            parse_list(
-                Token::LeftCurly,
-                Some(Token::Comma),
-                Token::RghtCurly,
-                |lexer| {
-                    let Some(Token::Ident(field)) = lexer.next() else { panic!() };
-                    assert_eq!(lexer.next(), Some(Token::Assignment));
-                    let rhs = parse_expr(lexer);
-                    (field, rhs)
-                },
-                lexer,
-            );
-
-            todo!()
-        },
         Some(_) => todo!(),
-        None => unreachable!(),
+        None => panic!(),
     }
 }
 

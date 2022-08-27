@@ -287,6 +287,35 @@ impl FuncRep {
                 self.tree.replace(space, new_return);
                 space
             },
+            Expr::Array(expr_parts) => {
+                let space = self.tree.make_one_space(parent);
+
+                let mut parts = Vec::new();
+
+                for part in expr_parts {
+                    parts.push(self.add_expr(part, space));
+                }
+
+                let new_array = NodeData::ArrayLit {
+                    var_type: Type::never(),
+                    parts,
+                };
+
+                self.tree.replace(space, new_array);
+                space
+            },
+            Expr::Index(object, index) => {
+                let space = self.tree.make_one_space(parent);
+
+                let new_index = NodeData::Index {
+                    ret_type: Type::never(),
+                    object: self.add_expr(*object, space),
+                    index: self.add_expr(*index, space),
+                };
+
+                self.tree.replace(space, new_index);
+                space
+            },
             Expr::Op(_) | Expr::ArgList(_) => unreachable!(),
         }
     }

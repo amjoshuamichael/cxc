@@ -403,6 +403,47 @@ pub fn compile<'comp>(
             fcs.builder.build_return(Some(&return_value));
             None
         },
+        ArrayLit { var_type, parts } => {
+            let mut c_parts = Vec::new();
+
+            for part in parts {
+                c_parts.push(compile(fcs, part).unwrap());
+            }
+
+            let c_parts = c_parts.iter();
+
+            let TypeEnum::Array(s) = var_type.as_type_enum() else { panic!() };
+
+            let array = match s.base().to_any_type(fcs.context) {
+                AnyTypeEnum::IntType(t) => t.const_array(
+                    &*c_parts.map(|p| p.into_int_value()).collect::<Vec<_>>(),
+                ),
+                AnyTypeEnum::FloatType(t) => t.const_array(
+                    &*c_parts.map(|p| p.into_float_value()).collect::<Vec<_>>(),
+                ),
+                AnyTypeEnum::PointerType(t) => t.const_array(
+                    &*c_parts.map(|p| p.into_pointer_value()).collect::<Vec<_>>(),
+                ),
+                AnyTypeEnum::VectorType(t) => t.const_array(
+                    &*c_parts.map(|p| p.into_vector_value()).collect::<Vec<_>>(),
+                ),
+                AnyTypeEnum::StructType(t) => t.const_array(
+                    &*c_parts.map(|p| p.into_struct_value()).collect::<Vec<_>>(),
+                ),
+                AnyTypeEnum::ArrayType(t) => t.const_array(
+                    &*c_parts.map(|p| p.into_array_value()).collect::<Vec<_>>(),
+                ),
+                _ => todo!(),
+            };
+
+            Some(array.as_any_value_enum())
+        },
+        Index { .. } => {
+            let ptr = compile_as_ptr(fcs, expr_id);
+            let val = fcs.builder.build_load(ptr, "load");
+
+            Some(val.as_any_value_enum())
+        },
         _ => todo!(),
     };
 
@@ -448,6 +489,33 @@ fn compile_as_ptr<'comp>(
             fcs.builder
                 .build_struct_gep(object, field_index as u32, "access")
                 .unwrap()
+        },
+        Index {
+            object,
+            index,
+            ret_type,
+        } => {
+            let typ = fcs.tree.get(object).ret_type();
+
+            let object = compile_as_ptr(fcs, object);
+            let index = compile(fcs, index).unwrap().into_int_value();
+
+            let gepped_array = unsafe {
+                fcs.builder.build_gep(
+                    object,
+                    &[fcs.context.i32_type().const_int(0, false), index],
+                    "gep",
+                )
+            };
+
+            fcs.builder
+                .build_cast(
+                    InstructionOpcode::BitCast,
+                    gepped_array,
+                    ret_type.get_ref().to_basic_type(fcs.context),
+                    "cast",
+                )
+                .into_pointer_value()
         },
         _ => todo!(),
     }

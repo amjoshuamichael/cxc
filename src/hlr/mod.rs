@@ -87,6 +87,10 @@ impl TypeArc {
         }
     }
 
+    pub fn get_array(self, count: u32) -> TypeArc {
+        TypeArc(Arc::new(TypeEnum::Array(ArrayType { base: self, count })))
+    }
+
     pub fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
         self.to_any_type(context).try_into().unwrap()
     }
@@ -141,6 +145,7 @@ pub enum TypeEnum {
     Struct(StructType),
     Ref(RefType),
     Func(FuncType),
+    Array(ArrayType),
 
     #[default]
     Never,
@@ -164,7 +169,8 @@ impl Deref for TypeEnum {
             TypeEnum::Func(t) => t,
             TypeEnum::Struct(t) => t,
             TypeEnum::Ref(t) => t,
-            _ => &NEVER_STATIC,
+            TypeEnum::Array(t) => t,
+            TypeEnum::Never => &NEVER_STATIC,
         }
     }
 }
@@ -314,4 +320,25 @@ impl Type for NeverType {
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.i32_type().as_any_type_enum()
     }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub struct ArrayType {
+    base: TypeArc,
+    count: u32,
+}
+
+impl Type for ArrayType {
+    fn name(&self) -> String { format!("[{:?}; {}]", self.base, self.count) }
+
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        self.base
+            .to_basic_type(context)
+            .array_type(self.count)
+            .as_any_type_enum()
+    }
+}
+
+impl ArrayType {
+    pub fn base(&self) -> TypeArc { self.base.clone() }
 }
