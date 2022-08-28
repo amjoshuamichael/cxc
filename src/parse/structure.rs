@@ -20,12 +20,14 @@ pub enum TypeAlias {
 pub struct StructParsingContext {
     pub generics: HashMap<String, u8>,
     pub name: String,
+    pub dependencies: HashSet<String>,
 }
 
 pub fn parse_advanced_alias(
     mut lexer: &mut Lexer,
-    context: &StructParsingContext,
-) -> (TypeAlias, Vec<Declaration>) {
+    context: &mut StructParsingContext,
+    //TODO: use a struct here instead of a tuple
+) -> (TypeAlias, Vec<Declaration>, HashSet<String>) {
     let beginning_of_alias = lexer.peek().unwrap().clone();
 
     let mut declarations = Vec::default();
@@ -72,8 +74,12 @@ pub fn parse_advanced_alias(
                     lexer,
                 );
 
+                context.dependencies.insert(name.clone());
+
                 TypeAlias::Generic(name, generics)
             } else {
+                context.dependencies.insert(name.clone());
+
                 TypeAlias::Named(name)
             }
         },
@@ -93,20 +99,20 @@ pub fn parse_advanced_alias(
         _ => type_alias,
     };
 
-    (type_alias, declarations)
+    (type_alias, declarations, context.dependencies.clone())
 }
 
 
 // TODO: introduce a "parse type alias without methods or generics" option,
 // which does require a context, so no name or generic labels
 pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
-    let context = StructParsingContext::default();
-    parse_advanced_alias(lexer, &context).0
+    let mut context = StructParsingContext::default();
+    parse_advanced_alias(lexer, &mut context).0
 }
 
 pub fn parse_struct(
     mut lexer: &mut Lexer,
-    generic_labels: &StructParsingContext,
+    generic_labels: &mut StructParsingContext,
 ) -> (TypeAlias, Vec<Declaration>) {
     let mut parts = parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
@@ -141,7 +147,7 @@ enum StructPart {
 
 fn parse_struct_part(
     lexer: &mut Lexer,
-    context: &StructParsingContext,
+    context: &mut StructParsingContext,
 ) -> StructPart {
     let beginning_of_part = lexer.peek().unwrap();
 

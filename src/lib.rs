@@ -6,7 +6,7 @@
 #![feature(box_syntax)]
 #[macro_use]
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
 mod hlr;
 mod lex;
@@ -501,6 +501,47 @@ mod tests {
 
                 assert_eq(points[1].x, 4)
                 assert_eq(points[1].y, 6)
+
+                ! 0
+            }
+            ",
+        );
+
+        unsafe { unit.get_fn::<(), i32>("main")(()) };
+    }
+
+    #[test]
+    fn backwards_struct_dependency() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_std_lib();
+
+        unit.push_script(
+            "
+            Julie {
+                letter: DreamFrom<TheEndOfTheWorld>
+            }
+
+            DreamFrom<T> {
+                location: T
+            }
+
+            TheEndOfTheWorld {
+                time: i32
+            }
+
+            main(): i32 {
+                location: TheEndOfTheWorld = 
+                    TheEndOfTheWorld { time = 2095 }
+
+                dream: DreamFrom<TheEndOfTheWorld> = 
+                    DreamFrom<TheEndOfTheWorld> {
+                        location = location,
+                    }
+
+                julie: Julie = Julie { letter = dream }
+
+                assert_eq(julie.letter.location.time, 2095)
 
                 ! 0
             }

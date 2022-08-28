@@ -43,6 +43,8 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
         type_by_id.insert(n, node.ret_type());
     }
 
+    dbg!(&hlr.data_flow);
+
     for (n, node) in hlr.tree.top_down_iter().rev() {
         match node {
             NodeData::BinOp {

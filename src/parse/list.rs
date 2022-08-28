@@ -4,11 +4,11 @@ use crate::lex::Tok;
 pub fn parse_list<T, U>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
-    parser: U,
+    mut parser: U,
     lexer: &mut Lexer,
 ) -> Vec<T>
 where
-    U: Fn(&mut Lexer) -> T,
+    U: FnMut(&mut Lexer) -> T,
 {
     let (opener, closer) = opener_and_closer;
 

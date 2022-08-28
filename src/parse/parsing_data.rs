@@ -35,7 +35,16 @@ pub struct VarDecl {
 #[derive(Debug)]
 pub struct Script(pub Vec<Declaration>);
 
-#[derive(Debug)]
+impl Script {
+    pub fn get_type(&self, name: String) -> Option<&Declaration> {
+        self.0
+            .iter()
+            .filter(|d| matches!(d, Declaration::Type { .. }))
+            .find(|d| d.name() == name)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Declaration {
     Function {
         name: String,
@@ -43,10 +52,11 @@ pub enum Declaration {
         args: Vec<VarDecl>,
         code: Expr,
     },
-    Struct {
+    Type {
         name: String,
         typ: TypeAlias,
         contains_generics: bool,
+        dependencies: HashSet<String>,
     },
 }
 
@@ -54,7 +64,7 @@ impl Declaration {
     pub fn name(&self) -> String {
         match self {
             Declaration::Function { name, .. } => name.clone(),
-            Declaration::Struct { name, .. } => name.clone(),
+            Declaration::Type { name, .. } => name.clone(),
         }
     }
 }

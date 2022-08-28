@@ -74,72 +74,106 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let parsed = crate::parse::file(lexed);
+        let script = crate::parse::file(lexed);
 
-        for decl in parsed.0 {
-            match decl {
-                Declaration::Function {
-                    name,
-                    args,
-                    code,
-                    ret_type,
-                } => {
-                    let hlr = hlr(args, code, &self.globals, &self.types);
+        let mut types_to_compile: HashSet<String> = script
+            .0
+            .iter()
+            .filter(|d| matches!(d, Declaration::Type { .. }))
+            .map(|d| d.name())
+            .collect();
 
-                    let mut arg_types: Vec<Type> = Vec::new();
-                    let mut arg_names: Vec<Arc<str>> = Vec::new();
+        for decl in script.0.iter() {
+            self.push_declaration(&script, decl.clone(), &mut types_to_compile)
+        }
+    }
 
-                    for (var_name, var) in hlr.data_flow.iter() {
-                        if var.is_func_param {
-                            arg_types.push(var.typ.clone());
-                            arg_names.push(var_name.clone());
-                        }
+    pub fn push_declaration(
+        &mut self,
+        script: &Script,
+        decl: Declaration,
+        types_to_compile: &mut HashSet<String>,
+    ) {
+        match decl {
+            Declaration::Function {
+                name,
+                args,
+                code,
+                ret_type,
+            } => {
+                let hlr = hlr(args, code, &self.globals, &self.types);
+
+                let mut arg_types: Vec<Type> = Vec::new();
+                let mut arg_names: Vec<Arc<str>> = Vec::new();
+
+                for (var_name, var) in hlr.data_flow.iter() {
+                    if var.is_func_param {
+                        arg_types.push(var.typ.clone());
+                        arg_names.push(var_name.clone());
                     }
+                }
 
-                    let function_name: String =
-                        llvm_function_name(&name, &arg_types);
-                    let func_ret_type = hlr.types.get_spec(&ret_type).unwrap();
+                let function_name: String = llvm_function_name(&name, &arg_types);
+                let func_ret_type = hlr.types.get_spec(&ret_type).unwrap();
 
-                    let mut fcs = self.new_func_comp_state(
-                        &*function_name,
-                        func_ret_type.clone(),
-                        arg_types.clone(),
-                        arg_names,
-                        hlr.tree,
+                let mut fcs = self.new_func_comp_state(
+                    &*function_name,
+                    func_ret_type.clone(),
+                    arg_types.clone(),
+                    arg_names,
+                    hlr.tree,
+                );
+
+                let basic_block =
+                    fcs.context.append_basic_block(fcs.function, "entry");
+                fcs.builder.position_at_end(basic_block);
+
+                let output = compile(&mut fcs, ExprID::ROOT);
+                fcs.delete();
+
+                if crate::DEBUG {
+                    self.module.print_to_stderr();
+                }
+
+                let function = self.module.get_function(&*function_name).unwrap();
+
+                self.globals.insert(
+                    FunctionDef { name, arg_types },
+                    func_ret_type,
+                    CallableValue::from(function),
+                );
+            },
+            Declaration::Type {
+                name,
+                typ,
+                contains_generics,
+                dependencies,
+            } => {
+                if !types_to_compile.contains(&name) {
+                    return;
+                }
+
+                let uncompiled_dependencies: HashSet<String> = dependencies
+                    .intersection(&types_to_compile)
+                    .map(|s| s.clone())
+                    .collect();
+
+                for typ in uncompiled_dependencies {
+                    self.push_declaration(
+                        script,
+                        script.get_type(typ.clone()).unwrap().clone(),
+                        types_to_compile,
                     );
+                }
 
-                    let basic_block =
-                        fcs.context.append_basic_block(fcs.function, "entry");
-                    fcs.builder.position_at_end(basic_block);
+                types_to_compile.remove(&name);
 
-                    let output = compile(&mut fcs, ExprID::ROOT);
-                    fcs.delete();
-
-                    if crate::DEBUG {
-                        self.module.print_to_stderr();
-                    }
-
-                    let function =
-                        self.module.get_function(&*function_name).unwrap();
-
-                    self.globals.insert(
-                        FunctionDef { name, arg_types },
-                        func_ret_type,
-                        CallableValue::from(function),
-                    );
-                },
-                Declaration::Struct {
-                    name,
-                    typ,
-                    contains_generics,
-                } => {
-                    if contains_generics {
-                        self.types.add_generic_alias(name, typ);
-                    } else {
-                        self.types.add(name, self.types.get_spec(&typ).unwrap());
-                    }
-                },
-            }
+                if contains_generics {
+                    self.types.add_generic_alias(name, typ);
+                } else {
+                    self.types.add(name, self.types.get_spec(&typ).unwrap());
+                }
+            },
         }
     }
 

@@ -2,6 +2,7 @@ pub use crate::lex::Lexer;
 use crate::lex::Tok;
 pub use opcode::Opcode;
 use std::collections::HashMap;
+use std::collections::HashSet;
 pub use std::iter::Peekable;
 
 mod expression;
@@ -43,18 +44,20 @@ pub fn file(mut lexer: Lexer) -> Script {
                 declarations.push(parse_func(&mut lexer, decl_name));
             },
             Some(Tok::LeftCurly) => {
-                let (typ, methods) = parse_advanced_alias(
+                let (typ, methods, dependencies) = parse_advanced_alias(
                     &mut lexer,
-                    &StructParsingContext {
+                    &mut StructParsingContext {
                         generics: generic_labels.clone(),
                         name: decl_name.clone(),
+                        dependencies: HashSet::new(),
                     },
                 );
 
-                let strct = Declaration::Struct {
+                let strct = Declaration::Type {
                     name: decl_name,
                     typ,
                     contains_generics: generic_labels.len() > 0,
+                    dependencies,
                 };
 
                 declarations.push(strct);
