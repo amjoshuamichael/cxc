@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeAlias {
     Named(String),
     Generic(String, Vec<TypeAlias>),
@@ -26,11 +26,11 @@ pub struct StructParsingContext {
 pub fn parse_advanced_alias(
     mut lexer: &mut Lexer,
     context: &mut StructParsingContext,
-    //TODO: use a struct here instead of a tuple
-) -> (TypeAlias, Vec<Declaration>, HashSet<String>) {
+    // TODO: use a struct here instead of a tuple
+) -> (TypeAlias, Vec<FuncDecl>, HashSet<String>) {
     let beginning_of_alias = lexer.peek().unwrap().clone();
 
-    let mut declarations = Vec::default();
+    let mut declarations = Vec::new();
     let type_alias = match beginning_of_alias {
         Tok::LeftCurly => {
             let strct = parse_struct(lexer, context);
@@ -102,7 +102,6 @@ pub fn parse_advanced_alias(
     (type_alias, declarations, context.dependencies.clone())
 }
 
-
 // TODO: introduce a "parse type alias without methods or generics" option,
 // which does require a context, so no name or generic labels
 pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
@@ -113,7 +112,7 @@ pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
 pub fn parse_struct(
     mut lexer: &mut Lexer,
     generic_labels: &mut StructParsingContext,
-) -> (TypeAlias, Vec<Declaration>) {
+) -> (TypeAlias, Vec<FuncDecl>) {
     let mut parts = parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
@@ -131,7 +130,7 @@ pub fn parse_struct(
                 fields.insert(name, typ);
             },
             StructPart::Method { is_static, decl } => {
-                methods.insert(decl.name().clone());
+                methods.insert(decl.name.clone());
                 method_declarations.push(decl);
             },
         }
@@ -142,7 +141,7 @@ pub fn parse_struct(
 
 enum StructPart {
     Field { name: String, typ: TypeAlias },
-    Method { is_static: bool, decl: Declaration },
+    Method { is_static: bool, decl: FuncDecl },
 }
 
 fn parse_struct_part(
@@ -164,10 +163,7 @@ fn parse_struct_part(
 
         let mut decl = parse_func(lexer, name);
 
-        let Declaration::Function { args: ref mut decl_args_ref, .. } = &mut decl 
-            else { unreachable!() };
-
-        decl_args_ref.push(VarDecl {
+        decl.args.push(VarDecl {
             var_name: "self".into(),
             type_spec: Some(TypeAlias::Named(context.name.clone())),
         });

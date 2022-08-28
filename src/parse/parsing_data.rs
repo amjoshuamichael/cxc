@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -26,7 +28,7 @@ pub enum Expr {
     Op(Opcode),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarDecl {
     pub var_name: String,
     pub type_spec: Option<TypeAlias>,
@@ -36,35 +38,83 @@ pub struct VarDecl {
 pub struct Script(pub Vec<Declaration>);
 
 impl Script {
-    pub fn get_type(&self, name: String) -> Option<&Declaration> {
+    pub fn get_type(&self, name: String) -> Option<&TypeDecl> {
         self.0
             .iter()
             .filter(|d| matches!(d, Declaration::Type { .. }))
-            .find(|d| d.name() == name)
+            .find(|d| d.name() == name)?
+            .as_type()
+    }
+
+    pub fn types_iter(&self) -> impl Iterator<Item = &TypeDecl> {
+        self.0
+            .iter()
+            .filter(|d| matches!(d, Declaration::Type { .. }))
+            .map(|d| d.as_type().unwrap())
+    }
+
+    pub fn funcs_iter(&self) -> impl Iterator<Item = &FuncDecl> {
+        self.0
+            .iter()
+            .filter(|d| matches!(d, Declaration::Func { .. }))
+            .map(|d| d.as_func().unwrap())
+    }
+}
+
+// TODO: separate function and type into separate types
+#[derive(Debug, Clone)]
+pub enum Declaration {
+    Func(FuncDecl),
+    Type(TypeDecl),
+}
+
+impl Declaration {
+    pub fn as_func(&self) -> Option<&FuncDecl> {
+        match self {
+            Declaration::Func(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    pub fn as_type(&self) -> Option<&TypeDecl> {
+        match self {
+            Declaration::Type(d) => Some(d),
+            _ => None,
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Declaration {
-    Function {
-        name: String,
-        ret_type: TypeAlias,
-        args: Vec<VarDecl>,
-        code: Expr,
-    },
-    Type {
-        name: String,
-        typ: TypeAlias,
-        contains_generics: bool,
-        dependencies: HashSet<String>,
-    },
+pub struct FuncDecl {
+    pub name: String,
+    pub ret_type: TypeAlias,
+    pub args: Vec<VarDecl>,
+    pub code: Expr,
+}
+
+// impl Hash for FuncDecl {
+//    fn hash<H: Hasher>(&self, state: &mut H) {
+//        self.name.hash(state);
+//        format!("{:?}", self.ret_type).hash(state);
+//        for arg in self.args {
+//            format!("{:?}", arg).hash(state);
+//        }
+//    }
+//}
+
+#[derive(Debug, Clone)]
+pub struct TypeDecl {
+    pub name: String,
+    pub typ: TypeAlias,
+    pub contains_generics: bool,
+    pub dependencies: HashSet<String>,
 }
 
 impl Declaration {
     pub fn name(&self) -> String {
         match self {
-            Declaration::Function { name, .. } => name.clone(),
-            Declaration::Type { name, .. } => name.clone(),
+            Declaration::Func(FuncDecl { name, .. }) => name.clone(),
+            Declaration::Type(TypeDecl { name, .. }) => name.clone(),
         }
     }
 }

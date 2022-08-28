@@ -83,98 +83,149 @@ impl<'u> Unit<'u> {
             .map(|d| d.name())
             .collect();
 
-        for decl in script.0.iter() {
-            self.push_declaration(&script, decl.clone(), &mut types_to_compile)
+        for decl in script.types_iter() {
+            self.add_type(&script, decl, &mut types_to_compile);
+        }
+
+        let mut functions = HashMap::new();
+        for (decl_index, decl) in script.funcs_iter().enumerate() {
+            let (fn_type, func_def) = self.insert_placeholder_for_function(decl);
+
+            functions.insert(decl_index, (fn_type, func_def));
+            // &self.context, &self.module);
+        }
+
+        for (decl_index, decl) in script.funcs_iter().enumerate() {
+            let required_decl_info =
+                (decl.name.clone(), decl.ret_type.clone(), decl.args.clone());
+
+            let (fn_type, func_def) = functions.get(&decl_index).unwrap();
+
+            self.add_function(fn_type.clone(), func_def.clone(), decl);
         }
     }
 
-    pub fn push_declaration(
+    // TODO: create separate function push and type push methods
+    pub fn add_type(
         &mut self,
         script: &Script,
-        decl: Declaration,
+        decl: &TypeDecl,
         types_to_compile: &mut HashSet<String>,
     ) {
-        match decl {
-            Declaration::Function {
-                name,
-                args,
-                code,
-                ret_type,
-            } => {
-                let hlr = hlr(args, code, &self.globals, &self.types);
-
-                let mut arg_types: Vec<Type> = Vec::new();
-                let mut arg_names: Vec<Arc<str>> = Vec::new();
-
-                for (var_name, var) in hlr.data_flow.iter() {
-                    if var.is_func_param {
-                        arg_types.push(var.typ.clone());
-                        arg_names.push(var_name.clone());
-                    }
-                }
-
-                let function_name: String = llvm_function_name(&name, &arg_types);
-                let func_ret_type = hlr.types.get_spec(&ret_type).unwrap();
-
-                let mut fcs = self.new_func_comp_state(
-                    &*function_name,
-                    func_ret_type.clone(),
-                    arg_types.clone(),
-                    arg_names,
-                    hlr.tree,
-                );
-
-                let basic_block =
-                    fcs.context.append_basic_block(fcs.function, "entry");
-                fcs.builder.position_at_end(basic_block);
-
-                let output = compile(&mut fcs, ExprID::ROOT);
-                fcs.delete();
-
-                if crate::DEBUG {
-                    self.module.print_to_stderr();
-                }
-
-                let function = self.module.get_function(&*function_name).unwrap();
-
-                self.globals.insert(
-                    FunctionDef { name, arg_types },
-                    func_ret_type,
-                    CallableValue::from(function),
-                );
-            },
-            Declaration::Type {
-                name,
-                typ,
-                contains_generics,
-                dependencies,
-            } => {
-                if !types_to_compile.contains(&name) {
-                    return;
-                }
-
-                let uncompiled_dependencies: HashSet<String> = dependencies
-                    .intersection(&types_to_compile)
-                    .map(|s| s.clone())
-                    .collect();
-
-                for typ in uncompiled_dependencies {
-                    self.push_declaration(
-                        script,
-                        script.get_type(typ.clone()).unwrap().clone(),
-                        types_to_compile,
-                    );
-                }
-
-                types_to_compile.remove(&name);
-
-                if contains_generics {
-                    self.types.add_generic_alias(name, typ);
-                } else {
-                    self.types.add(name, self.types.get_spec(&typ).unwrap());
-                }
-            },
+        if !types_to_compile.contains(&decl.name) {
+            return;
         }
+
+        let uncompiled_dependencies: HashSet<String> = decl
+            .dependencies
+            .intersection(&types_to_compile)
+            .map(|s| s.clone())
+            .collect();
+
+        for dep_name in uncompiled_dependencies {
+            let typ_decl = script.get_type(dep_name.clone()).unwrap().clone();
+
+            self.add_type(script, &typ_decl, types_to_compile);
+        }
+
+        types_to_compile.remove(&decl.name);
+
+        if decl.contains_generics {
+            self.types
+                .add_generic_alias(decl.name.clone(), decl.typ.clone());
+        } else {
+            self.types
+                .add(decl.name.clone(), self.types.get_spec(&decl.typ).unwrap());
+        }
+    }
+
+    pub fn insert_placeholder_for_function(
+        &mut self,
+        decl: &FuncDecl,
+        // TODO: return struct instead of tuple
+    ) -> (Type, FunctionDef) {
+        let (function_def, func_ret_type) = self.get_function_info(decl);
+
+        let function_name: String =
+            llvm_function_name(&decl.name, &function_def.arg_types);
+
+        let function_type = func_ret_type
+            .clone()
+            .func_with_args(function_def.arg_types.clone());
+
+        let function = self.module.add_function(
+            &*function_name,
+            function_type.to_any_type(self.context).into_function_type(),
+            None,
+        );
+
+        self.globals.insert(
+            function_def.clone(),
+            func_ret_type,
+            CallableValue::from(function),
+        );
+
+        (function_type, function_def)
+    }
+
+    pub fn add_function(
+        &mut self,
+        fn_type: Type,
+        function_def: FunctionDef,
+        decl: &FuncDecl,
+    ) {
+        let hlr =
+            hlr(decl.args.clone(), decl.code.clone(), &self.globals, &self.types);
+
+        let function = self.globals.get_value(function_def.clone()).unwrap();
+        dbg!(&function);
+
+        let arg_names = decl.args.iter().map(|v| Arc::from(&*v.var_name)).collect();
+
+        let mut fcs = self.new_func_comp_state(
+            &*function_def.name,
+            hlr.tree,
+            function.into_function_value(),
+            arg_names,
+        );
+
+        let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
+        fcs.builder.position_at_end(basic_block);
+
+        let output = compile(&mut fcs, ExprID::ROOT);
+        fcs.delete();
+
+        if crate::DEBUG {
+            self.module.print_to_stderr();
+        }
+    }
+
+    pub fn get_function_info(&self, decl: &FuncDecl) -> (FunctionDef, Type) {
+        let mut arg_types: Vec<Type> = Vec::new();
+        let mut arg_names: Vec<Arc<str>> = Vec::new();
+
+        for arg in decl.args.iter() {
+            let var_type = self
+                .types
+                .get_spec(arg.type_spec.as_ref().unwrap())
+                .unwrap()
+                .clone();
+            arg_types.push(var_type);
+
+            let var_name: Arc<str> = Arc::from(&*arg.var_name);
+            arg_names.push(var_name);
+        }
+
+        // let name: String = llvm_function_name(&name, &arg_types);
+        let func_ret_type = self.types.get_spec(&decl.ret_type).unwrap();
+
+        (
+            FunctionDef {
+                name: decl.name.clone(),
+                arg_types,
+            },
+            func_ret_type,
+        )
     }
 
     pub fn add_external_function(
@@ -220,20 +271,10 @@ impl<'u> Unit<'u> {
     fn new_func_comp_state<'s>(
         &'s self,
         name: &str,
-        ret_type: Type,
-        arg_types: Vec<Type>,
-        arg_names: Vec<Arc<str>>,
         tree: ExprTree,
+        function: FunctionValue<'s>,
+        arg_names: Vec<Arc<str>>,
     ) -> FunctionCompilationState<'s> {
-        let arg_types: Vec<BasicMetadataTypeEnum> = arg_types
-            .iter()
-            .map(|typ| typ.to_basic_type(self.context).into())
-            .collect();
-        let fn_type = ret_type
-            .to_basic_type(self.context)
-            .fn_type(&arg_types[..], false);
-        let function = self.module.add_function(name, fn_type, None);
-
         FunctionCompilationState {
             tree,
             variables: HashMap::new(),
@@ -249,6 +290,7 @@ impl<'u> Unit<'u> {
     pub fn get_fn<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
         let arg_types = &self.globals.funcs_with_name(name.into())[0].arg_types;
         let func_name = llvm_function_name(&name.into(), arg_types);
+        dbg!(&func_name);
 
         unsafe {
             let func_addr = self

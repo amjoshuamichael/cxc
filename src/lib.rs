@@ -6,7 +6,7 @@
 #![feature(box_syntax)]
 #[macro_use]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 
 mod hlr;
 mod lex;
@@ -549,5 +549,29 @@ mod tests {
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
+    }
+
+    #[test]
+    fn backwards_call() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_std_lib();
+
+        unit.push_script(
+            "
+            courthouse_1955(): i32 {
+                gigawatt_count: f32 = courthouse_1985()
+                assert_eq(gigawatt_count, 1.21) # great scott!
+
+                ! 1
+            }
+            
+            courthouse_1985(): f32 {
+                ! 1.21
+            }
+            ",
+        );
+
+        unsafe { unit.get_fn::<(), i32>("courthouse_1955")(()) };
     }
 }

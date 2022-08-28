@@ -1,4 +1,6 @@
 use crate::hlr::prelude::*;
+use inkwell::context::Context;
+use inkwell::module::Module;
 use inkwell::values::CallableValue;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -8,7 +10,7 @@ pub struct Functions<'a>(HashMap<FunctionDef, FuncValAndType<'a>>);
 
 #[derive(Debug)]
 pub struct FuncValAndType<'a> {
-    pub val: CallableValue<'a>,
+    pub val: Option<CallableValue<'a>>,
     pub ret_type: Type,
 }
 
@@ -25,8 +27,47 @@ impl<'a> Functions<'a> {
         ret_type: Type,
         val: CallableValue<'a>,
     ) {
-        self.0
-            .insert(function_def, FuncValAndType { ret_type, val });
+        self.0.insert(
+            function_def,
+            FuncValAndType {
+                ret_type,
+                val: Some(val),
+            },
+        );
+    }
+
+    pub fn replace(
+        &mut self,
+        function_def: FunctionDef,
+        ret_type: Type,
+        val: CallableValue<'a>,
+    ) {
+        *(self.0.get_mut(&function_def).unwrap()) = FuncValAndType {
+            ret_type,
+            val: Some(val),
+        };
+    }
+
+    pub fn insert_placeholder(
+        &mut self,
+        function_def: FunctionDef,
+        ret_type: Type,
+        context: &'a Context,
+        module: &Module<'a>,
+    ) {
+        let function = module.add_function(
+            &*function_def.name,
+            context.void_type().fn_type(&[], false),
+            None,
+        );
+
+        self.0.insert(
+            function_def,
+            FuncValAndType {
+                ret_type,
+                val: Some(CallableValue::from(function)),
+            },
+        );
     }
 
     pub fn name_exists(&self, name: String) -> bool {
@@ -42,7 +83,7 @@ impl<'a> Functions<'a> {
     }
 
     pub fn get_value(&self, def: FunctionDef) -> Option<CallableValue<'a>> {
-        self.get_func(def).map(|t| t.val.clone())
+        self.get_func(def).map(|t| t.val.clone())?
     }
 
     pub fn get_type(&self, mut def: FunctionDef) -> Option<Type> {

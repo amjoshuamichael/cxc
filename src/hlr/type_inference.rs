@@ -5,7 +5,7 @@ use crate::unit::Functions;
 use std::any::type_name;
 use std::collections::HashMap;
 
-pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
+pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
     let mut type_by_id = HashMap::new();
 
     for (n, node) in hlr.tree.top_down_iter() {
@@ -42,8 +42,6 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
 
         type_by_id.insert(n, node.ret_type());
     }
-
-    dbg!(&hlr.data_flow);
 
     for (n, node) in hlr.tree.top_down_iter().rev() {
         match node {
@@ -120,7 +118,8 @@ pub fn infer_types(hlr: &mut FuncRep, globals: &Functions) {
                 };
 
                 dbg!(&new_def);
-                let return_type = globals.get_type(new_def.clone()).unwrap();
+                dbg!(&functions);
+                let return_type = functions.get_type(new_def.clone()).unwrap();
 
                 *ret_type = return_type.clone();
                 *def = Some(new_def);
