@@ -41,11 +41,12 @@ pub fn file(mut lexer: Lexer) -> Script {
 
         match lexer.peek() {
             Some(Tok::LeftParen) => {
-                declarations
-                    .push(Declaration::Func(parse_func(&mut lexer, decl_name)));
+                declarations.push(Declaration::Func(parse_func(
+                    &mut lexer, decl_name, false,
+                )));
             },
             Some(Tok::LeftCurly) => {
-                let (typ, methods, dependencies) = parse_advanced_alias(
+                let parse_output = parse_advanced_alias(
                     &mut lexer,
                     &mut StructParsingContext {
                         generics: generic_labels.clone(),
@@ -56,14 +57,14 @@ pub fn file(mut lexer: Lexer) -> Script {
 
                 let strct = TypeDecl {
                     name: decl_name,
-                    typ,
+                    typ: parse_output.alias,
                     contains_generics: generic_labels.len() > 0,
-                    dependencies,
+                    dependencies: parse_output.dependencies,
                 };
 
                 declarations.push(Declaration::Type(strct));
 
-                for m in methods {
+                for m in parse_output.methods {
                     declarations.push(Declaration::Func(m));
                 }
             },
@@ -83,7 +84,7 @@ pub fn parse_generic_label(lexer: &mut Lexer) -> String {
     }
 }
 
-pub fn parse_func(lexer: &mut Lexer, name: String) -> FuncDecl {
+pub fn parse_func(lexer: &mut Lexer, name: String, is_method: bool) -> FuncDecl {
     let args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
@@ -102,6 +103,7 @@ pub fn parse_func(lexer: &mut Lexer, name: String) -> FuncDecl {
         ret_type,
         args,
         code,
+        is_method,
     }
 }
 

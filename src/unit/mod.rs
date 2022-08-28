@@ -25,10 +25,11 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::path::Path;
 use std::sync::Arc;
+
 mod globals;
 
 use crate::to_llvm::*;
-pub use globals::{FunctionDef, Functions};
+pub use globals::{Functions, UniqueFuncData};
 
 pub struct Unit<'u> {
     pub execution_engine: ExecutionEngine<'u>,
@@ -92,7 +93,6 @@ impl<'u> Unit<'u> {
             let (fn_type, func_def) = self.insert_placeholder_for_function(decl);
 
             functions.insert(decl_index, (fn_type, func_def));
-            // &self.context, &self.module);
         }
 
         for (decl_index, decl) in script.funcs_iter().enumerate() {
@@ -105,7 +105,6 @@ impl<'u> Unit<'u> {
         }
     }
 
-    // TODO: create separate function push and type push methods
     pub fn add_type(
         &mut self,
         script: &Script,
@@ -142,16 +141,14 @@ impl<'u> Unit<'u> {
     pub fn insert_placeholder_for_function(
         &mut self,
         decl: &FuncDecl,
-        // TODO: return struct instead of tuple
-    ) -> (Type, FunctionDef) {
-        let (function_def, func_ret_type) = self.get_function_info(decl);
+    ) -> (Type, UniqueFuncData) {
+        let (unique_data, func_ret_type) = self.get_function_info(decl);
 
-        let function_name: String =
-            llvm_function_name(&decl.name, &function_def.arg_types);
+        let function_name = unique_data.to_string();
 
         let function_type = func_ret_type
             .clone()
-            .func_with_args(function_def.arg_types.clone());
+            .func_with_args(unique_data.arg_types().clone());
 
         let function = self.module.add_function(
             &*function_name,
@@ -160,30 +157,28 @@ impl<'u> Unit<'u> {
         );
 
         self.globals.insert(
-            function_def.clone(),
+            unique_data.clone(),
             func_ret_type,
             CallableValue::from(function),
         );
 
-        (function_type, function_def)
+        (function_type, unique_data)
     }
 
     pub fn add_function(
         &mut self,
         fn_type: Type,
-        function_def: FunctionDef,
+        function_def: UniqueFuncData,
         decl: &FuncDecl,
     ) {
         let hlr =
             hlr(decl.args.clone(), decl.code.clone(), &self.globals, &self.types);
 
         let function = self.globals.get_value(function_def.clone()).unwrap();
-        dbg!(&function);
 
         let arg_names = decl.args.iter().map(|v| Arc::from(&*v.var_name)).collect();
 
         let mut fcs = self.new_func_comp_state(
-            &*function_def.name,
             hlr.tree,
             function.into_function_value(),
             arg_names,
@@ -200,7 +195,7 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn get_function_info(&self, decl: &FuncDecl) -> (FunctionDef, Type) {
+    pub fn get_function_info(&self, decl: &FuncDecl) -> (UniqueFuncData, Type) {
         let mut arg_types: Vec<Type> = Vec::new();
         let mut arg_names: Vec<Arc<str>> = Vec::new();
 
@@ -219,13 +214,7 @@ impl<'u> Unit<'u> {
         // let name: String = llvm_function_name(&name, &arg_types);
         let func_ret_type = self.types.get_spec(&decl.ret_type).unwrap();
 
-        (
-            FunctionDef {
-                name: decl.name.clone(),
-                arg_types,
-            },
-            func_ret_type,
-        )
+        (UniqueFuncData::from(&decl.name, &arg_types, decl.is_method), func_ret_type)
     }
 
     pub fn add_external_function(
@@ -235,6 +224,8 @@ impl<'u> Unit<'u> {
         arg_types: Vec<Type>,
         ret_type: Type,
     ) {
+        let name = String::from(name);
+
         let function_address = function as u64;
 
         let ink_arg_types: Vec<BasicMetadataTypeEnum> = arg_types
@@ -259,10 +250,7 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap();
 
         self.globals.insert(
-            FunctionDef {
-                name: String::from(name),
-                arg_types,
-            },
+            UniqueFuncData::from(&name, &arg_types, false),
             ret_type,
             callable_value,
         );
@@ -270,7 +258,6 @@ impl<'u> Unit<'u> {
 
     fn new_func_comp_state<'s>(
         &'s self,
-        name: &str,
         tree: ExprTree,
         function: FunctionValue<'s>,
         arg_names: Vec<Arc<str>>,
@@ -288,9 +275,7 @@ impl<'u> Unit<'u> {
     }
 
     pub fn get_fn<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
-        let arg_types = &self.globals.funcs_with_name(name.into())[0].arg_types;
-        let func_name = llvm_function_name(&name.into(), arg_types);
-        dbg!(&func_name);
+        let func_name = &self.globals.funcs_with_name(name.into())[0].to_string();
 
         unsafe {
             let func_addr = self
@@ -306,9 +291,7 @@ impl<'u> Unit<'u> {
         }
     }
 
-    // TODO: this is only being used for testing functions.
-    // Other rust functions should be added as well.
-    pub fn add_std_lib(&mut self) {
+    pub fn add_test_lib(&mut self) {
         self.add_external_function(
             "stdprint",
             print::<i32> as *const usize,
@@ -348,11 +331,3 @@ impl<'u> Unit<'u> {
 
 fn print<T: Display>(num: T) { println!("{num}") }
 fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }
-
-pub fn llvm_function_name(og_name: &String, arg_types: &Vec<Type>) -> String {
-    // TODO: make these nescessarily unique
-    format!("{:?}{:?}", og_name, arg_types)
-        .chars()
-        .filter(|c| c.is_alphanumeric() || matches!(c, '_'))
-        .collect()
-}

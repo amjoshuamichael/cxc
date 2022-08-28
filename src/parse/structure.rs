@@ -23,24 +23,29 @@ pub struct StructParsingContext {
     pub dependencies: HashSet<String>,
 }
 
+pub struct TypeParsingOutput {
+    pub alias: TypeAlias,
+    pub methods: Vec<FuncDecl>,
+    pub dependencies: HashSet<String>,
+}
+
 pub fn parse_advanced_alias(
     mut lexer: &mut Lexer,
     context: &mut StructParsingContext,
-    // TODO: use a struct here instead of a tuple
-) -> (TypeAlias, Vec<FuncDecl>, HashSet<String>) {
+) -> TypeParsingOutput {
     let beginning_of_alias = lexer.peek().unwrap().clone();
 
-    let mut declarations = Vec::new();
+    let mut methods = Vec::new();
     let type_alias = match beginning_of_alias {
         Tok::LeftCurly => {
             let strct = parse_struct(lexer, context);
-            declarations = strct.1;
+            methods = strct.1;
             strct.0
         },
         Tok::AmpersandSet(count) => {
             lexer.next();
 
-            let mut output = parse_advanced_alias(lexer, context).0;
+            let mut output = parse_advanced_alias(lexer, context).alias;
 
             for _ in 0..count {
                 output = TypeAlias::Ref(box output);
@@ -70,7 +75,7 @@ pub fn parse_advanced_alias(
                 let generics = parse_list(
                     (Tok::LeftAngle, Tok::RghtAngle),
                     Some(Tok::Comma),
-                    |lexer| parse_advanced_alias(lexer, context).0,
+                    |lexer| parse_advanced_alias(lexer, context).alias,
                     lexer,
                 );
 
@@ -88,7 +93,7 @@ pub fn parse_advanced_alias(
 
     let suffix = lexer.peek().unwrap().clone();
 
-    let type_alias = match suffix {
+    let alias = match suffix {
         Tok::LeftBrack => {
             lexer.next();
             let Some(Tok::Int(count)) = lexer.next() else { panic!() };
@@ -99,14 +104,16 @@ pub fn parse_advanced_alias(
         _ => type_alias,
     };
 
-    (type_alias, declarations, context.dependencies.clone())
+    TypeParsingOutput {
+        alias,
+        methods,
+        dependencies: context.dependencies.clone(),
+    }
 }
 
-// TODO: introduce a "parse type alias without methods or generics" option,
-// which does require a context, so no name or generic labels
 pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
     let mut context = StructParsingContext::default();
-    parse_advanced_alias(lexer, &mut context).0
+    parse_advanced_alias(lexer, &mut context).alias
 }
 
 pub fn parse_struct(
@@ -153,15 +160,14 @@ fn parse_struct_part(
     if let Some(name) = beginning_of_part.clone().ident_name() {
         lexer.next();
         assert_eq!(Some(Tok::Colon), lexer.next());
-        let typ = parse_advanced_alias(lexer, context).0;
+        let typ = parse_advanced_alias(lexer, context).alias;
 
         StructPart::Field { name, typ }
     } else if beginning_of_part == Tok::Dot {
         lexer.next();
         let name = lexer.next().unwrap().ident_name().unwrap();
-        let name = context.name.clone() + &*name;
 
-        let mut decl = parse_func(lexer, name);
+        let mut decl = parse_func(lexer, name, true);
 
         decl.args.push(VarDecl {
             var_name: "self".into(),

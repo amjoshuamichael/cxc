@@ -1,6 +1,6 @@
 use super::prelude::*;
 use crate::parse::*;
-use crate::unit::FunctionDef;
+use crate::unit::UniqueFuncData;
 use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -154,7 +154,8 @@ pub enum NodeData {
         ret_type: Type,
         f: String,
         a: Vec<ExprID>,
-        def: Option<FunctionDef>,
+        data: Option<UniqueFuncData>,
+        is_method: bool,
     },
     Member {
         ret_type: Type,

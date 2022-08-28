@@ -228,7 +228,7 @@ impl FuncRep {
                 self.tree.replace(space, new_binop);
                 space
             },
-            Expr::Call(f, args) => {
+            Expr::Call(f, args, is_method) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut arg_ids = Vec::new();
@@ -241,7 +241,8 @@ impl FuncRep {
                     ret_type: Type::never(),
                     f,
                     a: arg_ids,
-                    def: None,
+                    data: None,
+                    is_method,
                 };
 
                 self.tree.replace(space, new_data);

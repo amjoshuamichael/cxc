@@ -104,10 +104,10 @@ pub fn calls(atoms: &mut Vec<Expr>) {
         let being_called = atoms.remove(args_pos - 1);
 
         if let Expr::Ident(name) = being_called {
-            atoms.push(Expr::Call(name, args));
+            atoms.push(Expr::Call(name, args, false));
         } else if let Expr::Member(object, field) = being_called {
             args.push(*object);
-            atoms.push(Expr::Call(field, args));
+            atoms.push(Expr::Call(field, args, true));
         }
     }
 }

@@ -47,19 +47,20 @@ pub fn compile<'comp>(
     }
 
     let output: Option<AnyValueEnum> = match expr {
-        Number { ref value, .. } => {
-            // TODO: implement different int types
-            Some(
-                fcs.context
-                    .i32_type()
-                    .const_int(value.try_into().unwrap(), false)
-                    .into(),
-            )
-        },
-        Float { ref value, .. } => {
-            // TODO: implement different int types
-            Some(fcs.context.f32_type().const_float(*value).into())
-        },
+        Number { ref value, .. } => Some(
+            Type::int_of_size(32)
+                .to_any_type(&fcs.context)
+                .into_int_type()
+                .const_int(value.try_into().unwrap(), false)
+                .into(),
+        ),
+        Float { ref value, .. } => Some(
+            Type::float_of_size(32)
+                .to_any_type(&fcs.context)
+                .into_float_type()
+                .const_float(*value)
+                .into(),
+        ),
         Ident { ref name, .. } => {
             dbg!(&fcs.arg_names);
             if fcs.arg_names.contains(name) {
@@ -331,8 +332,8 @@ pub fn compile<'comp>(
             },
             _ => todo!(),
         },
-        Call { f, a, def, .. } => {
-            let function = fcs.globals.get_value(def.unwrap()).unwrap();
+        Call { f, a, data, .. } => {
+            let function = fcs.globals.get_value(data.unwrap()).unwrap();
             let is_extern = function.as_any_value_enum().is_pointer_value();
 
             let mut arg_vals = Vec::new();
@@ -379,7 +380,6 @@ pub fn compile<'comp>(
 
             let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
 
-            // TODO: sort during funcrep
             for field_index in 0..struct_type.field_count() {
                 let field = fields
                     .iter()

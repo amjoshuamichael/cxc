@@ -106,7 +106,7 @@ mod tests {
     fn call_test() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
-        unit.add_std_lib();
+        unit.add_test_lib();
 
         unit.push_script(
             "
@@ -399,7 +399,7 @@ mod tests {
     fn methods() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
-        unit.add_std_lib();
+        unit.add_test_lib();
 
         unit.push_script(
             "
@@ -438,7 +438,7 @@ mod tests {
     fn arrays() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
-        unit.add_std_lib();
+        unit.add_test_lib();
 
         unit.push_script(
             "
@@ -473,7 +473,7 @@ mod tests {
     fn struct_arrays() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
-        unit.add_std_lib();
+        unit.add_test_lib();
 
         unit.push_script(
             "
@@ -514,7 +514,7 @@ mod tests {
     fn backwards_struct_dependency() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
-        unit.add_std_lib();
+        unit.add_test_lib();
 
         unit.push_script(
             "
@@ -555,7 +555,7 @@ mod tests {
     fn backwards_call() {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
-        unit.add_std_lib();
+        unit.add_test_lib();
 
         unit.push_script(
             "

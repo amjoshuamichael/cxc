@@ -1,7 +1,7 @@
 use super::prelude::*;
 use crate::parse::*;
-use crate::unit::FunctionDef;
 use crate::unit::Functions;
+use crate::unit::UniqueFuncData;
 use std::any::type_name;
 use std::collections::HashMap;
 
@@ -105,24 +105,24 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                 ref mut ret_type,
                 f,
                 a,
-                def,
+                data,
+                is_method,
             } => {
                 let arg_types = a
                     .iter()
                     .map(|id| type_by_id.get_mut(&id).unwrap().clone())
                     .collect();
 
-                let new_def = FunctionDef {
-                    name: f.clone(),
-                    arg_types,
-                };
+                let new_data = UniqueFuncData::from(
+                    f,
+                    &arg_types,
+                    *is_method,
+                );
 
-                dbg!(&new_def);
-                dbg!(&functions);
-                let return_type = functions.get_type(new_def.clone()).unwrap();
+                let return_type = functions.get_type(new_data.clone()).unwrap();
 
                 *ret_type = return_type.clone();
-                *def = Some(new_def);
+                *data = Some(new_data);
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },

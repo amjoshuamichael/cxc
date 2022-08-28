@@ -12,7 +12,7 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
     SetVar(Box<Expr>, Box<Expr>),
-    Call(String, Vec<Expr>),
+    Call(String, Vec<Expr>, bool),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
     Member(Box<Expr>, String),
@@ -61,7 +61,6 @@ impl Script {
     }
 }
 
-// TODO: separate function and type into separate types
 #[derive(Debug, Clone)]
 pub enum Declaration {
     Func(FuncDecl),
@@ -90,6 +89,7 @@ pub struct FuncDecl {
     pub ret_type: TypeAlias,
     pub args: Vec<VarDecl>,
     pub code: Expr,
+    pub is_method: bool,
 }
 
 // impl Hash for FuncDecl {

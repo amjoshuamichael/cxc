@@ -48,7 +48,7 @@ pub fn hlr(
     output
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TypeArc(Arc<TypeEnum>);
 
 impl Debug for TypeArc {
@@ -100,7 +100,15 @@ impl TypeArc {
     }
 
     pub fn float_of_size(size: u32) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Float(FloatType { size })))
+        let float_type = match size {
+            16 => FloatType::F16,
+            32 => FloatType::F32,
+            64 => FloatType::F64,
+            128 => FloatType::F128,
+            _ => panic!(),
+        };
+
+        TypeArc(Arc::new(TypeEnum::Float(float_type)))
     }
 
     pub fn new_struct(
@@ -138,7 +146,7 @@ pub trait Type {
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t>;
 }
 
-#[derive(Default, PartialEq, Eq, Hash)]
+#[derive(Default, PartialEq, Eq)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -175,7 +183,7 @@ impl Deref for TypeEnum {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 pub struct RefType {
     base: TypeArc,
 }
@@ -191,7 +199,7 @@ impl Type for RefType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 pub struct FuncType {
     pub return_type: TypeArc,
     pub args: Vec<TypeArc>,
@@ -222,20 +230,10 @@ impl Type for FuncType {
     }
 }
 
-// TODO: save name of struct into struct so that method name lookup is more
-// consistant
 #[derive(PartialEq, Eq)]
 pub struct StructType {
     pub fields: IndexMap<String, TypeArc>,
     pub methods: HashSet<String>,
-}
-
-// TODO: make this faster
-impl Hash for StructType {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.fields.iter().collect::<Vec<_>>().hash(state);
-        self.methods.iter().collect::<Vec<_>>().hash(state);
-    }
 }
 
 impl StructType {
@@ -244,7 +242,7 @@ impl StructType {
     }
 
     pub fn get_full_method_name(&self, field_name: &String) -> Option<&String> {
-        self.methods.iter().find(|m| m.find(field_name).is_some())
+        self.methods.iter().find(|m| m == &field_name)
     }
 
     pub fn get_field_index(&self, field_name: &String) -> usize {
@@ -281,7 +279,7 @@ impl Type for StructType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
@@ -295,21 +293,36 @@ impl Type for IntType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
-pub struct FloatType {
-    pub size: u32,
+#[derive(PartialEq, Eq, Debug)]
+pub enum FloatType {
+    F16,
+    F32,
+    F64,
+    F128,
 }
 
 impl Type for FloatType {
-    fn name(&self) -> String { format!("f{}", self.size) }
+    fn name(&self) -> String {
+        match self {
+            FloatType::F16 => "f16",
+            FloatType::F32 => "f32",
+            FloatType::F64 => "f64",
+            FloatType::F128 => "f128",
+        }
+        .to_string()
+    }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        // TODO: implement different sized floats
-        context.f32_type().as_any_type_enum()
+        match self {
+            FloatType::F16 => context.f16_type().as_any_type_enum(),
+            FloatType::F32 => context.f32_type().as_any_type_enum(),
+            FloatType::F64 => context.f64_type().as_any_type_enum(),
+            FloatType::F128 => context.f128_type().as_any_type_enum(),
+        }
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 pub struct NeverType();
 
 pub static NEVER_STATIC: NeverType = NeverType();
@@ -322,7 +335,7 @@ impl Type for NeverType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq)]
 pub struct ArrayType {
     base: TypeArc,
     count: u32,
