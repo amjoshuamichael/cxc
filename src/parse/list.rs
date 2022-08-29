@@ -5,10 +5,10 @@ pub fn parse_list<T, U>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
     mut parser: U,
-    lexer: &mut Lexer,
+    lexer: &mut Context,
 ) -> Vec<T>
 where
-    U: FnMut(&mut Lexer) -> T,
+    U: FnMut(&mut Context) -> T,
 {
     let (opener, closer) = opener_and_closer;
 

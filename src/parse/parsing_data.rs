@@ -59,6 +59,13 @@ impl Script {
             .filter(|d| matches!(d, Declaration::Func { .. }))
             .map(|d| d.as_func().unwrap())
     }
+
+    pub fn remove_generic_funcs(&mut self) {
+        self.0.retain(|d| match d {
+            Declaration::Func(d) => !d.contains_generics,
+            _ => true,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -90,17 +97,10 @@ pub struct FuncDecl {
     pub args: Vec<VarDecl>,
     pub code: Expr,
     pub is_method: bool,
+    pub contains_generics: bool,
+    pub dependencies: Vec<(String, Vec<TypeAlias>)>,
+    pub generics: Vec<TypeAlias>,
 }
-
-// impl Hash for FuncDecl {
-//    fn hash<H: Hasher>(&self, state: &mut H) {
-//        self.name.hash(state);
-//        format!("{:?}", self.ret_type).hash(state);
-//        for arg in self.args {
-//            format!("{:?}", arg).hash(state);
-//        }
-//    }
-//}
 
 #[derive(Debug, Clone)]
 pub struct TypeDecl {

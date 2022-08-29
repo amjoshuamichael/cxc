@@ -1,14 +1,17 @@
-use crate::parse::Opcode;
+use crate::parse::{Opcode, TypeAlias};
 use logos::{Lexer as LogosLexer, Logos};
+use std::collections::{HashMap, HashSet};
 
 pub mod parse_num;
 
-pub struct Lexer {
+pub struct Context {
     inner: Vec<Tok>,
     current_ptr: usize,
+    pub generic_labels: HashMap<String, u8>,
+    pub func_dependencies: Vec<(String, Vec<TypeAlias>)>,
 }
 
-impl Lexer {
+impl Context {
     pub fn next(&mut self) -> Option<Tok> {
         let out = self.get(self.current_ptr, true);
         self.current_ptr += 1;
@@ -43,16 +46,18 @@ impl Lexer {
     }
 }
 
-impl From<LogosLexer<'_, Tok>> for Lexer {
+impl From<LogosLexer<'_, Tok>> for Context {
     fn from(og: LogosLexer<Tok>) -> Self {
-        Lexer {
+        Context {
             inner: og.collect(),
             current_ptr: 0,
+            generic_labels: HashMap::new(),
+            func_dependencies: Vec::new(),
         }
     }
 }
 
-pub fn lex(input: &str) -> Lexer { Lexer::from(Tok::lexer(input)) }
+pub fn lex(input: &str) -> Context { Context::from(Tok::lexer(input)) }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Tok {

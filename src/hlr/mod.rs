@@ -37,8 +37,9 @@ pub fn hlr(
     code: Expr,
     globals: &Functions,
     types: &TypeGroup,
+    generics: Vec<TypeAlias>,
 ) -> FuncRep {
-    let mut output = FuncRep::from(args, code, types);
+    let mut output = FuncRep::from(args, code, types, generics);
     infer_types(&mut output, globals);
 
     if crate::DEBUG {

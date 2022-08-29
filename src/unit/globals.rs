@@ -5,12 +5,13 @@ use inkwell::values::CallableValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::UniqueFuncData;
-
 type ValAndType<'a> = (Type, CallableValue<'a>);
 
 #[derive(Default, Debug)]
-pub struct Functions<'a>(HashMap<UniqueFuncData, ValAndType<'a>>);
+pub struct Functions<'a> {
+    compiled: HashMap<UniqueFuncData, ValAndType<'a>>,
+    generics: HashMap<String, FuncDecl>,
+}
 
 impl<'a> Functions<'a> {
     pub fn insert(
@@ -19,7 +20,7 @@ impl<'a> Functions<'a> {
         ret_type: Type,
         val: CallableValue<'a>,
     ) {
-        self.0.insert(unique_name, (ret_type, val));
+        self.compiled.insert(unique_name, (ret_type, val));
     }
 
     pub fn insert_placeholder(
@@ -35,8 +36,24 @@ impl<'a> Functions<'a> {
             None,
         );
 
-        self.0
+        self.compiled
             .insert(unique_name, (ret_type, CallableValue::from(function)));
+    }
+
+    pub fn insert_generic(&mut self, decl: FuncDecl) {
+        self.generics.insert(decl.name.clone(), decl);
+    }
+
+    pub fn get_generic(
+        &mut self,
+        name: String,
+        generics: Vec<TypeAlias>,
+    ) -> Option<FuncDecl> {
+        let mut decl = self.generics.get(&name)?.clone();
+        decl.contains_generics = false;
+        decl.generics = generics;
+        decl.dependencies = Vec::new();
+        Some(decl)
     }
 
     pub fn name_exists(&self, name: String) -> bool {
@@ -48,7 +65,7 @@ impl<'a> Functions<'a> {
     }
 
     pub fn funcs_with_name(&self, name: String) -> Vec<&UniqueFuncData> {
-        self.0
+        self.compiled
             .keys()
             .filter(|u_name| u_name.og_name() == name)
             .collect()
@@ -63,7 +80,7 @@ impl<'a> Functions<'a> {
     }
 
     pub fn get_func(&self, name: UniqueFuncData) -> Option<&ValAndType> {
-        self.0.get(&name)
+        self.compiled.get(&name)
     }
 }
 

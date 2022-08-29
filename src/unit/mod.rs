@@ -75,7 +75,7 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let script = crate::parse::file(lexed);
+        let mut script = crate::parse::file(lexed);
 
         let mut types_to_compile: HashSet<String> = script
             .0
@@ -89,6 +89,26 @@ impl<'u> Unit<'u> {
         }
 
         let mut functions = HashMap::new();
+
+        for decl in script.funcs_iter() {
+            if decl.contains_generics {
+                self.globals.insert_generic(decl.clone());
+            }
+        }
+
+        script.remove_generic_funcs();
+
+        let dependencies: Vec<(String, Vec<TypeAlias>)> = script
+            .funcs_iter()
+            .map(|d| d.dependencies.clone())
+            .flatten()
+            .collect();
+
+        for dep in dependencies {
+            let decl = self.globals.get_generic(dep.0, dep.1).unwrap();
+            script.0.push(Declaration::Func(decl));
+        }
+
         for (decl_index, decl) in script.funcs_iter().enumerate() {
             let (fn_type, func_def) = self.insert_placeholder_for_function(decl);
 
@@ -171,8 +191,13 @@ impl<'u> Unit<'u> {
         function_def: UniqueFuncData,
         decl: &FuncDecl,
     ) {
-        let hlr =
-            hlr(decl.args.clone(), decl.code.clone(), &self.globals, &self.types);
+        let hlr = hlr(
+            decl.args.clone(),
+            decl.code.clone(),
+            &self.globals,
+            &self.types,
+            decl.generics.clone(),
+        );
 
         let function = self.globals.get_value(function_def.clone()).unwrap();
 
@@ -186,12 +211,11 @@ impl<'u> Unit<'u> {
 
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
-
         let output = compile(&mut fcs, ExprID::ROOT);
         fcs.delete();
 
         if crate::DEBUG {
-            self.module.print_to_stderr();
+            println!("{}", self.module.print_to_string().to_string());
         }
     }
 
@@ -202,7 +226,7 @@ impl<'u> Unit<'u> {
         for arg in decl.args.iter() {
             let var_type = self
                 .types
-                .get_spec(arg.type_spec.as_ref().unwrap())
+                .get_gen_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)
                 .unwrap()
                 .clone();
             arg_types.push(var_type);
@@ -211,8 +235,10 @@ impl<'u> Unit<'u> {
             arg_names.push(var_name);
         }
 
-        // let name: String = llvm_function_name(&name, &arg_types);
-        let func_ret_type = self.types.get_spec(&decl.ret_type).unwrap();
+        let func_ret_type = self
+            .types
+            .get_gen_spec(&decl.ret_type, &decl.generics)
+            .unwrap();
 
         (UniqueFuncData::from(&decl.name, &arg_types, decl.is_method), func_ret_type)
     }

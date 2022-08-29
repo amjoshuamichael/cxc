@@ -574,4 +574,30 @@ mod tests {
 
         unsafe { unit.get_fn::<(), i32>("courthouse_1955")(()) };
     }
+
+    #[test]
+    fn function_generics() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_test_lib();
+
+        unit.push_script(
+            "
+            copy<T>(in: T): T {
+                copy: T = in
+                ! copy 
+            }
+
+            main(): i32 {
+                assert_eq(copy<i32>(4), 4)
+
+                assert_eq(copy<f32>(4.0), 4.0)
+
+                ! 0 
+            }
+        ",
+        );
+
+        unsafe { unit.get_fn::<(), i32>("main")(()) };
+    }
 }

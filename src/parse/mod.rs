@@ -1,9 +1,11 @@
-pub use crate::lex::Lexer;
+pub use crate::lex::Context;
 use crate::lex::Tok;
 pub use opcode::Opcode;
 use std::collections::HashMap;
 use std::collections::HashSet;
 pub use std::iter::Peekable;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 mod expression;
 mod list;
@@ -17,27 +19,25 @@ pub use opcode::*;
 pub use parsing_data::*;
 pub use structure::*;
 
-pub fn file(mut lexer: Lexer) -> Script {
+#[derive(Clone, Default, Debug)]
+pub struct GenericLabels(HashMap<String, u8>);
+
+impl Deref for GenericLabels {
+    type Target = HashMap<String, u8>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+
+impl DerefMut for GenericLabels {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+pub fn file(mut lexer: Context) -> Script {
     let mut declarations = Vec::new();
 
     loop {
         let Some(Tok::Ident(decl_name)) = lexer.next() else { panic!() };
 
-        let generic_labels: HashMap<String, u8> =
-            if lexer.peek() == Some(Tok::LeftAngle) {
-                parse_list(
-                    (Tok::LeftAngle, Tok::RghtAngle),
-                    Some(Tok::Comma),
-                    parse_generic_label,
-                    &mut lexer,
-                )
-                .iter()
-                .enumerate()
-                .map(|(i, s)| (s.clone(), i as u8))
-                .collect()
-            } else {
-                HashMap::new()
-            };
+        lexer.generic_labels = parse_generics(&mut lexer);
 
         match lexer.peek() {
             Some(Tok::LeftParen) => {
@@ -49,7 +49,6 @@ pub fn file(mut lexer: Lexer) -> Script {
                 let parse_output = parse_advanced_alias(
                     &mut lexer,
                     &mut StructParsingContext {
-                        generics: generic_labels.clone(),
                         name: decl_name.clone(),
                         dependencies: HashSet::new(),
                     },
@@ -58,7 +57,7 @@ pub fn file(mut lexer: Lexer) -> Script {
                 let strct = TypeDecl {
                     name: decl_name,
                     typ: parse_output.alias,
-                    contains_generics: generic_labels.len() > 0,
+                    contains_generics: lexer.generic_labels.len() > 0,
                     dependencies: parse_output.dependencies,
                 };
 
@@ -77,14 +76,31 @@ pub fn file(mut lexer: Lexer) -> Script {
     }
 }
 
-pub fn parse_generic_label(lexer: &mut Lexer) -> String {
+pub fn parse_generics(lexer: &mut Context) -> HashMap<String, u8> {
+    if lexer.peek() == Some(Tok::LeftAngle) {
+        parse_list(
+            (Tok::LeftAngle, Tok::RghtAngle),
+            Some(Tok::Comma),
+            parse_generic_label,
+            lexer,
+        )
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.clone(), i as u8))
+        .collect()
+    } else {
+        HashMap::new()
+    }
+}
+
+pub fn parse_generic_label(lexer: &mut Context) -> String {
     match lexer.next().unwrap() {
         Tok::Ident(name) => name,
         _ => panic!(),
     }
 }
 
-pub fn parse_func(lexer: &mut Lexer, name: String, is_method: bool) -> FuncDecl {
+pub fn parse_func(lexer: &mut Context, name: String, is_method: bool) -> FuncDecl {
     let args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
@@ -104,6 +120,9 @@ pub fn parse_func(lexer: &mut Lexer, name: String, is_method: bool) -> FuncDecl 
         args,
         code,
         is_method,
+        contains_generics: lexer.generic_labels.len() > 0,
+        dependencies: lexer.func_dependencies.clone(),
+        generics: Vec::new(),
     }
 }
 
@@ -121,7 +140,7 @@ impl Assignable {
     }
 }
 
-fn parse_var_decl(lexer: &mut Lexer) -> VarDecl {
+fn parse_var_decl(lexer: &mut Context) -> VarDecl {
     let Some(Tok::Ident(var_name)) = lexer.next() else { panic!() };
 
     let type_spec = match lexer.peek() {
@@ -139,7 +158,7 @@ fn parse_var_decl(lexer: &mut Lexer) -> VarDecl {
     }
 }
 
-fn parse_assignable(lexer: &mut Lexer) -> Assignable {
+fn parse_assignable(lexer: &mut Context) -> Assignable {
     let lhs = parse_expr(lexer);
 
     if let Expr::Ident(var_name) = lhs {
@@ -161,16 +180,16 @@ fn parse_assignable(lexer: &mut Lexer) -> Assignable {
     }
 }
 
-fn parse_block(lexer: &mut Lexer) -> Expr {
+fn parse_block(lexer: &mut Context) -> Expr {
     Expr::Block(parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
-        parse_stmt,
+        |lexer| parse_stmt(lexer),
         lexer,
     ))
 }
 
-fn parse_stmt(lexer: &mut Lexer) -> Expr {
+fn parse_stmt(lexer: &mut Context) -> Expr {
     let next = lexer.peek().unwrap();
     let after_that = lexer.peek_by(1).unwrap();
 
@@ -182,7 +201,7 @@ fn parse_stmt(lexer: &mut Lexer) -> Expr {
     }
 }
 
-fn parse_setvar(lexer: &mut Lexer) -> Expr {
+fn parse_setvar(lexer: &mut Context) -> Expr {
     let assignable = parse_assignable(lexer);
 
     assert_eq!(lexer.next(), Some(Tok::Assignment));
@@ -195,7 +214,7 @@ fn parse_setvar(lexer: &mut Lexer) -> Expr {
     }
 }
 
-fn parse_expr(lexer: &mut Lexer) -> Expr {
+fn parse_expr(lexer: &mut Context) -> Expr {
     match lexer.peek() {
         Some(Tok::Ident(_)) | Some(Tok::Int(_)) | Some(Tok::Float(_))
         | Some(Tok::LeftBrack) => parse_math_expr(lexer),
@@ -211,7 +230,7 @@ fn parse_expr(lexer: &mut Lexer) -> Expr {
     }
 }
 
-fn parse_for(lexer: &mut Lexer) -> Expr {
+fn parse_for(lexer: &mut Context) -> Expr {
     assert_eq!(lexer.next(), Some(Tok::At));
 
     let w = parse_expr(lexer);
@@ -220,7 +239,7 @@ fn parse_for(lexer: &mut Lexer) -> Expr {
     Expr::ForWhile(Box::new(w), Box::new(d))
 }
 
-fn parse_if(lexer: &mut Lexer) -> Expr {
+fn parse_if(lexer: &mut Context) -> Expr {
     assert_eq!(lexer.next(), Some(Tok::Question));
 
     let i = parse_expr(lexer);

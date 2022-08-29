@@ -62,7 +62,6 @@ pub fn compile<'comp>(
                 .into(),
         ),
         Ident { ref name, .. } => {
-            dbg!(&fcs.arg_names);
             if fcs.arg_names.contains(name) {
                 let param_index = fcs
                     .arg_names

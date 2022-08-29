@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
+pub fn parse_math_expr(lexer: &mut Context) -> Expr {
     let mut atoms = Vec::new();
 
     let mut last_atom = Expr::Op(Opcode::Plus);
@@ -15,7 +15,7 @@ pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
                 Tok::LeftBrack => Expr::Array(parse_list(
                     (Tok::LeftBrack, Tok::RghtBrack),
                     Some(Tok::Comma),
-                    parse_expr,
+                    |lexer| parse_expr(lexer),
                     lexer,
                 )),
                 opcode if opcode.get_un_opcode().is_some() => {
@@ -29,6 +29,25 @@ pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
             }
 
             atom
+        } else if let Expr::Ident(func_name) = last_atom.clone() && matches!(next, Some(Tok::LeftAngle)) && after_generics(lexer, Tok::LeftParen) {
+            let generics = parse_list(
+                (Tok::LeftAngle, Tok::RghtAngle),
+                Some(Tok::Comma),
+                parse_type_alias,
+                lexer,
+            );
+
+            lexer.func_dependencies.push((func_name, generics));
+
+            let params = parse_list(
+                (Tok::LeftParen, Tok::RghtParen),
+                Some(Tok::Comma),
+                parse_expr,
+                lexer,
+            );
+
+            Expr::ArgList(params)
+
         } else if matches!(next, Some(Tok::LeftParen)) {
             let params = parse_list(
                 (Tok::LeftParen, Tok::RghtParen),
@@ -47,7 +66,7 @@ pub fn parse_math_expr(lexer: &mut Lexer) -> Expr {
 
             Expr::Index(box object, box index)
         } else if let Expr::Ident(struct_name) = last_atom 
-            && (matches!(next, Some(Tok::LeftCurly)) || check_for_generics(lexer)){
+            && (matches!(next, Some(Tok::LeftCurly)) || after_generics(lexer, Tok::LeftCurly)){
             let struct_literal = parse_struct_literal(lexer, struct_name);
 
             atoms.pop();
@@ -151,7 +170,7 @@ pub fn binops(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn parse_struct_literal(lexer: &mut Lexer, struct_name: String) -> Expr {
+pub fn parse_struct_literal(lexer: &mut Context, struct_name: String) -> Expr {
     let generics = if lexer.peek() == Some(Tok::LeftAngle) {
         Some(parse_list(
             (Tok::LeftAngle, Tok::RghtAngle),
@@ -183,7 +202,7 @@ pub fn parse_struct_literal(lexer: &mut Lexer, struct_name: String) -> Expr {
 }
 
 
-pub fn check_for_generics(lexer: &mut Lexer) -> bool {
+fn after_generics(lexer: &mut Context, tok: Tok) -> bool {
     if lexer.peek() != Some(Tok::LeftAngle) {
         return false;
     }
@@ -192,7 +211,7 @@ pub fn check_for_generics(lexer: &mut Lexer) -> bool {
     for index in 0.. {
         match lexer.peek_by(index) {
             Some(Tok::RghtAngle) => {
-                return lexer.peek_by(index + 1) == Some(Tok::LeftCurly);
+                return lexer.peek_by(index + 1) == Some(tok);
             },
             Some(Tok::LeftCurly) | None => return false,
             _ => {},

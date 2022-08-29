@@ -10,6 +10,7 @@ pub struct FuncRep {
     pub tree: ExprTree,
     pub types: TypeGroup,
     pub identifiers: Vec<Arc<str>>,
+    pub generics: Vec<TypeAlias>,
 
     // used to find where variables are declared.
     pub data_flow: IndexMap<Arc<str>, DataFlowInfo>,
@@ -23,8 +24,15 @@ pub struct DataFlowInfo {
 }
 
 impl FuncRep {
-    pub fn from(args: Vec<VarDecl>, expr: Expr, types: &TypeGroup) -> Self {
+    pub fn from(
+        args: Vec<VarDecl>,
+        expr: Expr,
+        types: &TypeGroup,
+        generics: Vec<TypeAlias>,
+    ) -> Self {
         let mut new_hlr = FuncRep::with_types(types.clone());
+
+        new_hlr.generics = generics;
 
         for arg in args.iter() {
             let name: Arc<str> = Arc::from(&*arg.var_name);
@@ -32,7 +40,7 @@ impl FuncRep {
             new_hlr.identifiers.push(name.clone());
 
             let typ = match arg.type_spec {
-                Some(ref type_spec) => new_hlr.types.get_spec(&type_spec).unwrap(),
+                Some(ref type_spec) => new_hlr.get_type_spec(&type_spec).unwrap(),
                 None => todo!(),
             };
 
@@ -55,6 +63,10 @@ impl FuncRep {
         let mut output = FuncRep::default();
         output.types = TypeGroup::default();
         output
+    }
+
+    pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
+        self.types.get_gen_spec(alias, &self.generics)
     }
 
     fn with_types(types: TypeGroup) -> Self {
@@ -270,7 +282,7 @@ impl FuncRep {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: self.types.get_spec(&type_alias).unwrap(),
+                    var_type: self.get_type_spec(&type_alias).unwrap(),
                     fields,
                 };
 

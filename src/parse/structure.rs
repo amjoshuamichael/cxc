@@ -18,7 +18,6 @@ pub enum TypeAlias {
 
 #[derive(Default)]
 pub struct StructParsingContext {
-    pub generics: HashMap<String, u8>,
     pub name: String,
     pub dependencies: HashSet<String>,
 }
@@ -30,7 +29,7 @@ pub struct TypeParsingOutput {
 }
 
 pub fn parse_advanced_alias(
-    mut lexer: &mut Lexer,
+    mut lexer: &mut Context,
     context: &mut StructParsingContext,
 ) -> TypeParsingOutput {
     let beginning_of_alias = lexer.peek().unwrap().clone();
@@ -57,7 +56,7 @@ pub fn parse_advanced_alias(
             lexer.next();
             let first_char = name.chars().next().unwrap();
 
-            if let Some(generic_index) = context.generics.get(&name) {
+            if let Some(generic_index) = lexer.generic_labels.get(&name) {
                 TypeAlias::GenParam(*generic_index)
             } else if matches!(first_char, 'i' | 'u' | 'f')
                 && name.chars().skip(1).all(|c| c.is_digit(10))
@@ -111,19 +110,19 @@ pub fn parse_advanced_alias(
     }
 }
 
-pub fn parse_type_alias(lexer: &mut Lexer) -> TypeAlias {
+pub fn parse_type_alias(lexer: &mut Context) -> TypeAlias {
     let mut context = StructParsingContext::default();
     parse_advanced_alias(lexer, &mut context).alias
 }
 
 pub fn parse_struct(
-    mut lexer: &mut Lexer,
-    generic_labels: &mut StructParsingContext,
+    mut lexer: &mut Context,
+    context: &mut StructParsingContext,
 ) -> (TypeAlias, Vec<FuncDecl>) {
     let mut parts = parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
-        |lexer| parse_struct_part(lexer, generic_labels),
+        |lexer| parse_struct_part(lexer, context),
         lexer,
     );
 
@@ -152,7 +151,7 @@ enum StructPart {
 }
 
 fn parse_struct_part(
-    lexer: &mut Lexer,
+    lexer: &mut Context,
     context: &mut StructParsingContext,
 ) -> StructPart {
     let beginning_of_part = lexer.peek().unwrap();
@@ -166,6 +165,7 @@ fn parse_struct_part(
     } else if beginning_of_part == Tok::Dot {
         lexer.next();
         let name = lexer.next().unwrap().ident_name().unwrap();
+        let generic_labels = parse_generics(lexer);
 
         let mut decl = parse_func(lexer, name, true);
 
