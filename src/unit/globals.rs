@@ -1,9 +1,7 @@
-use crate::hlr::prelude::*;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::values::CallableValue;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 type ValAndType<'a> = (Type, CallableValue<'a>);
 

@@ -46,7 +46,7 @@ where
                     lexer.next_tok();
                     break;
                 },
-                Some(s) => list.push(parser(lexer)),
+                Some(_) => list.push(parser(lexer)),
                 _ => panic!(),
             }
         }

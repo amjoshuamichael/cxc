@@ -49,7 +49,7 @@ impl ExprTree {
 impl Debug for ExprTree {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         for (e, expr) in self.nodes.iter().enumerate() {
-            writeln!(fmt, "{e}: {expr:?}");
+            writeln!(fmt, "{e}: {expr:?}")?
         }
 
         Ok(())
@@ -86,7 +86,7 @@ impl Debug for ExprNode {
             } => {
                 write!(fmt, "{var_type:?} {{ {fields:?} }}")
             },
-            ArrayLit { var_type, parts } => {
+            ArrayLit { parts, .. } => {
                 write!(fmt, "{parts:?}")
             },
             Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
@@ -109,7 +109,7 @@ impl Debug for ExprNode {
             While { w, d, .. } => write!(fmt, "@ {w:?} {d:?}"),
             Block { stmts, .. } => write!(fmt, "{{{stmts:?}}}"),
             Return { to_return, .. } => write!(fmt, "! {to_return:?}"),
-        };
+        }?;
 
         write!(fmt, " :: {:?}", self.data.ret_type())
     }

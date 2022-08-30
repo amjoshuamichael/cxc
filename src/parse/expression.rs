@@ -61,7 +61,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext) -> Expr {
             );
 
             Expr::ArgList(params)
-        } else if let Expr::Ident(var_name) = last_atom.clone() 
+        } else if matches!( last_atom.clone(), Expr::Ident(_))
             && matches!(next, Some(Tok::LeftBrack)) {
 
             assert_eq!(lexer.next_tok(), Some(Tok::LeftBrack));
@@ -162,7 +162,7 @@ pub fn binops(atoms: &mut Vec<Expr>) {
             let opcode_pos = atoms.iter().position(|atom| match atom {
                 Expr::Op(opcode) => opcode.bin_prec_level() == Some(prec_level),
                 _ => false,
-            }) else { unreachable!() };
+            });
 
             let Some(opcode_pos) = opcode_pos else { break; };
             let Expr::Op(opcode) = atoms[opcode_pos] else { unreachable!() };

@@ -1,7 +1,6 @@
 use super::*;
 use crate::lex::Tok;
 use indexmap::IndexMap;
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,8 +117,8 @@ pub fn parse_type_alias(lexer: &mut ParseContext) -> TypeAlias {
     parse_type_decl(temp_lexer).0.typ
 }
 
-pub fn parse_struct(mut lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
-    let mut parts =
+pub fn parse_struct(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
+    let parts =
         parse_list((Tok::LeftCurly, Tok::RghtCurly), None, parse_struct_part, lexer);
 
     let mut fields = IndexMap::new();
@@ -131,7 +130,7 @@ pub fn parse_struct(mut lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) 
             StructPart::Field { name, typ } => {
                 fields.insert(name, typ);
             },
-            StructPart::Method { is_static, decl } => {
+            StructPart::Method { decl, .. } => {
                 methods.insert(decl.name.clone());
                 method_declarations.push(decl);
             },

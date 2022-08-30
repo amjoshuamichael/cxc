@@ -2,20 +2,13 @@ use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::parse::file;
 use crate::parse::*;
-use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::context::ContextRef;
 use inkwell::execution_engine::ExecutionEngine;
-use inkwell::execution_engine::UnsafeFunctionPointer;
 use inkwell::module::Module;
 use inkwell::targets::CodeModel;
-use inkwell::targets::FileType;
-use inkwell::targets::InitializationConfig;
 use inkwell::targets::RelocMode;
 use inkwell::targets::Target;
-use inkwell::targets::TargetData;
 use inkwell::targets::TargetMachine;
-use inkwell::targets::TargetTriple;
 use inkwell::types::*;
 use inkwell::values::*;
 use inkwell::AddressSpace;
@@ -24,7 +17,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
-use std::path::Path;
 use std::sync::Arc;
 
 mod func_info;
@@ -125,7 +117,7 @@ impl<'u> Unit<'u> {
         &mut self,
         script: &Script,
         typ_name: &String,
-        mut types_to_compile: &mut HashSet<String>,
+        types_to_compile: &mut HashSet<String>,
     ) {
         let decl = script.get_type(typ_name.clone()).unwrap().clone();
 
@@ -196,7 +188,9 @@ impl<'u> Unit<'u> {
 
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
-        let output = compile(&mut fcs, ExprID::ROOT);
+
+        compile(&mut fcs, ExprID::ROOT);
+
         fcs.delete();
     }
 

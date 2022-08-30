@@ -5,16 +5,12 @@ mod type_inference;
 
 use crate::parse::*;
 use crate::unit::Functions;
-use core::hash::Hash;
-use core::hash::Hasher;
 use inkwell::context::Context;
 use inkwell::types::AnyType;
 use inkwell::types::AnyTypeEnum;
 use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
-use inkwell::values::BasicMetadataValueEnum;
-use inkwell::values::BasicValue;
 use inkwell::AddressSpace;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
@@ -162,9 +158,7 @@ pub enum TypeEnum {
 
 impl Debug for TypeEnum {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "{}", self.name());
-
-        Ok(())
+        write!(fmt, "{}", self.name())
     }
 }
 

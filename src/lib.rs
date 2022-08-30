@@ -1,10 +1,9 @@
-#![allow(warnings, dead_code)]
+#![allow(dead_code)]
 #![feature(let_else)]
 #![feature(let_chains)]
 #![feature(once_cell)]
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
-#[macro_use]
 
 pub static DEBUG: bool = true;
 
@@ -98,7 +97,7 @@ mod tests {
             ",
         );
 
-        let mut output: f32 = unsafe { unit.get_fn("seventy")(()) };
+        let output: f32 = unsafe { unit.get_fn("seventy")(()) };
         assert_eq!(output, 70.0);
     }
 
@@ -185,7 +184,7 @@ mod tests {
             ",
         );
 
-        let mut new_point_y: Point3D =
+        let new_point_y: Point3D =
             unsafe { *unit.get_fn::<(), &mut Point3D>("main")(()) };
         assert_eq!(
             new_point_y,
@@ -219,7 +218,7 @@ mod tests {
 
         let point = Point2D { x: 2, y: 3 };
 
-        let mut sqr_mag: i32 = unsafe { unit.get_fn("sqr_magnitude_of")(&point) };
+        let sqr_mag: i32 = unsafe { unit.get_fn("sqr_magnitude_of")(&point) };
         assert_eq!(sqr_mag, 13);
     }
 
@@ -268,7 +267,7 @@ mod tests {
             size: 4,
         };
 
-        let mut new_square: Square =
+        let new_square: Square =
             unsafe { *unit.get_fn::<(), &Square>("make_square")(()) };
         assert_eq!(new_square, square);
     }
@@ -303,12 +302,12 @@ mod tests {
         ",
         );
 
-        let mut int_point =
+        let int_point =
             unsafe { *unit.get_fn::<(), &GenPoint2D<i32>>("int_point")(()) };
         assert_eq!(int_point.x, 42);
         assert_eq!(int_point.y, 32);
 
-        let mut float_point =
+        let float_point =
             unsafe { *unit.get_fn::<(), &GenPoint2D<f32>>("float_point")(()) };
 
         assert_eq!(float_point.x, 42.8);
@@ -326,14 +325,12 @@ mod tests {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
 
-        unsafe {
-            unit.add_external_function(
-                "print_num",
-                print_num as *const usize,
-                vec![Type::int_of_size(64)],
-                Type::never(),
-            );
-        }
+        unit.add_external_function(
+            "print_num",
+            print_num as *const usize,
+            vec![Type::int_of_size(64)],
+            Type::never(),
+        );
 
         unit.push_script(
             "

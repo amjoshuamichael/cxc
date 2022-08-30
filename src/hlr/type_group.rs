@@ -2,8 +2,6 @@ use super::prelude::*;
 use crate::parse::*;
 use indexmap::IndexMap;
 use std::collections::HashMap;
-use std::sync::Arc;
-
 #[derive(Debug, Default, Clone)]
 pub struct TypeGroup {
     types: HashMap<String, Type>,

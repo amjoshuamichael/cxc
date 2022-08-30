@@ -1,13 +1,6 @@
-use crate::parse::{GenFuncDependency, GenericLabels, Opcode, TypeAlias};
+use crate::parse::{GenFuncDependency, GenericLabels, Opcode};
 use logos::{Lexer as LogosLexer, Logos};
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    iter::Peekable,
-    ops::Deref,
-    rc::Rc,
-};
-use syn::token::Token;
+use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
 #[derive(Clone)]
 struct TokPos(Rc<RefCell<usize>>);

@@ -5,8 +5,6 @@ pub use opcode::Opcode;
 use std::collections::HashMap;
 use std::collections::HashSet;
 pub use std::iter::Peekable;
-use std::ops::Deref;
-use std::ops::DerefMut;
 
 mod expression;
 mod list;

@@ -1,4 +1,3 @@
-use super::*;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
 use crate::parse::Opcode::*;
@@ -8,7 +7,6 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::types::*;
 use inkwell::values::*;
-use inkwell::AddressSpace;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
 use std::collections::HashMap;
@@ -140,11 +138,11 @@ pub fn compile<'comp>(
             ref lhs,
             ref op,
             ref rhs,
-            ref ret_type,
+            ..
         } => {
             let lhs_type = fcs.tree.get(*lhs).ret_type().clone();
-            let mut lhs = compile(fcs, *lhs).unwrap();
-            let mut rhs = compile(fcs, *rhs).unwrap();
+            let lhs = compile(fcs, *lhs).unwrap();
+            let rhs = compile(fcs, *rhs).unwrap();
 
             match lhs_type.as_type_enum() {
                 TypeEnum::Int(_) => {
@@ -283,7 +281,7 @@ pub fn compile<'comp>(
             None
         },
         Block { stmts, .. } => {
-            let mut stmts = stmts.iter().peekable();
+            let stmts = stmts.iter().peekable();
 
             for stmt in stmts {
                 compile(fcs, *stmt);
@@ -331,7 +329,7 @@ pub fn compile<'comp>(
             },
             _ => todo!(),
         },
-        Call { f, a, data, .. } => {
+        Call { a, data, .. } => {
             let function = fcs.globals.get_value(data.unwrap()).unwrap();
             let is_extern = function.as_any_value_enum().is_pointer_value();
 
@@ -362,9 +360,7 @@ pub fn compile<'comp>(
 
             Some(output)
         },
-        Member {
-            ret_type, object, ..
-        } => {
+        Member { .. } => {
             let ptr = compile_as_ptr(fcs, expr_id);
             let val = fcs.builder.build_load(ptr, "load");
 
@@ -472,11 +468,7 @@ fn compile_as_ptr<'comp>(
                 new_temp
             },
         },
-        Member {
-            ret_type,
-            object,
-            field,
-        } => {
+        Member { object, field, .. } => {
             let typ = fcs.tree.get(object).ret_type();
             let object_type = typ.as_type_enum();
 
@@ -495,8 +487,6 @@ fn compile_as_ptr<'comp>(
             index,
             ret_type,
         } => {
-            let typ = fcs.tree.get(object).ret_type();
-
             let object = compile_as_ptr(fcs, object);
             let index = compile(fcs, index).unwrap().into_int_value();
 

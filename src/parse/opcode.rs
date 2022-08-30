@@ -1,5 +1,3 @@
-use super::*;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
     Exponential,

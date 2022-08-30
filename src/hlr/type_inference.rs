@@ -2,7 +2,6 @@ use super::prelude::*;
 use crate::parse::*;
 use crate::unit::Functions;
 use crate::unit::UniqueFuncInfo;
-use std::any::type_name;
 use std::collections::HashMap;
 
 pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
@@ -82,7 +81,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             NodeData::SetVar {
                 ref mut ret_type,
                 lhs,
-                rhs,
+                ..
             } => {
                 *ret_type = type_by_id.get(lhs).unwrap().clone();
 
@@ -129,7 +128,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             NodeData::Index {
                 ref mut ret_type,
                 object,
-                index,
+                ..
             } => {
                 let object_type = type_by_id.get_mut(&object).unwrap().clone();
                 let TypeEnum::Array(array_type) = object_type.as_type_enum() 
