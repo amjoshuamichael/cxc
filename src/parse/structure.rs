@@ -21,7 +21,9 @@ pub struct StructParsingContext {
     pub dependencies: HashSet<String>,
 }
 
-fn parse_type_and_methods(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
+fn parse_type_and_methods(
+    lexer: &mut ParseContext,
+) -> (TypeAlias, Vec<Declaration>) {
     let beginning_of_alias = lexer.peek_tok().unwrap().clone();
 
     let mut methods = Vec::new();
@@ -96,7 +98,7 @@ fn parse_type_and_methods(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>
     (alias, methods)
 }
 
-pub fn parse_type_decl(mut lexer: ParseContext) -> (TypeDecl, Vec<FuncDecl>) {
+pub fn parse_type_decl(mut lexer: ParseContext) -> (TypeDecl, Vec<Declaration>) {
     let (alias, methods) = parse_type_and_methods(&mut lexer);
 
     let contains_generics = lexer.has_generics();
@@ -117,7 +119,7 @@ pub fn parse_type_alias(lexer: &mut ParseContext) -> TypeAlias {
     parse_type_decl(temp_lexer).0.typ
 }
 
-pub fn parse_struct(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
+pub fn parse_struct(lexer: &mut ParseContext) -> (TypeAlias, Vec<Declaration>) {
     let parts =
         parse_list((Tok::LeftCurly, Tok::RghtCurly), None, parse_struct_part, lexer);
 
@@ -131,7 +133,7 @@ pub fn parse_struct(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
                 fields.insert(name, typ);
             },
             StructPart::Method { decl, .. } => {
-                methods.insert(decl.name.clone());
+                methods.insert(decl.name().clone());
                 method_declarations.push(decl);
             },
         }
@@ -142,7 +144,7 @@ pub fn parse_struct(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
 
 enum StructPart {
     Field { name: String, typ: TypeAlias },
-    Method { is_static: bool, decl: FuncDecl },
+    Method { is_static: bool, decl: Declaration },
 }
 
 fn parse_struct_part(lexer: &mut ParseContext) -> StructPart {
@@ -156,15 +158,38 @@ fn parse_struct_part(lexer: &mut ParseContext) -> StructPart {
         StructPart::Field { name, typ }
     } else if beginning_of_part == Tok::Dot {
         lexer.next_tok();
+
         let name = lexer.next_tok().unwrap().ident_name().unwrap();
         let func_context = lexer.create_new_with_name(name);
 
-        let mut decl = parse_func(func_context, true);
+        let mut decl = parse_maybe_gen_func(func_context, true);
 
-        decl.args.push(VarDecl {
-            var_name: "self".into(),
-            type_spec: Some(TypeAlias::Named(lexer.name_of_this())),
-        });
+        let args = match decl {
+            Declaration::Func(FuncDecl { ref mut args, .. }) => args,
+            Declaration::GenFunc(GenFuncDecl { ref mut args, .. }) => args,
+            _ => unreachable!(),
+        };
+
+        if lexer.has_generics() {
+            let mut generic_params = Vec::new();
+
+            for g in 0..lexer.generic_count() {
+                generic_params.push(TypeAlias::GenParam(g as u8));
+            }
+
+            args.push(VarDecl {
+                var_name: "self".into(),
+                type_spec: Some(TypeAlias::Generic(
+                    lexer.name_of_this(),
+                    generic_params,
+                )),
+            });
+        } else {
+            args.push(VarDecl {
+                var_name: "self".into(),
+                type_spec: Some(TypeAlias::Named(lexer.name_of_this())),
+            });
+        }
 
         StructPart::Method {
             is_static: false,

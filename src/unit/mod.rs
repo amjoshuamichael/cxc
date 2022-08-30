@@ -81,6 +81,7 @@ impl<'u> Unit<'u> {
             self.add_type_and_deps(&script, &decl.name, &mut types_to_compile);
         }
 
+        dbg!(&script);
         for decl in script.gen_funcs_iter() {
             self.functions.insert_generic(decl.clone());
         }
@@ -199,6 +200,8 @@ impl<'u> Unit<'u> {
         let mut arg_names: Vec<Arc<str>> = Vec::new();
 
         for arg in decl.args.iter() {
+            dbg!(&arg);
+            dbg!(&decl.generics);
             let var_type = self
                 .types
                 .get_gen_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)

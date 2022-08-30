@@ -118,6 +118,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                     *is_method,
                 );
 
+                dbg!(&new_data);
                 let return_type = functions.get_type(new_data.clone()).unwrap();
 
                 *ret_type = return_type.clone();

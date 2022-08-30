@@ -32,13 +32,7 @@ pub fn file(mut lexer: Lexer) -> Script {
             Some(Tok::LeftParen) => {
                 let context = lexer.split(decl_name, generic_labels);
 
-                let decl = if context.has_generics() {
-                    Declaration::GenFunc(parse_gen_func(context, false))
-                } else {
-                    Declaration::Func(parse_func(context, false))
-                };
-
-                declarations.push(decl);
+                declarations.push(parse_maybe_gen_func(context, false));
             },
             Some(Tok::LeftCurly) => {
                 let context = lexer.split(decl_name, generic_labels);
@@ -48,7 +42,7 @@ pub fn file(mut lexer: Lexer) -> Script {
                 declarations.push(Declaration::Type(strct));
 
                 for m in methods {
-                    declarations.push(Declaration::Func(m));
+                    declarations.push(m);
                 }
             },
             _ => panic!(),
@@ -85,6 +79,14 @@ pub fn parse_generic_label(lexer: &mut Lexer) -> String {
     match lexer.next_tok().unwrap() {
         Tok::Ident(name) => name,
         _ => panic!(),
+    }
+}
+
+pub fn parse_maybe_gen_func(lexer: ParseContext, is_method: bool) -> Declaration {
+    if lexer.has_generics() {
+        Declaration::GenFunc(parse_gen_func(lexer, is_method))
+    } else {
+        Declaration::Func(parse_func(lexer, is_method))
     }
 }
 

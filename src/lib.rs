@@ -186,6 +186,7 @@ mod tests {
 
         let new_point_y: Point3D =
             unsafe { *unit.get_fn::<(), &mut Point3D>("main")(()) };
+
         assert_eq!(
             new_point_y,
             Point3D {
@@ -580,15 +581,14 @@ mod tests {
 
         unit.push_script(
             "
-            copy<T>(in: T): T {
-                copy: T = in
-                ! copy 
+            double<T>(in: T): T {
+                ! in + in 
             }
 
             main(): i32 {
-                assert_eq(copy<i32>(4), 4)
+                assert_eq(double<i32>(4), 8)
 
-                assert_eq(copy<f32>(4.0), 4.0)
+                assert_eq(double<f32>(4.0), 8.0)
 
                 ! 0 
             }
@@ -596,5 +596,50 @@ mod tests {
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
+    }
+
+    #[test]
+    fn generic_methods() {
+        #[cfg(not(target_pointer_width = "64"))]
+        panic!("this test does not work on 64 bit architecture");
+
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_test_lib();
+
+        unit.push_script(
+            "
+            Roll<T> {
+                val: T
+
+                .come_on(): T {
+                    output: T = self.val
+
+                    counter: i32 = 1
+
+                    @ counter < 111 {
+                        output = output + self.val
+
+                        counter = counter + 1
+                    }
+
+                    ! output
+                }
+            }
+
+            buy_las_vegas(): i32 {
+                after_this: Roll<f32> = Roll<f32> { val = 7.0 }
+                assert_eq(after_this.come_on<f32>(), 7_7_7.0) #let's go!
+
+                roll: Roll<i32> = Roll<i32> { val = 7 }
+                assert_eq(roll.come_on<i32>(), 7_7_7) 
+                # i like it, i like it!
+
+                ! 0 
+            }
+        ",
+        );
+
+        unsafe { unit.get_fn::<(), i32>("buy_las_vegas")(()) };
     }
 }

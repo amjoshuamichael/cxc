@@ -24,6 +24,23 @@ impl TypeGroup {
         self.get_gen_spec(alias, &empty_vec)
     }
 
+    fn fill_gen_param_holes(
+        &self,
+        alias: &TypeAlias,
+        generics: &Vec<TypeAlias>,
+    ) -> Option<TypeAlias> {
+        // TODO: fill in type aliases like &T or T[]
+
+        match alias {
+            TypeAlias::GenParam(index) => {
+                return Some(generics[*index as usize].clone())
+            },
+            _ => {},
+        }
+
+        return Some(alias.clone());
+    }
+
     pub fn get_gen_spec(
         &self,
         alias: &TypeAlias,
@@ -44,8 +61,12 @@ impl TypeGroup {
 
                 Type::new_struct(typed_fields, methods.clone())
             },
-            TypeAlias::Generic(name, generics) => {
-                self.get_gen_spec(self.generic_alias.get(name)?, generics)?
+            TypeAlias::Generic(name, generic_aliases) => {
+                let generics = generic_aliases
+                    .iter()
+                    .map(|ga| self.fill_gen_param_holes(ga, generics).unwrap())
+                    .collect();
+                self.get_gen_spec(self.generic_alias.get(name)?, &generics)?
             },
             TypeAlias::GenParam(index) => {
                 self.get_spec(&generics[*index as usize])?

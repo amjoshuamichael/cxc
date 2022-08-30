@@ -146,6 +146,8 @@ impl ParseContext {
             type_dependencies: HashSet::new(),
         }
     }
+
+    pub fn generic_count(&self) -> usize { self.generic_labels.len() }
 }
 
 pub fn lex(input: &str) -> Lexer { Lexer::from(Tok::lexer(input)) }
