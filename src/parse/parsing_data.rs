@@ -60,16 +60,17 @@ impl Script {
             .map(|d| d.as_func().unwrap())
     }
 
-    pub fn remove_generic_funcs(&mut self) {
-        self.0.retain(|d| match d {
-            Declaration::Func(d) => !d.contains_generics,
-            _ => true,
-        })
+    pub fn gen_funcs_iter(&self) -> impl Iterator<Item = &GenFuncDecl> {
+        self.0
+            .iter()
+            .filter(|d| matches!(d, Declaration::GenFunc { .. }))
+            .map(|d| d.as_gen_func().unwrap())
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Declaration {
+    GenFunc(GenFuncDecl),
     Func(FuncDecl),
     Type(TypeDecl),
 }
@@ -88,6 +89,37 @@ impl Declaration {
             _ => None,
         }
     }
+
+    pub fn as_gen_func(&self) -> Option<&GenFuncDecl> {
+        match self {
+            Declaration::GenFunc(d) => Some(d),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenFuncDecl {
+    pub name: String,
+    pub ret_type: TypeAlias,
+    pub args: Vec<VarDecl>,
+    pub code: Expr,
+    pub is_method: bool,
+    pub dependencies: Vec<GenFuncDependency>,
+}
+
+impl GenFuncDecl {
+    pub fn realize(self, types: Vec<TypeAlias>) -> FuncDecl {
+        FuncDecl {
+            name: self.name,
+            ret_type: self.ret_type,
+            args: self.args,
+            code: self.code,
+            is_method: self.is_method,
+            dependencies: self.dependencies,
+            generics: types,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -97,8 +129,7 @@ pub struct FuncDecl {
     pub args: Vec<VarDecl>,
     pub code: Expr,
     pub is_method: bool,
-    pub contains_generics: bool,
-    pub dependencies: Vec<(String, Vec<TypeAlias>)>,
+    pub dependencies: Vec<GenFuncDependency>,
     pub generics: Vec<TypeAlias>,
 }
 
@@ -115,6 +146,13 @@ impl Declaration {
         match self {
             Declaration::Func(FuncDecl { name, .. }) => name.clone(),
             Declaration::Type(TypeDecl { name, .. }) => name.clone(),
+            Declaration::GenFunc(GenFuncDecl { name, .. }) => name.clone(),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct GenFuncDependency {
+    pub name: String,
+    pub types: Vec<TypeAlias>,
 }

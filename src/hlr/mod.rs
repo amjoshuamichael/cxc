@@ -239,7 +239,7 @@ pub struct StructType {
 
 impl StructType {
     pub fn get_field_type(&self, field_name: &String) -> Option<TypeArc> {
-        self.fields.get(field_name).map(|t| t.clone())
+        self.fields.get(field_name).cloned()
     }
 
     pub fn get_full_method_name(&self, field_name: &String) -> Option<&String> {

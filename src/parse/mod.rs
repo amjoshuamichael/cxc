@@ -1,5 +1,6 @@
-pub use crate::lex::Context;
-use crate::lex::Tok;
+pub use crate::lex::ParseContext;
+pub use crate::lex::TokenStream;
+use crate::lex::{Lexer, Tok};
 pub use opcode::Opcode;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -19,65 +20,54 @@ pub use opcode::*;
 pub use parsing_data::*;
 pub use structure::*;
 
-#[derive(Clone, Default, Debug)]
-pub struct GenericLabels(HashMap<String, u8>);
+pub type GenericLabels = HashMap<String, u8>;
 
-impl Deref for GenericLabels {
-    type Target = HashMap<String, u8>;
-    fn deref(&self) -> &Self::Target { &self.0 }
-}
-
-impl DerefMut for GenericLabels {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
-}
-
-pub fn file(mut lexer: Context) -> Script {
+pub fn file(mut lexer: Lexer) -> Script {
     let mut declarations = Vec::new();
 
     loop {
-        let Some(Tok::Ident(decl_name)) = lexer.next() else { panic!() };
+        let Some(Tok::Ident(decl_name)) = lexer.next_tok() else { panic!() };
 
-        lexer.generic_labels = parse_generics(&mut lexer);
+        let generic_labels = parse_generics(&mut lexer);
 
-        match lexer.peek() {
+        match lexer.peek_tok() {
             Some(Tok::LeftParen) => {
-                declarations.push(Declaration::Func(parse_func(
-                    &mut lexer, decl_name, false,
-                )));
+                let context = lexer.split(decl_name, generic_labels);
+
+                let decl = if context.has_generics() {
+                    Declaration::GenFunc(parse_gen_func(context, false))
+                } else {
+                    Declaration::Func(parse_func(context, false))
+                };
+
+                declarations.push(decl);
             },
             Some(Tok::LeftCurly) => {
-                let parse_output = parse_advanced_alias(
-                    &mut lexer,
-                    &mut StructParsingContext {
-                        name: decl_name.clone(),
-                        dependencies: HashSet::new(),
-                    },
-                );
+                let context = lexer.split(decl_name, generic_labels);
 
-                let strct = TypeDecl {
-                    name: decl_name,
-                    typ: parse_output.alias,
-                    contains_generics: lexer.generic_labels.len() > 0,
-                    dependencies: parse_output.dependencies,
-                };
+                let (strct, methods) = parse_type_decl(context);
 
                 declarations.push(Declaration::Type(strct));
 
-                for m in parse_output.methods {
+                for m in methods {
                     declarations.push(Declaration::Func(m));
                 }
             },
             _ => panic!(),
         }
 
-        if lexer.peek().is_none() {
+        if lexer.peek_tok().is_none() {
             return Script(declarations);
+        }
+
+        if crate::DEBUG {
+            println!("moving to the next declaration!");
         }
     }
 }
 
-pub fn parse_generics(lexer: &mut Context) -> HashMap<String, u8> {
-    if lexer.peek() == Some(Tok::LeftAngle) {
+pub fn parse_generics(lexer: &mut Lexer) -> GenericLabels {
+    if lexer.peek_tok() == Some(Tok::LeftAngle) {
         parse_list(
             (Tok::LeftAngle, Tok::RghtAngle),
             Some(Tok::Comma),
@@ -93,26 +83,54 @@ pub fn parse_generics(lexer: &mut Context) -> HashMap<String, u8> {
     }
 }
 
-pub fn parse_generic_label(lexer: &mut Context) -> String {
-    match lexer.next().unwrap() {
+pub fn parse_generic_label(lexer: &mut Lexer) -> String {
+    match lexer.next_tok().unwrap() {
         Tok::Ident(name) => name,
         _ => panic!(),
     }
 }
 
-pub fn parse_func(lexer: &mut Context, name: String, is_method: bool) -> FuncDecl {
+pub fn parse_gen_func(mut lexer: ParseContext, is_method: bool) -> GenFuncDecl {
     let args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
         parse_var_decl,
-        lexer,
+        &mut lexer,
     );
 
-    assert_eq!(lexer.next(), Some(Tok::Colon));
+    assert_eq!(lexer.next_tok(), Some(Tok::Colon));
 
-    let ret_type = parse_type_alias(lexer);
+    let ret_type = parse_type_alias(&mut lexer);
 
-    let code = parse_block(lexer);
+    let code = parse_block(&mut lexer);
+
+    let (name, dependencies, _) = lexer.return_info();
+
+    GenFuncDecl {
+        name,
+        ret_type,
+        args,
+        code,
+        is_method,
+        dependencies,
+    }
+}
+
+pub fn parse_func(mut lexer: ParseContext, is_method: bool) -> FuncDecl {
+    let args = parse_list(
+        (Tok::LeftParen, Tok::RghtParen),
+        Some(Tok::Comma),
+        parse_var_decl,
+        &mut lexer,
+    );
+
+    assert_eq!(lexer.next_tok(), Some(Tok::Colon));
+
+    let ret_type = parse_type_alias(&mut lexer);
+
+    let code = parse_block(&mut lexer);
+
+    let (name, dependencies, _) = lexer.return_info();
 
     FuncDecl {
         name,
@@ -120,8 +138,7 @@ pub fn parse_func(lexer: &mut Context, name: String, is_method: bool) -> FuncDec
         args,
         code,
         is_method,
-        contains_generics: lexer.generic_labels.len() > 0,
-        dependencies: lexer.func_dependencies.clone(),
+        dependencies,
         generics: Vec::new(),
     }
 }
@@ -140,12 +157,12 @@ impl Assignable {
     }
 }
 
-fn parse_var_decl(lexer: &mut Context) -> VarDecl {
-    let Some(Tok::Ident(var_name)) = lexer.next() else { panic!() };
+fn parse_var_decl(lexer: &mut ParseContext) -> VarDecl {
+    let Some(Tok::Ident(var_name)) = lexer.next_tok() else { panic!() };
 
-    let type_spec = match lexer.peek() {
+    let type_spec = match lexer.peek_tok() {
         Some(Tok::Colon) => {
-            lexer.next();
+            lexer.next_tok();
 
             Some(parse_type_alias(lexer))
         },
@@ -158,13 +175,13 @@ fn parse_var_decl(lexer: &mut Context) -> VarDecl {
     }
 }
 
-fn parse_assignable(lexer: &mut Context) -> Assignable {
+fn parse_assignable(lexer: &mut ParseContext) -> Assignable {
     let lhs = parse_expr(lexer);
 
     if let Expr::Ident(var_name) = lhs {
-        let type_spec = match lexer.peek() {
+        let type_spec = match lexer.peek_tok() {
             Some(Tok::Colon) => {
-                lexer.next();
+                lexer.next_tok();
 
                 Some(parse_type_alias(lexer))
             },
@@ -180,7 +197,7 @@ fn parse_assignable(lexer: &mut Context) -> Assignable {
     }
 }
 
-fn parse_block(lexer: &mut Context) -> Expr {
+fn parse_block(lexer: &mut ParseContext) -> Expr {
     Expr::Block(parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
@@ -189,8 +206,8 @@ fn parse_block(lexer: &mut Context) -> Expr {
     ))
 }
 
-fn parse_stmt(lexer: &mut Context) -> Expr {
-    let next = lexer.peek().unwrap();
+fn parse_stmt(lexer: &mut ParseContext) -> Expr {
+    let next = lexer.peek_tok().unwrap();
     let after_that = lexer.peek_by(1).unwrap();
 
     match (next, after_that) {
@@ -201,10 +218,10 @@ fn parse_stmt(lexer: &mut Context) -> Expr {
     }
 }
 
-fn parse_setvar(lexer: &mut Context) -> Expr {
+fn parse_setvar(lexer: &mut ParseContext) -> Expr {
     let assignable = parse_assignable(lexer);
 
-    assert_eq!(lexer.next(), Some(Tok::Assignment));
+    assert_eq!(lexer.next_tok(), Some(Tok::Assignment));
 
     let rhs = parse_expr(lexer);
 
@@ -214,15 +231,15 @@ fn parse_setvar(lexer: &mut Context) -> Expr {
     }
 }
 
-fn parse_expr(lexer: &mut Context) -> Expr {
-    match lexer.peek() {
+fn parse_expr(lexer: &mut ParseContext) -> Expr {
+    match lexer.peek_tok() {
         Some(Tok::Ident(_)) | Some(Tok::Int(_)) | Some(Tok::Float(_))
         | Some(Tok::LeftBrack) => parse_math_expr(lexer),
         Some(tok) if tok.is_un_op() => parse_math_expr(lexer),
         Some(Tok::At) => parse_for(lexer),
         Some(Tok::Question) => parse_if(lexer),
         Some(Tok::Bang) => {
-            lexer.next();
+            lexer.next_tok();
             Expr::Return(box parse_expr(lexer))
         },
         Some(_) => todo!(),
@@ -230,8 +247,8 @@ fn parse_expr(lexer: &mut Context) -> Expr {
     }
 }
 
-fn parse_for(lexer: &mut Context) -> Expr {
-    assert_eq!(lexer.next(), Some(Tok::At));
+fn parse_for(lexer: &mut ParseContext) -> Expr {
+    assert_eq!(lexer.next_tok(), Some(Tok::At));
 
     let w = parse_expr(lexer);
     let d = parse_block(lexer);
@@ -239,8 +256,8 @@ fn parse_for(lexer: &mut Context) -> Expr {
     Expr::ForWhile(Box::new(w), Box::new(d))
 }
 
-fn parse_if(lexer: &mut Context) -> Expr {
-    assert_eq!(lexer.next(), Some(Tok::Question));
+fn parse_if(lexer: &mut ParseContext) -> Expr {
+    assert_eq!(lexer.next_tok(), Some(Tok::Question));
 
     let i = parse_expr(lexer);
     let t = parse_block(lexer);

@@ -1,5 +1,6 @@
 use crate::hlr::prelude::*;
 use crate::lex::*;
+use crate::parse::file;
 use crate::parse::*;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -26,21 +27,21 @@ use std::fmt::{Debug, Display};
 use std::path::Path;
 use std::sync::Arc;
 
+mod func_info;
 mod globals;
 
 use crate::to_llvm::*;
-pub use globals::{Functions, UniqueFuncData};
+use func_info::FuncInfo;
+pub use globals::{Functions, UniqueFuncInfo};
 
 pub struct Unit<'u> {
     pub execution_engine: ExecutionEngine<'u>,
     pub types: TypeGroup,
     pub context: &'u Context,
     pub module: Module<'u>,
-    pub globals: Functions<'u>,
+    pub functions: Functions<'u>,
     pub machine: TargetMachine,
 }
-
-type NumGeneratorFunc = unsafe extern "C" fn(&mut i32) -> usize;
 
 impl<'u> Unit<'u> {
     pub fn new(context: &'u Context) -> Self {
@@ -68,83 +69,74 @@ impl<'u> Unit<'u> {
             types: TypeGroup::default(),
             execution_engine,
             module,
-            globals: Functions::default(),
+            functions: Functions::default(),
             machine,
         }
     }
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let mut script = crate::parse::file(lexed);
+        let mut script = file(lexed);
 
-        let mut types_to_compile: HashSet<String> = script
-            .0
-            .iter()
-            .filter(|d| matches!(d, Declaration::Type { .. }))
-            .map(|d| d.name())
-            .collect();
+        let mut types_to_compile: HashSet<String> =
+            script.types_iter().map(|d| d.name.clone()).collect();
 
         for decl in script.types_iter() {
-            self.add_type(&script, decl, &mut types_to_compile);
-        }
-
-        let mut functions = HashMap::new();
-
-        for decl in script.funcs_iter() {
-            if decl.contains_generics {
-                self.globals.insert_generic(decl.clone());
+            if !types_to_compile.contains(&decl.name) {
+                continue;
             }
+
+            self.add_type_and_deps(&script, &decl.name, &mut types_to_compile);
         }
 
-        script.remove_generic_funcs();
+        for decl in script.gen_funcs_iter() {
+            self.functions.insert_generic(decl.clone());
+        }
 
-        let dependencies: Vec<(String, Vec<TypeAlias>)> = script
+        let dependencies: Vec<GenFuncDependency> = script
             .funcs_iter()
             .map(|d| d.dependencies.clone())
             .flatten()
             .collect();
 
         for dep in dependencies {
-            let decl = self.globals.get_generic(dep.0, dep.1).unwrap();
+            let decl = self.functions.get_generic(dep).unwrap();
             script.0.push(Declaration::Func(decl));
         }
 
-        for (decl_index, decl) in script.funcs_iter().enumerate() {
-            let (fn_type, func_def) = self.insert_placeholder_for_function(decl);
+        let mut function_placeholders = Vec::new();
 
-            functions.insert(decl_index, (fn_type, func_def));
+        for decl in script.funcs_iter() {
+            let func_info = self.insert_placeholder_for_function(decl);
+            function_placeholders.push(func_info);
         }
 
         for (decl_index, decl) in script.funcs_iter().enumerate() {
-            let required_decl_info =
-                (decl.name.clone(), decl.ret_type.clone(), decl.args.clone());
+            let func_info = function_placeholders[decl_index].clone();
+            self.add_function(func_info, decl);
+        }
 
-            let (fn_type, func_def) = functions.get(&decl_index).unwrap();
-
-            self.add_function(fn_type.clone(), func_def.clone(), decl);
+        if crate::DEBUG {
+            println!("{}", self.module.print_to_string().to_string());
         }
     }
 
-    pub fn add_type(
+    pub fn add_type_and_deps(
         &mut self,
         script: &Script,
-        decl: &TypeDecl,
-        types_to_compile: &mut HashSet<String>,
+        typ_name: &String,
+        mut types_to_compile: &mut HashSet<String>,
     ) {
-        if !types_to_compile.contains(&decl.name) {
-            return;
-        }
+        let decl = script.get_type(typ_name.clone()).unwrap().clone();
 
         let uncompiled_dependencies: HashSet<String> = decl
             .dependencies
-            .intersection(&types_to_compile)
+            .intersection(types_to_compile)
             .map(|s| s.clone())
             .collect();
 
         for dep_name in uncompiled_dependencies {
-            let typ_decl = script.get_type(dep_name.clone()).unwrap().clone();
-
-            self.add_type(script, &typ_decl, types_to_compile);
+            self.add_type_and_deps(script, &dep_name, types_to_compile);
         }
 
         types_to_compile.remove(&decl.name);
@@ -158,17 +150,15 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn insert_placeholder_for_function(
-        &mut self,
-        decl: &FuncDecl,
-    ) -> (Type, UniqueFuncData) {
-        let (unique_data, func_ret_type) = self.get_function_info(decl);
+    pub fn insert_placeholder_for_function(&mut self, decl: &FuncDecl) -> FuncInfo {
+        let func_info = self.get_function_info(decl);
 
-        let function_name = unique_data.to_string();
+        let function_name = func_info.unique_name();
 
-        let function_type = func_ret_type
+        let function_type = func_info
+            .ret_type
             .clone()
-            .func_with_args(unique_data.arg_types().clone());
+            .func_with_args(func_info.arg_types());
 
         let function = self.module.add_function(
             &*function_name,
@@ -176,30 +166,25 @@ impl<'u> Unit<'u> {
             None,
         );
 
-        self.globals.insert(
-            unique_data.clone(),
-            func_ret_type,
-            CallableValue::from(function),
-        );
+        self.functions
+            .insert(func_info.clone(), CallableValue::from(function));
 
-        (function_type, unique_data)
+        func_info
     }
 
-    pub fn add_function(
-        &mut self,
-        fn_type: Type,
-        function_def: UniqueFuncData,
-        decl: &FuncDecl,
-    ) {
+    pub fn add_function(&mut self, func_info: FuncInfo, decl: &FuncDecl) {
         let hlr = hlr(
             decl.args.clone(),
             decl.code.clone(),
-            &self.globals,
+            &self.functions,
             &self.types,
             decl.generics.clone(),
         );
 
-        let function = self.globals.get_value(function_def.clone()).unwrap();
+        let function = self
+            .functions
+            .get_value(func_info.to_unique_func_info())
+            .unwrap();
 
         let arg_names = decl.args.iter().map(|v| Arc::from(&*v.var_name)).collect();
 
@@ -213,13 +198,9 @@ impl<'u> Unit<'u> {
         fcs.builder.position_at_end(basic_block);
         let output = compile(&mut fcs, ExprID::ROOT);
         fcs.delete();
-
-        if crate::DEBUG {
-            println!("{}", self.module.print_to_string().to_string());
-        }
     }
 
-    pub fn get_function_info(&self, decl: &FuncDecl) -> (UniqueFuncData, Type) {
+    pub fn get_function_info(&self, decl: &FuncDecl) -> FuncInfo {
         let mut arg_types: Vec<Type> = Vec::new();
         let mut arg_names: Vec<Arc<str>> = Vec::new();
 
@@ -235,12 +216,12 @@ impl<'u> Unit<'u> {
             arg_names.push(var_name);
         }
 
-        let func_ret_type = self
+        let ret_type = self
             .types
             .get_gen_spec(&decl.ret_type, &decl.generics)
             .unwrap();
 
-        (UniqueFuncData::from(&decl.name, &arg_types, decl.is_method), func_ret_type)
+        FuncInfo::from(&decl.name, &arg_types, &ret_type, decl.is_method)
     }
 
     pub fn add_external_function(
@@ -275,9 +256,8 @@ impl<'u> Unit<'u> {
         let callable_value: CallableValue =
             CallableValue::try_from(function_pointer).unwrap();
 
-        self.globals.insert(
-            UniqueFuncData::from(&name, &arg_types, false),
-            ret_type,
+        self.functions.insert(
+            FuncInfo::from(&name, &arg_types, &ret_type, false),
             callable_value,
         );
     }
@@ -294,14 +274,14 @@ impl<'u> Unit<'u> {
             function,
             builder: self.context.create_builder(),
             context: &self.context,
-            globals: &self.globals,
+            globals: &self.functions,
             llvm_ir_uuid: RefCell::new(0),
             arg_names,
         }
     }
 
     pub fn get_fn<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
-        let func_name = &self.globals.funcs_with_name(name.into())[0].to_string();
+        let func_name = &self.functions.funcs_with_name(name.into())[0].to_string();
 
         unsafe {
             let func_addr = self

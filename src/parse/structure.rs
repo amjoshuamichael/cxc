@@ -22,29 +22,20 @@ pub struct StructParsingContext {
     pub dependencies: HashSet<String>,
 }
 
-pub struct TypeParsingOutput {
-    pub alias: TypeAlias,
-    pub methods: Vec<FuncDecl>,
-    pub dependencies: HashSet<String>,
-}
-
-pub fn parse_advanced_alias(
-    mut lexer: &mut Context,
-    context: &mut StructParsingContext,
-) -> TypeParsingOutput {
-    let beginning_of_alias = lexer.peek().unwrap().clone();
+fn parse_type_and_methods(lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
+    let beginning_of_alias = lexer.peek_tok().unwrap().clone();
 
     let mut methods = Vec::new();
     let type_alias = match beginning_of_alias {
         Tok::LeftCurly => {
-            let strct = parse_struct(lexer, context);
+            let strct = parse_struct(lexer);
             methods = strct.1;
             strct.0
         },
         Tok::AmpersandSet(count) => {
-            lexer.next();
+            lexer.next_tok();
 
-            let mut output = parse_advanced_alias(lexer, context).alias;
+            let mut output = parse_type_and_methods(lexer).0;
 
             for _ in 0..count {
                 output = TypeAlias::Ref(box output);
@@ -53,11 +44,11 @@ pub fn parse_advanced_alias(
             output
         },
         Tok::Ident(name) => {
-            lexer.next();
+            lexer.next_tok();
             let first_char = name.chars().next().unwrap();
 
-            if let Some(generic_index) = lexer.generic_labels.get(&name) {
-                TypeAlias::GenParam(*generic_index)
+            if let Some(generic_index) = lexer.get_generic_label(&name) {
+                TypeAlias::GenParam(generic_index)
             } else if matches!(first_char, 'i' | 'u' | 'f')
                 && name.chars().skip(1).all(|c| c.is_digit(10))
             {
@@ -70,19 +61,19 @@ pub fn parse_advanced_alias(
                     'f' => TypeAlias::Float(bit_width),
                     _ => unreachable!(),
                 }
-            } else if let Some(Tok::LeftAngle) = lexer.peek() {
+            } else if let Some(Tok::LeftAngle) = lexer.peek_tok() {
                 let generics = parse_list(
                     (Tok::LeftAngle, Tok::RghtAngle),
                     Some(Tok::Comma),
-                    |lexer| parse_advanced_alias(lexer, context).alias,
+                    |lexer| parse_type_and_methods(lexer).0,
                     lexer,
                 );
 
-                context.dependencies.insert(name.clone());
+                lexer.push_type_dependency(name.clone());
 
                 TypeAlias::Generic(name, generics)
             } else {
-                context.dependencies.insert(name.clone());
+                lexer.push_type_dependency(name.clone());
 
                 TypeAlias::Named(name)
             }
@@ -90,41 +81,46 @@ pub fn parse_advanced_alias(
         _ => panic!(),
     };
 
-    let suffix = lexer.peek().unwrap().clone();
+    let suffix = lexer.peek_tok().unwrap().clone();
 
     let alias = match suffix {
         Tok::LeftBrack => {
-            lexer.next();
-            let Some(Tok::Int(count)) = lexer.next() else { panic!() };
-            lexer.next();
+            lexer.next_tok();
+            let Some(Tok::Int(count)) = lexer.next_tok() else { panic!() };
+            lexer.next_tok();
 
             TypeAlias::Array(box type_alias, count.try_into().unwrap())
         },
         _ => type_alias,
     };
 
-    TypeParsingOutput {
-        alias,
-        methods,
-        dependencies: context.dependencies.clone(),
-    }
+    (alias, methods)
 }
 
-pub fn parse_type_alias(lexer: &mut Context) -> TypeAlias {
-    let mut context = StructParsingContext::default();
-    parse_advanced_alias(lexer, &mut context).alias
+pub fn parse_type_decl(mut lexer: ParseContext) -> (TypeDecl, Vec<FuncDecl>) {
+    let (alias, methods) = parse_type_and_methods(&mut lexer);
+
+    let contains_generics = lexer.has_generics();
+    let (name, _, dependencies) = lexer.return_info();
+
+    let type_decl = TypeDecl {
+        name,
+        typ: alias,
+        contains_generics,
+        dependencies,
+    };
+
+    (type_decl, methods)
 }
 
-pub fn parse_struct(
-    mut lexer: &mut Context,
-    context: &mut StructParsingContext,
-) -> (TypeAlias, Vec<FuncDecl>) {
-    let mut parts = parse_list(
-        (Tok::LeftCurly, Tok::RghtCurly),
-        None,
-        |lexer| parse_struct_part(lexer, context),
-        lexer,
-    );
+pub fn parse_type_alias(lexer: &mut ParseContext) -> TypeAlias {
+    let temp_lexer = lexer.create_new_with_name(String::new());
+    parse_type_decl(temp_lexer).0.typ
+}
+
+pub fn parse_struct(mut lexer: &mut ParseContext) -> (TypeAlias, Vec<FuncDecl>) {
+    let mut parts =
+        parse_list((Tok::LeftCurly, Tok::RghtCurly), None, parse_struct_part, lexer);
 
     let mut fields = IndexMap::new();
     let mut methods = HashSet::new();
@@ -150,28 +146,25 @@ enum StructPart {
     Method { is_static: bool, decl: FuncDecl },
 }
 
-fn parse_struct_part(
-    lexer: &mut Context,
-    context: &mut StructParsingContext,
-) -> StructPart {
-    let beginning_of_part = lexer.peek().unwrap();
+fn parse_struct_part(lexer: &mut ParseContext) -> StructPart {
+    let beginning_of_part = lexer.peek_tok().unwrap();
 
     if let Some(name) = beginning_of_part.clone().ident_name() {
-        lexer.next();
-        assert_eq!(Some(Tok::Colon), lexer.next());
-        let typ = parse_advanced_alias(lexer, context).alias;
+        lexer.next_tok();
+        assert_eq!(Some(Tok::Colon), lexer.next_tok());
+        let typ = parse_type_and_methods(lexer).0;
 
         StructPart::Field { name, typ }
     } else if beginning_of_part == Tok::Dot {
-        lexer.next();
-        let name = lexer.next().unwrap().ident_name().unwrap();
-        let generic_labels = parse_generics(lexer);
+        lexer.next_tok();
+        let name = lexer.next_tok().unwrap().ident_name().unwrap();
+        let func_context = lexer.create_new_with_name(name);
 
-        let mut decl = parse_func(lexer, name, true);
+        let mut decl = parse_func(func_context, true);
 
         decl.args.push(VarDecl {
             var_name: "self".into(),
-            type_spec: Some(TypeAlias::Named(context.name.clone())),
+            type_spec: Some(TypeAlias::Named(lexer.name_of_this())),
         });
 
         StructPart::Method {
