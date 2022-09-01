@@ -17,6 +17,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
+use std::mem::transmute;
 use std::sync::Arc;
 
 mod func_info;
@@ -222,16 +223,21 @@ impl<'u> Unit<'u> {
         FuncInfo::from(&decl.name, &arg_types, &ret_type, decl.is_method)
     }
 
-    pub fn add_external_function(
+    pub fn add_rust_func<A, R>(
         &mut self,
         name: &str,
-        function: *const usize,
-        arg_types: Vec<Type>,
+        function: [fn(A) -> R; 1],
+        arg_types: &[Type],
         ret_type: Type,
     ) {
+        // TODO: recognize arg_types and ret_type based on std::any::type_name() of
+        // function
+
         let name = String::from(name);
 
-        let function_address = function as u64;
+        let function_ptr = unsafe { transmute::<_, *const usize>(function[0]) };
+
+        let function_address = function_ptr as u64;
 
         let ink_arg_types: Vec<BasicMetadataTypeEnum> = arg_types
             .iter()
@@ -255,7 +261,7 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap();
 
         self.functions.insert(
-            FuncInfo::from(&name, &arg_types, &ret_type, false),
+            FuncInfo::from(&name, &arg_types.to_vec(), &ret_type, false),
             callable_value,
         );
     }
@@ -286,82 +292,50 @@ impl<'u> Unit<'u> {
                 .execution_engine
                 .get_function_address(&*func_name)
                 .unwrap();
-            let function = std::mem::transmute::<
-                usize,
-                unsafe extern "C" fn(_: I, ...) -> O,
-            >(func_addr);
+            let function =
+                transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr);
 
             function
         }
     }
 
     pub fn add_test_lib(&mut self) {
-        self.add_external_function(
-            "print",
-            print::<i32> as *const usize,
-            vec![Type::i(32)],
-            Type::never(),
-        );
+        self.add_rust_func("print", [print::<i32>], &[Type::i(32)], Type::never());
 
-        self.add_external_function(
-            "print",
-            print::<i64> as *const usize,
-            vec![Type::i(64)],
-            Type::never(),
-        );
+        self.add_rust_func("print", [print::<i64>], &[Type::i(64)], Type::never());
 
-        self.add_external_function(
-            "print",
-            print::<f32> as *const usize,
-            vec![Type::f(32)],
-            Type::never(),
-        );
+        self.add_rust_func("print", [print::<f32>], &[Type::f(32)], Type::never());
 
-        self.add_external_function(
+        self.add_rust_func(
             "assert_eq",
-            assert::<i32> as *const usize,
-            vec![Type::i(32), Type::i(32)],
+            [assert::<i32>],
+            &[Type::i(32), Type::i(32)],
             Type::never(),
         );
 
-        self.add_external_function(
+        self.add_rust_func(
             "assert_eq",
-            assert::<i64> as *const usize,
-            vec![Type::i(64), Type::i(64)],
+            [assert::<i64>],
+            &[Type::i(64), Type::i(64)],
             Type::never(),
         );
 
-        self.add_external_function(
+        self.add_rust_func(
             "assert_eq",
-            assert::<f32> as *const usize,
-            vec![Type::f(32), Type::f(32)],
+            [assert::<f32>],
+            &[Type::f(32), Type::f(32)],
             Type::never(),
         );
 
-        self.add_external_function(
-            "sqrt",
-            f32::sqrt as *const usize,
-            vec![Type::f(32)],
-            Type::f(32),
-        );
+        self.add_rust_func("sqrt", [f32::sqrt], &[Type::f(32)], Type::f(32));
 
-        self.add_external_function(
-            "panic",
-            panic as *const usize,
-            vec![],
-            Type::never(),
-        );
+        self.add_rust_func("panic", [panic], &[], Type::never());
 
-        self.add_external_function(
-            "to_i64",
-            to_i64 as *const usize,
-            vec![Type::i(32)],
-            Type::i(64),
-        );
+        self.add_rust_func("to_i64", [to_i64], &[Type::i(32)], Type::i(64));
     }
 }
 
-fn panic() { panic!() }
+fn panic(_: ()) { panic!() }
 fn print<T: Display>(num: T) { println!("{num}") }
-fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }
+fn assert<T: PartialEq + Debug>(hs: (T, T)) { assert_eq!(hs.0, hs.1) }
 fn to_i64(input: i32) -> i64 { input as i64 }

@@ -326,12 +326,7 @@ mod tests {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_external_function(
-            "print_num",
-            print_num as *const usize,
-            vec![Type::i(64)],
-            Type::never(),
-        );
+        unit.add_rust_func("print_num", [print_num], &[Type::i(64)], Type::never());
 
         unit.push_script(
             "
