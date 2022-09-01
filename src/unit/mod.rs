@@ -81,12 +81,11 @@ impl<'u> Unit<'u> {
             self.add_type_and_deps(&script, &decl.name, &mut types_to_compile);
         }
 
-        dbg!(&script);
         for decl in script.gen_funcs_iter() {
             self.functions.insert_generic(decl.clone());
         }
 
-        let dependencies: Vec<GenFuncDependency> = script
+        let dependencies: HashSet<GenFuncDependency> = script
             .funcs_iter()
             .map(|d| d.dependencies.clone())
             .flatten()
@@ -94,7 +93,11 @@ impl<'u> Unit<'u> {
 
         for dep in dependencies {
             let decl = self.functions.get_generic(dep).unwrap();
-            script.0.push(Declaration::Func(decl));
+            let unique_info = self.get_function_info(&decl).to_unique_func_info();
+
+            if self.functions.get_value(unique_info).is_none() {
+                script.0.push(Declaration::Func(decl));
+            }
         }
 
         let mut function_placeholders = Vec::new();
@@ -200,8 +203,6 @@ impl<'u> Unit<'u> {
         let mut arg_names: Vec<Arc<str>> = Vec::new();
 
         for arg in decl.args.iter() {
-            dbg!(&arg);
-            dbg!(&decl.generics);
             let var_type = self
                 .types
                 .get_gen_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)
@@ -296,41 +297,71 @@ impl<'u> Unit<'u> {
 
     pub fn add_test_lib(&mut self) {
         self.add_external_function(
-            "stdprint",
+            "print",
             print::<i32> as *const usize,
-            vec![Type::int_of_size(32)],
+            vec![Type::i(32)],
             Type::never(),
         );
 
         self.add_external_function(
-            "stdprint",
+            "print",
+            print::<i64> as *const usize,
+            vec![Type::i(64)],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "print",
             print::<f32> as *const usize,
-            vec![Type::float_of_size(32)],
+            vec![Type::f(32)],
             Type::never(),
         );
 
         self.add_external_function(
             "assert_eq",
             assert::<i32> as *const usize,
-            vec![Type::int_of_size(32), Type::int_of_size(32)],
+            vec![Type::i(32), Type::i(32)],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "assert_eq",
+            assert::<i64> as *const usize,
+            vec![Type::i(64), Type::i(64)],
             Type::never(),
         );
 
         self.add_external_function(
             "assert_eq",
             assert::<f32> as *const usize,
-            vec![Type::float_of_size(32), Type::float_of_size(32)],
+            vec![Type::f(32), Type::f(32)],
             Type::never(),
         );
 
         self.add_external_function(
             "sqrt",
             f32::sqrt as *const usize,
-            vec![Type::float_of_size(32)],
-            Type::float_of_size(32),
-        )
+            vec![Type::f(32)],
+            Type::f(32),
+        );
+
+        self.add_external_function(
+            "panic",
+            panic as *const usize,
+            vec![],
+            Type::never(),
+        );
+
+        self.add_external_function(
+            "to_i64",
+            to_i64 as *const usize,
+            vec![Type::i(32)],
+            Type::i(64),
+        );
     }
 }
 
+fn panic() { panic!() }
 fn print<T: Display>(num: T) { println!("{num}") }
 fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }
+fn to_i64(input: i32) -> i64 { input as i64 }

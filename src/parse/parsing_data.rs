@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use super::*;
 
 #[derive(Debug, Clone)]
@@ -149,8 +151,14 @@ impl Declaration {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenFuncDependency {
     pub name: String,
     pub types: Vec<TypeAlias>,
+}
+
+impl Hash for GenFuncDependency {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        format!("{self:?}").hash(state);
+    }
 }

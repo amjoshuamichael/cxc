@@ -63,6 +63,16 @@ impl TypeArc {
         self
     }
 
+    pub fn complete_deref(self) -> TypeArc {
+        let mut output = self;
+
+        while let Some(derefed) = output.clone().get_deref() {
+            output = derefed;
+        }
+
+        output
+    }
+
     pub fn deref_x_times(self, count: u8) -> Option<TypeArc> {
         let mut output = self.clone();
 
@@ -92,11 +102,11 @@ impl TypeArc {
         self.to_any_type(context).try_into().unwrap()
     }
 
-    pub fn int_of_size(size: u32) -> TypeArc {
+    pub fn i(size: u32) -> TypeArc {
         TypeArc(Arc::new(TypeEnum::Int(IntType { size })))
     }
 
-    pub fn float_of_size(size: u32) -> TypeArc {
+    pub fn f(size: u32) -> TypeArc {
         let float_type = match size {
             16 => FloatType::F16,
             32 => FloatType::F32,
@@ -128,6 +138,8 @@ impl TypeArc {
         let output = &*self.0;
         output
     }
+
+    pub fn is_never(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Never) }
 }
 
 impl Type for TypeArc {

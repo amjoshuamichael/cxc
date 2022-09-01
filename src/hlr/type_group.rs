@@ -48,8 +48,8 @@ impl TypeGroup {
     ) -> Option<Type> {
         let typ = match alias {
             TypeAlias::Named(name) => self.get_by_name(&name)?,
-            TypeAlias::Int(size) => Type::int_of_size(*size),
-            TypeAlias::Float(size) => Type::float_of_size(*size),
+            TypeAlias::Int(size) => Type::i(*size),
+            TypeAlias::Float(size) => Type::f(*size),
             TypeAlias::Ref(base) => self.get_gen_spec(base, generics)?.get_ref(),
             TypeAlias::Struct(fields, methods) => {
                 let mut typed_fields: IndexMap<String, Type> = IndexMap::new();

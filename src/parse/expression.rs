@@ -131,7 +131,7 @@ pub fn calls(atoms: &mut Vec<Expr>) {
         if let Expr::Ident(name) = being_called {
             atoms.push(Expr::Call(name, args, false));
         } else if let Expr::Member(object, field) = being_called {
-            args.push(*object);
+            args.push(Expr::UnarOp(Opcode::Ref(1), object));
             atoms.push(Expr::Call(field, args, true));
         }
     }

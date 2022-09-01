@@ -1,7 +1,6 @@
 use super::prelude::*;
 use crate::parse::*;
 use crate::unit::UniqueFuncInfo;
-use num_bigint::BigInt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 
@@ -119,7 +118,7 @@ impl Debug for ExprNode {
 pub enum NodeData {
     Empty,
     Number {
-        value: BigInt,
+        value: u128,
         size: u32,
     },
     Float {
@@ -208,8 +207,8 @@ use NodeData::*;
 impl NodeData {
     pub fn ret_type(&self) -> Type {
         match self {
-            Number { size, .. } => Type::int_of_size(*size),
-            Float { size, .. } => Type::float_of_size(*size),
+            Number { size, .. } => Type::i(*size),
+            Float { size, .. } => Type::f(*size),
             Strin(_) => todo!(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }

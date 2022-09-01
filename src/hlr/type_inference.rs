@@ -53,7 +53,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                 use crate::parse::Opcode::*;
                 *ret_type = match op {
                     Equal | Inequal | GrtrThan | GreaterOrEqual | LessThan
-                    | LessOrEqual => Type::int_of_size(64),
+                    | LessOrEqual => Type::i(64),
                     _ => type_by_id.get(rhs).unwrap().clone(),
                 };
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
@@ -93,8 +93,10 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                 field,
             } => {
                 let typ = type_by_id.get(object).unwrap().clone();
-                let type_enum = typ.as_type_enum();
-                let TypeEnum::Struct(struct_type) = type_enum else { panic!() };
+
+                let TypeEnum::Struct(struct_type) = 
+                    typ.complete_deref().as_type_enum()
+                    else { panic!() };
 
                 *ret_type = struct_type.get_field_type(field).unwrap().clone();
 
@@ -118,7 +120,6 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                     *is_method,
                 );
 
-                dbg!(&new_data);
                 let return_type = functions.get_type(new_data.clone()).unwrap();
 
                 *ret_type = return_type.clone();

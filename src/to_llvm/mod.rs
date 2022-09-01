@@ -46,14 +46,14 @@ pub fn compile<'comp>(
 
     let output: Option<AnyValueEnum> = match expr {
         Number { ref value, .. } => Some(
-            Type::int_of_size(32)
+            Type::i(32)
                 .to_any_type(&fcs.context)
                 .into_int_type()
-                .const_int(value.try_into().unwrap(), false)
+                .const_int(*value as u64, false)
                 .into(),
         ),
         Float { ref value, .. } => Some(
-            Type::float_of_size(32)
+            Type::f(32)
                 .to_any_type(&fcs.context)
                 .into_float_type()
                 .const_float(*value)
@@ -91,6 +91,7 @@ pub fn compile<'comp>(
                 let param = fcs.function.get_nth_param(0).unwrap();
                 fcs.builder
                     .build_store(param.try_into().unwrap(), to_store_basic);
+
                 return Some(to_store);
             }
 
@@ -146,6 +147,8 @@ pub fn compile<'comp>(
 
             match lhs_type.as_type_enum() {
                 TypeEnum::Int(_) => {
+                    use IntPredicate::*;
+
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");
 
@@ -159,30 +162,13 @@ pub fn compile<'comp>(
                         Modulus => {
                             fcs.builder.build_int_unsigned_rem(lhs, rhs, "mod")
                         },
-                        Inequal => fcs.builder.build_int_compare(
-                            IntPredicate::NE,
-                            lhs,
-                            rhs,
-                            "eq",
-                        ),
-                        Equal => fcs.builder.build_int_compare(
-                            IntPredicate::EQ,
-                            lhs,
-                            rhs,
-                            "eq",
-                        ),
-                        LessThan => fcs.builder.build_int_compare(
-                            IntPredicate::ULT,
-                            lhs,
-                            rhs,
-                            "lt",
-                        ),
-                        GrtrThan => fcs.builder.build_int_compare(
-                            IntPredicate::UGT,
-                            lhs,
-                            rhs,
-                            "gt",
-                        ),
+                        Inequal => fcs.builder.build_int_compare( 
+                            NE, lhs, rhs, "eq"),
+                        Equal => fcs.builder.build_int_compare(EQ, lhs, rhs, "eq",),
+                        LessThan => fcs.builder.build_int_compare( ULT, lhs, rhs, "lt",),
+                        GrtrThan => fcs.builder.build_int_compare( UGT, lhs, rhs, "gt",),
+                       LessOrEqual => fcs.builder.build_int_compare( ULE, lhs, rhs, "gt",), 
+                       GreaterOrEqual => fcs.builder.build_int_compare( UGE, lhs, rhs, "gt",),
                         _ => todo!(),
                     };
 
@@ -232,6 +218,19 @@ pub fn compile<'comp>(
                             rhs,
                             "gt",
                         ),
+                        _ => todo!(),
+                    };
+
+                    Some(result.into())
+                },
+                TypeEnum::Ref(_) => {
+                    let lhs = lhs.try_into().expect("incorrect type for expression");
+                    let rhs = rhs.try_into().expect("incorrect type for expression");
+
+                    let result = match op {
+                        Plus => unsafe {
+                            fcs.builder.build_in_bounds_gep(lhs, &[rhs], "ptrmath")
+                        },
                         _ => todo!(),
                     };
 
@@ -329,36 +328,40 @@ pub fn compile<'comp>(
             },
             _ => todo!(),
         },
-        Call { a, data, .. } => {
-            let function = fcs.globals.get_value(data.unwrap()).unwrap();
-            let is_extern = function.as_any_value_enum().is_pointer_value();
+        Call { a, data, ret_type, .. } => {
+            let data = data.unwrap();
 
-            let mut arg_vals = Vec::new();
+            if let Some(output) = internal_function(fcs, data.clone(), ret_type, a.clone()) {
+                output
+            } else {
+                let function = fcs.globals.get_value(data.clone()).unwrap();
+                let mut arg_vals = Vec::new();
 
-            for arg in a {
-                let basic_arg: BasicValueEnum =
-                    compile(fcs, arg).unwrap().try_into().unwrap();
-                let basic_meta_arg: BasicMetadataValueEnum =
-                    basic_arg.try_into().unwrap();
-                arg_vals.push(basic_meta_arg);
+                for arg in a {
+                    let basic_arg: BasicValueEnum =
+                        compile(fcs, arg).unwrap().try_into().unwrap();
+                    let basic_meta_arg: BasicMetadataValueEnum =
+                        basic_arg.try_into().unwrap();
+                    arg_vals.push(basic_meta_arg);
+                }
+
+                let output = fcs
+                    .builder
+                    .build_call(function, &*arg_vals, "call")
+                    .as_any_value_enum();
+
+                // For external functions, we need to store the output (even
+                // if the output is void) in a temporary variable in order
+                // to prevent llvm from optimizing it out.
+                // TODO: make this only happen if function returns void
+                if fcs.globals.get_type(data).unwrap().is_never() {
+                    let x = fcs.builder.build_alloca(fcs.context.i32_type(), "temp");
+                    let output_basic: BasicValueEnum = output.try_into().unwrap();
+                    fcs.builder.build_store(x, output_basic);
+                }
+
+                Some(output)
             }
-
-            let output = fcs
-                .builder
-                .build_call(function, &*arg_vals, "call")
-                .as_any_value_enum();
-
-            // For external functions, we need to store the output (even
-            // if the output is void) in a temporary variable in order
-            // to prevent llvm from optimizing it out.
-            // TODO: make this only happen if function returns void
-            if is_extern {
-                let x = fcs.builder.build_alloca(fcs.context.i32_type(), "temp");
-                let output_basic: BasicValueEnum = output.try_into().unwrap();
-                fcs.builder.build_store(x, output_basic);
-            }
-
-            Some(output)
         },
         Member { .. } => {
             let ptr = compile_as_ptr(fcs, expr_id);
@@ -371,6 +374,7 @@ pub fn compile<'comp>(
             fields,
             ..
         } => {
+            // TODO: set each field individually instead of using const_struct
             let mut compiled_fields = Vec::new();
 
             let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
@@ -450,6 +454,16 @@ pub fn compile<'comp>(
     output
 }
 
+fn compile_as_ptr_unless_already_ptr<'comp>(
+    fcs: &mut FunctionCompilationState<'comp>,
+    expr_id: ExprID,
+) -> PointerValue<'comp> {
+    match fcs.tree.get(expr_id).ret_type().clone().as_type_enum() {
+        TypeEnum::Ref(_) => compile(fcs, expr_id).unwrap().into_pointer_value(),
+        _ => compile_as_ptr(fcs, expr_id),
+    }
+}
+
 fn compile_as_ptr<'comp>(
     fcs: &mut FunctionCompilationState<'comp>,
     expr_id: ExprID,
@@ -470,13 +484,14 @@ fn compile_as_ptr<'comp>(
         },
         Member { object, field, .. } => {
             let typ = fcs.tree.get(object).ret_type();
-            let object_type = typ.as_type_enum();
 
-            let TypeEnum::Struct(struct_type) = object_type else { panic!() };
+            let TypeEnum::Struct(struct_type) = 
+                typ.complete_deref().as_type_enum() 
+                    else { panic!() };
 
             let field_index = struct_type.get_field_index(&field);
 
-            let object = compile_as_ptr(fcs, object);
+            let object = compile_as_ptr_unless_already_ptr(fcs, object);
 
             fcs.builder
                 .build_struct_gep(object, field_index as u32, "access")
@@ -508,5 +523,66 @@ fn compile_as_ptr<'comp>(
                 .into_pointer_value()
         },
         _ => todo!(),
+    }
+}
+
+fn internal_function<'comp>(
+    fcs: &mut FunctionCompilationState<'comp>,
+    data: UniqueFuncInfo,
+    _ret_type: Type,
+    args: Vec<ExprID>,
+) -> Option<Option<AnyValueEnum<'comp>>> {
+    let output = match &*(data.og_name()) {
+        "alloc" => {
+            let alloc_typ = data.arg_types()[1].to_basic_type(&fcs.context);
+            let alloc_count = compile(fcs, args[0]).unwrap().try_into().unwrap();
+
+            Some(
+                fcs.builder
+                    .build_array_malloc(alloc_typ, alloc_count, "malloc")
+                    .unwrap()
+                    .as_any_value_enum(),
+            )
+        },
+        "free" => {
+            let ptr = compile(fcs, args[0]).unwrap().try_into().unwrap();
+
+            fcs.builder.build_free(ptr);
+
+            None
+        },
+        "memmove" => {
+            let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
+
+            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
+
+            let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
+
+            fcs.builder.build_memmove(dest, 1, src, 1, size).unwrap();
+
+            None
+        },
+        "size_of" => {
+            let typ = data.arg_types()[0].to_basic_type(&fcs.context);
+            let size = typ.size_of().unwrap().as_any_value_enum();
+
+            Some(size)
+        }
+        _ => {
+            return None
+        },
+    };
+
+    Some(output)
+}
+
+pub fn get_alignment<'a, 'ctx>(basic: &'a BasicTypeEnum<'ctx>) -> IntValue<'ctx> {
+    match basic {
+        BasicTypeEnum::ArrayType(t) => t.get_alignment(),
+        BasicTypeEnum::FloatType(t) => t.get_alignment(),
+        BasicTypeEnum::IntType(t) => t.get_alignment(),
+        BasicTypeEnum::PointerType(t) => t.get_alignment(),
+        BasicTypeEnum::StructType(t) => t.get_alignment(),
+        BasicTypeEnum::VectorType(t) => t.get_alignment(),
     }
 }

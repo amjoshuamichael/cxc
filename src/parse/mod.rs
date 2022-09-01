@@ -201,7 +201,7 @@ fn parse_block(lexer: &mut ParseContext) -> Expr {
     Expr::Block(parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
-        |lexer| parse_stmt(lexer),
+        parse_stmt,
         lexer,
     ))
 }
@@ -211,9 +211,10 @@ fn parse_stmt(lexer: &mut ParseContext) -> Expr {
     let after_that = lexer.peek_by(1).unwrap();
 
     match (next, after_that) {
-        (Tok::Ident(_), Tok::LeftBrack | Tok::Colon | Tok::Assignment) => {
-            parse_setvar(lexer)
-        },
+        (
+            Tok::Ident(_),
+            Tok::LeftBrack | Tok::Dot | Tok::Colon | Tok::Assignment,
+        ) => parse_setvar(lexer),
         _ => parse_expr(lexer),
     }
 }

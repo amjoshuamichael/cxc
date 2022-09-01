@@ -179,15 +179,17 @@ fn parse_struct_part(lexer: &mut ParseContext) -> StructPart {
 
             args.push(VarDecl {
                 var_name: "self".into(),
-                type_spec: Some(TypeAlias::Generic(
+                type_spec: Some(TypeAlias::Ref(Box::new(TypeAlias::Generic(
                     lexer.name_of_this(),
                     generic_params,
-                )),
+                )))),
             });
         } else {
             args.push(VarDecl {
                 var_name: "self".into(),
-                type_spec: Some(TypeAlias::Named(lexer.name_of_this())),
+                type_spec: Some(TypeAlias::Ref(Box::new(TypeAlias::Named(
+                    lexer.name_of_this(),
+                )))),
             });
         }
 

@@ -1,5 +1,3 @@
-use inkwell::context::Context;
-use inkwell::module::Module;
 use inkwell::values::CallableValue;
 use std::collections::HashMap;
 
@@ -15,23 +13,6 @@ impl<'a> Functions<'a> {
     pub fn insert(&mut self, func_info: FuncInfo, val: CallableValue<'a>) {
         self.compiled
             .insert(func_info.to_unique_func_info(), (func_info.ret_type(), val));
-    }
-
-    pub fn insert_placeholder(
-        &mut self,
-        unique_name: UniqueFuncInfo,
-        ret_type: Type,
-        context: &'a Context,
-        module: &Module<'a>,
-    ) {
-        let function = module.add_function(
-            &*unique_name.to_string(),
-            context.void_type().fn_type(&[], false),
-            None,
-        );
-
-        self.compiled
-            .insert(unique_name, (ret_type, CallableValue::from(function)));
     }
 
     pub fn insert_generic(&mut self, decl: GenFuncDecl) {
@@ -59,16 +40,24 @@ impl<'a> Functions<'a> {
             .collect()
     }
 
-    pub fn get_value(&'a self, name: UniqueFuncInfo) -> Option<CallableValue<'a>> {
-        self.get_func(name).map(|t| t.1.clone())
+    pub fn get_value(&'a self, info: UniqueFuncInfo) -> Option<CallableValue<'a>> {
+        self.get_func(info).map(|t| t.1.clone())
     }
 
-    pub fn get_type(&self, name: UniqueFuncInfo) -> Option<Type> {
-        self.get_func(name).map(|t| t.0.clone())
+    pub fn get_type(&self, info: UniqueFuncInfo) -> Option<Type> {
+        match &*(info.og_name()) {
+            "alloc" => return Some(info.arg_types[1].clone()),
+            "free" => return Some(Type::never()),
+            "memmove" => return Some(Type::never()),
+            "size_of" => return Some(Type::i(64)),
+            _ => {},
+        };
+
+        self.get_func(info).map(|t| t.0.clone())
     }
 
-    fn get_func(&self, name: UniqueFuncInfo) -> Option<&ValAndType> {
-        self.compiled.get(&name)
+    fn get_func(&self, info: UniqueFuncInfo) -> Option<&ValAndType> {
+        self.compiled.get(&info)
     }
 }
 

@@ -5,7 +5,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
 mod hlr;
 mod lex;
@@ -329,7 +329,7 @@ mod tests {
         unit.add_external_function(
             "print_num",
             print_num as *const usize,
-            vec![Type::int_of_size(64)],
+            vec![Type::i(64)],
             Type::never(),
         );
 
@@ -601,7 +601,7 @@ mod tests {
     #[test]
     fn generic_methods() {
         #[cfg(not(target_pointer_width = "64"))]
-        panic!("this test does not work on 64 bit architecture");
+        panic!("this test does not work on non-64 bit architecture");
 
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
@@ -629,17 +629,27 @@ mod tests {
 
             buy_las_vegas(): i32 {
                 after_this: Roll<f32> = Roll<f32> { val = 7.0 }
-                assert_eq(after_this.come_on<f32>(), 7_7_7.0) #let's go!
+                assert_eq(after_this.come_on<f32>(), 7_7_7.0) # let's go!
 
                 roll: Roll<i32> = Roll<i32> { val = 7 }
-                assert_eq(roll.come_on<i32>(), 7_7_7) 
-                # i like it, i like it!
+                assert_eq(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
 
                 ! 0 
             }
-        ",
+            ",
         );
 
         unsafe { unit.get_fn::<(), i32>("buy_las_vegas")(()) };
+    }
+
+    #[test]
+    fn std_lib() {
+        let context = Context::create();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_test_lib();
+
+        unit.push_script(include_str!("libraries/vec.cxc"));
+
+        unsafe { unit.get_fn::<(), i32>("test")(()) };
     }
 }
