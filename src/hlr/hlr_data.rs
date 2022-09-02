@@ -1,19 +1,19 @@
 use super::expr_tree::*;
 use super::prelude::*;
+use crate::lex::VarName;
 use crate::parse::*;
 use indexmap::IndexMap;
-use std::sync::Arc;
 
 /// The HLR Data Type.
 #[derive(Debug, Default)]
 pub struct FuncRep {
     pub tree: ExprTree,
     pub types: TypeGroup,
-    pub identifiers: Vec<Arc<str>>,
+    pub identifiers: Vec<VarName>,
     pub generics: Vec<TypeAlias>,
 
     // used to find where variables are declared.
-    pub data_flow: IndexMap<Arc<str>, DataFlowInfo>,
+    pub data_flow: IndexMap<VarName, DataFlowInfo>,
 }
 
 #[derive(Debug)]
@@ -35,9 +35,7 @@ impl FuncRep {
         new_hlr.generics = generics;
 
         for arg in args.iter() {
-            let name: Arc<str> = Arc::from(&*arg.var_name);
-
-            new_hlr.identifiers.push(name.clone());
+            new_hlr.identifiers.push(arg.var_name.clone());
 
             let typ = match arg.type_spec {
                 Some(ref type_spec) => new_hlr.get_type_spec(&type_spec).unwrap(),
@@ -45,7 +43,7 @@ impl FuncRep {
             };
 
             new_hlr.data_flow.insert(
-                name,
+                arg.var_name.clone(),
                 DataFlowInfo {
                     typ,
                     ids: Vec::new(),
@@ -92,56 +90,54 @@ impl FuncRep {
                     size: 32,
                 },
             ),
-            Expr::Ident(name) => {
-                match self.identifiers.iter().find(|i| ***i == *name) {
-                    Some(name) => {
-                        let space = self.tree.make_one_space(parent);
+            Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name)
+            {
+                Some(name) => {
+                    let space = self.tree.make_one_space(parent);
 
-                        let name = name.clone();
-                        let data_flow_info = self.data_flow.get_mut(&name).unwrap();
-                        data_flow_info.ids.push(space);
+                    let name = name.clone();
+                    let data_flow_info = self.data_flow.get_mut(&name).unwrap();
+                    data_flow_info.ids.push(space);
 
-                        self.tree.replace(
-                            space,
-                            NodeData::Ident {
-                                var_type: Type::never(),
-                                name,
-                            },
-                        );
-
-                        space
-                    },
-                    None => self.tree.insert(
-                        parent,
+                    self.tree.replace(
+                        space,
                         NodeData::Ident {
                             var_type: Type::never(),
-                            name: Arc::from(&*name),
+                            name,
                         },
-                    ),
-                }
+                    );
+
+                    space
+                },
+                None => self.tree.insert(
+                    parent,
+                    NodeData::Ident {
+                        var_type: Type::never(),
+                        name,
+                    },
+                ),
             },
             Expr::MakeVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let var_name: Arc<str> = Arc::from(&*decl.var_name);
-
                 let var_type = Type::never();
 
-                if !self.data_flow.contains_key(&var_name) {
+                if !self.data_flow.contains_key(&decl.var_name) {
                     let new_data_flow_info = DataFlowInfo {
                         typ: var_type.clone(),
                         ids: vec![space],
                         is_func_param: false,
                     };
 
-                    self.data_flow.insert(var_name.clone(), new_data_flow_info);
+                    self.data_flow
+                        .insert(decl.var_name.clone(), new_data_flow_info);
                 }
 
-                self.identifiers.push(var_name.clone());
+                self.identifiers.push(decl.var_name.clone());
                 let new_decl = NodeData::MakeVar {
                     type_spec: decl.type_spec,
                     var_type,
-                    name: var_name.clone(),
+                    name: decl.var_name.clone(),
                     rhs: self.add_expr(*e, space),
                 };
 

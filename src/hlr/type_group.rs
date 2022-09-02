@@ -1,21 +1,22 @@
 use super::prelude::*;
+use crate::lex::{TypeName, VarName};
 use crate::parse::*;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 #[derive(Debug, Default, Clone)]
 pub struct TypeGroup {
-    types: HashMap<String, Type>,
-    generic_alias: HashMap<String, TypeAlias>,
+    types: HashMap<TypeName, Type>,
+    generic_alias: HashMap<TypeName, TypeAlias>,
 }
 
 impl TypeGroup {
-    pub fn add(&mut self, name: String, t: Type) { self.types.insert(name, t); }
+    pub fn add(&mut self, name: TypeName, t: Type) { self.types.insert(name, t); }
 
-    pub fn add_generic_alias(&mut self, name: String, a: TypeAlias) {
+    pub fn add_generic_alias(&mut self, name: TypeName, a: TypeAlias) {
         self.generic_alias.insert(name, a);
     }
 
-    pub fn get_by_name(&self, name: &String) -> Option<Type> {
+    pub fn get_by_name(&self, name: &TypeName) -> Option<Type> {
         self.types.get(name).cloned()
     }
 
@@ -52,7 +53,7 @@ impl TypeGroup {
             TypeAlias::Float(size) => Type::f(*size),
             TypeAlias::Ref(base) => self.get_gen_spec(base, generics)?.get_ref(),
             TypeAlias::Struct(fields, methods) => {
-                let mut typed_fields: IndexMap<String, Type> = IndexMap::new();
+                let mut typed_fields: IndexMap<VarName, Type> = IndexMap::new();
 
                 for field in fields {
                     let field_type = self.get_gen_spec(field.1, generics)?;

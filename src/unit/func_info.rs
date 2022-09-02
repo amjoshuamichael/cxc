@@ -1,11 +1,12 @@
 use crate::hlr::prelude::*;
+use crate::lex::VarName;
 
 use super::UniqueFuncInfo;
 
 /// Helper struct to define all information about a function.
 #[derive(Clone)]
 pub struct FuncInfo {
-    pub name: String,
+    pub name: VarName,
     pub arg_types: Vec<Type>,
     pub ret_type: Type,
     pub is_method: bool,
@@ -13,7 +14,7 @@ pub struct FuncInfo {
 
 impl FuncInfo {
     pub fn from(
-        name: &String,
+        name: &VarName,
         arg_types: &Vec<Type>,
         ret_type: &Type,
         is_method: bool,
@@ -34,7 +35,7 @@ impl FuncInfo {
 
     pub fn typ(&self) -> Type { self.ret_type().func_with_args(self.arg_types()) }
 
-    pub fn name(&self) -> String { self.name.clone() }
+    pub fn name(&self) -> VarName { self.name.clone() }
     pub fn arg_types(&self) -> Vec<Type> { self.arg_types.clone() }
     pub fn ret_type(&self) -> Type { self.ret_type.clone() }
 }

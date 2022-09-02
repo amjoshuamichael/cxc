@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::mem::transmute;
-use std::sync::Arc;
 
 mod func_info;
 mod globals;
@@ -71,7 +70,7 @@ impl<'u> Unit<'u> {
         let lexed = lex(script);
         let mut script = file(lexed);
 
-        let mut types_to_compile: HashSet<String> =
+        let mut types_to_compile: HashSet<TypeName> =
             script.types_iter().map(|d| d.name.clone()).collect();
 
         for decl in script.types_iter() {
@@ -97,7 +96,7 @@ impl<'u> Unit<'u> {
             let unique_info = self.get_function_info(&decl).to_unique_func_info();
 
             if self.functions.get_value(unique_info).is_none() {
-                script.0.push(Declaration::Func(decl));
+                script.0.push(Decl::Func(decl));
             }
         }
 
@@ -121,12 +120,12 @@ impl<'u> Unit<'u> {
     pub fn add_type_and_deps(
         &mut self,
         script: &Script,
-        typ_name: &String,
-        types_to_compile: &mut HashSet<String>,
+        typ_name: &TypeName,
+        types_to_compile: &mut HashSet<TypeName>,
     ) {
         let decl = script.get_type(typ_name.clone()).unwrap().clone();
 
-        let uncompiled_dependencies: HashSet<String> = decl
+        let uncompiled_dependencies: HashSet<TypeName> = decl
             .dependencies
             .intersection(types_to_compile)
             .map(|s| s.clone())
@@ -158,7 +157,7 @@ impl<'u> Unit<'u> {
             .func_with_args(func_info.arg_types());
 
         let function = self.module.add_function(
-            &*function_name,
+            &*function_name.to_string(),
             function_type.to_any_type(self.context).into_function_type(),
             None,
         );
@@ -183,7 +182,7 @@ impl<'u> Unit<'u> {
             .get_value(func_info.to_unique_func_info())
             .unwrap();
 
-        let arg_names = decl.args.iter().map(|v| Arc::from(&*v.var_name)).collect();
+        let arg_names = decl.args.iter().map(|v| v.var_name.clone()).collect();
 
         let mut fcs = self.new_func_comp_state(
             hlr.tree,
@@ -201,7 +200,7 @@ impl<'u> Unit<'u> {
 
     pub fn get_function_info(&self, decl: &FuncDecl) -> FuncInfo {
         let mut arg_types: Vec<Type> = Vec::new();
-        let mut arg_names: Vec<Arc<str>> = Vec::new();
+        let mut arg_names: Vec<VarName> = Vec::new();
 
         for arg in decl.args.iter() {
             let var_type = self
@@ -209,10 +208,9 @@ impl<'u> Unit<'u> {
                 .get_gen_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)
                 .unwrap()
                 .clone();
-            arg_types.push(var_type);
 
-            let var_name: Arc<str> = Arc::from(&*arg.var_name);
-            arg_names.push(var_name);
+            arg_types.push(var_type);
+            arg_names.push(arg.var_name.clone());
         }
 
         let ret_type = self
@@ -233,7 +231,7 @@ impl<'u> Unit<'u> {
         // TODO: recognize arg_types and ret_type based on std::any::type_name() of
         // function
 
-        let name = String::from(name);
+        let name = VarName::from(name);
 
         let function_ptr = unsafe { transmute::<_, *const usize>(function[0]) };
 
@@ -270,7 +268,7 @@ impl<'u> Unit<'u> {
         &'s self,
         tree: ExprTree,
         function: FunctionValue<'s>,
-        arg_names: Vec<Arc<str>>,
+        arg_names: Vec<VarName>,
     ) -> FunctionCompilationState<'s> {
         FunctionCompilationState {
             tree,

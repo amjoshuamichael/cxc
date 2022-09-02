@@ -3,6 +3,7 @@ pub mod hlr_data;
 pub mod type_group;
 mod type_inference;
 
+use crate::lex::VarName;
 use crate::parse::*;
 use crate::unit::Functions;
 use inkwell::context::Context;
@@ -119,8 +120,8 @@ impl TypeArc {
     }
 
     pub fn new_struct(
-        fields: IndexMap<String, TypeArc>,
-        methods: HashSet<String>,
+        fields: IndexMap<VarName, TypeArc>,
+        methods: HashSet<VarName>,
     ) -> TypeArc {
         TypeArc(Arc::new(TypeEnum::Struct(StructType { fields, methods })))
     }
@@ -239,20 +240,20 @@ impl Type for FuncType {
 
 #[derive(PartialEq, Eq)]
 pub struct StructType {
-    pub fields: IndexMap<String, TypeArc>,
-    pub methods: HashSet<String>,
+    pub fields: IndexMap<VarName, TypeArc>,
+    pub methods: HashSet<VarName>,
 }
 
 impl StructType {
-    pub fn get_field_type(&self, field_name: &String) -> Option<TypeArc> {
+    pub fn get_field_type(&self, field_name: &VarName) -> Option<TypeArc> {
         self.fields.get(field_name).cloned()
     }
 
-    pub fn get_full_method_name(&self, field_name: &String) -> Option<&String> {
+    pub fn get_full_method_name(&self, field_name: &VarName) -> Option<&VarName> {
         self.methods.iter().find(|m| m == &field_name)
     }
 
-    pub fn get_field_index(&self, field_name: &String) -> usize {
+    pub fn get_field_index(&self, field_name: &VarName) -> usize {
         self.fields.get_index_of(field_name).unwrap()
     }
 

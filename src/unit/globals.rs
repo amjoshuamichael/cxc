@@ -6,7 +6,7 @@ type ValAndType<'a> = (Type, CallableValue<'a>);
 #[derive(Default, Debug)]
 pub struct Functions<'a> {
     compiled: HashMap<UniqueFuncInfo, ValAndType<'a>>,
-    generics: HashMap<String, GenFuncDecl>,
+    generics: HashMap<VarName, GenFuncDecl>,
 }
 
 impl<'a> Functions<'a> {
@@ -25,15 +25,15 @@ impl<'a> Functions<'a> {
         Some(func_decl)
     }
 
-    pub fn name_exists(&self, name: String) -> bool {
+    pub fn name_exists(&self, name: VarName) -> bool {
         self.funcs_with_name(name).len() > 0
     }
 
-    pub fn count_with_name(&self, name: String) -> usize {
+    pub fn count_with_name(&self, name: VarName) -> usize {
         self.funcs_with_name(name).len()
     }
 
-    pub fn funcs_with_name(&self, name: String) -> Vec<&UniqueFuncInfo> {
+    pub fn funcs_with_name(&self, name: VarName) -> Vec<&UniqueFuncInfo> {
         self.compiled
             .keys()
             .filter(|u_name| u_name.og_name() == name)
@@ -45,7 +45,7 @@ impl<'a> Functions<'a> {
     }
 
     pub fn get_type(&self, info: UniqueFuncInfo) -> Option<Type> {
-        match &*(info.og_name()) {
+        match &*info.og_name().to_string() {
             "alloc" => return Some(info.arg_types[1].clone()),
             "free" => return Some(Type::never()),
             "memmove" => return Some(Type::never()),
@@ -67,7 +67,7 @@ use super::*;
 
 #[derive(Debug, Clone)]
 pub struct UniqueFuncInfo {
-    og_name: String,
+    og_name: VarName,
     arg_types: Vec<Type>,
     is_method: bool,
 }
@@ -97,7 +97,7 @@ impl ToString for UniqueFuncInfo {
 
 impl UniqueFuncInfo {
     pub fn from(
-        og_name: &String,
+        og_name: &VarName,
         arg_types: &Vec<Type>,
         is_method: bool,
     ) -> UniqueFuncInfo {
@@ -108,6 +108,6 @@ impl UniqueFuncInfo {
         }
     }
 
-    pub fn og_name(&self) -> String { self.og_name.clone() }
+    pub fn og_name(&self) -> VarName { self.og_name.clone() }
     pub fn arg_types(&self) -> Vec<Type> { self.arg_types.clone() }
 }

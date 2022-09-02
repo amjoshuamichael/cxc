@@ -1,14 +1,14 @@
 use super::*;
 use crate::lex::Tok;
 
-pub fn parse_list<El, Fu, Ts: TokenStream>(
+pub fn parse_list<E, F, T: TokenStream>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
-    mut parser: Fu,
-    lexer: &mut Ts,
-) -> Vec<El>
+    mut parser: F,
+    lexer: &mut T,
+) -> Vec<E>
 where
-    Fu: FnMut(&mut Ts) -> El,
+    F: FnMut(&mut T) -> E,
 {
     let (opener, closer) = opener_and_closer;
 

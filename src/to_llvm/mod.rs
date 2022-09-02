@@ -1,3 +1,4 @@
+use crate::lex::VarName;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
 use crate::parse::Opcode::*;
@@ -10,16 +11,15 @@ use inkwell::values::*;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub struct FunctionCompilationState<'f> {
     pub tree: ExprTree,
-    pub variables: HashMap<Arc<str>, PointerValue<'f>>,
+    pub variables: HashMap<VarName, PointerValue<'f>>,
     pub function: FunctionValue<'f>,
     pub builder: Builder<'f>,
     pub context: &'f Context,
     pub globals: &'f Functions<'f>,
-    pub arg_names: Vec<Arc<str>>,
+    pub arg_names: Vec<VarName>,
     pub llvm_ir_uuid: RefCell<u32>,
 }
 
@@ -73,7 +73,7 @@ pub fn compile<'comp>(
                 return Some(param.into());
             }
 
-            let val = fcs.variables.get(&**name).unwrap().clone();
+            let val = fcs.variables.get(&name).unwrap().clone();
             let loaded = fcs.builder.build_load(val, &*fcs.new_uuid());
 
             Some(loaded.into())
@@ -95,7 +95,7 @@ pub fn compile<'comp>(
                 return Some(to_store);
             }
 
-            if let Some(val) = fcs.variables.get(&**name) {
+            if let Some(val) = fcs.variables.get(name) {
                 if matches!(var_type.clone().as_type_enum(), TypeEnum::Ref(_)) {
                     let tmp = fcs.builder.build_load(*val, &*fcs.new_uuid());
                     fcs.builder
@@ -111,7 +111,7 @@ pub fn compile<'comp>(
                 let var_ptr = {
                     fcs.builder.build_alloca(
                         expr.ret_type().to_basic_type(fcs.context),
-                        name,
+                        &*name.to_string(),
                     )
                 };
 
@@ -469,7 +469,7 @@ fn compile_as_ptr<'comp>(
     expr_id: ExprID,
 ) -> PointerValue<'comp> {
     match fcs.tree.get(expr_id) {
-        Ident { name, .. } => match fcs.variables.get(&*name) {
+        Ident { name, .. } => match fcs.variables.get(&name) {
             Some(var) => var.clone(),
             None => {
                 let ident_no_ptr: BasicValueEnum =
@@ -532,7 +532,7 @@ fn internal_function<'comp>(
     _ret_type: Type,
     args: Vec<ExprID>,
 ) -> Option<Option<AnyValueEnum<'comp>>> {
-    let output = match &*(data.og_name()) {
+    let output = match &*data.og_name().to_string() {
         "alloc" => {
             let alloc_typ = data.arg_types()[1].to_basic_type(&fcs.context);
             let alloc_count = compile(fcs, args[0]).unwrap().try_into().unwrap();

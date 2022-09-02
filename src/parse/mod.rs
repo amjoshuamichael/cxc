@@ -1,6 +1,6 @@
 pub use crate::lex::ParseContext;
 pub use crate::lex::TokenStream;
-use crate::lex::{Lexer, Tok};
+use crate::lex::{Lexer, Tok, TypeName, VarName};
 pub use opcode::Opcode;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -18,28 +18,26 @@ pub use opcode::*;
 pub use parsing_data::*;
 pub use structure::*;
 
-pub type GenericLabels = HashMap<String, u8>;
+pub type GenericLabels = HashMap<TypeName, u8>;
 
 pub fn file(mut lexer: Lexer) -> Script {
-    let mut declarations = Vec::new();
+    let mut declarations: Vec<Decl> = Vec::new();
 
     loop {
-        let Some(Tok::Ident(decl_name)) = lexer.next_tok() else { panic!() };
+        match lexer.next_tok() {
+            Some(Tok::VarName(name)) => {
+                let generic_labels = parse_generics(&mut lexer);
+                let context = lexer.split(name, generic_labels);
 
-        let generic_labels = parse_generics(&mut lexer);
-
-        match lexer.peek_tok() {
-            Some(Tok::LeftParen) => {
-                let context = lexer.split(decl_name, generic_labels);
-
-                declarations.push(parse_maybe_gen_func(context, false));
+                declarations.push(parse_maybe_gen_func(context, false).into());
             },
-            Some(Tok::LeftCurly) => {
-                let context = lexer.split(decl_name, generic_labels);
+            Some(Tok::TypeName(name)) => {
+                let generic_labels = parse_generics(&mut lexer);
+                let context = lexer.split(name, generic_labels);
 
                 let (strct, methods) = parse_type_decl(context);
 
-                declarations.push(Declaration::Type(strct));
+                declarations.push(Decl::Type(strct));
 
                 for m in methods {
                     declarations.push(m);
@@ -75,22 +73,28 @@ pub fn parse_generics(lexer: &mut Lexer) -> GenericLabels {
     }
 }
 
-pub fn parse_generic_label(lexer: &mut Lexer) -> String {
+pub fn parse_generic_label(lexer: &mut Lexer) -> TypeName {
     match lexer.next_tok().unwrap() {
-        Tok::Ident(name) => name,
+        Tok::TypeName(name) => name,
         _ => panic!(),
     }
 }
 
-pub fn parse_maybe_gen_func(lexer: ParseContext, is_method: bool) -> Declaration {
+pub fn parse_maybe_gen_func(
+    lexer: ParseContext<VarName>,
+    is_method: bool,
+) -> SomeFuncDecl {
     if lexer.has_generics() {
-        Declaration::GenFunc(parse_gen_func(lexer, is_method))
+        SomeFuncDecl::Gen(parse_gen_func(lexer, is_method))
     } else {
-        Declaration::Func(parse_func(lexer, is_method))
+        SomeFuncDecl::Func(parse_func(lexer, is_method))
     }
 }
 
-pub fn parse_gen_func(mut lexer: ParseContext, is_method: bool) -> GenFuncDecl {
+pub fn parse_gen_func(
+    mut lexer: ParseContext<VarName>,
+    is_method: bool,
+) -> GenFuncDecl {
     let args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
@@ -116,7 +120,7 @@ pub fn parse_gen_func(mut lexer: ParseContext, is_method: bool) -> GenFuncDecl {
     }
 }
 
-pub fn parse_func(mut lexer: ParseContext, is_method: bool) -> FuncDecl {
+pub fn parse_func(mut lexer: ParseContext<VarName>, is_method: bool) -> FuncDecl {
     let args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
@@ -157,8 +161,8 @@ impl Assignable {
     }
 }
 
-fn parse_var_decl(lexer: &mut ParseContext) -> VarDecl {
-    let Some(Tok::Ident(var_name)) = lexer.next_tok() else { panic!() };
+fn parse_var_decl(lexer: &mut ParseContext<VarName>) -> VarDecl {
+    let Some(Tok::VarName(var_name)) = lexer.next_tok() else { panic!() };
 
     let type_spec = match lexer.peek_tok() {
         Some(Tok::Colon) => {
@@ -175,7 +179,7 @@ fn parse_var_decl(lexer: &mut ParseContext) -> VarDecl {
     }
 }
 
-fn parse_assignable(lexer: &mut ParseContext) -> Assignable {
+fn parse_assignable(lexer: &mut ParseContext<VarName>) -> Assignable {
     let lhs = parse_expr(lexer);
 
     if let Expr::Ident(var_name) = lhs {
@@ -197,7 +201,7 @@ fn parse_assignable(lexer: &mut ParseContext) -> Assignable {
     }
 }
 
-fn parse_block(lexer: &mut ParseContext) -> Expr {
+fn parse_block(lexer: &mut ParseContext<VarName>) -> Expr {
     Expr::Block(parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
@@ -206,20 +210,20 @@ fn parse_block(lexer: &mut ParseContext) -> Expr {
     ))
 }
 
-fn parse_stmt(lexer: &mut ParseContext) -> Expr {
+fn parse_stmt(lexer: &mut ParseContext<VarName>) -> Expr {
     let next = lexer.peek_tok().unwrap();
     let after_that = lexer.peek_by(1).unwrap();
 
     match (next, after_that) {
         (
-            Tok::Ident(_),
+            Tok::VarName(_),
             Tok::LeftBrack | Tok::Dot | Tok::Colon | Tok::Assignment,
         ) => parse_setvar(lexer),
         _ => parse_expr(lexer),
     }
 }
 
-fn parse_setvar(lexer: &mut ParseContext) -> Expr {
+fn parse_setvar(lexer: &mut ParseContext<VarName>) -> Expr {
     let assignable = parse_assignable(lexer);
 
     assert_eq!(lexer.next_tok(), Some(Tok::Assignment));
@@ -232,9 +236,12 @@ fn parse_setvar(lexer: &mut ParseContext) -> Expr {
     }
 }
 
-fn parse_expr(lexer: &mut ParseContext) -> Expr {
+fn parse_expr(lexer: &mut ParseContext<VarName>) -> Expr {
     match lexer.peek_tok() {
-        Some(Tok::Ident(_)) | Some(Tok::Int(_)) | Some(Tok::Float(_))
+        Some(Tok::VarName(_))
+        | Some(Tok::TypeName(_))
+        | Some(Tok::Int(_))
+        | Some(Tok::Float(_))
         | Some(Tok::LeftBrack) => parse_math_expr(lexer),
         Some(tok) if tok.is_un_op() => parse_math_expr(lexer),
         Some(Tok::At) => parse_for(lexer),
@@ -248,20 +255,20 @@ fn parse_expr(lexer: &mut ParseContext) -> Expr {
     }
 }
 
-fn parse_for(lexer: &mut ParseContext) -> Expr {
-    assert_eq!(lexer.next_tok(), Some(Tok::At));
+fn parse_for(ctx: &mut ParseContext<VarName>) -> Expr {
+    assert_eq!(ctx.next_tok(), Some(Tok::At));
 
-    let w = parse_expr(lexer);
-    let d = parse_block(lexer);
+    let w = parse_expr(ctx);
+    let d = parse_block(ctx);
 
-    Expr::ForWhile(Box::new(w), Box::new(d))
+    Expr::ForWhile(box w, box d)
 }
 
-fn parse_if(lexer: &mut ParseContext) -> Expr {
-    assert_eq!(lexer.next_tok(), Some(Tok::Question));
+fn parse_if(ctx: &mut ParseContext<VarName>) -> Expr {
+    assert_eq!(ctx.next_tok(), Some(Tok::Question));
 
-    let i = parse_expr(lexer);
-    let t = parse_block(lexer);
+    let i = parse_expr(ctx);
+    let t = parse_block(ctx);
 
-    Expr::IfThen(Box::new(i), Box::new(t))
+    Expr::IfThen(box i, box t)
 }

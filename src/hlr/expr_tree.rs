@@ -1,4 +1,5 @@
 use super::prelude::*;
+use crate::lex::VarName;
 use crate::parse::*;
 use crate::unit::UniqueFuncInfo;
 use std::fmt::{Debug, Formatter};
@@ -127,7 +128,7 @@ pub enum NodeData {
     },
     StructLit {
         var_type: Type,
-        fields: Vec<(String, ExprID)>,
+        fields: Vec<(VarName, ExprID)>,
     },
     ArrayLit {
         var_type: Type,
@@ -136,12 +137,12 @@ pub enum NodeData {
     Strin(String),
     Ident {
         var_type: Type,
-        name: Arc<str>,
+        name: VarName,
     },
     MakeVar {
         type_spec: Option<TypeAlias>,
         var_type: Type,
-        name: Arc<str>,
+        name: VarName,
         rhs: ExprID,
     },
     SetVar {
@@ -151,7 +152,7 @@ pub enum NodeData {
     },
     Call {
         ret_type: Type,
-        f: String,
+        f: VarName,
         a: Vec<ExprID>,
         data: Option<UniqueFuncInfo>,
         is_method: bool,
@@ -159,7 +160,7 @@ pub enum NodeData {
     Member {
         ret_type: Type,
         object: ExprID,
-        field: String,
+        field: VarName,
     },
     Index {
         ret_type: Type,

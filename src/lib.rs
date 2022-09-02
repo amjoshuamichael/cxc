@@ -5,7 +5,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 
 mod hlr;
 mod lex;
