@@ -485,8 +485,9 @@ fn compile_as_ptr<'comp>(
         Member { object, field, .. } => {
             let typ = fcs.tree.get(object).ret_type();
 
-            let TypeEnum::Struct(struct_type) = 
-                typ.complete_deref().as_type_enum() 
+            let complete_deref = typ.complete_deref();
+            let TypeEnum::Struct(struct_type) = complete_deref
+                .as_type_enum() 
                     else { panic!() };
 
             let field_index = struct_type.get_field_index(&field);
