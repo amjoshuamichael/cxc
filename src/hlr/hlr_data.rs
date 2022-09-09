@@ -1,5 +1,6 @@
 use super::expr_tree::*;
 use super::prelude::*;
+use super::FloatType;
 use crate::lex::VarName;
 use crate::parse::*;
 use indexmap::IndexMap;
@@ -87,7 +88,7 @@ impl FuncRep {
                 parent,
                 NodeData::Float {
                     value: n.into(),
-                    size: 32,
+                    size: FloatType::F32,
                 },
             ),
             Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name)

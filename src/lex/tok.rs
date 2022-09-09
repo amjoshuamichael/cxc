@@ -42,7 +42,6 @@ pub enum TypeName {
     I32,
     I16,
     I8,
-    F128,
     F64,
     F32,
     F16,
@@ -59,7 +58,6 @@ impl Ident for TypeName {
             "f16" => Self::F16,
             "f32" => Self::F32,
             "f64" => Self::F64,
-            "f128" => Self::F128,
             _ => Self::Other(Arc::from(t.slice())),
         }
     }
@@ -81,7 +79,6 @@ impl Debug for TypeName {
             Self::I32 => "i32",
             Self::I16 => "i16",
             Self::I8 => "i8",
-            Self::F128 => "i128",
             Self::F64 => "f64",
             Self::F32 => "f32",
             Self::F16 => "f16",

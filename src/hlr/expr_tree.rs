@@ -1,9 +1,8 @@
-use super::prelude::*;
+use super::{prelude::*, FloatType};
 use crate::lex::VarName;
 use crate::parse::*;
 use crate::unit::UniqueFuncInfo;
 use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
 
 #[derive(Default, Clone)]
 pub struct ExprTree {
@@ -124,7 +123,7 @@ pub enum NodeData {
     },
     Float {
         value: f64,
-        size: u32,
+        size: FloatType,
     },
     StructLit {
         var_type: Type,
@@ -209,7 +208,7 @@ impl NodeData {
     pub fn ret_type(&self) -> Type {
         match self {
             Number { size, .. } => Type::i(*size),
-            Float { size, .. } => Type::f(*size),
+            Float { size, .. } => Type::new(TypeEnum::Float(*size)),
             Strin(_) => todo!(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }

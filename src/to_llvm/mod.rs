@@ -53,7 +53,7 @@ pub fn compile<'comp>(
                 .into(),
         ),
         Float { ref value, .. } => Some(
-            Type::f(32)
+            Type::f32()
                 .to_any_type(&fcs.context)
                 .into_float_type()
                 .const_float(*value)

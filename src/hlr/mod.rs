@@ -56,6 +56,8 @@ impl Debug for TypeArc {
 }
 
 impl TypeArc {
+    fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum)) }
+
     pub fn ref_x_times(mut self, count: u8) -> TypeArc {
         for _ in 0..count {
             self = self.get_ref();
@@ -103,21 +105,15 @@ impl TypeArc {
         self.to_any_type(context).try_into().unwrap()
     }
 
-    pub fn i(size: u32) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Int(IntType { size })))
-    }
+    pub fn i(size: u32) -> TypeArc { TypeArc::new(TypeEnum::Int(IntType { size })) }
 
-    pub fn f(size: u32) -> TypeArc {
-        let float_type = match size {
-            16 => FloatType::F16,
-            32 => FloatType::F32,
-            64 => FloatType::F64,
-            128 => FloatType::F128,
-            _ => panic!(),
-        };
+    pub fn f16() -> TypeArc { TypeArc::new(TypeEnum::Float(FloatType::F16)) }
 
-        TypeArc(Arc::new(TypeEnum::Float(float_type)))
-    }
+    pub fn f32() -> TypeArc { TypeArc::new(TypeEnum::Float(FloatType::F32)) }
+
+    pub fn f64() -> TypeArc { TypeArc::new(TypeEnum::Float(FloatType::F64)) }
+
+    pub fn f(size: FloatType) -> TypeArc { TypeArc::new(TypeEnum::Float(size)) }
 
     pub fn new_struct(
         fields: IndexMap<VarName, TypeArc>,
@@ -301,12 +297,11 @@ impl Type for IntType {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum FloatType {
     F16,
     F32,
     F64,
-    F128,
 }
 
 impl Type for FloatType {
@@ -315,7 +310,6 @@ impl Type for FloatType {
             FloatType::F16 => "f16",
             FloatType::F32 => "f32",
             FloatType::F64 => "f64",
-            FloatType::F128 => "f128",
         }
         .to_string()
     }
@@ -325,7 +319,6 @@ impl Type for FloatType {
             FloatType::F16 => context.f16_type().as_any_type_enum(),
             FloatType::F32 => context.f32_type().as_any_type_enum(),
             FloatType::F64 => context.f64_type().as_any_type_enum(),
-            FloatType::F128 => context.f128_type().as_any_type_enum(),
         }
     }
 }

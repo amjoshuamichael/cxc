@@ -3,6 +3,9 @@ use crate::lex::{TypeName, VarName};
 use crate::parse::*;
 use indexmap::IndexMap;
 use std::collections::HashMap;
+
+mod rust_type_name_conversion;
+
 #[derive(Debug, Default, Clone)]
 pub struct TypeGroup {
     types: HashMap<TypeName, Type>,

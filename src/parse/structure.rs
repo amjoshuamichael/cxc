@@ -1,5 +1,5 @@
 use super::*;
-use crate::lex::Tok;
+use crate::{hlr::FloatType, lex::Tok};
 use indexmap::IndexMap;
 use std::collections::HashSet;
 
@@ -9,7 +9,7 @@ pub enum TypeAlias {
     Generic(TypeName, Vec<TypeAlias>),
     GenParam(u8),
     Int(u32),
-    Float(u32),
+    Float(FloatType),
     Ref(Box<TypeAlias>),
     Struct(IndexMap<VarName, TypeAlias>, HashSet<VarName>),
     Array(Box<TypeAlias>, u32),
@@ -51,10 +51,9 @@ fn parse_type_and_methods(
                 TypeName::I32 => TypeAlias::Int(32),
                 TypeName::I16 => TypeAlias::Int(16),
                 TypeName::I8 => TypeAlias::Int(8),
-                TypeName::F128 => TypeAlias::Float(128),
-                TypeName::F64 => TypeAlias::Float(64),
-                TypeName::F32 => TypeAlias::Float(32),
-                TypeName::F16 => TypeAlias::Float(16),
+                TypeName::F64 => TypeAlias::Float(FloatType::F64),
+                TypeName::F32 => TypeAlias::Float(FloatType::F32),
+                TypeName::F16 => TypeAlias::Float(FloatType::F16),
                 TypeName::Anonymous => unreachable!(),
                 TypeName::Other(_) => {
                     if let Some(generic_index) = lexer.get_generic_label(&name) {

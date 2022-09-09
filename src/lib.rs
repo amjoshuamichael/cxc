@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![feature(type_name_of_val)]
 #![feature(let_else)]
 #![feature(let_chains)]
 #![feature(once_cell)]
@@ -326,7 +327,11 @@ mod tests {
         let context = Context::create();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_rust_func("print_num", [print_num], &[Type::i(64)], Type::never());
+        unit.add_rust_func_explicit(
+            "print_num",
+            print_num as *const usize,
+            Type::never().func_with_args(vec![Type::i(64)]),
+        );
 
         unit.push_script(
             "

@@ -221,45 +221,41 @@ impl<'u> Unit<'u> {
         FuncInfo::from(&decl.name, &arg_types, &ret_type, decl.is_method)
     }
 
-    pub fn add_rust_func<A, R>(
-        &mut self,
-        name: &str,
-        function: [fn(A) -> R; 1],
-        arg_types: &[Type],
-        ret_type: Type,
-    ) {
-        // TODO: recognize arg_types and ret_type based on std::any::type_name() of
-        // function
-
-        let name = VarName::from(name);
+    pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) {
+        let func_type = self.types.type_of(&function[0]);
 
         let function_ptr = unsafe { transmute::<_, *const usize>(function[0]) };
 
+        self.add_rust_func_explicit(name, function_ptr, func_type);
+    }
+
+    pub fn add_rust_func_explicit(
+        &mut self,
+        name: &str,
+        function_ptr: *const usize,
+        func_type: Type,
+    ) {
+        let ink_func_type = func_type.to_any_type(&self.context);
+        let ink_func_ptr = ink_func_type
+            .into_function_type()
+            .ptr_type(AddressSpace::Global);
+
+        let name = VarName::from(name);
+
         let function_address = function_ptr as u64;
 
-        let ink_arg_types: Vec<BasicMetadataTypeEnum> = arg_types
-            .iter()
-            .map(|t| t.to_basic_type(self.context).into())
-            .collect();
-
-        let fn_type = match ret_type.to_any_type(self.context) {
-            AnyTypeEnum::VoidType(void) => void.fn_type(&*ink_arg_types, false),
-            other_any_type => {
-                let basic: BasicTypeEnum = other_any_type.try_into().unwrap();
-                basic.fn_type(&*ink_arg_types, false)
-            },
-        }
-        .ptr_type(AddressSpace::Global);
         let function_pointer = self
             .context
             .i64_type()
             .const_int(function_address, false)
-            .const_to_pointer(fn_type);
+            .const_to_pointer(ink_func_ptr);
         let callable_value: CallableValue =
             CallableValue::try_from(function_pointer).unwrap();
 
+        let TypeEnum::Func(func_type) = func_type.as_type_enum() else { panic!() };
+
         self.functions.insert(
-            FuncInfo::from(&name, &arg_types.to_vec(), &ret_type, false),
+            FuncInfo::from(&name, &func_type.args, &func_type.return_type, false),
             callable_value,
         );
     }
@@ -298,42 +294,43 @@ impl<'u> Unit<'u> {
     }
 
     pub fn add_test_lib(&mut self) {
-        self.add_rust_func("print", [print::<i32>], &[Type::i(32)], Type::never());
+        self.add_rust_func("print", [print::<i32>]);
 
-        self.add_rust_func("print", [print::<i64>], &[Type::i(64)], Type::never());
+        self.add_rust_func("print", [print::<i64>]);
 
-        self.add_rust_func("print", [print::<f32>], &[Type::f(32)], Type::never());
+        self.add_rust_func("print", [print::<f32>]);
 
-        self.add_rust_func(
+        self.add_rust_func_explicit(
             "assert_eq",
-            [assert::<i32>],
-            &[Type::i(32), Type::i(32)],
-            Type::never(),
+            assert::<i32> as *const usize,
+            Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
         );
 
-        self.add_rust_func(
+        self.add_rust_func_explicit(
             "assert_eq",
-            [assert::<i64>],
-            &[Type::i(64), Type::i(64)],
-            Type::never(),
+            assert::<i64> as *const usize,
+            Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
         );
 
-        self.add_rust_func(
+        self.add_rust_func_explicit(
             "assert_eq",
-            [assert::<f32>],
-            &[Type::f(32), Type::f(32)],
-            Type::never(),
+            assert::<f32> as *const usize,
+            Type::never().func_with_args(vec![Type::f32(), Type::f32()]),
         );
 
-        self.add_rust_func("sqrt", [f32::sqrt], &[Type::f(32)], Type::f(32));
+        self.add_rust_func("sqrt", [f32::sqrt]);
 
-        self.add_rust_func("panic", [panic], &[], Type::never());
+        self.add_rust_func_explicit(
+            "panic",
+            panic as *const usize,
+            Type::never().func_with_args(vec![]),
+        );
 
-        self.add_rust_func("to_i64", [to_i64], &[Type::i(32)], Type::i(64));
+        self.add_rust_func("to_i64", [to_i64]);
     }
 }
 
 fn panic(_: ()) { panic!() }
-fn print<T: Display>(num: T) { println!("{num}") }
-fn assert<T: PartialEq + Debug>(hs: (T, T)) { assert_eq!(hs.0, hs.1) }
+fn print<T: Display>(val: T) { println!("{val}") }
+fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }
 fn to_i64(input: i32) -> i64 { input as i64 }
