@@ -6,51 +6,50 @@ pub fn parse_list<E, F, T: TokenStream>(
     separator: Option<Tok>,
     mut parser: F,
     lexer: &mut T,
-) -> Vec<E>
+) -> Result<Vec<E>, ParseError>
 where
-    F: FnMut(&mut T) -> E,
+    F: FnMut(&mut T) -> Result<E, ParseError>,
 {
     let (opener, closer) = opener_and_closer;
 
-    assert_eq!(lexer.next_tok(), Some(opener));
+    assert_eq!(lexer.next_tok()?, opener);
 
-    if lexer.peek_tok() == Some(closer.clone()) {
-        lexer.next_tok();
-        return Vec::new();
+    if lexer.peek_tok()? == closer.clone() {
+        lexer.next_tok()?;
+        return Ok(Vec::new());
     }
 
-    let mut list = vec![parser(lexer)];
+    let mut list = vec![parser(lexer)?];
 
     if let Some(separator) = separator {
         // parse with separator
 
         loop {
-            match lexer.next_tok() {
-                Some(s) if s == separator => {
-                    if lexer.peek_tok() == Some(closer.clone()) {
-                        lexer.next_tok();
+            match lexer.next_tok()? {
+                s if s == separator => {
+                    if lexer.peek_tok()? == closer.clone() {
+                        lexer.next_tok()?;
                         break;
                     }
 
-                    list.push(parser(lexer))
+                    list.push(parser(lexer)?)
                 },
-                Some(s) if s == closer => break,
+                s if s == closer => break,
                 _ => panic!(),
             }
         }
     } else {
         // parse without separator
         loop {
-            match lexer.peek_tok() {
-                Some(c) if c == closer => {
-                    lexer.next_tok();
+            match lexer.peek_tok()? {
+                c if c == closer => {
+                    lexer.next_tok()?;
                     break;
                 },
-                Some(_) => list.push(parser(lexer)),
-                _ => panic!(),
+                _ => list.push(parser(lexer)?),
             }
         }
     }
 
-    list
+    Ok(list)
 }

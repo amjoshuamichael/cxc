@@ -1,5 +1,7 @@
 use super::parse_num::*;
 use crate::parse::Opcode;
+use crate::parse::ParseError;
+use crate::parse::TokName;
 use logos::{Lexer, Logos};
 use std::{
     fmt::{Debug, Display},
@@ -155,7 +157,6 @@ pub enum Tok {
     LeftBrack,
     #[token("]")]
     RghtBrack,
-
     #[token("<")]
     LeftAngle,
     #[token(">")]
@@ -210,38 +211,54 @@ impl Tok {
 
     pub fn is_un_op(&self) -> bool { self.get_un_opcode().is_some() }
 
-    pub fn get_bin_opcode(&self) -> Option<Opcode> {
+    pub fn get_bin_opcode(&self) -> Result<Opcode, ParseError> {
         match self {
-            Tok::AsterickSet(2) => Some(Opcode::Exponential),
-            Tok::Plus => Some(Opcode::Plus),
-            Tok::Minus => Some(Opcode::Minus),
-            Tok::AsterickSet(1) => Some(Opcode::Multiplier),
-            Tok::Divider => Some(Opcode::Divider),
-            Tok::Modulus => Some(Opcode::Modulus),
-            Tok::AmpersandSet(1) => Some(Opcode::BitAND),
-            Tok::BitOR => Some(Opcode::BitOR),
-            Tok::BitXOR => Some(Opcode::BitXOR),
-            Tok::BitShiftR => Some(Opcode::BitShiftR),
-            Tok::BitShiftL => Some(Opcode::BitShiftL),
-            Tok::AmpersandSet(2) => Some(Opcode::BitAND),
-            Tok::Or => Some(Opcode::Or),
-            Tok::LeftAngle => Some(Opcode::LessThan),
-            Tok::RghtAngle => Some(Opcode::GrtrThan),
-            Tok::LessOrEqual => Some(Opcode::LessOrEqual),
-            Tok::GreaterOrEqual => Some(Opcode::GreaterOrEqual),
-            Tok::Equal => Some(Opcode::Equal),
-            Tok::Inequal => Some(Opcode::Inequal),
-            Tok::Dot => Some(Opcode::Dot),
-            _ => None,
+            Tok::AsterickSet(2) => Ok(Opcode::Exponential),
+            Tok::Plus => Ok(Opcode::Plus),
+            Tok::Minus => Ok(Opcode::Minus),
+            Tok::AsterickSet(1) => Ok(Opcode::Multiplier),
+            Tok::Divider => Ok(Opcode::Divider),
+            Tok::Modulus => Ok(Opcode::Modulus),
+            Tok::AmpersandSet(1) => Ok(Opcode::BitAND),
+            Tok::BitOR => Ok(Opcode::BitOR),
+            Tok::BitXOR => Ok(Opcode::BitXOR),
+            Tok::BitShiftR => Ok(Opcode::BitShiftR),
+            Tok::BitShiftL => Ok(Opcode::BitShiftL),
+            Tok::AmpersandSet(2) => Ok(Opcode::BitAND),
+            Tok::Or => Ok(Opcode::Or),
+            Tok::LeftAngle => Ok(Opcode::LessThan),
+            Tok::RghtAngle => Ok(Opcode::GrtrThan),
+            Tok::LessOrEqual => Ok(Opcode::LessOrEqual),
+            Tok::GreaterOrEqual => Ok(Opcode::GreaterOrEqual),
+            Tok::Equal => Ok(Opcode::Equal),
+            Tok::Inequal => Ok(Opcode::Inequal),
+            Tok::Dot => Ok(Opcode::Dot),
+            err => Err(ParseError::UnexpectedTok {
+                got: err.clone(),
+                expected: vec![TokName::BinaryOperator],
+            }),
         }
     }
 
-    pub fn is_bin_op(&self) -> bool { self.get_bin_opcode().is_some() }
+    pub fn is_bin_op(&self) -> bool { self.get_bin_opcode().is_ok() }
 
-    pub fn var_name(self) -> Option<VarName> {
+    pub fn var_name(self) -> Result<VarName, ParseError> {
         match self {
-            Tok::VarName(name) => Some(name),
-            _ => None,
+            Tok::VarName(name) => Ok(name),
+            err => Err(ParseError::UnexpectedTok {
+                got: err,
+                expected: vec![TokName::VarName],
+            }),
+        }
+    }
+
+    pub fn int_value(self) -> Result<u128, ParseError> {
+        match self {
+            Tok::Int(val) => Ok(val),
+            err => Err(ParseError::UnexpectedTok {
+                got: err,
+                expected: vec![TokName::Int],
+            }),
         }
     }
 }

@@ -5,6 +5,7 @@
 #![feature(once_cell)]
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
+#![feature(yeet_expr)]
 
 pub static DEBUG: bool = true;
 

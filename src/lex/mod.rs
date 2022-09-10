@@ -1,4 +1,4 @@
-use crate::parse::{GenFuncDependency, GenericLabels};
+use crate::parse::{GenFuncDependency, GenericLabels, ParseError};
 use logos::{Lexer as LogosLexer, Logos};
 use std::{cell::RefCell, collections::HashSet, fmt::Display, rc::Rc};
 
@@ -9,7 +9,7 @@ use tok::Ident;
 mod parse_num;
 mod tok;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct TokPos(Rc<RefCell<usize>>);
 
 impl TokPos {
@@ -19,8 +19,8 @@ impl TokPos {
 }
 
 pub trait TokenStream {
-    fn next_tok(&mut self) -> Option<Tok>;
-    fn peek_tok(&mut self) -> Option<Tok>;
+    fn next_tok(&mut self) -> Result<Tok, ParseError>;
+    fn peek_tok(&mut self) -> Result<Tok, ParseError>;
 }
 
 pub struct Lexer {
@@ -29,20 +29,27 @@ pub struct Lexer {
 }
 
 impl TokenStream for Lexer {
-    fn next_tok(&mut self) -> Option<Tok> {
+    fn next_tok(&mut self) -> Result<Tok, ParseError> {
         let out = self.inner.get(self.tok_pos.val());
 
         self.tok_pos.inc();
 
-        if crate::DEBUG {
-            println!("pre-lexing: {:?}", out?);
-        }
+        match out {
+            Some(tok) => {
+                if crate::DEBUG {
+                    println!("pre-lexing: {:?}", tok);
+                }
 
-        out.cloned()
+                Ok(tok.clone())
+            },
+            None => Err(ParseError::UnexpectedEndOfFile),
+        }
     }
 
-    fn peek_tok(&mut self) -> Option<Tok> {
-        self.inner.get(self.tok_pos.val()).cloned()
+    fn peek_tok(&mut self) -> Result<Tok, ParseError> {
+        self.inner
+            .get(self.tok_pos.val())
+            .map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
     }
 }
 
@@ -60,7 +67,10 @@ impl Lexer {
         generic_labels: GenericLabels,
     ) -> ParseContext<N> {
         if crate::DEBUG {
-            println!("splitting the lexer to parse {name}");
+            println!(
+                "splitting the lexer at index {:?} to parse {name}",
+                self.tok_pos.val()
+            );
         }
 
         let output = ParseContext {
@@ -86,39 +96,30 @@ pub struct ParseContext<N: Ident> {
 }
 
 impl<N: Ident> TokenStream for ParseContext<N> {
-    fn next_tok(&mut self) -> Option<Tok> {
+    fn next_tok(&mut self) -> Result<Tok, ParseError> {
         let out = self.get(self.tok_pos.val(), true);
         self.tok_pos.inc();
         out
     }
 
-    fn peek_tok(&mut self) -> Option<Tok> { self.get(self.tok_pos.val(), false) }
+    fn peek_tok(&mut self) -> Result<Tok, ParseError> {
+        self.get(self.tok_pos.val(), false)
+    }
 }
 
 impl<N: Ident> ParseContext<N> {
-    pub fn next_if<F: Fn(Tok) -> bool>(&mut self, cond: F) -> Option<Tok> {
-        let next = self.peek_tok()?;
-
-        if cond(next.clone()) {
-            self.next_tok();
-            Some(next)
-        } else {
-            None
-        }
-    }
-
-    pub fn peek_by(&self, offset: usize) -> Option<Tok> {
+    pub fn peek_by(&self, offset: usize) -> Result<Tok, ParseError> {
         self.get(self.tok_pos.val() + offset, false)
     }
 
-    fn get(&self, at: usize, log: bool) -> Option<Tok> {
-        let token = self.inner.get(at).cloned();
+    fn get(&self, at: usize, log: bool) -> Result<Tok, ParseError> {
+        let token = self.inner.get(at);
 
         if crate::DEBUG && log && let Some(token) = token.clone() {
-            print!("lexing: {:?},   ", token);
+            println!("lexing: {:?}", token);
         }
 
-        token
+        token.map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
     }
 
     pub fn push_func_dependency(&mut self, dep: GenFuncDependency) {

@@ -68,7 +68,7 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let mut script = file(lexed);
+        let mut script = file(lexed).unwrap();
 
         let mut types_to_compile: HashSet<TypeName> =
             script.types_iter().map(|d| d.name.clone()).collect();
