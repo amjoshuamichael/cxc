@@ -26,18 +26,30 @@ use crate::to_llvm::*;
 use func_info::FuncInfo;
 pub use globals::{Functions, UniqueFuncInfo};
 
+pub struct LLVMContext {
+    context: Context,
+}
+
+impl LLVMContext {
+    pub fn new() -> Self {
+        LLVMContext {
+            context: Context::create(),
+        }
+    }
+}
+
 pub struct Unit<'u> {
-    pub execution_engine: ExecutionEngine<'u>,
-    pub types: TypeGroup,
-    pub context: &'u Context,
-    pub module: Module<'u>,
-    pub functions: Functions<'u>,
-    pub machine: TargetMachine,
+    pub(crate) execution_engine: ExecutionEngine<'u>,
+    pub(crate) types: TypeGroup,
+    pub(crate) context: &'u Context,
+    pub(crate) module: Module<'u>,
+    pub(crate) functions: Functions<'u>,
+    pub(crate) machine: TargetMachine,
 }
 
 impl<'u> Unit<'u> {
-    pub fn new(context: &'u Context) -> Self {
-        let module = Context::create_module(context, "new_module");
+    pub fn new(context: &'u LLVMContext) -> Self {
+        let module = Context::create_module(&context.context, "new_module");
 
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
@@ -57,7 +69,7 @@ impl<'u> Unit<'u> {
             .unwrap();
 
         Self {
-            context,
+            context: &context.context,
             types: TypeGroup::default(),
             execution_engine,
             module,
@@ -66,7 +78,7 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) {
+    pub fn push_script<'s>(&'s mut self, script: &str) -> &mut Self {
         let lexed = lex(script);
         let mut script = file(lexed).unwrap();
 
@@ -115,6 +127,8 @@ impl<'u> Unit<'u> {
         if crate::DEBUG {
             println!("{}", self.module.print_to_string().to_string());
         }
+
+        self
     }
 
     pub fn add_type_and_deps(
@@ -221,12 +235,16 @@ impl<'u> Unit<'u> {
         FuncInfo::from(&decl.name, &arg_types, &ret_type, decl.is_method)
     }
 
-    pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) {
+    pub fn add_rust_func<A, R>(
+        &mut self,
+        name: &str,
+        function: [fn(A) -> R; 1],
+    ) -> &mut Self {
         let func_type = self.types.type_of(&function[0]);
 
         let function_ptr = unsafe { transmute::<_, *const usize>(function[0]) };
 
-        self.add_rust_func_explicit(name, function_ptr, func_type);
+        self.add_rust_func_explicit(name, function_ptr, func_type)
     }
 
     pub fn add_rust_func_explicit(
@@ -234,7 +252,7 @@ impl<'u> Unit<'u> {
         name: &str,
         function_ptr: *const usize,
         func_type: Type,
-    ) {
+    ) -> &mut Self {
         let ink_func_type = func_type.to_any_type(&self.context);
         let ink_func_ptr = ink_func_type
             .into_function_type()
@@ -258,6 +276,8 @@ impl<'u> Unit<'u> {
             FuncInfo::from(&name, &func_type.args, &func_type.return_type, false),
             callable_value,
         );
+
+        self
     }
 
     fn new_func_comp_state<'s>(
@@ -293,40 +313,34 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn add_test_lib(&mut self) {
-        self.add_rust_func("print", [print::<i32>]);
+    pub fn add_test_lib(&mut self) -> &mut Self {
+        self.add_rust_func("print", [print::<i32>])
+            .add_rust_func("print", [print::<i64>])
+            .add_rust_func("print", [print::<f32>])
+            .add_rust_func_explicit(
+                "assert_eq",
+                assert::<i32> as *const usize,
+                Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
+            )
+            .add_rust_func_explicit(
+                "assert_eq",
+                assert::<i64> as *const usize,
+                Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
+            )
+            .add_rust_func_explicit(
+                "assert_eq",
+                assert::<f32> as *const usize,
+                Type::never().func_with_args(vec![Type::f32(), Type::f32()]),
+            )
+            .add_rust_func("sqrt", [f32::sqrt])
+            .add_rust_func_explicit(
+                "panic",
+                panic as *const usize,
+                Type::never().func_with_args(vec![]),
+            )
+            .add_rust_func("to_i64", [to_i64]);
 
-        self.add_rust_func("print", [print::<i64>]);
-
-        self.add_rust_func("print", [print::<f32>]);
-
-        self.add_rust_func_explicit(
-            "assert_eq",
-            assert::<i32> as *const usize,
-            Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
-        );
-
-        self.add_rust_func_explicit(
-            "assert_eq",
-            assert::<i64> as *const usize,
-            Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
-        );
-
-        self.add_rust_func_explicit(
-            "assert_eq",
-            assert::<f32> as *const usize,
-            Type::never().func_with_args(vec![Type::f32(), Type::f32()]),
-        );
-
-        self.add_rust_func("sqrt", [f32::sqrt]);
-
-        self.add_rust_func_explicit(
-            "panic",
-            panic as *const usize,
-            Type::never().func_with_args(vec![]),
-        );
-
-        self.add_rust_func("to_i64", [to_i64]);
+        self
     }
 }
 

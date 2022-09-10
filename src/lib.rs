@@ -19,13 +19,13 @@ mod indent_parens;
 
 #[cfg(test)]
 mod tests {
-    use inkwell::context::Context;
+    use crate::unit::LLVMContext;
 
     use super::*;
 
     #[test]
     fn basic_test() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
@@ -50,16 +50,16 @@ mod tests {
 
     #[test]
     fn pointer_test() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            square(num: &i32): i32 {
-                num = *num * *num
-                ! 0
-            }
-            ",
+                square(num: &i32): i32 {
+                    num = *num * *num
+                    ! 0
+                }
+                ",
         );
 
         let mut num = 4;
@@ -69,16 +69,16 @@ mod tests {
 
     #[test]
     fn multiple_args() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            sum(a: i32, b: i32): i32 {
-                output: i32 = a + b
-                ! output
-            }
-            ",
+                sum(a: i32, b: i32): i32 {
+                    output: i32 = a + b
+                    ! output
+                }
+                ",
         );
 
         let output: i32 = unsafe { unit.get_fn("sum")(4, 5) };
@@ -87,16 +87,16 @@ mod tests {
 
     #[test]
     fn float_test() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            seventy(): f32 {
-                output: f32 = 60.0 + 10.0
-                ! output
-            }
-            ",
+                seventy(): f32 {
+                    output: f32 = 60.0 + 10.0
+                    ! output
+                }
+                ",
         );
 
         let output: f32 = unsafe { unit.get_fn("seventy")(()) };
@@ -105,32 +105,32 @@ mod tests {
 
     #[test]
     fn call_test() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
         unit.add_test_lib();
 
         unit.push_script(
             "
-            divide_by_two(num: f32): f32 {
-                output: f32 = num / 2.0
-                ! output
-            }
-
-            mul_by_two(num: i32): i32 {
-                output: i32 = num * 2
-                ! output
-            }
+                divide_by_two(num: f32): f32 {
+                    output: f32 = num / 2.0
+                    ! output
+                }
     
-            everything_works(): i32 {
-                six_times_two: i32 = mul_by_two(6)
-                assert_eq(six_times_two, 12) 
-
-                six_div_two: f32 = divide_by_two(6.0)
-                assert_eq(six_div_two, 3.0)
-
-                ! 0
-            }
-            ",
+                mul_by_two(num: i32): i32 {
+                    output: i32 = num * 2
+                    ! output
+                }
+    
+                everything_works(): i32 {
+                    six_times_two: i32 = mul_by_two(6)
+                    assert_eq(six_times_two, 12)
+    
+                    six_div_two: f32 = divide_by_two(6.0)
+                    assert_eq(six_div_two, 3.0)
+    
+                    ! 0
+                }
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("everything_works")(()) };
@@ -163,27 +163,27 @@ mod tests {
 
     #[test]
     fn return_struct() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            Point3D {
-                x: i32
-                y: i32
-                z: i32
-            }
-
-            main(): &Point3D {
-                new_point: Point3D = Point3D { 
-                    x = 30 * 2, 
-                    y = 52, 
-                    z = 99999,
+                Point3D {
+                    x: i32
+                    y: i32
+                    z: i32
                 }
-                
-                ! &new_point
-            }
-            ",
+    
+                main(): &Point3D {
+                    new_point: Point3D = Point3D {
+                        x = 30 * 2,
+                        y = 52,
+                        z = 99999,
+                    }
+    
+                    ! &new_point
+                }
+                ",
         );
 
         let new_point_y: Point3D =
@@ -201,22 +201,22 @@ mod tests {
 
     #[test]
     fn struct_pointer() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            Point2D {
-                x: i32
-                y: i32
-            }
-
-            sqr_magnitude_of(in_ptr: &Point2D): i32 {
-                in: Point2D = *in_ptr
-
-                ! in.x * in.x + in.y * in.y
-            }
-            ",
+                Point2D {
+                    x: i32
+                    y: i32
+                }
+    
+                sqr_magnitude_of(in_ptr: &Point2D): i32 {
+                    in: Point2D = *in_ptr
+    
+                    ! in.x * in.x + in.y * in.y
+                }
+                ",
         );
 
         let point = Point2D { x: 2, y: 3 };
@@ -227,42 +227,42 @@ mod tests {
 
     #[test]
     fn type_aliasing() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            Square {
-                position: {
+                Square {
+                    position: {
+                        x: i32
+                        y: i32
+                    }
+                    size: i32
+                }
+    
+                Point2D {
                     x: i32
                     y: i32
                 }
-                size: i32
-            }
-
-            Point2D {
-                x: i32
-                y: i32
-            }
-
-            make_square(): &{
-                position: {
-                    x: i32
-                    y: i32
+    
+                make_square(): &{
+                    position: {
+                        x: i32
+                        y: i32
+                    }
+                    size: i32
+                } {
+                    new_square: Square = Square {
+                        position = Point2D {
+                            x = 43,
+                            y = 92,
+                        },
+                        size = 4,
+                    }
+    
+                    ! &new_square
                 }
-                size: i32
-            } {
-                new_square: Square = Square {
-                    position = Point2D {
-                        x = 43,
-                        y = 92,
-                    },
-                    size = 4,
-                }
-
-                ! &new_square
-            }
-            ",
+                ",
         );
 
         let square = Square {
@@ -277,32 +277,32 @@ mod tests {
 
     #[test]
     fn generics() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            Point2D<T> {
-                x: T
-                y: T
-            }
-
-            int_point(): &Point2D<i32> {
-                new_point: Point2D<i32> = Point2D<i32> {
-                    x = 42, y = 32
+                Point2D<T> {
+                    x: T
+                    y: T
                 }
-
-                ! &new_point
-            }
-
-            float_point(): &Point2D<f32> {
-                new_point: Point2D<f32> = Point2D<f32> {
-                    x = 42.8, y = 32.2
+    
+                int_point(): &Point2D<i32> {
+                    new_point: Point2D<i32> = Point2D<i32> {
+                        x = 42, y = 32
+                    }
+    
+                    ! &new_point
                 }
-
-                ! &new_point
-            }
-        ",
+    
+                float_point(): &Point2D<f32> {
+                    new_point: Point2D<f32> = Point2D<f32> {
+                        x = 42.8, y = 32.2
+                    }
+    
+                    ! &new_point
+                }
+            ",
         );
 
         let int_point =
@@ -325,27 +325,26 @@ mod tests {
             println!("{input}");
         }
 
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.add_rust_func_explicit(
             "print_num",
             print_num as *const usize,
             Type::never().func_with_args(vec![Type::i(64)]),
-        );
-
-        unit.push_script(
+        )
+        .push_script(
             "
-            call(): i64 {
-                x: i64 = 0
-                @ x < 100 {
-                    print_num(x)
-                    x = x + 1
+                call(): i64 {
+                    x: i64 = 0
+                    @ x < 100 {
+                        print_num(x)
+                        x = x + 1
+                    }
+    
+                    ! x
                 }
-
-                ! x
-            }
-        ",
+            ",
         );
 
         unsafe { unit.get_fn::<(), i64>("call")(()) };
@@ -353,40 +352,40 @@ mod tests {
 
     #[test]
     fn function_overload() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
         unit.push_script(
             "
-            # method overload 1
-            confusion() : i32 {
-                ! 40
-            }
-
-            # method overload 2
-            confusion(in: i32) : f32 {
-                ? in == 40 {
-                    ! 34.9
+                # method overload 1
+                confusion() : i32 {
+                    ! 40
                 }
-
-                ! 43.3
-            }
-
-            # method overload 3
-            confusion(in: f32) : i32 {
-                ? in == 34.9 {
-                    ! 42
+    
+                # method overload 2
+                confusion(in: i32) : f32 {
+                    ? in == 40 {
+                        ! 34.9
+                    }
+    
+                    ! 43.3
                 }
-
-                ! 6
-            }
-
-            shine_a_little_love(): i32 {
-                # should pass output of 1 into 2, 
-                # and then ouput of 2 into 3
-                ! confusion(confusion(confusion()))
-            }
-            ",
+    
+                # method overload 3
+                confusion(in: f32) : i32 {
+                    ? in == 34.9 {
+                        ! 42
+                    }
+    
+                    ! 6
+                }
+    
+                shine_a_little_love(): i32 {
+                    # should pass output of 1 into 2,
+                    # and then ouput of 2 into 3
+                    ! confusion(confusion(confusion()))
+                }
+                ",
         );
 
         let output = unsafe { unit.get_fn::<(), i32>("shine_a_little_love")(()) };
@@ -396,38 +395,37 @@ mod tests {
 
     #[test]
     fn methods() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            Point2D {
-                x: f32
-                y: f32
-
-                .hypotenuse(): f32 {
-                    ! sqrt(self.x * self.x + self.y * self.y)
+                Point2D {
+                    x: f32
+                    y: f32
+    
+                    .hypotenuse(): f32 {
+                        ! sqrt(self.x * self.x + self.y * self.y)
+                    }
+    
+                    .scaled(by: f32): Point2D {
+                        ! Point2D { x = self.x * by, y = self.y * by }
+                    }
                 }
-
-                .scaled(by: f32): Point2D {
-                    ! Point2D { x = self.x * by, y = self.y * by }
+    
+                main(): i32 {
+                    original: Point2D = Point2D { x = 4.0, y = 3.0 }
+    
+                    hypotenuse: f32 = original.hypotenuse()
+                    assert_eq(hypotenuse, 5.0)
+    
+                    scaled_by_2: Point2D = original.scaled(1.5)
+                    assert_eq(scaled_by_2.x, 6.0)
+                    assert_eq(scaled_by_2.y, 4.5)
+    
+                    ! 0
                 }
-            }
-
-            main(): i32 {
-                original: Point2D = Point2D { x = 4.0, y = 3.0 }
-
-                hypotenuse: f32 = original.hypotenuse()
-                assert_eq(hypotenuse, 5.0)
-
-                scaled_by_2: Point2D = original.scaled(1.5)
-                assert_eq(scaled_by_2.x, 6.0)
-                assert_eq(scaled_by_2.y, 4.5)
-
-                ! 0
-            }
-            ",
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
@@ -435,34 +433,33 @@ mod tests {
 
     #[test]
     fn arrays() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            main(): i32 {
-                original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
-
-                assert_eq(original[3], 15)
-                assert_eq(original[0], 1)
-                assert_eq(original[6], 42)
-                
-                index: i32 = 0
-                @ index < 7 {
-                    original[index] = index * 2
-
-                    index = index + 1
+                main(): i32 {
+                    original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
+    
+                    assert_eq(original[3], 15)
+                    assert_eq(original[0], 1)
+                    assert_eq(original[6], 42)
+    
+                    index: i32 = 0
+                    @ index < 7 {
+                        original[index] = index * 2
+    
+                        index = index + 1
+                    }
+    
+                    assert_eq(original[0], 0)
+                    assert_eq(original[1], 2)
+                    assert_eq(original[3], 6)
+                    assert_eq(original[6], 12)
+    
+                    ! 0
                 }
-
-                assert_eq(original[0], 0)
-                assert_eq(original[1], 2)
-                assert_eq(original[3], 6)
-                assert_eq(original[6], 12)
-
-                ! 0
-            }
-            ",
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
@@ -470,40 +467,39 @@ mod tests {
 
     #[test]
     fn struct_arrays() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            Point2D {
-                x: i32
-                y: i32
-            }
-
-            main(): i32 {
-                points: Point2D[3] = [
-                    Point2D { x = 43, y = 15 }, 
-                    Point2D { x = 327, y = 413 }, 
-                    Point2D { x = 1672, y = 2526 },
-                ]
-
-                assert_eq(points[0].x, 43)
-                assert_eq(points[0].y, 15)
-
-                points[0].x = 94
-
-                assert_eq(points[0].x, 94)
-                assert_eq(points[0].y, 15)
-
-                points[1] = Point2D { x = 4, y = 6 }
-
-                assert_eq(points[1].x, 4)
-                assert_eq(points[1].y, 6)
-
-                ! 0
-            }
-            ",
+                Point2D {
+                    x: i32
+                    y: i32
+                }
+    
+                main(): i32 {
+                    points: Point2D[3] = [
+                        Point2D { x = 43, y = 15 },
+                        Point2D { x = 327, y = 413 },
+                        Point2D { x = 1672, y = 2526 },
+                    ]
+    
+                    assert_eq(points[0].x, 43)
+                    assert_eq(points[0].y, 15)
+    
+                    points[0].x = 94
+    
+                    assert_eq(points[0].x, 94)
+                    assert_eq(points[0].y, 15)
+    
+                    points[1] = Point2D { x = 4, y = 6 }
+    
+                    assert_eq(points[1].x, 4)
+                    assert_eq(points[1].y, 6)
+    
+                    ! 0
+                }
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
@@ -511,40 +507,39 @@ mod tests {
 
     #[test]
     fn backwards_struct_dependency() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            Julie {
-                letter: DreamFrom<TheEndOfTheWorld>
-            }
-
-            DreamFrom<T> {
-                location: T
-            }
-
-            TheEndOfTheWorld {
-                time: i32
-            }
-
-            main(): i32 {
-                location: TheEndOfTheWorld = 
-                    TheEndOfTheWorld { time = 2095 }
-
-                dream: DreamFrom<TheEndOfTheWorld> = 
-                    DreamFrom<TheEndOfTheWorld> {
-                        location = location,
-                    }
-
-                julie: Julie = Julie { letter = dream }
-
-                assert_eq(julie.letter.location.time, 2095)
-
-                ! 0
-            }
-            ",
+                Julie {
+                    letter: DreamFrom<TheEndOfTheWorld>
+                }
+    
+                DreamFrom<T> {
+                    location: T
+                }
+    
+                TheEndOfTheWorld {
+                    time: i32
+                }
+    
+                main(): i32 {
+                    location: TheEndOfTheWorld =
+                        TheEndOfTheWorld { time = 2095 }
+    
+                    dream: DreamFrom<TheEndOfTheWorld> =
+                        DreamFrom<TheEndOfTheWorld> {
+                            location = location,
+                        }
+    
+                    julie: Julie = Julie { letter = dream }
+    
+                    assert_eq(julie.letter.location.time, 2095)
+    
+                    ! 0
+                }
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
@@ -552,23 +547,22 @@ mod tests {
 
     #[test]
     fn backwards_call() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            courthouse_1955(): i32 {
-                gigawatt_count: f32 = courthouse_1985()
-                assert_eq(gigawatt_count, 1.21) # great scott!
-
-                ! 1
-            }
-            
-            courthouse_1985(): f32 {
-                ! 1.21
-            }
-            ",
+                courthouse_1955(): i32 {
+                    gigawatt_count: f32 = courthouse_1985()
+                    assert_eq(gigawatt_count, 1.21) # great scott!
+    
+                    ! 1
+                }
+    
+                courthouse_1985(): f32 {
+                    ! 1.21
+                }
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("courthouse_1955")(()) };
@@ -576,24 +570,23 @@ mod tests {
 
     #[test]
     fn function_generics() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            double<T>(in: T): T {
-                ! in + in 
-            }
-
-            main(): i32 {
-                assert_eq(double<i32>(4), 8)
-
-                assert_eq(double<f32>(4.0), 8.0)
-
-                ! 0 
-            }
-        ",
+                double<T>(in: T): T {
+                    ! in + in
+                }
+    
+                main(): i32 {
+                    assert_eq(double<i32>(4), 8)
+    
+                    assert_eq(double<f32>(4.0), 8.0)
+    
+                    ! 0
+                }
+            ",
         );
 
         unsafe { unit.get_fn::<(), i32>("main")(()) };
@@ -604,40 +597,39 @@ mod tests {
         #[cfg(not(target_pointer_width = "64"))]
         panic!("this test does not work on non-64 bit architecture");
 
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
 
-        unit.push_script(
+        unit.add_test_lib().push_script(
             "
-            Roll<T> {
-                val: T
-
-                .come_on(): T {
-                    output: T = self.val
-
-                    counter: i32 = 1
-
-                    @ counter < 111 {
-                        output = output + self.val
-
-                        counter = counter + 1
+                Roll<T> {
+                    val: T
+    
+                    .come_on(): T {
+                        output: T = self.val
+    
+                        counter: i32 = 1
+    
+                        @ counter < 111 {
+                            output = output + self.val
+    
+                            counter = counter + 1
+                        }
+    
+                        ! output
                     }
-
-                    ! output
                 }
-            }
-
-            buy_las_vegas(): i32 {
-                after_this: Roll<f32> = Roll<f32> { val = 7.0 }
-                assert_eq(after_this.come_on<f32>(), 7_7_7.0) # let's go!
-
-                roll: Roll<i32> = Roll<i32> { val = 7 }
-                assert_eq(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
-
-                ! 0 
-            }
-            ",
+    
+                buy_las_vegas(): i32 {
+                    after_this: Roll<f32> = Roll<f32> { val = 7.0 }
+                    assert_eq(after_this.come_on<f32>(), 7_7_7.0) # let's go!
+    
+                    roll: Roll<i32> = Roll<i32> { val = 7 }
+                    assert_eq(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
+    
+                    ! 0
+                }
+                ",
         );
 
         unsafe { unit.get_fn::<(), i32>("buy_las_vegas")(()) };
@@ -645,7 +637,7 @@ mod tests {
 
     #[test]
     fn std_lib() {
-        let context = Context::create();
+        let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
         unit.add_test_lib();
 
