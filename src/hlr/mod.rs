@@ -21,8 +21,8 @@ use std::sync::Arc;
 pub mod prelude {
     pub use super::{
         expr_tree::ExprID, expr_tree::ExprTree, expr_tree::NodeData, hlr,
-        hlr_data::FuncRep, type_group::TypeGroup, type_inference::*, StructType,
-        Type as TypeTrait, TypeArc as Type, TypeEnum,
+        hlr_data::FuncRep, type_group::TypeGroup, type_inference::*, Kind,
+        StructType, Type, TypeEnum,
     };
 }
 
@@ -47,18 +47,18 @@ pub fn hlr(
 }
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct TypeArc(Arc<TypeEnum>);
+pub struct Type(Arc<TypeEnum>);
 
-impl Debug for TypeArc {
+impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.0)
     }
 }
 
-impl TypeArc {
+impl Type {
     fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum)) }
 
-    pub fn ref_x_times(mut self, count: u8) -> TypeArc {
+    pub fn ref_x_times(mut self, count: u8) -> Type {
         for _ in 0..count {
             self = self.get_ref();
         }
@@ -66,7 +66,7 @@ impl TypeArc {
         self
     }
 
-    pub fn complete_deref(self) -> TypeArc {
+    pub fn complete_deref(self) -> Type {
         let mut output = self;
 
         while let Some(derefed) = output.clone().get_deref() {
@@ -76,7 +76,7 @@ impl TypeArc {
         output
     }
 
-    pub fn deref_x_times(self, count: u8) -> Option<TypeArc> {
+    pub fn deref_x_times(self, count: u8) -> Option<Type> {
         let mut output = self.clone();
 
         for _ in 0..count {
@@ -86,46 +86,46 @@ impl TypeArc {
         Some(output)
     }
 
-    pub fn get_ref(self) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Ref(RefType { base: self })))
+    pub fn get_ref(self) -> Type {
+        Type(Arc::new(TypeEnum::Ref(RefType { base: self })))
     }
 
-    pub fn get_deref(self) -> Option<TypeArc> {
+    pub fn get_deref(self) -> Option<Type> {
         match &*self.0 {
             TypeEnum::Ref(t) => Some(t.base.clone()),
             _ => None,
         }
     }
 
-    pub fn get_array(self, count: u32) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Array(ArrayType { base: self, count })))
+    pub fn get_array(self, count: u32) -> Type {
+        Type(Arc::new(TypeEnum::Array(ArrayType { base: self, count })))
     }
 
     pub fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
         self.to_any_type(context).try_into().unwrap()
     }
 
-    pub fn i(size: u32) -> TypeArc { TypeArc::new(TypeEnum::Int(IntType { size })) }
+    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size })) }
 
-    pub fn f16() -> TypeArc { TypeArc::new(TypeEnum::Float(FloatType::F16)) }
+    pub fn f16() -> Type { Type::new(TypeEnum::Float(FloatType::F16)) }
 
-    pub fn f32() -> TypeArc { TypeArc::new(TypeEnum::Float(FloatType::F32)) }
+    pub fn f32() -> Type { Type::new(TypeEnum::Float(FloatType::F32)) }
 
-    pub fn f64() -> TypeArc { TypeArc::new(TypeEnum::Float(FloatType::F64)) }
+    pub fn f64() -> Type { Type::new(TypeEnum::Float(FloatType::F64)) }
 
-    pub fn f(size: FloatType) -> TypeArc { TypeArc::new(TypeEnum::Float(size)) }
+    pub fn f(size: FloatType) -> Type { Type::new(TypeEnum::Float(size)) }
 
     pub fn new_struct(
-        fields: IndexMap<VarName, TypeArc>,
+        fields: IndexMap<VarName, Type>,
         methods: HashSet<VarName>,
-    ) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Struct(StructType { fields, methods })))
+    ) -> Type {
+        Type(Arc::new(TypeEnum::Struct(StructType { fields, methods })))
     }
 
-    pub fn never() -> TypeArc { TypeArc(Arc::new(TypeEnum::Never)) }
+    pub fn never() -> Type { Type(Arc::new(TypeEnum::Never)) }
 
-    pub fn func_with_args(self, args: Vec<TypeArc>) -> TypeArc {
-        TypeArc(Arc::new(TypeEnum::Func(FuncType {
+    pub fn func_with_args(self, args: Vec<Type>) -> Type {
+        Type(Arc::new(TypeEnum::Func(FuncType {
             return_type: self,
             args,
         })))
@@ -139,7 +139,7 @@ impl TypeArc {
     pub fn is_never(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Never) }
 }
 
-impl Type for TypeArc {
+impl Kind for Type {
     fn name(&self) -> String { self.as_type_enum().name() }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -147,7 +147,7 @@ impl Type for TypeArc {
     }
 }
 
-pub trait Type {
+pub trait Kind {
     fn name(&self) -> String;
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t>;
 }
@@ -172,7 +172,7 @@ impl Debug for TypeEnum {
 }
 
 impl Deref for TypeEnum {
-    type Target = dyn Type;
+    type Target = dyn Kind;
 
     fn deref(&self) -> &Self::Target {
         match self {
@@ -189,10 +189,10 @@ impl Deref for TypeEnum {
 
 #[derive(PartialEq, Eq)]
 pub struct RefType {
-    base: TypeArc,
+    base: Type,
 }
 
-impl Type for RefType {
+impl Kind for RefType {
     fn name(&self) -> String { "&".to_string() + &*self.base.name() }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -205,11 +205,11 @@ impl Type for RefType {
 
 #[derive(PartialEq, Eq)]
 pub struct FuncType {
-    pub return_type: TypeArc,
-    pub args: Vec<TypeArc>,
+    pub return_type: Type,
+    pub args: Vec<Type>,
 }
 
-impl Type for FuncType {
+impl Kind for FuncType {
     fn name(&self) -> String {
         let args_names: String = self
             .args
@@ -236,12 +236,12 @@ impl Type for FuncType {
 
 #[derive(PartialEq, Eq)]
 pub struct StructType {
-    pub fields: IndexMap<VarName, TypeArc>,
+    pub fields: IndexMap<VarName, Type>,
     pub methods: HashSet<VarName>,
 }
 
 impl StructType {
-    pub fn get_field_type(&self, field_name: &VarName) -> Option<TypeArc> {
+    pub fn get_field_type(&self, field_name: &VarName) -> Option<Type> {
         self.fields.get(field_name).cloned()
     }
 
@@ -256,7 +256,7 @@ impl StructType {
     pub fn field_count(&self) -> usize { self.fields.len() }
 }
 
-impl Type for StructType {
+impl Kind for StructType {
     fn name(&self) -> String {
         // the indexmap crate formats a struct like this:
         // { x: i32, y: i32, }
@@ -289,7 +289,7 @@ pub struct IntType {
     pub size: u32,
 }
 
-impl Type for IntType {
+impl Kind for IntType {
     fn name(&self) -> String { format!("i{}", self.size) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -304,7 +304,7 @@ pub enum FloatType {
     F64,
 }
 
-impl Type for FloatType {
+impl Kind for FloatType {
     fn name(&self) -> String {
         match self {
             FloatType::F16 => "f16",
@@ -328,7 +328,7 @@ pub struct NeverType();
 
 pub static NEVER_STATIC: NeverType = NeverType();
 
-impl Type for NeverType {
+impl Kind for NeverType {
     fn name(&self) -> String { String::from("NEVER") }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -338,11 +338,11 @@ impl Type for NeverType {
 
 #[derive(PartialEq, Eq)]
 pub struct ArrayType {
-    base: TypeArc,
+    base: Type,
     count: u32,
 }
 
-impl Type for ArrayType {
+impl Kind for ArrayType {
     fn name(&self) -> String { format!("[{:?}; {}]", self.base, self.count) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
@@ -354,5 +354,5 @@ impl Type for ArrayType {
 }
 
 impl ArrayType {
-    pub fn base(&self) -> TypeArc { self.base.clone() }
+    pub fn base(&self) -> Type { self.base.clone() }
 }

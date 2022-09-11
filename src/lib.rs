@@ -9,13 +9,14 @@
 
 pub static DEBUG: bool = true;
 
+pub use hlr::{Type, TypeEnum};
+pub use unit::{LLVMContext, Unit};
+
 mod hlr;
 mod lex;
 mod parse;
 mod to_llvm;
 mod unit;
-
-mod indent_parens;
 
 #[cfg(test)]
 mod tests {
