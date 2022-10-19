@@ -105,7 +105,7 @@ impl ToString for UniqueFuncInfo {
         let prefix = if self.is_method { "_MTHD_" } else { "" };
         format!("{prefix}{:?}{:?}", self.og_name, self.arg_types)
             .chars()
-            .filter(|c| c.is_alphanumeric() || matches!(c, '_'))
+            .filter(|c| c.is_alphanumeric() || *c == '_')
             .collect()
     }
 }

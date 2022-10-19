@@ -11,7 +11,6 @@ use inkwell::targets::CodeModel;
 use inkwell::targets::RelocMode;
 use inkwell::targets::Target;
 use inkwell::targets::TargetMachine;
-use inkwell::types::*;
 use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
@@ -24,13 +23,13 @@ use std::mem::size_of;
 use std::mem::transmute;
 
 mod func_info;
-mod globals;
+mod functions;
 pub mod output_api;
 pub mod value_api;
 
 use crate::to_llvm::*;
 use func_info::FuncInfo;
-pub use globals::{Functions, UniqueFuncInfo};
+pub use functions::{Functions, UniqueFuncInfo};
 
 pub use self::output_api::Compiled;
 pub use self::output_api::CompiledFunc;
@@ -124,15 +123,8 @@ impl<'u> Unit<'u> {
             },
         };
 
-        let mut types_to_compile: HashSet<TypeName> =
-            script.types_iter().map(|d| d.name.clone()).collect();
-
-        for decl in script.types_iter() {
-            if !types_to_compile.contains(&decl.name) {
-                continue;
-            }
-
-            self.add_type_and_deps(&script, &decl.name, &mut types_to_compile);
+        for decl in script.types_iter().cloned() {
+            self.types.add(decl.name, decl.typ);
         }
 
         for decl in script.gen_funcs_iter() {
@@ -197,7 +189,7 @@ impl<'u> Unit<'u> {
 
         let expr = {
             let mut lexed = lex(of);
-            let mut context = lexed.split(VarName::empty(), HashMap::new());
+            let mut context = lexed.split(VarName::temp(), HashMap::new());
 
             parse::parse_expr(&mut context).unwrap()
         };
@@ -272,35 +264,6 @@ impl<'u> Unit<'u> {
         value
     }
 
-    fn add_type_and_deps(
-        &mut self,
-        script: &Script,
-        typ_name: &TypeName,
-        types_to_compile: &mut HashSet<TypeName>,
-    ) {
-        let decl = script.get_type(typ_name.clone()).unwrap().clone();
-
-        let uncompiled_dependencies: HashSet<TypeName> = decl
-            .dependencies
-            .intersection(types_to_compile)
-            .map(|s| s.clone())
-            .collect();
-
-        for dep_name in uncompiled_dependencies {
-            self.add_type_and_deps(script, &dep_name, types_to_compile);
-        }
-
-        types_to_compile.remove(&decl.name);
-
-        if decl.contains_generics {
-            self.types
-                .add_generic_alias(decl.name.clone(), decl.typ.clone());
-        } else {
-            self.types
-                .add(decl.name.clone(), self.types.get_spec(&decl.typ).unwrap());
-        }
-    }
-
     fn insert_placeholder_for_function(&mut self, decl: &FuncDecl) -> FuncInfo {
         let func_info = self.get_function_info(decl);
 
@@ -358,7 +321,7 @@ impl<'u> Unit<'u> {
         for arg in decl.args.iter() {
             let var_type = self
                 .types
-                .get_gen_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)
+                .get_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)
                 .unwrap()
                 .clone();
 
@@ -366,10 +329,7 @@ impl<'u> Unit<'u> {
             arg_names.push(arg.var_name.clone());
         }
 
-        let ret_type = self
-            .types
-            .get_gen_spec(&decl.ret_type, &decl.generics)
-            .unwrap();
+        let ret_type = self.types.get_spec(&decl.ret_type, &decl.generics).unwrap();
 
         FuncInfo::from(&decl.name, &arg_types, &ret_type, decl.is_method)
     }
@@ -431,7 +391,7 @@ impl<'u> Unit<'u> {
             function,
             builder: self.context.create_builder(),
             context: self.context,
-            globals: &self.functions,
+            functions: &self.functions,
             llvm_ir_uuid: RefCell::new(0),
             arg_names,
         }

@@ -17,7 +17,7 @@ pub trait Ident {
 pub struct VarName(Arc<str>);
 
 impl VarName {
-    pub fn empty() -> Self { VarName(Arc::from("unnamed")) }
+    pub fn temp() -> Self { VarName(Arc::from("temp")) }
 }
 
 impl Ident for VarName {

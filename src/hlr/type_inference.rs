@@ -19,7 +19,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                 *var_type = match type_spec {
                     Some(type_spec) => {
                         let var_type =
-                            hlr.types.get_gen_spec(type_spec, &hlr.generics).unwrap().clone();
+                            hlr.types.get_spec(type_spec, &hlr.generics).unwrap().clone();
                         hlr.data_flow.get_mut(&name.clone()).unwrap().typ =
                             var_type.clone();
                         var_type

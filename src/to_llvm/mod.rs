@@ -20,7 +20,7 @@ pub struct FunctionCompilationState<'f> {
     pub function: FunctionValue<'f>,
     pub builder: Builder<'f>,
     pub context: &'f Context,
-    pub globals: &'f Functions<'f>,
+    pub functions: &'f Functions<'f>,
     pub arg_names: Vec<VarName>,
     pub llvm_ir_uuid: RefCell<u32>,
 }
@@ -336,7 +336,7 @@ pub fn compile<'comp>(
             if let Some(output) = internal_function(fcs, data.clone(), ret_type, a.clone()) {
                 output
             } else {
-                let function = fcs.globals.get_value(data.clone()).unwrap();
+                let function = fcs.functions.get_value(data.clone()).unwrap();
                 let mut arg_vals = Vec::new();
 
                 for arg in a {
@@ -356,7 +356,7 @@ pub fn compile<'comp>(
                 // if the output is void) in a temporary variable in order
                 // to prevent llvm from optimizing it out.
                 // TODO: make this only happen if function returns void
-                if fcs.globals.get_type(data).unwrap().is_never() {
+                if fcs.functions.get_type(data).unwrap().is_never() {
                     let x = fcs.builder.build_alloca(fcs.context.i32_type(), "temp");
                     let output_basic: BasicValueEnum = output.try_into().unwrap();
                     fcs.builder.build_store(x, output_basic);

@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn external_function() {
-        use crate::hlr::prelude::Type;
+        use crate::Type;
 
         pub fn print_num(input: i64) {
             println!("{input}");

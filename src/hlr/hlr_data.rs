@@ -66,7 +66,7 @@ impl FuncRep {
     }
 
     pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
-        self.types.get_gen_spec(alias, &self.generics)
+        self.types.get_spec(alias, &self.generics)
     }
 
     fn with_types(types: TypeGroup) -> Self {
