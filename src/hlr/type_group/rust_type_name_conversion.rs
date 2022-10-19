@@ -1,5 +1,5 @@
 use super::TypeGroup;
-use crate::hlr::prelude::*;
+use crate::Type;
 use logos::{Lexer, Logos};
 
 impl TypeGroup {
@@ -8,7 +8,6 @@ impl TypeGroup {
     pub fn to_type<T>(&self) -> Type {
         let type_name = std::any::type_name::<T>();
         let mut lexer = RustTok::lexer(type_name);
-        dbg!(&type_name);
         type_from_tok(&mut lexer)
     }
 }

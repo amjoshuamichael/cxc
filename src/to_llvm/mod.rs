@@ -1,3 +1,5 @@
+use crate::typ::Kind;
+use crate::{Type, TypeEnum};
 use crate::lex::VarName;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
@@ -523,7 +525,18 @@ fn compile_as_ptr<'comp>(
                 )
                 .into_pointer_value()
         },
-        _ => todo!(),
+        other_expression => {
+            let value = compile(fcs, expr_id).unwrap();
+
+            let ptr = fcs.builder.build_alloca(
+                other_expression.ret_type().to_basic_type(fcs.context),
+                "temp",
+            );
+
+            fcs.builder.build_store(ptr, BasicValueEnum::try_from(value).unwrap());
+
+            ptr
+        }
     }
 }
 

@@ -114,7 +114,7 @@ pub fn parse_gen_func(
         &mut lexer,
     )?;
 
-    assert_eq!(lexer.next_tok()?, Tok::Colon);
+    assert_or_error(lexer.next_tok()?, Tok::Colon)?;
 
     let ret_type = parse_type_alias(&mut lexer)?;
 
@@ -143,7 +143,7 @@ pub fn parse_func(
         &mut lexer,
     )?;
 
-    assert_eq!(lexer.next_tok()?, Tok::Colon);
+    assert_or_error(lexer.next_tok()?, Tok::Colon)?;
 
     let ret_type = parse_type_alias(&mut lexer)?;
 
@@ -253,7 +253,7 @@ fn parse_setvar(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
     }
 }
 
-fn parse_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
+pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
     match lexer.peek_tok()? {
         Tok::VarName(_)
         | Tok::TypeName(_)

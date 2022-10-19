@@ -1,7 +1,8 @@
-use super::{prelude::*, FloatType};
 use crate::lex::VarName;
 use crate::parse::*;
+use crate::typ::FloatType;
 use crate::unit::UniqueFuncInfo;
+use crate::{Type, TypeEnum};
 use std::fmt::{Debug, Formatter};
 
 #[derive(Default, Clone)]
@@ -208,7 +209,7 @@ impl NodeData {
     pub fn ret_type(&self) -> Type {
         match self {
             Number { size, .. } => Type::i(*size),
-            Float { size, .. } => Type::new(TypeEnum::Float(*size)),
+            Float { size, .. } => Type::f(*size),
             Strin(_) => todo!(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }

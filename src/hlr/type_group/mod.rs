@@ -1,6 +1,6 @@
-use super::prelude::*;
 use crate::lex::{TypeName, VarName};
 use crate::parse::*;
+use crate::Type;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 

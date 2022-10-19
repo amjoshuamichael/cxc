@@ -1,8 +1,9 @@
 use super::expr_tree::*;
 use super::prelude::*;
-use super::FloatType;
 use crate::lex::VarName;
 use crate::parse::*;
+use crate::typ::FloatType;
+use crate::Type;
 use indexmap::IndexMap;
 
 /// The HLR Data Type.

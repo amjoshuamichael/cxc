@@ -16,6 +16,10 @@ pub trait Ident {
 #[derive(PartialEq, Eq, Clone, Hash)]
 pub struct VarName(Arc<str>);
 
+impl VarName {
+    pub fn empty() -> Self { VarName(Arc::from("unnamed")) }
+}
+
 impl Ident for VarName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self { Self(Arc::from(t.slice())) }
     fn to_string(&self) -> String { String::from(&*self.0) }

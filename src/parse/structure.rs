@@ -1,5 +1,6 @@
 use super::*;
-use crate::{hlr::FloatType, lex::Tok};
+use crate::lex::Tok;
+use crate::typ::FloatType;
 use indexmap::IndexMap;
 use std::collections::HashSet;
 
@@ -80,10 +81,14 @@ fn parse_type_and_methods(
         _ => panic!(),
     };
 
-    let suffix = lexer.peek_tok()?.clone();
+    let suffix = lexer.peek_tok().clone();
+
+    if suffix.is_err() && suffix != Err(ParseError::UnexpectedEndOfFile) {
+        return Err(suffix.err().unwrap());
+    }
 
     let alias = match suffix {
-        Tok::LeftBrack => {
+        Ok(Tok::LeftBrack) => {
             lexer.next_tok()?;
             let count = lexer.next_tok()?.int_value()?;
             lexer.next_tok()?;

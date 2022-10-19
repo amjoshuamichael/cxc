@@ -7,15 +7,16 @@
 #![feature(box_syntax)]
 #![feature(yeet_expr)]
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
-pub use hlr::{Type, TypeEnum};
-pub use unit::{LLVMContext, Unit};
+pub use typ::{Type, TypeEnum};
+pub use unit::{Compiled, CompiledFunc, LLVMContext, Unit, Value};
 
 mod hlr;
 mod lex;
 mod parse;
 mod to_llvm;
+mod typ;
 mod unit;
 
 #[cfg(test)]
@@ -131,7 +132,7 @@ mod tests {
     
                     ! 0
                 }
-                ",
+            ",
         );
 
         unsafe { unit.get_fn::<(), i32>("everything_works")(()) };

@@ -1,7 +1,9 @@
 use crate::hlr::prelude::*;
 use crate::lex::*;
-use crate::parse::file;
+use crate::parse;
 use crate::parse::*;
+use crate::typ::Kind;
+use crate::{Type, TypeEnum};
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -13,18 +15,32 @@ use inkwell::types::*;
 use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
+use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::{Debug, Display};
+use std::mem::size_of;
 use std::mem::transmute;
 
 mod func_info;
 mod globals;
+pub mod output_api;
+pub mod value_api;
 
 use crate::to_llvm::*;
 use func_info::FuncInfo;
 pub use globals::{Functions, UniqueFuncInfo};
+
+pub use self::output_api::Compiled;
+pub use self::output_api::CompiledFunc;
+pub use self::value_api::Value;
+
+pub type IOFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
+
+thread_local! {
+    static LLVM: Lazy<Context> = Lazy::new(|| Context::create());
+}
 
 pub struct LLVMContext {
     context: Context,
@@ -41,16 +57,15 @@ impl LLVMContext {
 pub struct Unit<'u> {
     pub(crate) execution_engine: ExecutionEngine<'u>,
     pub(crate) types: TypeGroup,
-    pub(crate) context: &'u Context,
     pub(crate) module: Module<'u>,
     pub(crate) functions: Functions<'u>,
     pub(crate) machine: TargetMachine,
+    pub(crate) context: &'u Context,
 }
 
 impl<'u> Unit<'u> {
     pub fn new(context: &'u LLVMContext) -> Self {
         let module = Context::create_module(&context.context, "new_module");
-
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .unwrap();
@@ -69,18 +84,45 @@ impl<'u> Unit<'u> {
             .unwrap();
 
         Self {
-            context: &context.context,
             types: TypeGroup::default(),
             execution_engine,
             module,
             functions: Functions::default(),
             machine,
+            context: &context.context,
         }
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) -> &mut Self {
+    pub fn clear(&mut self) {
+        for func in self.functions.func_info_iter() {
+            if self.functions.is_extern(func).unwrap() {
+                continue;
+            }
+
+            let llvm_func = self.module.get_function(&*func.to_string()).unwrap();
+            self.execution_engine.free_fn_machine_code(llvm_func);
+            unsafe { llvm_func.delete() }
+        }
+
+        self.execution_engine.remove_module(&self.module).unwrap();
+
+        self.execution_engine = self
+            .module
+            .create_jit_execution_engine(OptimizationLevel::Aggressive)
+            .unwrap();
+
+        self.functions.clear();
+    }
+
+    pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Compiled> {
         let lexed = lex(script);
-        let mut script = file(lexed).unwrap();
+        let mut script = match parse::file(lexed) {
+            Ok(file) => file,
+            Err(err) => {
+                dbg!(&err);
+                return Vec::new();
+            },
+        };
 
         let mut types_to_compile: HashSet<TypeName> =
             script.types_iter().map(|d| d.name.clone()).collect();
@@ -124,14 +166,113 @@ impl<'u> Unit<'u> {
             self.add_function(func_info, decl);
         }
 
+        let compiled = script
+            .funcs_iter()
+            .map(|decl| {
+                let full_func_name =
+                    self.functions.funcs_with_name(decl.name.clone())[0].to_string();
+
+                let func_address = self
+                    .execution_engine
+                    .get_function_address(&*full_func_name)
+                    .unwrap();
+
+                Compiled::Func(CompiledFunc {
+                    address: func_address,
+                    name: decl.name.to_string(),
+                })
+            })
+            .collect();
+
         if crate::DEBUG {
             println!("{}", self.module.print_to_string().to_string());
         }
 
-        self
+        compiled
     }
 
-    pub fn add_type_and_deps(
+    pub fn get_value(&self, of: &str) -> Value {
+        // TODO: create UUID
+        let temp_name = "temp";
+
+        let expr = {
+            let mut lexed = lex(of);
+            let mut context = lexed.split(VarName::empty(), HashMap::new());
+
+            parse::parse_expr(&mut context).unwrap()
+        };
+
+        let func_rep = hlr(
+            Vec::new(),
+            Expr::Return(box expr.clone()),
+            &self.functions,
+            &self.types,
+            Vec::new(),
+        );
+
+        let val_type = match func_rep.tree.get(ExprID::ROOT) {
+            NodeData::Return { to_return, .. } => {
+                func_rep.tree.get(to_return).ret_type()
+            },
+            _ => unreachable!(),
+        };
+
+        let get_via_ref = val_type.size(self.context) > size_of::<usize>();
+
+        let (func_rep, ret_type) = if !get_via_ref {
+            (func_rep, val_type.clone())
+        } else {
+            let func_rep = hlr(
+                Vec::new(),
+                Expr::Return(box Expr::UnarOp(Opcode::Ref(1), box expr)),
+                &self.functions,
+                &self.types,
+                Vec::new(),
+            );
+
+            let ret_type = val_type.clone().get_ref();
+
+            (func_rep, ret_type)
+        };
+
+        let mut fcs = {
+            let func_type = ret_type.clone().func_with_args(Vec::new());
+
+            let function = self.module.add_function(
+                temp_name,
+                func_type.to_any_type(self.context).into_function_type(),
+                None,
+            );
+
+            self.new_func_comp_state(func_rep.tree, function, Vec::new())
+        };
+
+        {
+            let block = fcs.context.append_basic_block(fcs.function, "");
+            fcs.builder.position_at_end(block);
+            compile(&mut fcs, ExprID::ROOT);
+        };
+
+        let func_addr = self
+            .execution_engine
+            .get_function_address(temp_name)
+            .unwrap();
+
+        let value = if get_via_ref {
+            let comp: fn() -> *const [u8; 16] = unsafe { transmute(func_addr) };
+            Value::new(val_type, unsafe { *comp() }, &self.context)
+        } else {
+            let comp: fn() -> [u8; 8] = unsafe { transmute(func_addr) };
+            Value::new(val_type, comp(), &self.context)
+        };
+
+        self.execution_engine.free_fn_machine_code(fcs.function);
+        unsafe { fcs.function.delete() };
+
+        value
+    }
+
+    fn add_type_and_deps(
         &mut self,
         script: &Script,
         typ_name: &TypeName,
@@ -160,7 +301,7 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn insert_placeholder_for_function(&mut self, decl: &FuncDecl) -> FuncInfo {
+    fn insert_placeholder_for_function(&mut self, decl: &FuncDecl) -> FuncInfo {
         let func_info = self.get_function_info(decl);
 
         let function_name = func_info.unique_name();
@@ -182,7 +323,7 @@ impl<'u> Unit<'u> {
         func_info
     }
 
-    pub fn add_function(&mut self, func_info: FuncInfo, decl: &FuncDecl) {
+    fn add_function(&mut self, func_info: FuncInfo, decl: &FuncDecl) {
         let hlr = hlr(
             decl.args.clone(),
             decl.code.clone(),
@@ -208,11 +349,9 @@ impl<'u> Unit<'u> {
         fcs.builder.position_at_end(basic_block);
 
         compile(&mut fcs, ExprID::ROOT);
-
-        fcs.delete();
     }
 
-    pub fn get_function_info(&self, decl: &FuncDecl) -> FuncInfo {
+    fn get_function_info(&self, decl: &FuncDecl) -> FuncInfo {
         let mut arg_types: Vec<Type> = Vec::new();
         let mut arg_names: Vec<VarName> = Vec::new();
 
@@ -242,7 +381,7 @@ impl<'u> Unit<'u> {
     ) -> &mut Self {
         let func_type = self.types.type_of(&function[0]);
 
-        let function_ptr = unsafe { transmute::<_, *const usize>(function[0]) };
+        let function_ptr: *const usize = unsafe { transmute(function[0]) };
 
         self.add_rust_func_explicit(name, function_ptr, func_type)
     }
@@ -291,7 +430,7 @@ impl<'u> Unit<'u> {
             variables: HashMap::new(),
             function,
             builder: self.context.create_builder(),
-            context: &self.context,
+            context: self.context,
             globals: &self.functions,
             llvm_ir_uuid: RefCell::new(0),
             arg_names,

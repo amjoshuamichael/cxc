@@ -1,3 +1,4 @@
+use crate::Type;
 use inkwell::values::CallableValue;
 use std::collections::HashMap;
 
@@ -13,6 +14,15 @@ impl<'a> Functions<'a> {
     pub fn insert(&mut self, func_info: FuncInfo, val: CallableValue<'a>) {
         self.compiled
             .insert(func_info.to_unique_func_info(), (func_info.ret_type(), val));
+    }
+
+    pub fn clear(&mut self) {
+        self.compiled.clear();
+        self.generics.clear();
+    }
+
+    pub fn func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
+        self.compiled.keys()
     }
 
     pub fn insert_generic(&mut self, decl: GenFuncDecl) {
@@ -58,6 +68,11 @@ impl<'a> Functions<'a> {
 
     fn get_func(&self, info: UniqueFuncInfo) -> Option<&ValAndType> {
         self.compiled.get(&info)
+    }
+
+    pub fn is_extern(&self, info: &UniqueFuncInfo) -> Option<bool> {
+        let callable = &self.compiled.get(info)?.1;
+        Some(callable.is_pointer_value())
     }
 }
 

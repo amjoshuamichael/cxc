@@ -5,7 +5,11 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
 
     let mut last_atom = Expr::Op(Opcode::Plus);
     loop {
-        let next = lexer.peek_tok()?;
+        let next = match lexer.peek_tok() {
+            Ok(tok) => tok,
+            Err(ParseError::UnexpectedEndOfFile) => break,
+            Err(other_error) => return Err(other_error),
+        };
 
         let atom = if matches!(last_atom, Expr::Op(_)) {
             let atom = match next {
