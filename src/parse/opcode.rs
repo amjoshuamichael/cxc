@@ -11,6 +11,7 @@ pub enum Opcode {
     BitXOR,
     BitShiftL,
     BitShiftR,
+    Not,
     Or,
     And,
     LessThan,
@@ -28,12 +29,13 @@ pub enum Opcode {
 }
 
 impl Opcode {
-    pub const MAX_UN_PREC: u8 = 0;
+    pub const MAX_UN_PREC: u8 = 1;
     pub fn un_prec_level(&self) -> Option<u8> {
         use Opcode::*;
 
         match self {
-            Ref(_) | Deref(_) => Some(0),
+            Ref(_) | Deref(_) => Some(1),
+            Not => Some(0),
             _ => None,
         }
     }

@@ -9,6 +9,7 @@ use super::*;
 pub enum Expr {
     Number(u128),
     Float(f64),
+    Bool(bool),
     Ident(VarName),
     Struct(TypeAlias, Vec<(VarName, Expr)>),
     Array(Vec<Expr>),

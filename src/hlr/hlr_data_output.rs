@@ -4,6 +4,7 @@ use crate::{lex::VarName, unit::UniqueFuncInfo};
 
 use super::expr_tree::{ExprTree, NodeData};
 
+#[derive(Debug)]
 pub struct FuncOutput {
     pub(super) tree: Option<ExprTree>,
     pub(super) arg_names: Option<Vec<VarName>>,

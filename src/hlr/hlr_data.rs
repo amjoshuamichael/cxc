@@ -105,6 +105,7 @@ impl<'a> FuncRep<'a> {
                     size: FloatType::F32,
                 },
             ),
+            Expr::Bool(b) => self.tree.insert(parent, NodeData::Bool { value: b }),
             Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name)
             {
                 Some(name) => {

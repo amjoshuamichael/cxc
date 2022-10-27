@@ -76,6 +76,8 @@ impl Type {
         Type::new(TypeEnum::Float(size.into()))
     }
 
+    pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
+
     pub fn new_struct(
         fields: IndexMap<VarName, Type>,
         methods: HashSet<VarName>,
@@ -135,12 +137,7 @@ impl TypeData {
         Self { type_enum, name }
     }
 
-    pub fn is_named(&self) -> bool {
-        match &self.name {
-            Some(name) => true,
-            None => false,
-        }
-    }
+    pub fn is_named(&self) -> bool { self.name.is_some() }
 }
 
 #[derive(Default, Hash, PartialEq, Eq)]
@@ -151,6 +148,7 @@ pub enum TypeEnum {
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
+    Bool(BoolType),
 
     #[default]
     Never,
@@ -173,6 +171,7 @@ impl Deref for TypeEnum {
             TypeEnum::Struct(t) => t,
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
+            TypeEnum::Bool(t) => t,
             TypeEnum::Never => &NEVER_STATIC,
         }
     }
@@ -247,6 +246,9 @@ impl Into<FloatType> for u32 {
         }
     }
 }
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub struct BoolType;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct NeverType();

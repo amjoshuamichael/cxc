@@ -140,6 +140,14 @@ impl Kind for FloatType {
     }
 }
 
+impl Kind for BoolType {
+    fn name(&self) -> String { "bool".into() }
+
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        context.bool_type().as_any_type_enum()
+    }
+}
+
 impl Kind for ArrayType {
     fn name(&self) -> String { format!("[{:?}; {}]", self.base, self.count) }
 

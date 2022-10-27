@@ -57,6 +57,7 @@ pub enum TokName {
 
     Int,
     Float,
+    Bool,
 
     Error,
     Whitespace,
@@ -104,6 +105,7 @@ impl From<Tok> for TokName {
             TypeName(_) => TokName::TypeName,
             Int(_) => TokName::Int,
             Float(_) => TokName::Float,
+            Bool(_) => TokName::Bool,
             Error => TokName::Error,
             Whitespace => TokName::Whitespace,
         }

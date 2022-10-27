@@ -121,6 +121,7 @@ impl Debug for ExprNode {
             Empty => write!(fmt, "Empty"),
             Number { value, .. } => write!(fmt, "{value}"),
             Float { value, .. } => write!(fmt, "{value:?}"),
+            Bool { value, .. } => write!(fmt, "{value:?}"),
             Strin(s) => write!(fmt, "{s}"),
             StructLit {
                 var_type, fields, ..
@@ -157,6 +158,7 @@ impl Debug for ExprNode {
 }
 
 // TODO: refactor Call to use UniqueFuncInfo
+// TODO: combine SetVar and MakeVar
 #[derive(Clone, Debug)]
 pub enum NodeData {
     Empty,
@@ -167,6 +169,9 @@ pub enum NodeData {
     Float {
         value: f64,
         size: FloatType,
+    },
+    Bool {
+        value: bool,
     },
     StructLit {
         var_type: Type,
@@ -252,6 +257,7 @@ impl NodeData {
         match self {
             Number { size, .. } => Type::i(*size),
             Float { size, .. } => Type::f(*size),
+            Bool { .. } => Type::bool(),
             Strin(_) => todo!(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }

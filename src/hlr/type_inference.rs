@@ -68,19 +68,22 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
                 op,
                 ..
             } => {
-                *ret_type = type_by_id.get(hs).unwrap().clone();
+                let hs_type = type_by_id.get(hs).unwrap().clone();
 
                 match op {
                     Opcode::Deref(count) => {
-                        *ret_type = ret_type.clone().deref_x_times(count).unwrap();
+                        *ret_type = hs_type.clone().deref_x_times(count).unwrap();
                     },
                     Opcode::Ref(count) => {
-                        *ret_type = ret_type.clone().ref_x_times(count)
+                        *ret_type = hs_type.clone().ref_x_times(count)
                     },
+                    Opcode::Not => {
+                        *ret_type = Type::bool()
+                    }
                     _ => unreachable!(),
                 }
 
-                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
+                *type_by_id.get_mut(&n).unwrap() = hs_type.clone();
             },
             NodeData::SetVar {
                 ref mut ret_type,

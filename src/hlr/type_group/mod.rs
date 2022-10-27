@@ -50,6 +50,7 @@ impl<'a> CompData<'a> {
             TypeAlias::Named(name) => self.get_by_name(&name)?,
             TypeAlias::Int(size) => Type::i(*size),
             TypeAlias::Float(size) => Type::f(*size),
+            TypeAlias::Bool => Type::bool(),
             TypeAlias::Ref(base) => self.get_spec(base, generics)?.get_ref(),
             TypeAlias::Struct(fields, methods) => {
                 let mut typed_fields: IndexMap<VarName, Type> = IndexMap::new();

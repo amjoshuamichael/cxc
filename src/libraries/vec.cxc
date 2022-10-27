@@ -8,16 +8,16 @@ two_nums_from_one(in: i64): TwoNums {
     two_nums.num_one = in
     two_nums.num_two = in + 42
 
-    ! two_nums
+    ; two_nums
 }
 
 Vec<T> {
     data_loc: &T
-    len: i64
     capacity: i64
+    len: i64
     
     .push(val: T): i32 {
-        ? self.len >= self.capacity + 0 {
+        ? self.len >= self.capacity {
             # reallocate memory
             self.capacity = self.capacity * to_i64(2)
 
@@ -32,12 +32,12 @@ Vec<T> {
         
         self.len = self.len + to_i64(1)
 
-        ! 0 
+        ; 0 
     }
 
     .get(index: i64): T {
         ptr: &T = self.data_loc + index
-        ! *ptr
+        ; *ptr
     }
 }
 
@@ -47,48 +47,7 @@ create_vec<T>(): Vec<T> {
     new_vec.capacity = to_i64(4)
     new_vec.data_loc = alloc<T>(new_vec.capacity)
 
-    ! new_vec
+    ; new_vec
 }
 
-test(): i32 {
-    number_of_checks: i32 = 32
 
-    num_vec: Vec<i32> = create_vec<i32>()
-    two_num_vec: Vec<TwoNums> = create_vec<TwoNums>(two_nums_from_one(to_i64(0)))
-
-    current_index: i32 = 0
-    @ current_index < number_of_checks + 0 {
-        x: i32 = num_vec.push<i32>(current_index)
-
-        current_index = current_index + 1
-    }
-
-    current_index = 0
-    @ current_index < number_of_checks + 0 {
-        assert_eq<i32>(num_vec.get<i32>(to_i64(current_index)), current_index)
-
-        current_index = current_index + 1
-    }
-
-
-    current_index: i64 = 0
-    @ current_index < number_of_checks + 0 {
-        x: i32 = two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
-
-        current_index = current_index + 1
-    }
-
-    current_index = 0
-    @ current_index < number_of_checks + 0 {
-        in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
-        corresponding: TwoNums = two_nums_from_one(current_index)
-
-        assert_eq<i64>(in_vec.num_one, corresponding.num_one)
-        assert_eq<i64>(in_vec.num_two, corresponding.num_two)
-
-        current_index = current_index + 1
-    }
-
-
-    ! 0
-}

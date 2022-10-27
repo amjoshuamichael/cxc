@@ -209,6 +209,7 @@ impl UniqueFuncInfo {
 
     pub fn og_name(&self) -> VarName { self.name.clone() }
     pub fn is_method(&self) -> bool { self.method_of.is_some() }
+    pub fn has_generics(&self) -> bool { self.generics.len() > 0 }
 }
 
 impl Into<FuncDeclInfo> for UniqueFuncInfo {

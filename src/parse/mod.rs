@@ -220,11 +220,12 @@ pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError>
         | Tok::TypeName(_)
         | Tok::Int(_)
         | Tok::Float(_)
+        | Tok::Bool(_)
         | Tok::LeftBrack => parse_math_expr(lexer),
         tok if tok.is_un_op() => parse_math_expr(lexer),
         Tok::At => parse_for(lexer),
         Tok::Question => parse_if(lexer),
-        Tok::Bang => {
+        Tok::Semicolon => {
             lexer.next_tok()?;
             Ok(Expr::Return(box parse_expr(lexer)?))
         },
@@ -239,7 +240,7 @@ pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError>
                 TokName::UnaryOperator,
                 TokName::At,
                 TokName::Question,
-                TokName::Bang,
+                TokName::Semicolon,
             ],
         }),
     }

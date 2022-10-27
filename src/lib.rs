@@ -41,7 +41,7 @@ mod tests {
                     current = current - 1
                 }
 
-                ! output
+                ; output
             }
         ",
         );
@@ -59,7 +59,7 @@ mod tests {
             "
                 square(num: &i32): i32 {
                     num = *num * *num
-                    ! 0
+                    ; 0
                 }
                 ",
         );
@@ -78,7 +78,7 @@ mod tests {
             "
                 sum(a: i32, b: i32): i32 {
                     output: i32 = a + b
-                    ! output
+                    ; output
                 }
                 ",
         );
@@ -96,13 +96,67 @@ mod tests {
             "
                 seventy(): f32 {
                     output: f32 = 60.0 + 10.0
-                    ! output
+                    ; output
                 }
                 ",
         );
 
         let output: f32 = unsafe { unit.get_fn("seventy")(()) };
         assert_eq!(output, 70.0);
+    }
+
+    #[test]
+    fn booleans() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_test_lib();
+
+        unit.push_script(
+            "
+                yeah(): bool {
+                    output: bool = true
+                    ; output
+                }
+
+                no(): bool {
+                    output: bool = false
+                    ; output
+                }
+
+                if_statements(): i32 {
+                    test_bool: bool = false
+                    basic_if_works: bool = true
+                    not_operator_works: bool = false
+                    set_bool_works: bool = false
+
+                    ? test_bool {
+                        basic_if_works = false
+                    }
+
+                    ? !test_bool {
+                        not_operator_works = true
+                    }
+
+                    test_bool = true
+
+                    ? test_bool {
+                        set_bool_works = true
+                    }
+
+                    assert_eq<bool>(basic_if_works, true)
+                    assert_eq<bool>(not_operator_works, true)
+                    assert_eq<bool>(set_bool_works, true)
+
+                    ; 0
+                }
+            ",
+        );
+
+        let yeah: bool = unsafe { unit.get_fn("yeah")(()) };
+        assert_eq!(yeah, true);
+        let no: bool = unsafe { unit.get_fn("no")(()) };
+        assert_eq!(no, false);
+        unsafe { unit.get_fn::<_, ()>("if_statements")(()) };
     }
 
     #[test]
@@ -115,12 +169,12 @@ mod tests {
             "
                 divide_by_two(num: f32): f32 {
                     output: f32 = num / 2.0
-                    ! output
+                    ; output
                 }
     
                 mul_by_two(num: i32): i32 {
                     output: i32 = num * 2
-                    ! output
+                    ; output
                 }
     
                 everything_works(): i32 {
@@ -130,7 +184,7 @@ mod tests {
                     six_div_two: f32 = divide_by_two(6.0)
                     assert_eq<f32>(six_div_two, 3.0)
     
-                    ! 0
+                    ; 0
                 }
             ",
         );
@@ -183,7 +237,7 @@ mod tests {
                         z = 99999,
                     }
     
-                    ! &new_point
+                    ; &new_point
                 }
                 ",
         );
@@ -216,7 +270,7 @@ mod tests {
                 sqr_magnitude_of(in_ptr: &Point2D): i32 {
                     in: Point2D = *in_ptr
     
-                    ! in.x * in.x + in.y * in.y
+                    ; in.x * in.x + in.y * in.y
                 }
                 ",
         );
@@ -262,7 +316,7 @@ mod tests {
                         size = 4,
                     }
     
-                    ! &new_square
+                    ; &new_square
                 }
                 ",
         );
@@ -294,7 +348,7 @@ mod tests {
                         x = 42, y = 32
                     }
     
-                    ! &new_point
+                    ; &new_point
                 }
     
                 float_point(): &Point2D<f32> {
@@ -302,7 +356,7 @@ mod tests {
                         x = 42.8, y = 32.2
                     }
     
-                    ! &new_point
+                    ; &new_point
                 }
             ",
         );
@@ -346,7 +400,7 @@ mod tests {
                         x = x + 1
                     }
     
-                    ! x
+                    ; x
                 }
             ",
         );
@@ -366,11 +420,11 @@ mod tests {
                     y: f32
     
                     .hypotenuse(): f32 {
-                        ! sqrt(self.x * self.x + self.y * self.y)
+                        ; sqrt(self.x * self.x + self.y * self.y)
                     }
     
                     .scaled(by: f32): Point2D {
-                        ! Point2D { x = self.x * by, y = self.y * by }
+                        ; Point2D { x = self.x * by, y = self.y * by }
                     }
                 }
     
@@ -384,7 +438,7 @@ mod tests {
                     assert_eq<f32>(scaled_by_2.x, 6.0)
                     assert_eq<f32>(scaled_by_2.y, 4.5)
     
-                    ! 0
+                    ; 0
                 }
                 ",
         );
@@ -418,7 +472,7 @@ mod tests {
                     assert_eq<i32>(original[3], 6)
                     assert_eq<i32>(original[6], 12)
     
-                    ! 0
+                    ; 0
                 }
                 ",
         );
@@ -458,7 +512,7 @@ mod tests {
                     assert_eq<i32>(points[1].x, 4)
                     assert_eq<i32>(points[1].y, 6)
     
-                    ! 0
+                    ; 0
                 }
                 ",
         );
@@ -498,7 +552,7 @@ mod tests {
     
                     assert_eq<i32>(julie.letter.location.time, 2095)
     
-                    ! 0
+                    ; 0
                 }
                 ",
         );
@@ -517,11 +571,11 @@ mod tests {
                     gigawatt_count: f32 = courthouse_1985()
                     assert_eq<f32>(gigawatt_count, 1.21) # great scott!
     
-                    ! 1
+                    ; 1
                 }
     
                 courthouse_1985(): f32 {
-                    ! 1.21
+                    ; 1.21
                 }
                 ",
         );
@@ -537,7 +591,7 @@ mod tests {
         unit.add_test_lib().push_script(
             "
                 double<T>(in: T): T {
-                    ! in + in
+                    ; in + in
                 }
     
                 main(): i32 {
@@ -545,7 +599,7 @@ mod tests {
     
                     assert_eq<f32>(double<f32>(4.0), 8.0)
     
-                    ! 0
+                    ; 0
                 }
             ",
         );
@@ -577,7 +631,7 @@ mod tests {
                             counter = counter + 1
                         }
     
-                        ! output
+                        ; output
                     }
                 }
 
@@ -588,7 +642,7 @@ mod tests {
                     roll: Roll<i32> = Roll<i32> { val = 7 }
                     assert_eq<f32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
     
-                    ! 0
+                    ; 0
                 }
                 ",
         );
@@ -604,6 +658,86 @@ mod tests {
 
         unit.push_script(include_str!("libraries/vec.cxc"));
 
-        unsafe { unit.get_fn::<(), i32>("test")(()) };
+        unit.push_script(
+            "
+         test_vec(): i32 {
+            number_of_checks: i32 = 12345
+        
+            num_vec: Vec<i32> = create_vec<i32>()
+            two_num_vec: Vec<TwoNums> =
+         create_vec<TwoNums>(two_nums_from_one(to_i64(0)))
+        
+            current_index: i32 = 0
+            @ current_index < number_of_checks + 0 {
+                x: i32 = num_vec.push<i32>(current_index)
+        
+                current_index = current_index + 1
+            }
+        
+            current_index = 0
+            @ current_index < number_of_checks + 0 {
+                assert_eq<i32>(num_vec.get<i32>(to_i64(current_index)),
+         current_index)
+        
+                current_index = current_index + 1
+            }
+        
+        
+            current_index: i64 = 0
+            @ current_index < number_of_checks + 0 {
+                x: i32 =
+         two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
+        
+                current_index = current_index + 1
+            }
+        
+            current_index = 0
+            @ current_index < number_of_checks + 0 {
+                in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
+                corresponding: TwoNums = two_nums_from_one(current_index)
+        
+                assert_eq<i64>(in_vec.num_one, corresponding.num_one)
+                assert_eq<i64>(in_vec.num_two, corresponding.num_two)
+        
+                current_index = current_index + 1
+            }
+        
+        
+            ; 0
+        }",
+        );
+
+        unsafe { unit.get_fn::<(), i32>("test_vec")(()) };
+    }
+
+    fn vec_ffi() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.add_test_lib();
+        unit.push_script(include_str!("libraries/vec.cxc"));
+
+        unit.push_script(
+            "
+            part_2(info: &Vec<i32>): i32 {
+                none: i32 = info.push(15)
+                none = info.push(16)
+
+                ; 0
+            }
+
+            part_3(info: &Vec<i32>): i32 {
+                none: i32 = info.push(23)
+                none = info.push(42)
+
+                ; 0
+            }
+        ",
+        );
+
+        let info = vec![4, 8];
+
+        unsafe { unit.get_fn::<_, ()>("part_2")(&info) };
+        unsafe { unit.get_fn::<_, ()>("part_3")(&info) };
     }
 }

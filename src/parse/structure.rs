@@ -10,6 +10,7 @@ pub enum TypeAlias {
     GenParam(u8),
     Int(u32),
     Float(FloatType),
+    Bool,
     Ref(Box<TypeAlias>),
     Struct(Vec<(VarName, TypeAlias)>, Vec<VarName>),
     Array(Box<TypeAlias>, u32),
@@ -51,6 +52,7 @@ fn parse_type_and_methods(
                 TypeName::I32 => TypeAlias::Int(32),
                 TypeName::I16 => TypeAlias::Int(16),
                 TypeName::I8 => TypeAlias::Int(8),
+                TypeName::Bool => TypeAlias::Bool,
                 TypeName::F64 => TypeAlias::Float(FloatType::F64),
                 TypeName::F32 => TypeAlias::Float(FloatType::F32),
                 TypeName::F16 => TypeAlias::Float(FloatType::F16),
@@ -77,7 +79,12 @@ fn parse_type_and_methods(
                 },
             }
         },
-        _ => panic!(),
+        _ => {
+            return Err(ParseError::UnexpectedTok {
+                got: beginning_of_alias,
+                expected: vec![TokName::TypeName, TokName::LeftCurly, TokName::Ref],
+            })
+        },
     };
 
     let suffix = lexer.peek_tok().clone();

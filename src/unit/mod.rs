@@ -123,7 +123,7 @@ impl<'u> Unit<'u> {
         self.comp_data = Rc::new(CompData::new());
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Compiled> {
+    pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<UniqueFuncInfo> {
         let lexed = lex(script);
         let script = match parse::file(lexed) {
             Ok(file) => file,
@@ -158,6 +158,8 @@ impl<'u> Unit<'u> {
                 );
             }
         }
+
+        let output = funcs_to_compile.clone();
 
         let func_reps: Vec<FuncOutput> = { funcs_to_compile }
             .drain(..)
@@ -194,31 +196,14 @@ impl<'u> Unit<'u> {
             .collect();
 
         for output in &mut all_funcs_to_compile {
-            self.add_function(output)
+            self.add_function(output);
         }
-
-        let compiled = { all_funcs_to_compile }
-            .drain(..)
-            .map(|mut output| {
-                let info = output.take_info();
-
-                let func_address = self
-                    .execution_engine
-                    .get_function_address(&*info.to_string())
-                    .unwrap();
-
-                Compiled::Func(CompiledFunc {
-                    address: func_address,
-                    name: info.name.to_string(),
-                })
-            })
-            .collect();
 
         if crate::DEBUG {
             println!("{}", self.module.print_to_string().to_string());
         }
 
-        compiled
+        output
     }
 
     pub fn get_value(&self, of: &str) -> Value {
@@ -463,6 +448,13 @@ impl<'u> Unit<'u> {
             Type::never().func_with_args(vec![Type::f(32), Type::f(32)]),
             None,
             vec![Type::f(32)],
+        )
+        .add_rust_func_explicit(
+            "assert_eq",
+            assert::<bool> as *const usize,
+            Type::never().func_with_args(vec![Type::bool(), Type::bool()]),
+            None,
+            vec![Type::bool()],
         )
         .add_rust_func("sqrt", [f32::sqrt])
         .add_rust_func_explicit(

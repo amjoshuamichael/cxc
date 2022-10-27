@@ -33,6 +33,15 @@ pub fn parse_float(token: &mut Lexer<Tok>) -> Option<f64> {
     }
 }
 
+pub fn parse_bool(token: &mut Lexer<Tok>) -> Option<bool> {
+    let true_or_false: String = token.slice().chars().collect();
+    match &*true_or_false {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
 fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<f64> {
     let coeff_str = &num_text[..e_pos];
     let exp_str = &num_text[e_pos + 1..];

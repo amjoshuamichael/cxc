@@ -91,6 +91,13 @@ fn compile<'comp, 'a>(
                 .const_float(*value)
                 .into(),
         ),
+        Bool { ref value } => Some(
+            Type::bool()
+                .to_any_type(&fcs.context)
+                .into_int_type()
+                .const_int(if *value { 1 } else { 0 }, false)
+                .into(),
+        ),
         MakeVar { ref var_type, ref name, ref rhs, .. } => {
             let to_store = compile(fcs, *rhs).unwrap();
             let to_store_basic: BasicValueEnum = to_store.try_into().unwrap();
@@ -340,17 +347,22 @@ fn compile<'comp, 'a>(
             None
         },
         UnarOp { op, hs, .. } => match op {
-            crate::parse::Opcode::Ref(_) => {
+            Ref(_) => {
                 Some(compile_as_ptr(fcs, hs).as_any_value_enum())
             },
-            crate::parse::Opcode::Deref(_) => {
+            Deref(_) => {
                 let var_ptr = compile(fcs, hs).unwrap();
                 let val = fcs
                     .builder
                     .build_load(var_ptr.into_pointer_value(), &*fcs.new_uuid());
                 Some(val.into())
             },
-            _ => todo!(),
+            Not => {
+                let b = compile(fcs, hs).unwrap().into_int_value();
+                let val = fcs.builder.build_not(b, "not");
+                Some(val.into())
+            },
+            _ => unreachable!(),
         },
         Call { ref a, .. }=> {
             let info = fcs.tree.unique_func_info_of_call(&expr);

@@ -51,6 +51,7 @@ pub enum TypeName {
     F64,
     F32,
     F16,
+    Bool,
     Anonymous,
 }
 
@@ -64,6 +65,7 @@ impl Ident for TypeName {
             "f16" => Self::F16,
             "f32" => Self::F32,
             "f64" => Self::F64,
+            "bool" => Self::Bool,
             _ => Self::Other(Arc::from(t.slice())),
         }
     }
@@ -88,6 +90,7 @@ impl Debug for TypeName {
             Self::F64 => "f64",
             Self::F32 => "f32",
             Self::F16 => "f16",
+            Self::Bool => "bool",
             Self::Anonymous => "unnamed",
         };
 
@@ -183,7 +186,7 @@ pub enum Tok {
     #[regex(
         "[A-Z][A-Za-z0-9_]+(:[A-Za-z0-9_]+)*|\
         [A-Z]|\
-        i8|i16|i32|i64|f16|f32|f64|f128",
+        i8|i16|i32|i64|f16|f32|f64|f128|bool",
         TypeName::from_tok,
         priority = 2
     )]
@@ -201,6 +204,9 @@ pub enum Tok {
     #[regex(r"[0-9_]*\.[0-9_]*(e[+-]?[0-9_]+)?", parse_float)]
     Float(f64),
 
+    #[regex("true|false", parse_bool)]
+    Bool(bool),
+
     #[error]
     Error,
 
@@ -213,6 +219,7 @@ impl Tok {
         match self {
             Tok::AsterickSet(count) => Some(Opcode::Deref(*count)),
             Tok::AmpersandSet(count) => Some(Opcode::Ref(*count)),
+            Tok::Bang => Some(Opcode::Not),
             _ => None,
         }
     }
