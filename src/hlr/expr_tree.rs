@@ -11,7 +11,7 @@ pub struct ExprTree {
 }
 
 impl ExprTree {
-    pub fn top_down_iter<'a>(
+    pub fn iter_mut<'a>(
         &'a mut self,
     ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &mut NodeData)> + 'a> {
         Box::new(
@@ -20,6 +20,21 @@ impl ExprTree {
                 .enumerate()
                 .map(|(id, node)| (ExprID(id), &mut node.data)),
         )
+    }
+
+    pub fn iter<'a>(
+        &'a self,
+    ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &NodeData)> + 'a> {
+        Box::new(
+            self.nodes
+                .iter()
+                .enumerate()
+                .map(|(id, node)| (ExprID(id), &node.data)),
+        )
+    }
+
+    pub fn ids(&self) -> impl DoubleEndedIterator<Item = ExprID> {
+        (0..self.node_count()).map(|id| ExprID(id))
     }
 
     pub fn insert(&mut self, parent: ExprID, data: NodeData) -> ExprID {
@@ -43,7 +58,33 @@ impl ExprTree {
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
 
-    pub fn node_count(&self) -> u32 { self.nodes.len().try_into().unwrap() }
+    fn node_count(&self) -> usize { self.nodes.len().try_into().unwrap() }
+
+    pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
+        let NodeData::Call { f, generics, a, is_method, .. } = call.clone()
+            else { panic!() };
+
+        let method_of = if is_method {
+            let object = a.last().unwrap();
+
+            let name = {
+                let typ = self.get(*object).ret_type();
+                let derefed = typ.clone().get_deref().unwrap();
+                derefed.name().clone()
+            };
+
+            assert!(name.is_some());
+            name.clone()
+        } else {
+            None
+        };
+
+        UniqueFuncInfo {
+            name: f,
+            method_of,
+            generics,
+        }
+    }
 }
 
 impl Debug for ExprTree {
@@ -115,6 +156,7 @@ impl Debug for ExprNode {
     }
 }
 
+// TODO: refactor Call to use UniqueFuncInfo
 #[derive(Clone, Debug)]
 pub enum NodeData {
     Empty,
@@ -153,8 +195,8 @@ pub enum NodeData {
     Call {
         ret_type: Type,
         f: VarName,
+        generics: Vec<Type>,
         a: Vec<ExprID>,
-        data: Option<UniqueFuncInfo>,
         is_method: bool,
     },
     Member {

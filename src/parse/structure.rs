@@ -1,10 +1,9 @@
 use super::*;
 use crate::lex::Tok;
 use crate::typ::FloatType;
-use indexmap::IndexMap;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum TypeAlias {
     Named(TypeName),
     Generic(TypeName, Vec<TypeAlias>),
@@ -12,7 +11,7 @@ pub enum TypeAlias {
     Int(u32),
     Float(FloatType),
     Ref(Box<TypeAlias>),
-    Struct(IndexMap<VarName, TypeAlias>, HashSet<VarName>),
+    Struct(Vec<(VarName, TypeAlias)>, Vec<VarName>),
     Array(Box<TypeAlias>, u32),
 }
 
@@ -24,7 +23,7 @@ pub struct StructParsingContext {
 
 fn parse_type_and_methods(
     lexer: &mut ParseContext<TypeName>,
-) -> Result<(TypeAlias, Vec<Decl>), ParseError> {
+) -> Result<(TypeAlias, Vec<FuncCode>), ParseError> {
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let mut methods = Vec::new();
@@ -103,7 +102,7 @@ fn parse_type_and_methods(
 
 pub fn parse_type_decl(
     mut lexer: ParseContext<TypeName>,
-) -> Result<(TypeDecl, Vec<Decl>), ParseError> {
+) -> Result<(TypeDecl, Vec<FuncCode>), ParseError> {
     let (alias, methods) = parse_type_and_methods(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
@@ -128,7 +127,7 @@ pub fn parse_type_alias(
 
 pub fn parse_struct(
     lexer: &mut ParseContext<TypeName>,
-) -> Result<(TypeAlias, Vec<Decl>), ParseError> {
+) -> Result<(TypeAlias, Vec<FuncCode>), ParseError> {
     let parts = parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         None,
@@ -136,17 +135,17 @@ pub fn parse_struct(
         lexer,
     )?;
 
-    let mut fields = IndexMap::new();
-    let mut methods = HashSet::new();
+    let mut fields = Vec::new();
+    let mut methods = Vec::new();
     let mut method_declarations = Vec::new();
 
     for p in parts {
         match p {
             StructPart::Field { name, typ } => {
-                fields.insert(name, typ);
+                fields.push((name, typ));
             },
             StructPart::Method { decl, .. } => {
-                methods.insert(decl.name().clone());
+                methods.push(decl.name.clone());
                 method_declarations.push(decl.into());
             },
         }
@@ -157,7 +156,7 @@ pub fn parse_struct(
 
 enum StructPart {
     Field { name: VarName, typ: TypeAlias },
-    Method { is_static: bool, decl: SomeFuncDecl },
+    Method { is_static: bool, decl: FuncCode },
 }
 
 fn parse_struct_part(
@@ -177,8 +176,7 @@ fn parse_struct_part(
         let name = lexer.next_tok()?.var_name()?;
         let func_context = lexer.create_new_with_name(name);
 
-        let mut decl = parse_maybe_gen_func(func_context, true)?;
-        let args = decl.args_mut();
+        let mut decl = parse_func(func_context, Some(lexer.name_of_this().clone()))?;
 
         if lexer.has_generics() {
             let mut generic_params = Vec::new();
@@ -187,17 +185,17 @@ fn parse_struct_part(
                 generic_params.push(TypeAlias::GenParam(g as u8));
             }
 
-            args.push(VarDecl {
-                var_name: "self".into(),
-                type_spec: Some(TypeAlias::Ref(box TypeAlias::Generic(
+            decl.args.push(VarDecl {
+                name: "self".into(),
+                typ: Some(TypeAlias::Ref(box TypeAlias::Generic(
                     lexer.name_of_this().clone(),
                     generic_params,
                 ))),
             });
         } else {
-            args.push(VarDecl {
-                var_name: "self".into(),
-                type_spec: Some(TypeAlias::Ref(box TypeAlias::Named(
+            decl.args.push(VarDecl {
+                name: "self".into(),
+                typ: Some(TypeAlias::Ref(box TypeAlias::Named(
                     lexer.name_of_this().clone(),
                 ))),
             });

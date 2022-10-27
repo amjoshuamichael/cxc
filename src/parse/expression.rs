@@ -48,8 +48,8 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                 lexer,
             )?;
 
-            lexer.push_func_dependency(GenFuncDependency {
-                name: func_name, types: generics
+            lexer.push_func_dependency(FuncDependency {
+                name: func_name, method_of: None, generics: generics.clone()
             });
 
             let params = parse_list(
@@ -59,7 +59,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                 lexer,
             )?;
 
-            Expr::ArgList(params)
+            Expr::ArgList(generics, params)
         } else if matches!(next, Tok::LeftParen) {
             let params = parse_list(
                 (Tok::LeftParen, Tok::RghtParen),
@@ -68,7 +68,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                 lexer,
             )?;
 
-            Expr::ArgList(params)
+            Expr::ArgList(Vec::new(), params)
         } else if matches!(last_atom.clone(), Expr::Ident(_))
             && matches!(next, Tok::LeftBrack) {
 
@@ -117,17 +117,18 @@ pub fn members(atoms: &mut Vec<Expr>) {
 pub fn calls(atoms: &mut Vec<Expr>) {
     while let Some(args_pos) = atoms
         .iter()
-        .position(|atom| matches!(atom, Expr::ArgList(_)))
+        .position(|atom| matches!(atom, Expr::ArgList(..)))
     {
-        let Expr::ArgList(mut args) = atoms.remove(args_pos) else { unreachable!() };
+        let Expr::ArgList(generics, mut args) = atoms.remove(args_pos) 
+            else { unreachable!() };
 
         let being_called = atoms.remove(args_pos - 1);
 
         if let Expr::Ident(name) = being_called {
-            atoms.push(Expr::Call(name, args, false));
+            atoms.push(Expr::Call(name, generics, args, false));
         } else if let Expr::Member(object, field) = being_called {
             args.push(Expr::UnarOp(Opcode::Ref(1), object));
-            atoms.push(Expr::Call(field, args, true));
+            atoms.push(Expr::Call(field, generics, args, true));
         }
     }
 }

@@ -1,25 +1,25 @@
-use crate::{Type, TypeEnum};
+use crate::{Type, TypeEnum, unit::{CompData, UniqueFuncInfo}, typ::FuncType};
 use super::prelude::*;
 use crate::parse::*;
-use crate::unit::Functions;
-use crate::unit::UniqueFuncInfo;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
-pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
+pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
     let mut type_by_id = HashMap::new();
 
-    for (n, node) in hlr.tree.top_down_iter() {
+    for n in hlr.tree.ids() {
+        let mut node = hlr.tree.get(n);
+
         match node {
             NodeData::MakeVar {
-                type_spec,
+                ref type_spec,
                 ref mut var_type,
-                name,
+                ref name,
                 ..
             } => {
                 *var_type = match type_spec {
                     Some(type_spec) => {
                         let var_type =
-                            hlr.types.get_spec(type_spec, &hlr.generics).unwrap().clone();
+                            hlr.get_type_spec(&type_spec).unwrap().clone();
                         hlr.data_flow.get_mut(&name.clone()).unwrap().typ =
                             var_type.clone();
                         var_type
@@ -32,7 +32,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             },
             NodeData::Ident {
                 ref mut var_type,
-                name,
+                ref name,
             } => {
                 let instances = hlr.data_flow.get_mut(&name.clone()).unwrap();
                 *var_type = instances.typ.clone();
@@ -41,13 +41,16 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
         };
 
         type_by_id.insert(n, node.ret_type());
+        hlr.tree.replace(n, node)
     }
 
-    for (n, node) in hlr.tree.top_down_iter().rev() {
+    for n in hlr.tree.ids().rev() {
+        let mut node = hlr.tree.get(n);
+
         match node {
             NodeData::BinOp {
                 ref mut ret_type,
-                rhs,
+                ref lhs,
                 op,
                 ..
             } => {
@@ -55,13 +58,13 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
                 *ret_type = match op {
                     Equal | Inequal | GrtrThan | GreaterOrEqual | LessThan
                     | LessOrEqual => Type::i(64),
-                    _ => type_by_id.get(rhs).unwrap().clone(),
+                    _ => type_by_id.get(lhs).unwrap().clone(),
                 };
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             NodeData::UnarOp {
                 ref mut ret_type,
-                hs,
+                ref hs,
                 op,
                 ..
             } => {
@@ -69,10 +72,10 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
 
                 match op {
                     Opcode::Deref(count) => {
-                        *ret_type = ret_type.clone().deref_x_times(*count).unwrap();
+                        *ret_type = ret_type.clone().deref_x_times(count).unwrap();
                     },
                     Opcode::Ref(count) => {
-                        *ret_type = ret_type.clone().ref_x_times(*count)
+                        *ret_type = ret_type.clone().ref_x_times(count)
                     },
                     _ => unreachable!(),
                 }
@@ -81,7 +84,7 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             },
             NodeData::SetVar {
                 ref mut ret_type,
-                lhs,
+                ref lhs,
                 ..
             } => {
                 *ret_type = type_by_id.get(lhs).unwrap().clone();
@@ -90,8 +93,8 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             },
             NodeData::Member {
                 ref mut ret_type,
-                object,
-                field,
+                ref object,
+                ref field,
             } => {
                 let typ = type_by_id.get(object).unwrap().clone();
 
@@ -106,26 +109,18 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             },
             NodeData::Call {
                 ref mut ret_type,
-                f,
-                a,
-                data,
-                is_method,
+                ..            
             } => {
-                let arg_types = a
-                    .iter()
-                    .map(|id| type_by_id.get_mut(&id).unwrap().clone())
-                    .collect();
+                let func_info = {
+                    let call = hlr.tree.get(n);
+                    hlr.tree.unique_func_info_of_call(&call)
+                };
 
-                let new_data = UniqueFuncInfo::from(
-                    f,
-                    &arg_types,
-                    *is_method,
-                );
-
-                let return_type = functions.get_type(new_data.clone()).unwrap();
+                let func_type = comp_data.get_type(&func_info).unwrap();
+                let TypeEnum::Func(FuncType { return_type, .. }) = 
+                    func_type.as_type_enum() else { panic!() };
 
                 *ret_type = return_type.clone();
-                *data = Some(new_data);
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
@@ -144,12 +139,14 @@ pub fn infer_types(hlr: &mut FuncRep, functions: &Functions) {
             },
             NodeData::ArrayLit {
                 ref mut var_type,
-                parts,
+                ref parts,
             } => {
                 *var_type = type_by_id.get(&parts[0]).unwrap().clone().get_array(parts.len() as u32);
                 *type_by_id.get_mut(&n).unwrap() = var_type.clone();
             }
             _ => {},
         }
+
+        hlr.tree.replace(n, node);
     }
 }

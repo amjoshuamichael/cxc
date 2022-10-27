@@ -1,18 +1,22 @@
+use std::collections::HashSet;
+use std::rc::Rc;
+
 use super::expr_tree::*;
-use super::prelude::*;
+use super::hlr_data_output::FuncOutput;
 use crate::lex::VarName;
 use crate::parse::*;
 use crate::typ::FloatType;
+use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 use indexmap::IndexMap;
 
 /// The HLR Data Type.
-#[derive(Debug, Default)]
-pub struct FuncRep {
+#[derive(Debug)]
+pub struct FuncRep<'a> {
     pub tree: ExprTree,
-    pub types: TypeGroup,
+    pub types: Rc<CompData<'a>>,
     pub identifiers: Vec<VarName>,
-    pub generics: Vec<TypeAlias>,
+    pub info: UniqueFuncInfo,
 
     // used to find where variables are declared.
     pub data_flow: IndexMap<VarName, DataFlowInfo>,
@@ -25,27 +29,32 @@ pub struct DataFlowInfo {
     pub is_func_param: bool,
 }
 
-impl FuncRep {
+impl<'a> FuncRep<'a> {
     pub fn from(
-        args: Vec<VarDecl>,
-        expr: Expr,
-        types: &TypeGroup,
-        generics: Vec<TypeAlias>,
+        code: FuncCode,
+        comp_data: Rc<CompData<'a>>,
+        info: UniqueFuncInfo,
     ) -> Self {
-        let mut new_hlr = FuncRep::with_types(types.clone());
+        let mut new = FuncRep {
+            tree: ExprTree::default(),
+            types: comp_data,
+            identifiers: Vec::new(),
+            info,
+            data_flow: IndexMap::new(),
+        };
 
-        new_hlr.generics = generics;
+        for arg in code.args.iter() {
+            new.identifiers.push(arg.name.clone());
 
-        for arg in args.iter() {
-            new_hlr.identifiers.push(arg.var_name.clone());
-
-            let typ = match arg.type_spec {
-                Some(ref type_spec) => new_hlr.get_type_spec(&type_spec).unwrap(),
+            let typ = match arg.typ {
+                Some(ref type_spec) => {
+                    new.types.get_spec(&type_spec, &new.info.generics).unwrap()
+                },
                 None => todo!(),
             };
 
-            new_hlr.data_flow.insert(
-                arg.var_name.clone(),
+            new.data_flow.insert(
+                arg.name.clone(),
                 DataFlowInfo {
                     typ,
                     ids: Vec::new(),
@@ -54,25 +63,29 @@ impl FuncRep {
             );
         }
 
-        new_hlr.add_expr(expr, ExprID::ROOT);
+        new.add_expr(code.code, ExprID::ROOT);
 
-        new_hlr
+        new
     }
 
-    pub fn with_core_lib() -> Self {
-        let mut output = FuncRep::default();
-        output.types = TypeGroup::default();
-        output
+    pub fn arg_names(&self) -> Vec<VarName> {
+        self.data_flow
+            .iter()
+            .filter(|f| f.1.is_func_param)
+            .map(|f| f.0)
+            .cloned()
+            .collect()
     }
 
     pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
-        self.types.get_spec(alias, &self.generics)
+        self.types.get_spec(alias, &self.info.generics)
     }
 
-    fn with_types(types: TypeGroup) -> Self {
-        FuncRep {
-            types,
-            ..Default::default()
+    pub fn output(self) -> FuncOutput {
+        FuncOutput {
+            arg_names: Some(self.arg_names()),
+            tree: Some(self.tree),
+            info: Some(self.info),
         }
     }
 
@@ -124,22 +137,21 @@ impl FuncRep {
 
                 let var_type = Type::never();
 
-                if !self.data_flow.contains_key(&decl.var_name) {
+                if !self.data_flow.contains_key(&decl.name) {
                     let new_data_flow_info = DataFlowInfo {
                         typ: var_type.clone(),
                         ids: vec![space],
                         is_func_param: false,
                     };
 
-                    self.data_flow
-                        .insert(decl.var_name.clone(), new_data_flow_info);
+                    self.data_flow.insert(decl.name.clone(), new_data_flow_info);
                 }
 
-                self.identifiers.push(decl.var_name.clone());
+                self.identifiers.push(decl.name.clone());
                 let new_decl = NodeData::MakeVar {
-                    type_spec: decl.type_spec,
+                    type_spec: decl.typ,
                     var_type,
-                    name: decl.var_name.clone(),
+                    name: decl.name.clone(),
                     rhs: self.add_expr(*e, space),
                 };
 
@@ -238,7 +250,7 @@ impl FuncRep {
                 self.tree.replace(space, new_binop);
                 space
             },
-            Expr::Call(f, args, is_method) => {
+            Expr::Call(f, generics, args, is_method) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut arg_ids = Vec::new();
@@ -247,11 +259,16 @@ impl FuncRep {
                     arg_ids.push(self.add_expr(arg, space));
                 }
 
+                let generics = generics
+                    .iter()
+                    .map(|spec| self.get_type_spec(spec).unwrap())
+                    .collect();
+
                 let new_data = NodeData::Call {
                     ret_type: Type::never(),
                     f,
+                    generics,
                     a: arg_ids,
-                    data: None,
                     is_method,
                 };
 
@@ -327,7 +344,7 @@ impl FuncRep {
                 self.tree.replace(space, new_index);
                 space
             },
-            Expr::Op(_) | Expr::ArgList(_) => unreachable!(),
+            Expr::Op(_) | Expr::ArgList(..) => unreachable!(),
         }
     }
 }

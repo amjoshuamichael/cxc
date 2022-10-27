@@ -31,7 +31,7 @@ pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
                 let generic_labels = parse_generics(&mut lexer)?;
                 let context = lexer.split(name, generic_labels);
 
-                declarations.push(parse_maybe_gen_func(context, false)?.into());
+                declarations.push(Decl::Func(parse_func(context, None)?));
             },
             Tok::TypeName(name) => {
                 let generic_labels = parse_generics(&mut lexer)?;
@@ -42,7 +42,7 @@ pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
                 declarations.push(Decl::Type(strct));
 
                 for m in methods {
-                    declarations.push(m);
+                    declarations.push(Decl::Func(m));
                 }
             },
             err => {
@@ -92,50 +92,10 @@ pub fn parse_generic_label(lexer: &mut Lexer) -> Result<TypeName, ParseError> {
     }
 }
 
-pub fn parse_maybe_gen_func(
-    lexer: ParseContext<VarName>,
-    is_method: bool,
-) -> Result<SomeFuncDecl, ParseError> {
-    if lexer.has_generics() {
-        Ok(SomeFuncDecl::Gen(parse_gen_func(lexer, is_method)?))
-    } else {
-        Ok(SomeFuncDecl::Func(parse_func(lexer, is_method)?))
-    }
-}
-
-pub fn parse_gen_func(
-    mut lexer: ParseContext<VarName>,
-    is_method: bool,
-) -> Result<GenFuncDecl, ParseError> {
-    let args = parse_list(
-        (Tok::LeftParen, Tok::RghtParen),
-        Some(Tok::Comma),
-        parse_var_decl,
-        &mut lexer,
-    )?;
-
-    assert_or_error(lexer.next_tok()?, Tok::Colon)?;
-
-    let ret_type = parse_type_alias(&mut lexer)?;
-
-    let code = parse_block(&mut lexer)?;
-
-    let (name, dependencies, _) = lexer.return_info();
-
-    Ok(GenFuncDecl {
-        name,
-        ret_type,
-        args,
-        code,
-        is_method,
-        dependencies,
-    })
-}
-
 pub fn parse_func(
     mut lexer: ParseContext<VarName>,
-    is_method: bool,
-) -> Result<FuncDecl, ParseError> {
+    method_of: Option<TypeName>,
+) -> Result<FuncCode, ParseError> {
     let args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
@@ -149,16 +109,17 @@ pub fn parse_func(
 
     let code = parse_block(&mut lexer)?;
 
+    let generic_count = lexer.generic_count() as u32;
     let (name, dependencies, _) = lexer.return_info();
 
-    Ok(FuncDecl {
+    Ok(FuncCode {
         name,
         ret_type,
         args,
         code,
-        is_method,
+        generic_count,
+        method_of,
         dependencies,
-        generics: Vec::new(),
     })
 }
 
@@ -189,8 +150,8 @@ fn parse_var_decl(lexer: &mut ParseContext<VarName>) -> Result<VarDecl, ParseErr
     };
 
     Ok(VarDecl {
-        var_name,
-        type_spec,
+        name: var_name,
+        typ: type_spec,
     })
 }
 
@@ -210,8 +171,8 @@ fn parse_assignable(
         };
 
         Ok(Assignable::Declare(VarDecl {
-            var_name,
-            type_spec,
+            name: var_name,
+            typ: type_spec,
         }))
     } else {
         Ok(Assignable::Get(lhs))

@@ -1,78 +1,167 @@
 use crate::Type;
-use inkwell::values::CallableValue;
-use std::collections::HashMap;
 
-type ValAndType<'a> = (Type, CallableValue<'a>);
+impl<'a> CompData<'a> {
+    pub fn new() -> Self {
+        let mut out = Self {
+            types: HashMap::new(),
+            aliases: HashMap::new(),
+            compiled: HashMap::new(),
+            func_types: HashMap::new(),
+            func_code: HashMap::new(),
+        };
 
-#[derive(Default, Debug)]
-pub struct Functions<'a> {
-    compiled: HashMap<UniqueFuncInfo, ValAndType<'a>>,
-    generics: HashMap<VarName, GenFuncDecl>,
-}
+        out.insert_code(FuncCode {
+            name: VarName::from("alloc"),
+            ret_type: TypeAlias::Ref(box TypeAlias::GenParam(0)),
+            args: Vec::new(),
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            method_of: None,
+            dependencies: Vec::new(),
+        });
 
-impl<'a> Functions<'a> {
-    pub fn insert(&mut self, func_info: FuncInfo, val: CallableValue<'a>) {
-        self.compiled
-            .insert(func_info.to_unique_func_info(), (func_info.ret_type(), val));
+        out.insert_code(FuncCode {
+            name: VarName::from("free"),
+            ret_type: TypeAlias::Int(32),
+            args: vec![VarDecl {
+                name: VarName::temp(),
+                typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0))),
+            }],
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            method_of: None,
+            dependencies: Vec::new(),
+        });
+
+        out.insert_code(FuncCode {
+            name: VarName::from("memmove"),
+            ret_type: TypeAlias::Int(32),
+            args: vec![
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0))),
+                },
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0))),
+                },
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::Int(64)),
+                },
+            ],
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            method_of: None,
+            dependencies: Vec::new(),
+        });
+
+        out.insert_code(FuncCode {
+            name: VarName::from("size_of"),
+            ret_type: TypeAlias::Int(64),
+            args: Vec::new(),
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            method_of: None,
+            dependencies: Vec::new(),
+        });
+
+        out
     }
 
-    pub fn clear(&mut self) {
-        self.compiled.clear();
-        self.generics.clear();
+    pub fn insert_code(&mut self, code: FuncCode) {
+        self.func_code.insert(code.decl_info(), code);
     }
 
-    pub fn func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
+    pub fn insert_temp_function(&mut self, code: FuncCode) -> UniqueFuncInfo {
+        let name = VarName::from("T_temp");
+        let decl_info = FuncDeclInfo {
+            name: name.clone(),
+            method_of: None,
+        };
+        self.func_code.insert(decl_info, code);
+
+        UniqueFuncInfo {
+            name,
+            method_of: None,
+            generics: Vec::new(),
+        }
+    }
+
+    pub fn remove_function(&mut self, unique_func_info: UniqueFuncInfo) {
+        self.compiled.remove(&unique_func_info);
+        self.func_types.remove(&unique_func_info);
+        let decl_info = unique_func_info.into();
+        self.func_code.remove(&decl_info);
+    }
+
+    pub fn unique_func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
         self.compiled.keys()
     }
 
-    pub fn insert_generic(&mut self, decl: GenFuncDecl) {
-        self.generics.insert(decl.name.clone(), decl);
+    pub fn func_exists(&self, info: &FuncDeclInfo) -> bool {
+        self.func_code.contains_key(info)
     }
 
-    pub fn get_generic(&mut self, dep: GenFuncDependency) -> Option<FuncDecl> {
-        let gen_decl = self.generics.get(&dep.name)?.clone();
-        let func_decl = gen_decl.realize(dep.types);
-        Some(func_decl)
+    pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
+        self.compiled.contains_key(info)
     }
 
-    pub fn name_exists(&self, name: VarName) -> bool {
-        self.funcs_with_name(name).len() > 0
+    pub fn get_func_value(
+        &'a self,
+        info: &UniqueFuncInfo,
+    ) -> Option<FunctionValue<'a>> {
+        self.compiled.get(info).cloned()
     }
 
-    pub fn count_with_name(&self, name: VarName) -> usize {
-        self.funcs_with_name(name).len()
+    pub fn create_func_placeholder(
+        &mut self,
+        info: &UniqueFuncInfo,
+        context: &'a Context,
+        module: &Module<'a>,
+    ) {
+        let function_type = self.get_type(info).unwrap();
+
+        let empty_function = module.add_function(
+            &*info.to_string(),
+            function_type.to_any_type(context).into_function_type(),
+            None,
+        );
+
+        self.compiled.insert(info.clone(), empty_function.into());
+        self.func_types.insert(info.clone(), function_type);
     }
 
-    pub fn funcs_with_name(&self, name: VarName) -> Vec<&UniqueFuncInfo> {
-        self.compiled
-            .keys()
-            .filter(|u_name| u_name.og_name() == name)
-            .collect()
+    pub fn get_type(&self, info: &UniqueFuncInfo) -> Option<Type> {
+        let cached_type = self.func_types.get(info);
+        if cached_type.is_some() {
+            return cached_type.cloned();
+        }
+
+        let code = self.func_code.get(&info.clone().into())?;
+
+        let ret_type = self.get_spec(&code.ret_type, &info.generics).unwrap();
+
+        let arg_types = code
+            .args
+            .iter()
+            .map(|d| {
+                self.get_spec(d.typ.as_ref().unwrap(), &info.generics)
+                    .unwrap()
+            })
+            .collect();
+
+        let func_type = ret_type.func_with_args(arg_types);
+
+        Some(func_type)
     }
 
-    pub fn get_value(&'a self, info: UniqueFuncInfo) -> Option<CallableValue<'a>> {
-        self.get_func(info).map(|t| t.1.clone())
+    pub fn get_code(&self, info: UniqueFuncInfo) -> Option<FuncCode> {
+        self.func_code.get(&info.into()).cloned()
     }
 
-    pub fn get_type(&self, info: UniqueFuncInfo) -> Option<Type> {
-        match &*info.og_name().to_string() {
-            "alloc" => return Some(info.arg_types[1].clone()),
-            "free" => return Some(Type::never()),
-            "memmove" => return Some(Type::never()),
-            "size_of" => return Some(Type::i(64)),
-            _ => {},
-        };
-
-        self.get_func(info).map(|t| t.0.clone())
-    }
-
-    fn get_func(&self, info: UniqueFuncInfo) -> Option<&ValAndType> {
-        self.compiled.get(&info)
-    }
-
-    pub fn is_extern(&self, info: &UniqueFuncInfo) -> Option<bool> {
-        let callable = &self.compiled.get(info)?.1;
-        Some(callable.is_pointer_value())
+    pub fn is_extern(&self, info: &FuncDeclInfo) -> bool {
+        self.func_code.contains_key(info)
     }
 }
 
@@ -80,49 +169,53 @@ use std::hash::Hash;
 
 use super::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FuncDeclInfo {
+    pub name: VarName,
+    pub method_of: Option<TypeName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UniqueFuncInfo {
-    og_name: VarName,
-    arg_types: Vec<Type>,
-    is_method: bool,
+    pub name: VarName,
+    pub method_of: Option<TypeName>,
+    pub generics: Vec<Type>,
 }
-
-impl Hash for UniqueFuncInfo {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.to_string().hash(state);
-    }
-}
-
-impl PartialEq for UniqueFuncInfo {
-    fn eq(&self, other: &Self) -> bool { self.to_string() == other.to_string() }
-    fn ne(&self, other: &Self) -> bool { self.to_string() != other.to_string() }
-}
-
-impl Eq for UniqueFuncInfo {}
 
 impl ToString for UniqueFuncInfo {
     fn to_string(&self) -> String {
-        let prefix = if self.is_method { "_MTHD_" } else { "" };
-        format!("{prefix}{:?}{:?}", self.og_name, self.arg_types)
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '_')
-            .collect()
+        match &self.method_of {
+            Some(typ) => format!("M_{:?}{:?}{:?}", typ, self.name, self.generics),
+            None => format!("{:?}{:?}", self.name, self.generics),
+        }
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_')
+        .collect()
     }
 }
 
 impl UniqueFuncInfo {
-    pub fn from(
+    pub fn new(
         og_name: &VarName,
-        arg_types: &Vec<Type>,
-        is_method: bool,
+        method_of: &Option<TypeName>,
+        generics: Vec<Type>,
     ) -> UniqueFuncInfo {
         UniqueFuncInfo {
-            og_name: og_name.clone(),
-            arg_types: arg_types.clone(),
-            is_method,
+            name: og_name.clone(),
+            method_of: method_of.clone(),
+            generics,
         }
     }
 
-    pub fn og_name(&self) -> VarName { self.og_name.clone() }
-    pub fn arg_types(&self) -> Vec<Type> { self.arg_types.clone() }
+    pub fn og_name(&self) -> VarName { self.name.clone() }
+    pub fn is_method(&self) -> bool { self.method_of.is_some() }
+}
+
+impl Into<FuncDeclInfo> for UniqueFuncInfo {
+    fn into(self) -> FuncDeclInfo {
+        FuncDeclInfo {
+            name: self.name,
+            method_of: self.method_of,
+        }
+    }
 }

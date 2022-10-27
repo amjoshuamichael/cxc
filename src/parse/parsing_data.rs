@@ -1,4 +1,7 @@
-use std::hash::Hash;
+use crate::{
+    unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
+    Type,
+};
 
 use super::*;
 
@@ -12,7 +15,7 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
     SetVar(Box<Expr>, Box<Expr>),
-    Call(VarName, Vec<Expr>, bool),
+    Call(VarName, Vec<TypeAlias>, Vec<Expr>, bool),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
     Member(Box<Expr>, VarName),
@@ -24,14 +27,14 @@ pub enum Expr {
 
     // These are used during to make parsing easier, but are not outputted after
     // parsing.
-    ArgList(Vec<Expr>),
+    ArgList(Vec<TypeAlias>, Vec<Expr>),
     Op(Opcode),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarDecl {
-    pub var_name: VarName,
-    pub type_spec: Option<TypeAlias>,
+    pub name: VarName,
+    pub typ: Option<TypeAlias>,
 }
 
 #[derive(Debug)]
@@ -55,30 +58,22 @@ impl Script {
             .map(|d| d.as_type().unwrap())
     }
 
-    pub fn funcs_iter(&self) -> impl Iterator<Item = &FuncDecl> {
+    pub fn funcs_iter(&self) -> impl Iterator<Item = &FuncCode> {
         self.0
             .iter()
             .filter(|d| matches!(d, Decl::Func { .. }))
             .map(|d| d.as_func().unwrap())
     }
-
-    pub fn gen_funcs_iter(&self) -> impl Iterator<Item = &GenFuncDecl> {
-        self.0
-            .iter()
-            .filter(|d| matches!(d, Decl::GenFunc { .. }))
-            .map(|d| d.as_gen_func().unwrap())
-    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Decl {
-    GenFunc(GenFuncDecl),
-    Func(FuncDecl),
+    Func(FuncCode),
     Type(TypeDecl),
 }
 
 impl Decl {
-    pub fn as_func(&self) -> Option<&FuncDecl> {
+    pub fn as_func(&self) -> Option<&FuncCode> {
         match self {
             Decl::Func(d) => Some(d),
             _ => None,
@@ -91,85 +86,60 @@ impl Decl {
             _ => None,
         }
     }
-
-    pub fn as_gen_func(&self) -> Option<&GenFuncDecl> {
-        match self {
-            Decl::GenFunc(d) => Some(d),
-            _ => None,
-        }
-    }
-}
-
-pub enum SomeFuncDecl {
-    Gen(GenFuncDecl),
-    Func(FuncDecl),
-}
-
-impl SomeFuncDecl {
-    pub fn args(&self) -> &Vec<VarDecl> {
-        match self {
-            SomeFuncDecl::Gen(GenFuncDecl { args, .. }) => args,
-            SomeFuncDecl::Func(FuncDecl { args, .. }) => args,
-        }
-    }
-
-    pub fn args_mut(&mut self) -> &mut Vec<VarDecl> {
-        match self {
-            SomeFuncDecl::Gen(GenFuncDecl { ref mut args, .. }) => args,
-            SomeFuncDecl::Func(FuncDecl { ref mut args, .. }) => args,
-        }
-    }
-
-    pub fn name(&self) -> &VarName {
-        match self {
-            SomeFuncDecl::Gen(GenFuncDecl { name, .. }) => name,
-            SomeFuncDecl::Func(FuncDecl { name, .. }) => name,
-        }
-    }
-}
-
-impl Into<Decl> for SomeFuncDecl {
-    fn into(self) -> Decl {
-        match self {
-            SomeFuncDecl::Gen(g) => Decl::GenFunc(g),
-            SomeFuncDecl::Func(g) => Decl::Func(g),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
-pub struct GenFuncDecl {
+pub struct FuncCode {
     pub name: VarName,
     pub ret_type: TypeAlias,
     pub args: Vec<VarDecl>,
+    pub generic_count: u32,
     pub code: Expr,
-    pub is_method: bool,
-    pub dependencies: Vec<GenFuncDependency>,
+    pub method_of: Option<TypeName>,
+    pub dependencies: Vec<FuncDependency>,
 }
 
-impl GenFuncDecl {
-    pub fn realize(self, types: Vec<TypeAlias>) -> FuncDecl {
-        FuncDecl {
+impl FuncCode {
+    pub fn decl_info(&self) -> FuncDeclInfo {
+        FuncDeclInfo {
+            name: self.name.clone(),
+            method_of: self.method_of.clone(),
+        }
+    }
+
+    pub fn from_expr(code: Expr) -> Self {
+        Self {
+            name: VarName::temp(),
+            ret_type: TypeAlias::Int(0),
+            args: Vec::new(),
+            generic_count: 0,
+            code,
+            method_of: None,
+            dependencies: Vec::new(),
+        }
+    }
+
+    pub fn is_generic(&self) -> bool { self.generic_count > 0 }
+}
+
+impl Into<FuncDependency> for FuncCode {
+    fn into(self) -> FuncDependency {
+        FuncDependency {
             name: self.name,
-            ret_type: self.ret_type,
-            args: self.args,
-            code: self.code,
-            is_method: self.is_method,
-            dependencies: self.dependencies,
-            generics: types,
+            method_of: self.method_of,
+            generics: vec![],
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct FuncDecl {
-    pub name: VarName,
-    pub ret_type: TypeAlias,
-    pub args: Vec<VarDecl>,
-    pub code: Expr,
-    pub is_method: bool,
-    pub dependencies: Vec<GenFuncDependency>,
-    pub generics: Vec<TypeAlias>,
+impl FuncCode {
+    pub fn to_unique_func_info(&self) -> UniqueFuncInfo {
+        UniqueFuncInfo {
+            name: self.name.clone(),
+            method_of: self.method_of.clone(),
+            generics: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -180,14 +150,9 @@ pub struct TypeDecl {
     pub dependencies: HashSet<TypeName>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GenFuncDependency {
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct FuncDependency {
     pub name: VarName,
-    pub types: Vec<TypeAlias>,
-}
-
-impl Hash for GenFuncDependency {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        format!("{self:?}").hash(state);
-    }
+    pub method_of: Option<TypeName>,
+    pub generics: Vec<TypeAlias>,
 }

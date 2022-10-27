@@ -25,7 +25,7 @@ pub trait Kind {
         // that calculates it for us, and then compile and run that
         // program.
         //
-        // TODO: cache this calculate, because it is vary innefficient
+        // TODO: cache this calculation, because it is very innefficient
         let context = Context::create();
         let module = context.create_module("");
         let builder = context.create_builder();
@@ -51,7 +51,7 @@ impl Kind for Type {
 }
 
 impl Kind for RefType {
-    fn name(&self) -> String { "&".to_string() + &*self.base.name() }
+    fn name(&self) -> String { "&".to_string() + &*format!("{:?}", self.base) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         self.base
@@ -66,12 +66,12 @@ impl Kind for FuncType {
         let args_names: String = self
             .args
             .iter()
-            .map(|t| t.name())
+            .map(|t| format!("{:?}", t.name()))
             .collect::<Vec<String>>()
             .join(", ");
-        let ret_name = self.return_type.name();
+        let ret_name = &self.return_type;
 
-        format!("({args_names}) -> {ret_name}")
+        format!("({args_names}) -> {ret_name:?}")
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {

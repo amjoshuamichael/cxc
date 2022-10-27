@@ -1,4 +1,4 @@
-use crate::lex::VarName;
+use crate::lex::{TypeName, VarName};
 
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
@@ -12,7 +12,7 @@ mod kind;
 pub use kind::Kind;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
-pub struct Type(Arc<TypeEnum>);
+pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -21,7 +21,7 @@ impl Debug for Type {
 }
 
 impl Type {
-    fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum)) }
+    fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
     pub fn ref_x_times(mut self, count: u8) -> Type {
         for _ in 0..count {
@@ -51,19 +51,17 @@ impl Type {
         Some(output)
     }
 
-    pub fn get_ref(self) -> Type {
-        Type(Arc::new(TypeEnum::Ref(RefType { base: self })))
-    }
+    pub fn get_ref(self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self })) }
 
     pub fn get_deref(self) -> Option<Type> {
-        match &*self.0 {
+        match &self.0.type_enum {
             TypeEnum::Ref(t) => Some(t.base.clone()),
             _ => None,
         }
     }
 
     pub fn get_array(self, count: u32) -> Type {
-        Type(Arc::new(TypeEnum::Array(ArrayType { base: self, count })))
+        Type::new(TypeEnum::Array(ArrayType { base: self, count }))
     }
 
     pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size })) }
@@ -74,30 +72,75 @@ impl Type {
 
     pub fn f64() -> Type { Type::new(TypeEnum::Float(FloatType::F64)) }
 
-    pub fn f(size: FloatType) -> Type { Type::new(TypeEnum::Float(size)) }
+    pub fn f(size: impl Into<FloatType>) -> Type {
+        Type::new(TypeEnum::Float(size.into()))
+    }
 
     pub fn new_struct(
         fields: IndexMap<VarName, Type>,
         methods: HashSet<VarName>,
     ) -> Type {
-        Type(Arc::new(TypeEnum::Struct(StructType { fields, methods })))
+        Type::new(TypeEnum::Struct(StructType { fields, methods }))
     }
 
-    pub fn never() -> Type { Type(Arc::new(TypeEnum::Never)) }
+    pub fn never() -> Type { Type::new(TypeEnum::Never) }
 
     pub fn func_with_args(self, args: Vec<Type>) -> Type {
-        Type(Arc::new(TypeEnum::Func(FuncType {
+        Type::new(TypeEnum::Func(FuncType {
             return_type: self,
             args,
-        })))
+        }))
     }
 
-    pub fn as_type_enum<'a>(&self) -> &TypeEnum {
-        let output = &*self.0;
-        output
+    pub fn as_type_enum<'a>(&self) -> &TypeEnum { &self.0.type_enum }
+
+    pub fn name(&self) -> &Option<TypeName> { &self.0.name }
+
+    // panics if there is more than one reference to the inner TypeData
+    pub fn with_name(self, name: TypeName) -> Self {
+        let mut type_data = Arc::try_unwrap(self.0).unwrap();
+        type_data.name = Some(name);
+        Self(Arc::from(type_data))
     }
 
     pub fn is_never(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Never) }
+}
+
+#[derive(Default, Hash, PartialEq, Eq)]
+pub struct TypeData {
+    type_enum: TypeEnum,
+    name: Option<TypeName>,
+}
+
+impl Debug for TypeData {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match &self.name {
+            Some(name) => write!(fmt, "{} = {:?}", name, self.type_enum),
+            None => write!(fmt, "{:?}", self.type_enum),
+        }
+    }
+}
+
+impl From<TypeEnum> for TypeData {
+    fn from(type_enum: TypeEnum) -> Self {
+        Self {
+            type_enum,
+            name: None,
+        }
+    }
+}
+
+impl TypeData {
+    fn new(type_enum: TypeEnum, name: Option<TypeName>) -> Self {
+        Self { type_enum, name }
+    }
+
+    pub fn is_named(&self) -> bool {
+        match &self.name {
+            Some(name) => true,
+            None => false,
+        }
+    }
 }
 
 #[derive(Default, Hash, PartialEq, Eq)]
@@ -192,6 +235,17 @@ pub enum FloatType {
     F16,
     F32,
     F64,
+}
+
+impl Into<FloatType> for u32 {
+    fn into(self) -> FloatType {
+        match self {
+            16 => FloatType::F16,
+            32 => FloatType::F32,
+            64 => FloatType::F64,
+            _ => panic!("{} is an invalid float size", self),
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Hash)]

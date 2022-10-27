@@ -1,8 +1,7 @@
-use super::TypeGroup;
-use crate::Type;
+use crate::{unit::CompData, Type};
 use logos::{Lexer, Logos};
 
-impl TypeGroup {
+impl<'a> CompData<'a> {
     pub fn type_of<T>(&self, _: &T) -> Type { self.to_type::<T>() }
 
     pub fn to_type<T>(&self) -> Type {
@@ -63,19 +62,19 @@ mod tests {
 
     #[test]
     fn int() {
-        let type_group = TypeGroup::default();
+        let type_group = CompData::new();
         assert_eq!(type_group.to_type::<i32>(), Type::i(32));
     }
 
     #[test]
     fn float() {
-        let type_group = TypeGroup::default();
+        let type_group = CompData::new();
         assert_eq!(type_group.to_type::<f64>(), Type::f64());
     }
 
     #[test]
     fn function() {
-        let type_group = TypeGroup::default();
+        let type_group = CompData::new();
         assert_eq!(
             type_group.to_type::<fn(i32, i64) -> f64>(),
             Type::f64().func_with_args(vec![Type::i(32), Type::i(64)])

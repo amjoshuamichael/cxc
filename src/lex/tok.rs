@@ -95,6 +95,10 @@ impl Debug for TypeName {
     }
 }
 
+impl TypeName {
+    pub fn from(s: &str) -> Self { Self::Other(Arc::from(s)) }
+}
+
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Tok {
     #[token(",")]

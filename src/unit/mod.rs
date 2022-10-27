@@ -1,9 +1,11 @@
+use crate::hlr::hlr_anonymous;
+use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::parse;
 use crate::parse::*;
 use crate::typ::Kind;
-use crate::{Type, TypeEnum};
+use crate::Type;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -21,6 +23,7 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Display};
 use std::mem::size_of;
 use std::mem::transmute;
+use std::rc::Rc;
 
 mod func_info;
 mod functions;
@@ -28,9 +31,9 @@ pub mod output_api;
 pub mod value_api;
 
 use crate::to_llvm::*;
-use func_info::FuncInfo;
-pub use functions::{Functions, UniqueFuncInfo};
+pub use functions::UniqueFuncInfo;
 
+pub use self::functions::FuncDeclInfo;
 pub use self::output_api::Compiled;
 pub use self::output_api::CompiledFunc;
 pub use self::value_api::Value;
@@ -55,11 +58,19 @@ impl LLVMContext {
 
 pub struct Unit<'u> {
     pub(crate) execution_engine: ExecutionEngine<'u>,
-    pub(crate) types: TypeGroup,
+    pub(crate) comp_data: Rc<CompData<'u>>,
     pub(crate) module: Module<'u>,
-    pub(crate) functions: Functions<'u>,
     pub(crate) machine: TargetMachine,
     pub(crate) context: &'u Context,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompData<'u> {
+    pub(crate) types: HashMap<TypeName, Type>,
+    pub(crate) aliases: HashMap<TypeName, TypeAlias>,
+    compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
+    func_types: HashMap<UniqueFuncInfo, Type>,
+    func_code: HashMap<FuncDeclInfo, FuncCode>,
 }
 
 impl<'u> Unit<'u> {
@@ -83,18 +94,17 @@ impl<'u> Unit<'u> {
             .unwrap();
 
         Self {
-            types: TypeGroup::default(),
+            comp_data: Rc::new(CompData::new()),
             execution_engine,
             module,
-            functions: Functions::default(),
             machine,
             context: &context.context,
         }
     }
 
     pub fn clear(&mut self) {
-        for func in self.functions.func_info_iter() {
-            if self.functions.is_extern(func).unwrap() {
+        for func in self.comp_data.unique_func_info_iter() {
+            if self.comp_data.is_extern(&func.clone().into()) {
                 continue;
             }
 
@@ -110,12 +120,12 @@ impl<'u> Unit<'u> {
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .unwrap();
 
-        self.functions.clear();
+        self.comp_data = Rc::new(CompData::new());
     }
 
     pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Compiled> {
         let lexed = lex(script);
-        let mut script = match parse::file(lexed) {
+        let script = match parse::file(lexed) {
             Ok(file) => file,
             Err(err) => {
                 dbg!(&err);
@@ -123,55 +133,83 @@ impl<'u> Unit<'u> {
             },
         };
 
-        for decl in script.types_iter().cloned() {
-            self.types.add(decl.name, decl.typ);
-        }
-
-        for decl in script.gen_funcs_iter() {
-            self.functions.insert_generic(decl.clone());
-        }
-
-        let dependencies: HashSet<GenFuncDependency> = script
+        let funcs_to_compile: Vec<UniqueFuncInfo> = script
             .funcs_iter()
-            .map(|d| d.dependencies.clone())
-            .flatten()
+            .filter(|func| !func.is_generic())
+            .map(|d| d.to_unique_func_info())
             .collect();
 
-        for dep in dependencies {
-            let decl = self.functions.get_generic(dep).unwrap();
-            let unique_info = self.get_function_info(&decl).to_unique_func_info();
+        {
+            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
-            if self.functions.get_value(unique_info).is_none() {
-                script.0.push(Decl::Func(decl));
+            for decl in script.types_iter().cloned() {
+                comp_data.add_type_alias(decl.name, decl.typ);
+            }
+
+            for decl in script.funcs_iter() {
+                comp_data.insert_code(decl.clone());
+            }
+
+            for func in &funcs_to_compile {
+                comp_data.create_func_placeholder(
+                    func,
+                    &mut self.context,
+                    &mut self.module,
+                );
             }
         }
 
-        let mut function_placeholders = Vec::new();
+        let func_reps: Vec<FuncOutput> = { funcs_to_compile }
+            .drain(..)
+            .map(|info| hlr(info, self.comp_data.clone()))
+            .collect();
 
-        for decl in script.funcs_iter() {
-            let func_info = self.insert_placeholder_for_function(decl);
-            function_placeholders.push(func_info);
+        let dependencies_to_compile: HashSet<UniqueFuncInfo> = func_reps
+            .iter()
+            .map(|f| f.get_func_dependencies())
+            .flatten()
+            .filter(|f| !self.comp_data.has_been_compiled(f))
+            .collect();
+
+        {
+            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
+            for func in &dependencies_to_compile {
+                comp_data.create_func_placeholder(
+                    func,
+                    &mut self.context,
+                    &mut self.module,
+                );
+            }
         }
 
-        for (decl_index, decl) in script.funcs_iter().enumerate() {
-            let func_info = function_placeholders[decl_index].clone();
-            self.add_function(func_info, decl);
+        let dependency_reps: Vec<FuncOutput> = { dependencies_to_compile }
+            .drain()
+            .map(|info| hlr(info, self.comp_data.clone()))
+            .collect();
+
+        let mut all_funcs_to_compile: Vec<FuncOutput> = { dependency_reps }
+            .drain(..)
+            .chain({ func_reps }.drain(..))
+            .collect();
+
+        for output in &mut all_funcs_to_compile {
+            self.add_function(output)
         }
 
-        let compiled = script
-            .funcs_iter()
-            .map(|decl| {
-                let full_func_name =
-                    self.functions.funcs_with_name(decl.name.clone())[0].to_string();
+        let compiled = { all_funcs_to_compile }
+            .drain(..)
+            .map(|mut output| {
+                let info = output.take_info();
 
                 let func_address = self
                     .execution_engine
-                    .get_function_address(&*full_func_name)
+                    .get_function_address(&*info.to_string())
                     .unwrap();
 
                 Compiled::Func(CompiledFunc {
                     address: func_address,
-                    name: decl.name.to_string(),
+                    name: info.name.to_string(),
                 })
             })
             .collect();
@@ -184,7 +222,6 @@ impl<'u> Unit<'u> {
     }
 
     pub fn get_value(&self, of: &str) -> Value {
-        // TODO: create UUID
         let temp_name = "temp";
 
         let expr = {
@@ -194,37 +231,37 @@ impl<'u> Unit<'u> {
             parse::parse_expr(&mut context).unwrap()
         };
 
-        let func_rep = hlr(
-            Vec::new(),
-            Expr::Return(box expr.clone()),
-            &self.functions,
-            &self.types,
-            Vec::new(),
-        );
+        let code = FuncCode::from_expr(Expr::Return(box expr.clone()));
 
-        let val_type = match func_rep.tree.get(ExprID::ROOT) {
+        let info = UniqueFuncInfo {
+            name: VarName::temp(),
+            method_of: None,
+            generics: Vec::new(),
+        };
+
+        let func_rep = hlr_anonymous(info.clone(), self.comp_data.clone(), code);
+
+        let val_type = match func_rep.tree_ref().get(ExprID::ROOT) {
             NodeData::Return { to_return, .. } => {
-                func_rep.tree.get(to_return).ret_type()
+                func_rep.tree_ref().get(to_return).ret_type()
             },
             _ => unreachable!(),
         };
 
         let get_via_ref = val_type.size(self.context) > size_of::<usize>();
 
-        let (func_rep, ret_type) = if !get_via_ref {
+        let (mut func_rep, ret_type) = if !get_via_ref {
             (func_rep, val_type.clone())
         } else {
-            let func_rep = hlr(
-                Vec::new(),
-                Expr::Return(box Expr::UnarOp(Opcode::Ref(1), box expr)),
-                &self.functions,
-                &self.types,
-                Vec::new(),
-            );
+            let new_expr = Expr::Return(box Expr::UnarOp(Opcode::Ref(1), box expr));
+            let new_code = FuncCode::from_expr(new_expr.clone());
 
-            let ret_type = val_type.clone().get_ref();
+            let new_func_output =
+                hlr_anonymous(info, self.comp_data.clone(), new_code);
 
-            (func_rep, ret_type)
+            let new_ret_type = val_type.clone().get_ref();
+
+            (new_func_output, new_ret_type)
         };
 
         let mut fcs = {
@@ -236,13 +273,13 @@ impl<'u> Unit<'u> {
                 None,
             );
 
-            self.new_func_comp_state(func_rep.tree, function, Vec::new())
+            self.new_func_comp_state(func_rep.take_tree(), function, Vec::new())
         };
 
         {
             let block = fcs.context.append_basic_block(fcs.function, "");
             fcs.builder.position_at_end(block);
-            compile(&mut fcs, ExprID::ROOT);
+            compile_routine(&mut fcs);
         };
 
         let func_addr = self
@@ -264,74 +301,19 @@ impl<'u> Unit<'u> {
         value
     }
 
-    fn insert_placeholder_for_function(&mut self, decl: &FuncDecl) -> FuncInfo {
-        let func_info = self.get_function_info(decl);
-
-        let function_name = func_info.unique_name();
-
-        let function_type = func_info
-            .ret_type
-            .clone()
-            .func_with_args(func_info.arg_types());
-
-        let function = self.module.add_function(
-            &*function_name.to_string(),
-            function_type.to_any_type(self.context).into_function_type(),
-            None,
-        );
-
-        self.functions
-            .insert(func_info.clone(), CallableValue::from(function));
-
-        func_info
-    }
-
-    fn add_function(&mut self, func_info: FuncInfo, decl: &FuncDecl) {
-        let hlr = hlr(
-            decl.args.clone(),
-            decl.code.clone(),
-            &self.functions,
-            &self.types,
-            decl.generics.clone(),
-        );
-
-        let function = self
-            .functions
-            .get_value(func_info.to_unique_func_info())
-            .unwrap();
-
-        let arg_names = decl.args.iter().map(|v| v.var_name.clone()).collect();
+    fn add_function(&mut self, output: &mut FuncOutput) {
+        let function = self.comp_data.get_func_value(output.info_ref()).unwrap();
 
         let mut fcs = self.new_func_comp_state(
-            hlr.tree,
-            function.into_function_value(),
-            arg_names,
+            output.take_tree(),
+            function,
+            output.take_arg_names(),
         );
 
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
 
-        compile(&mut fcs, ExprID::ROOT);
-    }
-
-    fn get_function_info(&self, decl: &FuncDecl) -> FuncInfo {
-        let mut arg_types: Vec<Type> = Vec::new();
-        let mut arg_names: Vec<VarName> = Vec::new();
-
-        for arg in decl.args.iter() {
-            let var_type = self
-                .types
-                .get_spec(arg.type_spec.as_ref().unwrap(), &decl.generics)
-                .unwrap()
-                .clone();
-
-            arg_types.push(var_type);
-            arg_names.push(arg.var_name.clone());
-        }
-
-        let ret_type = self.types.get_spec(&decl.ret_type, &decl.generics).unwrap();
-
-        FuncInfo::from(&decl.name, &arg_types, &ret_type, decl.is_method)
+        compile_routine(&mut fcs);
     }
 
     pub fn add_rust_func<A, R>(
@@ -339,11 +321,11 @@ impl<'u> Unit<'u> {
         name: &str,
         function: [fn(A) -> R; 1],
     ) -> &mut Self {
-        let func_type = self.types.type_of(&function[0]);
+        let func_type = self.comp_data.type_of(&function[0]);
 
         let function_ptr: *const usize = unsafe { transmute(function[0]) };
 
-        self.add_rust_func_explicit(name, function_ptr, func_type)
+        self.add_rust_func_explicit(name, function_ptr, func_type, None, Vec::new())
     }
 
     pub fn add_rust_func_explicit(
@@ -351,30 +333,53 @@ impl<'u> Unit<'u> {
         name: &str,
         function_ptr: *const usize,
         func_type: Type,
+        method_of: Option<TypeName>,
+        generics: Vec<Type>,
     ) -> &mut Self {
-        let ink_func_type = func_type.to_any_type(&self.context);
-        let ink_func_ptr = ink_func_type
-            .into_function_type()
-            .ptr_type(AddressSpace::Global);
+        let ink_func_type =
+            func_type.to_any_type(&self.context).into_function_type();
+        let ink_func_ptr = ink_func_type.ptr_type(AddressSpace::Global);
 
-        let name = VarName::from(name);
+        let func_info = UniqueFuncInfo {
+            name: name.into(),
+            method_of,
+            generics,
+        };
 
-        let function_address = function_ptr as u64;
+        let function =
+            self.module
+                .add_function(&*func_info.to_string(), ink_func_type, None);
 
-        let function_pointer = self
-            .context
-            .i64_type()
-            .const_int(function_address, false)
-            .const_to_pointer(ink_func_ptr);
-        let callable_value: CallableValue =
-            CallableValue::try_from(function_pointer).unwrap();
+        let builder = self.context.create_builder();
 
-        let TypeEnum::Func(func_type) = func_type.as_type_enum() else { panic!() };
+        {
+            let block = self.context.append_basic_block(function, "link");
+            builder.position_at_end(block);
+        }
 
-        self.functions.insert(
-            FuncInfo::from(&name, &func_type.args, &func_type.return_type, false),
-            callable_value,
-        );
+        let callable_value = {
+            let function_pointer = self
+                .context
+                .i64_type()
+                .const_int(function_ptr as u64, false)
+                .const_to_pointer(ink_func_ptr);
+
+            CallableValue::try_from(function_pointer).unwrap()
+        };
+
+        let param_count = function.count_params();
+        let arg_vals: Vec<BasicMetadataValueEnum> = (0..param_count)
+            .map(|p| function.get_nth_param(p).unwrap().try_into().unwrap())
+            .collect();
+
+        let out = builder.build_call(callable_value, &*arg_vals, "call");
+        builder.build_return(Some(&out.try_as_basic_value().unwrap_left()));
+
+        let function = self.module.get_function(&*func_info.to_string()).unwrap();
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
+        comp_data.compiled.insert(func_info.clone(), function);
+        comp_data.func_types.insert(func_info, func_type);
 
         self
     }
@@ -391,19 +396,23 @@ impl<'u> Unit<'u> {
             function,
             builder: self.context.create_builder(),
             context: self.context,
-            functions: &self.functions,
+            comp_data: self.comp_data.clone(),
             llvm_ir_uuid: RefCell::new(0),
             arg_names,
         }
     }
 
     pub fn get_fn<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
-        let func_name = &self.functions.funcs_with_name(name.into())[0].to_string();
+        let func_info = UniqueFuncInfo {
+            name: name.into(),
+            method_of: None,
+            generics: Vec::new(),
+        };
 
         unsafe {
             let func_addr = self
                 .execution_engine
-                .get_function_address(&*func_name)
+                .get_function_address(&*func_info.to_string())
                 .unwrap();
             let function =
                 transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr);
@@ -413,31 +422,57 @@ impl<'u> Unit<'u> {
     }
 
     pub fn add_test_lib(&mut self) -> &mut Self {
-        self.add_rust_func("print", [print::<i32>])
-            .add_rust_func("print", [print::<i64>])
-            .add_rust_func("print", [print::<f32>])
-            .add_rust_func_explicit(
-                "assert_eq",
-                assert::<i32> as *const usize,
-                Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
-            )
-            .add_rust_func_explicit(
-                "assert_eq",
-                assert::<i64> as *const usize,
-                Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
-            )
-            .add_rust_func_explicit(
-                "assert_eq",
-                assert::<f32> as *const usize,
-                Type::never().func_with_args(vec![Type::f32(), Type::f32()]),
-            )
-            .add_rust_func("sqrt", [f32::sqrt])
-            .add_rust_func_explicit(
-                "panic",
-                panic as *const usize,
-                Type::never().func_with_args(vec![]),
-            )
-            .add_rust_func("to_i64", [to_i64]);
+        self.add_rust_func_explicit(
+            "print",
+            print::<i32> as *const usize,
+            Type::never().func_with_args(vec![]),
+            None,
+            vec![Type::i(32)],
+        )
+        .add_rust_func_explicit(
+            "print",
+            print::<i64> as *const usize,
+            Type::never().func_with_args(vec![]),
+            None,
+            vec![Type::i(64)],
+        )
+        .add_rust_func_explicit(
+            "print",
+            print::<f32> as *const usize,
+            Type::never().func_with_args(vec![]),
+            None,
+            vec![Type::f(32)],
+        )
+        .add_rust_func_explicit(
+            "assert_eq",
+            assert::<i32> as *const usize,
+            Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
+            None,
+            vec![Type::i(32)],
+        )
+        .add_rust_func_explicit(
+            "assert_eq",
+            assert::<i64> as *const usize,
+            Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
+            None,
+            vec![Type::i(64)],
+        )
+        .add_rust_func_explicit(
+            "assert_eq",
+            assert::<f32> as *const usize,
+            Type::never().func_with_args(vec![Type::f(32), Type::f(32)]),
+            None,
+            vec![Type::f(32)],
+        )
+        .add_rust_func("sqrt", [f32::sqrt])
+        .add_rust_func_explicit(
+            "panic",
+            panic as *const usize,
+            Type::never().func_with_args(vec![]),
+            None,
+            vec![],
+        )
+        .add_rust_func("to_i64", [to_i64]);
 
         self
     }

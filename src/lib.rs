@@ -125,10 +125,10 @@ mod tests {
     
                 everything_works(): i32 {
                     six_times_two: i32 = mul_by_two(6)
-                    assert_eq(six_times_two, 12)
+                    assert_eq<i32>(six_times_two, 12)
     
                     six_div_two: f32 = divide_by_two(6.0)
-                    assert_eq(six_div_two, 3.0)
+                    assert_eq<f32>(six_div_two, 3.0)
     
                     ! 0
                 }
@@ -334,6 +334,8 @@ mod tests {
             "print_num",
             print_num as *const usize,
             Type::never().func_with_args(vec![Type::i(64)]),
+            None,
+            Vec::new(),
         )
         .push_script(
             "
@@ -350,49 +352,6 @@ mod tests {
         );
 
         unsafe { unit.get_fn::<(), i64>("call")(()) };
-    }
-
-    #[test]
-    fn function_overload() {
-        let context = LLVMContext::new();
-        let mut unit = unit::Unit::new(&context);
-
-        unit.push_script(
-            "
-                # method overload 1
-                confusion() : i32 {
-                    ! 40
-                }
-    
-                # method overload 2
-                confusion(in: i32) : f32 {
-                    ? in == 40 {
-                        ! 34.9
-                    }
-    
-                    ! 43.3
-                }
-    
-                # method overload 3
-                confusion(in: f32) : i32 {
-                    ? in == 34.9 {
-                        ! 42
-                    }
-    
-                    ! 6
-                }
-    
-                shine_a_little_love(): i32 {
-                    # should pass output of 1 into 2,
-                    # and then ouput of 2 into 3
-                    ! confusion(confusion(confusion()))
-                }
-                ",
-        );
-
-        let output = unsafe { unit.get_fn::<(), i32>("shine_a_little_love")(()) };
-
-        assert_eq!(output, 42);
     }
 
     #[test]
@@ -419,11 +378,11 @@ mod tests {
                     original: Point2D = Point2D { x = 4.0, y = 3.0 }
     
                     hypotenuse: f32 = original.hypotenuse()
-                    assert_eq(hypotenuse, 5.0)
+                    assert_eq<f32>(hypotenuse, 5.0)
     
                     scaled_by_2: Point2D = original.scaled(1.5)
-                    assert_eq(scaled_by_2.x, 6.0)
-                    assert_eq(scaled_by_2.y, 4.5)
+                    assert_eq<f32>(scaled_by_2.x, 6.0)
+                    assert_eq<f32>(scaled_by_2.y, 4.5)
     
                     ! 0
                 }
@@ -443,9 +402,9 @@ mod tests {
                 main(): i32 {
                     original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
     
-                    assert_eq(original[3], 15)
-                    assert_eq(original[0], 1)
-                    assert_eq(original[6], 42)
+                    assert_eq<i32>(original[3], 15)
+                    assert_eq<i32>(original[0], 1)
+                    assert_eq<i32>(original[6], 42)
     
                     index: i32 = 0
                     @ index < 7 {
@@ -454,10 +413,10 @@ mod tests {
                         index = index + 1
                     }
     
-                    assert_eq(original[0], 0)
-                    assert_eq(original[1], 2)
-                    assert_eq(original[3], 6)
-                    assert_eq(original[6], 12)
+                    assert_eq<i32>(original[0], 0)
+                    assert_eq<i32>(original[1], 2)
+                    assert_eq<i32>(original[3], 6)
+                    assert_eq<i32>(original[6], 12)
     
                     ! 0
                 }
@@ -486,18 +445,18 @@ mod tests {
                         Point2D { x = 1672, y = 2526 },
                     ]
     
-                    assert_eq(points[0].x, 43)
-                    assert_eq(points[0].y, 15)
+                    assert_eq<i32>(points[0].x, 43)
+                    assert_eq<i32>(points[0].y, 15)
     
                     points[0].x = 94
     
-                    assert_eq(points[0].x, 94)
-                    assert_eq(points[0].y, 15)
+                    assert_eq<i32>(points[0].x, 94)
+                    assert_eq<i32>(points[0].y, 15)
     
                     points[1] = Point2D { x = 4, y = 6 }
     
-                    assert_eq(points[1].x, 4)
-                    assert_eq(points[1].y, 6)
+                    assert_eq<i32>(points[1].x, 4)
+                    assert_eq<i32>(points[1].y, 6)
     
                     ! 0
                 }
@@ -537,7 +496,7 @@ mod tests {
     
                     julie: Julie = Julie { letter = dream }
     
-                    assert_eq(julie.letter.location.time, 2095)
+                    assert_eq<i32>(julie.letter.location.time, 2095)
     
                     ! 0
                 }
@@ -556,7 +515,7 @@ mod tests {
             "
                 courthouse_1955(): i32 {
                     gigawatt_count: f32 = courthouse_1985()
-                    assert_eq(gigawatt_count, 1.21) # great scott!
+                    assert_eq<f32>(gigawatt_count, 1.21) # great scott!
     
                     ! 1
                 }
@@ -582,9 +541,9 @@ mod tests {
                 }
     
                 main(): i32 {
-                    assert_eq(double<i32>(4), 8)
+                    assert_eq<i32>(double<i32>(4), 8)
     
-                    assert_eq(double<f32>(4.0), 8.0)
+                    assert_eq<f32>(double<f32>(4.0), 8.0)
     
                     ! 0
                 }
@@ -621,13 +580,13 @@ mod tests {
                         ! output
                     }
                 }
-    
+
                 buy_las_vegas(): i32 {
                     after_this: Roll<f32> = Roll<f32> { val = 7.0 }
-                    assert_eq(after_this.come_on<f32>(), 7_7_7.0) # let's go!
+                    assert_eq<f32>(after_this.come_on<f32>(), 7_7_7.0) # let's go!
     
                     roll: Roll<i32> = Roll<i32> { val = 7 }
-                    assert_eq(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
+                    assert_eq<f32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
     
                     ! 0
                 }

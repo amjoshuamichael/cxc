@@ -1,4 +1,4 @@
-use crate::parse::{GenFuncDependency, GenericLabels, ParseError};
+use crate::parse::{FuncDependency, GenericLabels, ParseError};
 use logos::{Lexer as LogosLexer, Logos};
 use std::{cell::RefCell, collections::HashSet, fmt::Display, rc::Rc};
 
@@ -91,7 +91,7 @@ pub struct ParseContext<N: Ident> {
     tok_pos: TokPos,
     name: N,
     generic_labels: GenericLabels,
-    func_dependencies: Vec<GenFuncDependency>,
+    func_dependencies: Vec<FuncDependency>,
     type_dependencies: HashSet<TypeName>,
 }
 
@@ -122,7 +122,7 @@ impl<N: Ident> ParseContext<N> {
         token.map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
     }
 
-    pub fn push_func_dependency(&mut self, dep: GenFuncDependency) {
+    pub fn push_func_dependency(&mut self, dep: FuncDependency) {
         self.func_dependencies.push(dep);
     }
 
@@ -138,7 +138,7 @@ impl<N: Ident> ParseContext<N> {
 
     pub fn name_of_this(&self) -> &N { &self.name }
 
-    pub fn return_info(self) -> (N, Vec<GenFuncDependency>, HashSet<TypeName>) {
+    pub fn return_info(self) -> (N, Vec<FuncDependency>, HashSet<TypeName>) {
         (self.name, self.func_dependencies, self.type_dependencies)
     }
 
