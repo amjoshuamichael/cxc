@@ -2,6 +2,7 @@ use crate::hlr::hlr_anonymous;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
 use crate::lex::*;
+use crate::libraries::Library;
 use crate::parse;
 use crate::parse::*;
 use crate::typ::Kind;
@@ -34,9 +35,8 @@ use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
 
 pub use self::functions::FuncDeclInfo;
-pub use self::output_api::Compiled;
-pub use self::output_api::CompiledFunc;
 pub use self::value_api::Value;
+pub use output_api::FuncRef;
 
 pub type IOFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
@@ -64,13 +64,20 @@ pub struct Unit<'u> {
     pub(crate) context: &'u Context,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CompData<'u> {
     pub(crate) types: HashMap<TypeName, Type>,
     pub(crate) aliases: HashMap<TypeName, TypeAlias>,
     compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
     func_types: HashMap<UniqueFuncInfo, Type>,
     func_code: HashMap<FuncDeclInfo, FuncCode>,
+    derivers: HashMap<VarName, fn(&CompData, TypeName) -> Option<FuncCode>>,
+}
+
+impl<'u> Debug for CompData<'u> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "comp_data: working on it!")
+    }
 }
 
 impl<'u> Unit<'u> {
@@ -406,71 +413,17 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn add_test_lib(&mut self) -> &mut Self {
-        self.add_rust_func_explicit(
-            "print",
-            print::<i32> as *const usize,
-            Type::never().func_with_args(vec![]),
-            None,
-            vec![Type::i(32)],
-        )
-        .add_rust_func_explicit(
-            "print",
-            print::<i64> as *const usize,
-            Type::never().func_with_args(vec![]),
-            None,
-            vec![Type::i(64)],
-        )
-        .add_rust_func_explicit(
-            "print",
-            print::<f32> as *const usize,
-            Type::never().func_with_args(vec![]),
-            None,
-            vec![Type::f(32)],
-        )
-        .add_rust_func_explicit(
-            "assert_eq",
-            assert::<i32> as *const usize,
-            Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
-            None,
-            vec![Type::i(32)],
-        )
-        .add_rust_func_explicit(
-            "assert_eq",
-            assert::<i64> as *const usize,
-            Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
-            None,
-            vec![Type::i(64)],
-        )
-        .add_rust_func_explicit(
-            "assert_eq",
-            assert::<f32> as *const usize,
-            Type::never().func_with_args(vec![Type::f(32), Type::f(32)]),
-            None,
-            vec![Type::f(32)],
-        )
-        .add_rust_func_explicit(
-            "assert_eq",
-            assert::<bool> as *const usize,
-            Type::never().func_with_args(vec![Type::bool(), Type::bool()]),
-            None,
-            vec![Type::bool()],
-        )
-        .add_rust_func("sqrt", [f32::sqrt])
-        .add_rust_func_explicit(
-            "panic",
-            panic as *const usize,
-            Type::never().func_with_args(vec![]),
-            None,
-            vec![],
-        )
-        .add_rust_func("to_i64", [to_i64]);
-
+    pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {
+        lib.add_to_unit(self);
         self
     }
-}
 
-fn panic(_: ()) { panic!() }
-fn print<T: Display>(val: T) { println!("{val}") }
-fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }
-fn to_i64(input: i32) -> i64 { input as i64 }
+    pub fn add_deriver(
+        &mut self,
+        func_name: VarName,
+        func: fn(&CompData, TypeName) -> Option<FuncCode>,
+    ) {
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+        comp_data.add_deriver(func_name, func);
+    }
+}

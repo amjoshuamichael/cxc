@@ -7,13 +7,14 @@
 #![feature(box_syntax)]
 #![feature(yeet_expr)]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 
 pub use typ::{Type, TypeEnum};
-pub use unit::{Compiled, CompiledFunc, LLVMContext, Unit, Value};
+pub use unit::{FuncRef, LLVMContext, Unit, Value};
 
 mod hlr;
 mod lex;
+mod libraries;
 mod parse;
 mod to_llvm;
 mod typ;
@@ -21,7 +22,10 @@ mod unit;
 
 #[cfg(test)]
 mod tests {
-    use crate::unit::LLVMContext;
+    use crate::{
+        libraries::{TestLib, TypeInterfaceLib},
+        unit::LLVMContext,
+    };
 
     use super::*;
 
@@ -109,7 +113,7 @@ mod tests {
     fn booleans() {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
+        unit.add_lib(TestLib);
 
         unit.push_script(
             "
@@ -163,7 +167,7 @@ mod tests {
     fn call_test() {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
+        unit.add_lib(TestLib);
 
         unit.push_script(
             "
@@ -413,7 +417,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 Point2D {
                     x: f32
@@ -451,7 +455,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 main(): i32 {
                     original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
@@ -485,7 +489,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 Point2D {
                     x: i32
@@ -525,7 +529,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 Julie {
                     letter: DreamFrom<TheEndOfTheWorld>
@@ -565,7 +569,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 courthouse_1955(): i32 {
                     gigawatt_count: f32 = courthouse_1985()
@@ -588,7 +592,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 double<T>(in: T): T {
                     ; in + in
@@ -615,7 +619,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib().push_script(
+        unit.add_lib(TestLib).push_script(
             "
                 Roll<T> {
                     val: T
@@ -654,57 +658,54 @@ mod tests {
     fn std_lib() {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
-        unit.add_test_lib();
+        unit.add_lib(TestLib);
 
         unit.push_script(include_str!("libraries/vec.cxc"));
 
         unit.push_script(
             "
-         test_vec(): i32 {
-            number_of_checks: i32 = 12345
-        
-            num_vec: Vec<i32> = create_vec<i32>()
-            two_num_vec: Vec<TwoNums> =
-         create_vec<TwoNums>(two_nums_from_one(to_i64(0)))
-        
-            current_index: i32 = 0
-            @ current_index < number_of_checks + 0 {
-                x: i32 = num_vec.push<i32>(current_index)
-        
-                current_index = current_index + 1
-            }
-        
-            current_index = 0
-            @ current_index < number_of_checks + 0 {
-                assert_eq<i32>(num_vec.get<i32>(to_i64(current_index)),
-         current_index)
-        
-                current_index = current_index + 1
-            }
-        
-        
-            current_index: i64 = 0
-            @ current_index < number_of_checks + 0 {
-                x: i32 =
-         two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
-        
-                current_index = current_index + 1
-            }
-        
-            current_index = 0
-            @ current_index < number_of_checks + 0 {
-                in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
-                corresponding: TwoNums = two_nums_from_one(current_index)
-        
-                assert_eq<i64>(in_vec.num_one, corresponding.num_one)
-                assert_eq<i64>(in_vec.num_two, corresponding.num_two)
-        
-                current_index = current_index + 1
-            }
-        
-        
-            ; 0
-        }",
+ test_vec(): i32 {
+    number_of_checks: i32 = 128
+
+    num_vec: Vec<i32> = create_vec<i32>()
+    two_num_vec: Vec<TwoNums> = create_vec<TwoNums>(two_nums_from_one(to_i64(0)))
+
+    current_index: i32 = 0
+    @ current_index < number_of_checks + 0 {
+        x: i32 = num_vec.push<i32>(current_index)
+
+        current_index = current_index + 1
+    }
+
+    current_index = 0
+    @ current_index < number_of_checks + 0 {
+        assert_eq<i32>(num_vec.get<i32>(to_i64(current_index)), current_index)
+
+        current_index = current_index + 1
+    }
+
+
+    current_index: i64 = 0
+    @ current_index < number_of_checks + 0 {
+        x: i32 = two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
+
+        current_index = current_index + 1
+    }
+
+    current_index = 0
+    @ current_index < number_of_checks + 0 {
+        in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
+        corresponding: TwoNums = two_nums_from_one(current_index)
+
+        assert_eq<i64>(in_vec.num_one, corresponding.num_one)
+        assert_eq<i64>(in_vec.num_two, corresponding.num_two)
+
+        current_index = current_index + 1
+    }
+
+
+    ; 0
+}",
         );
 
         unsafe { unit.get_fn::<(), i32>("test_vec")(()) };
@@ -714,7 +715,7 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
 
-        unit.add_test_lib();
+        unit.add_lib(TestLib);
         unit.push_script(include_str!("libraries/vec.cxc"));
 
         unit.push_script(
@@ -739,5 +740,37 @@ mod tests {
 
         unsafe { unit.get_fn::<_, ()>("part_2")(&info) };
         unsafe { unit.get_fn::<_, ()>("part_3")(&info) };
+    }
+
+    #[test]
+    fn derivations() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+        unit.add_lib(TestLib).add_lib(TypeInterfaceLib).push_script(
+            "
+            Point2D {
+                x: i32
+                y: i32
+            }
+
+            Point3D {
+                x: i32
+                y: i32
+                z: i32
+            }
+
+            test_derivation(): i32 {
+                point2D: Point2D = Point2D { x = 0, y = 0 }
+                assert_eq<i32>(point2D.type_field_count(), 2)
+
+                point3D: Point3D = Point3D { x = 0, y = 0, z = 0 }
+                assert_eq<i32>(point3D.type_field_count(), 3)
+
+                ; 0
+            }
+        ",
+        );
+
+        unsafe { unit.get_fn::<(), ()>("test_derivation")(()) };
     }
 }

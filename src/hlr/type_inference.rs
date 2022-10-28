@@ -119,6 +119,7 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
                     hlr.tree.unique_func_info_of_call(&call)
                 };
 
+                dbg!(&func_info);
                 let func_type = comp_data.get_type(&func_info).unwrap();
                 let TypeEnum::Func(FuncType { return_type, .. }) = 
                     func_type.as_type_enum() else { panic!() };

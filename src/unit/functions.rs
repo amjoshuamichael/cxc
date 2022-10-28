@@ -8,6 +8,7 @@ impl<'a> CompData<'a> {
             compiled: HashMap::new(),
             func_types: HashMap::new(),
             func_code: HashMap::new(),
+            derivers: HashMap::new(),
         };
 
         out.insert_code(FuncCode {
@@ -138,7 +139,7 @@ impl<'a> CompData<'a> {
             return cached_type.cloned();
         }
 
-        let code = self.func_code.get(&info.clone().into())?;
+        let code = self.get_code(info.clone())?;
 
         let ret_type = self.get_spec(&code.ret_type, &info.generics).unwrap();
 
@@ -156,12 +157,28 @@ impl<'a> CompData<'a> {
         Some(func_type)
     }
 
+    pub fn get_derived_code(&self, info: &UniqueFuncInfo) -> Option<FuncCode> {
+        let deriver = self.derivers.get(&info.name)?;
+        deriver(self, info.method_of.as_ref()?.clone())
+    }
+
     pub fn get_code(&self, info: UniqueFuncInfo) -> Option<FuncCode> {
-        self.func_code.get(&info.into()).cloned()
+        match self.get_derived_code(&info) {
+            Some(code) => Some(code),
+            None => self.func_code.get(&info.into()).cloned(),
+        }
     }
 
     pub fn is_extern(&self, info: &FuncDeclInfo) -> bool {
         self.func_code.contains_key(info)
+    }
+
+    pub fn add_deriver(
+        &mut self,
+        func_name: VarName,
+        func: fn(&CompData, TypeName) -> Option<FuncCode>,
+    ) {
+        self.derivers.insert(func_name, func);
     }
 }
 
