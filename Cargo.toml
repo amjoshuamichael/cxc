@@ -7,5 +7,4 @@ edition = "2021"
 logos = "0.12.0"
 llvm-sys = "120"
 inkwell = { git = "https://github.com/amjoshuamichael/inkwell", branch = "master", features = ["llvm12-0"] }
-indexmap = "1.9.1"
 once_cell = "1.15.0"

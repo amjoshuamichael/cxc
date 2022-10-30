@@ -1,6 +1,6 @@
 use crate::{
+    typ::TypeOrAlias,
     unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
-    Type,
 };
 
 use super::*;
@@ -35,7 +35,7 @@ pub enum Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarDecl {
     pub name: VarName,
-    pub typ: Option<TypeAlias>,
+    pub typ: Option<TypeOrAlias>,
 }
 
 #[derive(Debug)]
@@ -96,15 +96,27 @@ pub struct FuncCode {
     pub args: Vec<VarDecl>,
     pub generic_count: u32,
     pub code: Expr,
-    pub method_of: Option<TypeName>,
-    pub dependencies: Vec<FuncDependency>,
+    pub method_of: Option<TypeOrAlias>,
 }
 
 impl FuncCode {
-    pub fn decl_info(&self) -> FuncDeclInfo {
+    pub fn decl_info(&self, comp_data: &CompData) -> FuncDeclInfo {
         FuncDeclInfo {
             name: self.name.clone(),
             method_of: self.method_of.clone(),
+        }
+    }
+
+    pub fn to_unique_func_info(&self, comp_data: &CompData) -> UniqueFuncInfo {
+        let method_of = self
+            .method_of
+            .clone()
+            .map(|toa| toa.into_type(comp_data).unwrap());
+
+        UniqueFuncInfo {
+            name: self.name.clone(),
+            method_of,
+            generics: Vec::new(),
         }
     }
 
@@ -116,31 +128,10 @@ impl FuncCode {
             generic_count: 0,
             code,
             method_of: None,
-            dependencies: Vec::new(),
         }
     }
 
-    pub fn is_generic(&self) -> bool { self.generic_count > 0 }
-}
-
-impl Into<FuncDependency> for FuncCode {
-    fn into(self) -> FuncDependency {
-        FuncDependency {
-            name: self.name,
-            method_of: self.method_of,
-            generics: vec![],
-        }
-    }
-}
-
-impl FuncCode {
-    pub fn to_unique_func_info(&self) -> UniqueFuncInfo {
-        UniqueFuncInfo {
-            name: self.name.clone(),
-            method_of: self.method_of.clone(),
-            generics: Vec::new(),
-        }
-    }
+    pub fn has_generics(&self) -> bool { self.generic_count > 0 }
 }
 
 #[derive(Debug, Clone)]
@@ -149,11 +140,4 @@ pub struct TypeDecl {
     pub typ: TypeAlias,
     pub contains_generics: bool,
     pub dependencies: HashSet<TypeName>,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct FuncDependency {
-    pub name: VarName,
-    pub method_of: Option<TypeName>,
-    pub generics: Vec<TypeAlias>,
 }

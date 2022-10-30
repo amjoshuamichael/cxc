@@ -2,7 +2,6 @@ use crate::lex::{TypeName, VarName};
 use crate::parse::*;
 use crate::unit::CompData;
 use crate::Type;
-use indexmap::IndexMap;
 
 mod rust_type_name_conversion;
 
@@ -28,39 +27,22 @@ impl<'a> CompData<'a> {
         Some(realized_type.with_name(name.clone()))
     }
 
-    fn fill_gen_param_holes(
-        &self,
-        alias: &TypeAlias,
-        generics: &Vec<TypeAlias>,
-    ) -> Option<TypeAlias> {
-        // TODO: fill in type aliases like &T or T[]
-
-        match alias {
-            TypeAlias::GenParam(index) => {
-                return Some(generics[*index as usize].clone())
-            },
-            _ => {},
-        }
-
-        return Some(alias.clone());
-    }
-
     pub fn get_spec(&self, alias: &TypeAlias, generics: &Vec<Type>) -> Option<Type> {
         let typ = match alias {
-            TypeAlias::Named(name) => self.get_by_name(&name)?,
+            TypeAlias::Named(name) => self.get_by_name(name)?,
             TypeAlias::Int(size) => Type::i(*size),
             TypeAlias::Float(size) => Type::f(*size),
             TypeAlias::Bool => Type::bool(),
             TypeAlias::Ref(base) => self.get_spec(base, generics)?.get_ref(),
             TypeAlias::Struct(fields, methods) => {
-                let mut typed_fields: IndexMap<VarName, Type> = IndexMap::new();
+                let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
 
                 for field in fields {
                     let field_type = self.get_spec(&field.1, generics)?;
-                    typed_fields.insert(field.0.clone(), field_type);
+                    typed_fields.push((field.0.clone(), field_type));
                 }
 
-                Type::new_struct(typed_fields, methods.iter().cloned().collect())
+                Type::new_struct(typed_fields, methods.to_vec())
             },
             TypeAlias::Generic(name, generic_aliases) => {
                 let generics = generic_aliases

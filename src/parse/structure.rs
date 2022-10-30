@@ -113,7 +113,7 @@ pub fn parse_type_decl(
     let (alias, methods) = parse_type_and_methods(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
-    let (name, _, dependencies) = lexer.return_info();
+    let (name, dependencies) = lexer.return_info();
 
     let type_decl = TypeDecl {
         name,
@@ -194,17 +194,23 @@ fn parse_struct_part(
 
             decl.args.push(VarDecl {
                 name: "self".into(),
-                typ: Some(TypeAlias::Ref(box TypeAlias::Generic(
-                    lexer.name_of_this().clone(),
-                    generic_params,
-                ))),
+                typ: Some(
+                    TypeAlias::Ref(box TypeAlias::Generic(
+                        lexer.name_of_this().clone(),
+                        generic_params,
+                    ))
+                    .into(),
+                ),
             });
         } else {
             decl.args.push(VarDecl {
                 name: "self".into(),
-                typ: Some(TypeAlias::Ref(box TypeAlias::Named(
-                    lexer.name_of_this().clone(),
-                ))),
+                typ: Some(
+                    TypeAlias::Ref(box TypeAlias::Named(
+                        lexer.name_of_this().clone(),
+                    ))
+                    .into(),
+                ),
             });
         }
 

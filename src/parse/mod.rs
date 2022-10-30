@@ -110,7 +110,16 @@ pub fn parse_func(
     let code = parse_block(&mut lexer)?;
 
     let generic_count = lexer.generic_count() as u32;
-    let (name, dependencies, _) = lexer.return_info();
+    let (name, _) = lexer.return_info();
+
+    let generic_params = (0..(generic_count as u8))
+        .into_iter()
+        .map(|index| TypeAlias::GenParam(index))
+        .collect();
+
+    let method_of = method_of.map(|name| {
+        TypeAlias::Ref(box TypeAlias::Generic(name, generic_params)).into()
+    });
 
     Ok(FuncCode {
         name,
@@ -119,7 +128,6 @@ pub fn parse_func(
         code,
         generic_count,
         method_of,
-        dependencies,
     })
 }
 
@@ -151,7 +159,7 @@ fn parse_var_decl(lexer: &mut ParseContext<VarName>) -> Result<VarDecl, ParseErr
 
     Ok(VarDecl {
         name: var_name,
-        typ: type_spec,
+        typ: type_spec.map(|s| s.into()),
     })
 }
 
@@ -172,7 +180,7 @@ fn parse_assignable(
 
         Ok(Assignable::Declare(VarDecl {
             name: var_name,
-            typ: type_spec,
+            typ: type_spec.map(|s| s.into()),
         }))
     } else {
         Ok(Assignable::Get(lhs))

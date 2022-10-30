@@ -1,15 +1,14 @@
 use crate::lex::{TypeName, VarName};
 
-use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use indexmap::IndexMap;
-
 mod kind;
+mod typ_or_alias;
 pub use kind::Kind;
+pub use typ_or_alias::TypeOrAlias;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Type(Arc<TypeData>);
@@ -31,14 +30,12 @@ impl Type {
         self
     }
 
-    pub fn complete_deref(self) -> Type {
-        let mut output = self;
-
-        while let Some(derefed) = output.clone().get_deref() {
-            output = derefed;
+    pub fn complete_deref(mut self) -> Type {
+        while let Some(derefed) = self.clone().get_deref() {
+            self = derefed;
         }
 
-        output
+        self
     }
 
     pub fn deref_x_times(self, count: u8) -> Option<Type> {
@@ -78,10 +75,7 @@ impl Type {
 
     pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
 
-    pub fn new_struct(
-        fields: IndexMap<VarName, Type>,
-        methods: HashSet<VarName>,
-    ) -> Type {
+    pub fn new_struct(fields: Vec<(VarName, Type)>, methods: Vec<VarName>) -> Type {
         Type::new(TypeEnum::Struct(StructType { fields, methods }))
     }
 
@@ -188,15 +182,21 @@ pub struct FuncType {
     pub args: Vec<Type>,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct StructType {
-    pub fields: IndexMap<VarName, Type>,
-    pub methods: HashSet<VarName>,
+    pub fields: Vec<(VarName, Type)>,
+    pub methods: Vec<VarName>,
 }
 
 impl StructType {
     pub fn get_field_type(&self, field_name: &VarName) -> Option<Type> {
-        self.fields.get(field_name).cloned()
+        for field in &self.fields {
+            if field.0 == *field_name {
+                return Some(field.1.clone());
+            }
+        }
+
+        return None;
     }
 
     pub fn get_full_method_name(&self, field_name: &VarName) -> Option<&VarName> {
@@ -204,23 +204,13 @@ impl StructType {
     }
 
     pub fn get_field_index(&self, field_name: &VarName) -> usize {
-        self.fields.get_index_of(field_name).unwrap()
+        self.fields
+            .iter()
+            .position(|field| field.0 == *field_name)
+            .unwrap()
     }
 
     pub fn field_count(&self) -> usize { self.fields.len() }
-}
-
-impl Hash for StructType {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        for (name, typ) in &self.fields {
-            name.hash(state);
-            typ.hash(state);
-        }
-
-        for method in &self.methods {
-            method.hash(state);
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Hash)]

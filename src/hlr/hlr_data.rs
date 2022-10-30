@@ -1,14 +1,13 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
 use crate::lex::VarName;
 use crate::parse::*;
-use crate::typ::FloatType;
+use crate::typ::{FloatType, TypeOrAlias};
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
-use indexmap::IndexMap;
 
 /// The HLR Data Type.
 #[derive(Debug)]
@@ -19,14 +18,18 @@ pub struct FuncRep<'a> {
     pub info: UniqueFuncInfo,
 
     // used to find where variables are declared.
-    pub data_flow: IndexMap<VarName, DataFlowInfo>,
+    pub data_flow: HashMap<VarName, DataFlowInfo>,
 }
 
 #[derive(Debug)]
 pub struct DataFlowInfo {
     pub typ: Type,
     pub ids: Vec<ExprID>,
-    pub is_func_param: bool,
+    pub arg_index: Option<usize>,
+}
+
+impl DataFlowInfo {
+    pub fn is_arg(&self) -> bool { self.arg_index.is_some() }
 }
 
 impl<'a> FuncRep<'a> {
@@ -40,16 +43,16 @@ impl<'a> FuncRep<'a> {
             types: comp_data,
             identifiers: Vec::new(),
             info,
-            data_flow: IndexMap::new(),
+            data_flow: HashMap::new(),
         };
 
-        for arg in code.args.iter() {
+        for (a, arg) in code.args.iter().enumerate() {
             new.identifiers.push(arg.name.clone());
 
             let typ = match arg.typ {
-                Some(ref type_spec) => {
-                    new.types.get_spec(&type_spec, &new.info.generics).unwrap()
-                },
+                Some(ref type_spec) => type_spec
+                    .into_type_with_generics(&*new.types, &new.info.generics)
+                    .unwrap(),
                 None => todo!(),
             };
 
@@ -58,7 +61,7 @@ impl<'a> FuncRep<'a> {
                 DataFlowInfo {
                     typ,
                     ids: Vec::new(),
-                    is_func_param: true,
+                    arg_index: Some(a),
                 },
             );
         }
@@ -69,16 +72,29 @@ impl<'a> FuncRep<'a> {
     }
 
     pub fn arg_names(&self) -> Vec<VarName> {
-        self.data_flow
+        let mut names_and_flow = self
+            .data_flow
             .iter()
-            .filter(|f| f.1.is_func_param)
+            .filter(|f| f.1.is_arg())
+            .collect::<Vec<_>>();
+
+        names_and_flow.sort_by(|(_, df), (_, df2)| {
+            df.arg_index.unwrap().cmp(&df2.arg_index.unwrap())
+        });
+
+        names_and_flow
+            .iter()
             .map(|f| f.0)
             .cloned()
-            .collect()
+            .collect::<Vec<_>>()
     }
 
     pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
         self.types.get_spec(alias, &self.info.generics)
+    }
+
+    pub fn get_type_or_alias(&self, toa: &TypeOrAlias) -> Option<Type> {
+        toa.into_type_with_generics(&self.types, &self.info.generics)
     }
 
     pub fn output(self) -> FuncOutput {
@@ -91,21 +107,17 @@ impl<'a> FuncRep<'a> {
 
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
-            Expr::Number(n) => self.tree.insert(
-                parent,
-                NodeData::Number {
-                    value: n.into(),
-                    size: 32,
-                },
-            ),
-            Expr::Float(n) => self.tree.insert(
+            Expr::Number(value) => self
+                .tree
+                .insert(parent, NodeData::Number { value, size: 32 }),
+            Expr::Float(value) => self.tree.insert(
                 parent,
                 NodeData::Float {
-                    value: n.into(),
+                    value,
                     size: FloatType::F32,
                 },
             ),
-            Expr::Bool(b) => self.tree.insert(parent, NodeData::Bool { value: b }),
+            Expr::Bool(value) => self.tree.insert(parent, NodeData::Bool { value }),
             Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name)
             {
                 Some(name) => {
@@ -136,23 +148,26 @@ impl<'a> FuncRep<'a> {
             Expr::MakeVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let var_type = Type::never();
+                let var_type = if self.data_flow.contains_key(&decl.name) {
+                    self.data_flow.get(&decl.name).unwrap().typ.clone()
+                } else {
+                    let var_type =
+                        self.get_type_or_alias(&decl.typ.unwrap()).unwrap();
 
-                if !self.data_flow.contains_key(&decl.name) {
                     let new_data_flow_info = DataFlowInfo {
                         typ: var_type.clone(),
                         ids: vec![space],
-                        is_func_param: false,
+                        arg_index: None,
                     };
 
                     self.data_flow.insert(decl.name.clone(), new_data_flow_info);
-                }
+                    var_type
+                };
 
                 self.identifiers.push(decl.name.clone());
                 let new_decl = NodeData::MakeVar {
-                    type_spec: decl.typ,
                     var_type,
-                    name: decl.name.clone(),
+                    name: decl.name,
                     rhs: self.add_expr(*e, space),
                 };
 

@@ -1,4 +1,4 @@
-use crate::parse::{FuncDependency, GenericLabels, ParseError};
+use crate::parse::{GenericLabels, ParseError};
 use logos::{Lexer as LogosLexer, Logos};
 use std::{cell::RefCell, collections::HashSet, fmt::Display, rc::Rc};
 
@@ -73,16 +73,13 @@ impl Lexer {
             );
         }
 
-        let output = ParseContext {
+        ParseContext {
             inner: self.inner.clone(),
             tok_pos: self.tok_pos.clone(),
             name,
             generic_labels,
-            func_dependencies: Vec::new(),
             type_dependencies: HashSet::new(),
-        };
-
-        output
+        }
     }
 }
 
@@ -91,7 +88,6 @@ pub struct ParseContext<N: Ident> {
     tok_pos: TokPos,
     name: N,
     generic_labels: GenericLabels,
-    func_dependencies: Vec<FuncDependency>,
     type_dependencies: HashSet<TypeName>,
 }
 
@@ -115,15 +111,11 @@ impl<N: Ident> ParseContext<N> {
     fn get(&self, at: usize, log: bool) -> Result<Tok, ParseError> {
         let token = self.inner.get(at);
 
-        if crate::DEBUG && log && let Some(token) = token.clone() {
+        if crate::DEBUG && log && let Some(token) = token {
             println!("lexing: {:?}", token);
         }
 
         token.map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
-    }
-
-    pub fn push_func_dependency(&mut self, dep: FuncDependency) {
-        self.func_dependencies.push(dep);
     }
 
     pub fn push_type_dependency(&mut self, name: TypeName) {
@@ -134,12 +126,12 @@ impl<N: Ident> ParseContext<N> {
         self.generic_labels.get(label).copied()
     }
 
-    pub fn has_generics(&self) -> bool { self.generic_labels.len() > 0 }
+    pub fn has_generics(&self) -> bool { !self.generic_labels.is_empty() }
 
     pub fn name_of_this(&self) -> &N { &self.name }
 
-    pub fn return_info(self) -> (N, Vec<FuncDependency>, HashSet<TypeName>) {
-        (self.name, self.func_dependencies, self.type_dependencies)
+    pub fn return_info(self) -> (N, HashSet<TypeName>) {
+        (self.name, self.type_dependencies)
     }
 
     pub fn create_new_with_name<T: Ident>(&self, name: T) -> ParseContext<T> {
@@ -148,7 +140,6 @@ impl<N: Ident> ParseContext<N> {
             name,
             tok_pos: self.tok_pos.clone(),
             generic_labels: self.generic_labels.clone(),
-            func_dependencies: Vec::new(),
             type_dependencies: HashSet::new(),
         }
     }

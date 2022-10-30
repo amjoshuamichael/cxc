@@ -39,7 +39,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
             }
 
             atom
-        } else if let Expr::Ident(func_name) = last_atom.clone() 
+        } else if matches!(last_atom.clone(), Expr::Ident(_))
             && matches!(next, Tok::LeftAngle) 
             && after_generics(lexer, Tok::LeftParen)? {
             let generics = parse_list(
@@ -48,10 +48,6 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                 parse_type_alias,
                 lexer,
             )?;
-
-            lexer.push_func_dependency(FuncDependency {
-                name: func_name, method_of: None, generics: generics.clone()
-            });
 
             let params = parse_list(
                 (Tok::LeftParen, Tok::RghtParen),
@@ -99,7 +95,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
     binops(&mut atoms);
 
     assert_eq!(atoms.len(), 1);
-    return Ok(atoms[0].clone());
+    Ok(atoms[0].clone())
 }
 
 pub fn members(atoms: &mut Vec<Expr>) {

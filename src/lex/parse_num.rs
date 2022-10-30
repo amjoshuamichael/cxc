@@ -56,7 +56,7 @@ fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<f64> {
 
     let output = coefficient * base.powf(exponent);
 
-    return Some(output);
+    Some(output)
 }
 
 fn convert_base(input: &str, base: u32) -> Option<u128> {

@@ -1,4 +1,4 @@
-use crate::{Type, TypeEnum, unit::{CompData, UniqueFuncInfo}, typ::FuncType};
+use crate::{Type, TypeEnum, unit::CompData, typ::FuncType};
 use super::prelude::*;
 use crate::parse::*;
 use std::{collections::HashMap, rc::Rc};
@@ -11,24 +11,11 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
 
         match node {
             NodeData::MakeVar {
-                ref type_spec,
-                ref mut var_type,
+                ref var_type,
                 ref name,
                 ..
             } => {
-                *var_type = match type_spec {
-                    Some(type_spec) => {
-                        let var_type =
-                            hlr.get_type_spec(&type_spec).unwrap().clone();
-                        hlr.data_flow.get_mut(&name.clone()).unwrap().typ =
-                            var_type.clone();
-                        var_type
-                    },
-                    None => {
-                        hlr.data_flow.get_mut(&name.clone()).unwrap().typ.clone()
-                    },
-                }
-                .clone();
+                hlr.data_flow.get_mut(&name.clone()).unwrap().typ = var_type.clone();
             },
             NodeData::Ident {
                 ref mut var_type,
@@ -119,7 +106,6 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
                     hlr.tree.unique_func_info_of_call(&call)
                 };
 
-                dbg!(&func_info);
                 let func_type = comp_data.get_type(&func_info).unwrap();
                 let TypeEnum::Func(FuncType { return_type, .. }) = 
                     func_type.as_type_enum() else { panic!() };

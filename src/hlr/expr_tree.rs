@@ -2,7 +2,7 @@ use crate::lex::VarName;
 use crate::parse::*;
 use crate::typ::FloatType;
 use crate::unit::UniqueFuncInfo;
-use crate::{Type, TypeEnum};
+use crate::Type;
 use std::fmt::{Debug, Formatter};
 
 #[derive(Default, Clone)]
@@ -34,7 +34,7 @@ impl ExprTree {
     }
 
     pub fn ids(&self) -> impl DoubleEndedIterator<Item = ExprID> {
-        (0..self.node_count()).map(|id| ExprID(id))
+        (0..self.node_count()).map(ExprID)
     }
 
     pub fn insert(&mut self, parent: ExprID, data: NodeData) -> ExprID {
@@ -58,7 +58,7 @@ impl ExprTree {
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
 
-    fn node_count(&self) -> usize { self.nodes.len().try_into().unwrap() }
+    fn node_count(&self) -> usize { self.nodes.len() }
 
     pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
         let NodeData::Call { f, generics, a, is_method, .. } = call.clone()
@@ -66,15 +66,7 @@ impl ExprTree {
 
         let method_of = if is_method {
             let object = a.last().unwrap();
-
-            let name = {
-                let typ = self.get(*object).ret_type();
-                let derefed = typ.clone().get_deref().unwrap();
-                derefed.name().clone()
-            };
-
-            assert!(name.is_some());
-            name.clone()
+            Some(self.get(*object).ret_type())
         } else {
             None
         };
@@ -187,7 +179,6 @@ pub enum NodeData {
         name: VarName,
     },
     MakeVar {
-        type_spec: Option<TypeAlias>,
         var_type: Type,
         name: VarName,
         rhs: ExprID,

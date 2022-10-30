@@ -21,12 +21,11 @@ use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::mem::size_of;
 use std::mem::transmute;
 use std::rc::Rc;
 
-mod func_info;
 mod functions;
 pub mod output_api;
 pub mod value_api;
@@ -34,6 +33,7 @@ pub mod value_api;
 use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
 
+use self::functions::DeriverFunc;
 pub use self::functions::FuncDeclInfo;
 pub use self::value_api::Value;
 pub use output_api::FuncRef;
@@ -64,14 +64,15 @@ pub struct Unit<'u> {
     pub(crate) context: &'u Context,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CompData<'u> {
     pub(crate) types: HashMap<TypeName, Type>,
     pub(crate) aliases: HashMap<TypeName, TypeAlias>,
     compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
     func_types: HashMap<UniqueFuncInfo, Type>,
     func_code: HashMap<FuncDeclInfo, FuncCode>,
-    derivers: HashMap<VarName, fn(&CompData, TypeName) -> Option<FuncCode>>,
+    decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
+    derivers: HashMap<VarName, DeriverFunc>,
 }
 
 impl<'u> Debug for CompData<'u> {
@@ -111,10 +112,6 @@ impl<'u> Unit<'u> {
 
     pub fn clear(&mut self) {
         for func in self.comp_data.unique_func_info_iter() {
-            if self.comp_data.is_extern(&func.clone().into()) {
-                continue;
-            }
-
             let llvm_func = self.module.get_function(&*func.to_string()).unwrap();
             self.execution_engine.free_fn_machine_code(llvm_func);
             unsafe { llvm_func.delete() }
@@ -140,22 +137,29 @@ impl<'u> Unit<'u> {
             },
         };
 
-        let funcs_to_compile: Vec<UniqueFuncInfo> = script
-            .funcs_iter()
-            .filter(|func| !func.is_generic())
-            .map(|d| d.to_unique_func_info())
-            .collect();
-
-        {
+        let funcs_to_compile = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
             for decl in script.types_iter().cloned() {
                 comp_data.add_type_alias(decl.name, decl.typ);
             }
 
-            for decl in script.funcs_iter() {
-                comp_data.insert_code(decl.clone());
+            let mut declarations = Vec::new();
+
+            for code in script.funcs_iter() {
+                let is_generic = code.has_generics();
+
+                let decl = comp_data.insert_code(code.clone());
+
+                if !is_generic {
+                    declarations.push(decl);
+                }
             }
+
+            let funcs_to_compile: Vec<UniqueFuncInfo> = { declarations }
+                .drain(..)
+                .map(|decl| comp_data.to_unique_func_info(decl, Vec::new()))
+                .collect();
 
             for func in &funcs_to_compile {
                 comp_data.create_func_placeholder(
@@ -164,7 +168,9 @@ impl<'u> Unit<'u> {
                     &mut self.module,
                 );
             }
-        }
+
+            funcs_to_compile
+        };
 
         let output = funcs_to_compile.clone();
 
@@ -202,8 +208,8 @@ impl<'u> Unit<'u> {
             .chain({ func_reps }.drain(..))
             .collect();
 
-        for output in &mut all_funcs_to_compile {
-            self.add_function(output);
+        for func_output in &mut all_funcs_to_compile {
+            self.compile(func_output);
         }
 
         if crate::DEBUG {
@@ -293,7 +299,7 @@ impl<'u> Unit<'u> {
         value
     }
 
-    fn add_function(&mut self, output: &mut FuncOutput) {
+    fn compile(&mut self, output: &mut FuncOutput) {
         let function = self.comp_data.get_func_value(output.info_ref()).unwrap();
 
         let mut fcs = self.new_func_comp_state(
@@ -325,7 +331,7 @@ impl<'u> Unit<'u> {
         name: &str,
         function_ptr: *const usize,
         func_type: Type,
-        method_of: Option<TypeName>,
+        method_of: Option<Type>,
         generics: Vec<Type>,
     ) -> &mut Self {
         let ink_func_type =
@@ -406,10 +412,8 @@ impl<'u> Unit<'u> {
                 .execution_engine
                 .get_function_address(&*func_info.to_string())
                 .unwrap();
-            let function =
-                transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr);
 
-            function
+            transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr)
         }
     }
 
@@ -418,11 +422,7 @@ impl<'u> Unit<'u> {
         self
     }
 
-    pub fn add_deriver(
-        &mut self,
-        func_name: VarName,
-        func: fn(&CompData, TypeName) -> Option<FuncCode>,
-    ) {
+    pub fn add_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
         comp_data.add_deriver(func_name, func);
     }

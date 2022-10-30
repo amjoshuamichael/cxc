@@ -1,15 +1,10 @@
-use crate::Type;
+use crate::{typ::TypeOrAlias, Type};
+
+pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
 
 impl<'a> CompData<'a> {
     pub fn new() -> Self {
-        let mut out = Self {
-            types: HashMap::new(),
-            aliases: HashMap::new(),
-            compiled: HashMap::new(),
-            func_types: HashMap::new(),
-            func_code: HashMap::new(),
-            derivers: HashMap::new(),
-        };
+        let mut out = Self::default();
 
         out.insert_code(FuncCode {
             name: VarName::from("alloc"),
@@ -18,7 +13,6 @@ impl<'a> CompData<'a> {
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             method_of: None,
-            dependencies: Vec::new(),
         });
 
         out.insert_code(FuncCode {
@@ -26,12 +20,11 @@ impl<'a> CompData<'a> {
             ret_type: TypeAlias::Int(32),
             args: vec![VarDecl {
                 name: VarName::temp(),
-                typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0))),
+                typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
             }],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             method_of: None,
-            dependencies: Vec::new(),
         });
 
         out.insert_code(FuncCode {
@@ -40,21 +33,20 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0))),
+                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0))),
+                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Int(64)),
+                    typ: Some(Type::i(64).into()),
                 },
             ],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             method_of: None,
-            dependencies: Vec::new(),
         });
 
         out.insert_code(FuncCode {
@@ -64,14 +56,39 @@ impl<'a> CompData<'a> {
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             method_of: None,
-            dependencies: Vec::new(),
         });
 
         out
     }
 
-    pub fn insert_code(&mut self, code: FuncCode) {
-        self.func_code.insert(code.decl_info(), code);
+    pub fn insert_code(&mut self, code: FuncCode) -> FuncDeclInfo {
+        let decl_info = code.decl_info(self);
+        self.func_code.insert(decl_info.clone(), code);
+        self.decl_names
+            .entry(decl_info.name.clone())
+            .and_modify(|set| set.push(decl_info.clone()))
+            .or_insert(vec![decl_info.clone()]);
+
+        decl_info
+    }
+
+    pub fn to_unique_func_info(
+        &mut self,
+        decl_info: FuncDeclInfo,
+        generics: Vec<Type>,
+    ) -> UniqueFuncInfo {
+        let method_of = decl_info
+            .method_of
+            .clone()
+            .map(|toa| toa.into_type_with_generics(self, &generics).unwrap());
+
+        let unique_func_info = UniqueFuncInfo {
+            name: decl_info.name.clone(),
+            method_of,
+            generics,
+        };
+
+        unique_func_info
     }
 
     pub fn insert_temp_function(&mut self, code: FuncCode) -> UniqueFuncInfo {
@@ -92,7 +109,7 @@ impl<'a> CompData<'a> {
     pub fn remove_function(&mut self, unique_func_info: UniqueFuncInfo) {
         self.compiled.remove(&unique_func_info);
         self.func_types.remove(&unique_func_info);
-        let decl_info = unique_func_info.into();
+        let decl_info = self.get_declaration_of(&unique_func_info).unwrap();
         self.func_code.remove(&decl_info);
     }
 
@@ -106,6 +123,22 @@ impl<'a> CompData<'a> {
 
     pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
         self.compiled.contains_key(info)
+    }
+
+    pub fn get_declaration_of(&self, info: &UniqueFuncInfo) -> Option<FuncDeclInfo> {
+        let possible_decls = self.decl_names.get(&info.name)?;
+
+        for decl in possible_decls {
+            let decl_method_of = decl.method_of.clone().map(|toa| {
+                toa.into_type_with_generics(self, &info.generics).unwrap()
+            });
+
+            if decl_method_of == info.method_of {
+                return Some(decl.clone());
+            }
+        }
+
+        None
     }
 
     pub fn get_func_value(
@@ -147,7 +180,10 @@ impl<'a> CompData<'a> {
             .args
             .iter()
             .map(|d| {
-                self.get_spec(d.typ.as_ref().unwrap(), &info.generics)
+                d.typ
+                    .clone()
+                    .unwrap()
+                    .into_type_with_generics(self, &info.generics)
                     .unwrap()
             })
             .collect();
@@ -163,21 +199,15 @@ impl<'a> CompData<'a> {
     }
 
     pub fn get_code(&self, info: UniqueFuncInfo) -> Option<FuncCode> {
-        match self.get_derived_code(&info) {
-            Some(code) => Some(code),
-            None => self.func_code.get(&info.into()).cloned(),
-        }
+        let decl_info = self.get_declaration_of(&info);
+        if let Some(decl_info) = decl_info {
+            return self.func_code.get(&decl_info).cloned();
+        };
+
+        self.get_derived_code(&info)
     }
 
-    pub fn is_extern(&self, info: &FuncDeclInfo) -> bool {
-        self.func_code.contains_key(info)
-    }
-
-    pub fn add_deriver(
-        &mut self,
-        func_name: VarName,
-        func: fn(&CompData, TypeName) -> Option<FuncCode>,
-    ) {
+    pub fn add_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
         self.derivers.insert(func_name, func);
     }
 }
@@ -189,13 +219,13 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuncDeclInfo {
     pub name: VarName,
-    pub method_of: Option<TypeName>,
+    pub method_of: Option<TypeOrAlias>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UniqueFuncInfo {
     pub name: VarName,
-    pub method_of: Option<TypeName>,
+    pub method_of: Option<Type>,
     pub generics: Vec<Type>,
 }
 
@@ -214,7 +244,7 @@ impl ToString for UniqueFuncInfo {
 impl UniqueFuncInfo {
     pub fn new(
         og_name: &VarName,
-        method_of: &Option<TypeName>,
+        method_of: &Option<Type>,
         generics: Vec<Type>,
     ) -> UniqueFuncInfo {
         UniqueFuncInfo {
@@ -227,13 +257,4 @@ impl UniqueFuncInfo {
     pub fn og_name(&self) -> VarName { self.name.clone() }
     pub fn is_method(&self) -> bool { self.method_of.is_some() }
     pub fn has_generics(&self) -> bool { self.generics.len() > 0 }
-}
-
-impl Into<FuncDeclInfo> for UniqueFuncInfo {
-    fn into(self) -> FuncDeclInfo {
-        FuncDeclInfo {
-            name: self.name,
-            method_of: self.method_of,
-        }
-    }
 }
