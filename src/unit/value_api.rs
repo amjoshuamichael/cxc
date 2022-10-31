@@ -1,8 +1,6 @@
 use crate::typ::Kind;
 use std::mem::transmute;
 
-use inkwell::context::Context;
-
 use crate::Type;
 
 #[derive(Debug)]

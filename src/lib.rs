@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 #![feature(type_name_of_val)]
-#![feature(let_else)]
 #![feature(let_chains)]
 #![feature(once_cell)]
 #![feature(type_alias_impl_trait)]

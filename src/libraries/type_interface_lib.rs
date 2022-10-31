@@ -20,8 +20,9 @@ impl Library for TypeInterfaceLib {
 }
 
 fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
+    let derefed_typ = typ.clone().complete_deref();
     let TypeEnum::Struct(StructType { fields, .. }) = 
-        typ.clone().complete_deref().as_type_enum() else { return None };
+        derefed_typ.as_type_enum() else { return None };
     let field_count = fields.len();
 
     Some(FuncCode {

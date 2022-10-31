@@ -23,8 +23,9 @@ impl Library for StdLib {
 }
 
 fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
+    let derefed_typ = typ.clone().complete_deref();
     let TypeEnum::Array(ArrayType { count, .. }) =
-        typ.clone().complete_deref().as_type_enum() else { return None };
+        derefed_typ.as_type_enum() else { return None };
 
     Some(FuncCode {
         name: VarName::from("len"),
