@@ -20,6 +20,20 @@ pub fn parse_int(token: &mut Lexer<Tok>) -> Option<u128> {
     }
 }
 
+pub fn parse_bool(token: &mut Lexer<Tok>) -> Option<bool> {
+    let true_or_false: String = token.slice().chars().collect();
+    match &*true_or_false {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
+pub fn parse_string(token: &mut Lexer<Tok>) -> Option<String> {
+    let string_len = token.slice().len() - 1;
+    Some(token.slice()[1..string_len].chars().collect())
+}
+
 pub fn parse_float(token: &mut Lexer<Tok>) -> Option<f64> {
     let num_text = token
         .slice()
@@ -30,15 +44,6 @@ pub fn parse_float(token: &mut Lexer<Tok>) -> Option<f64> {
     match num_text.chars().position(|c| c == 'e') {
         None => num_text.parse().ok(),
         Some(e_pos) => parse_scientific_notation(num_text, e_pos),
-    }
-}
-
-pub fn parse_bool(token: &mut Lexer<Tok>) -> Option<bool> {
-    let true_or_false: String = token.slice().chars().collect();
-    match &*true_or_false {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
     }
 }
 

@@ -17,8 +17,9 @@ pub trait Kind {
         self.to_any_type(context).try_into().unwrap()
     }
 
-    fn size(&self, context: &Context) -> usize {
-        let size_int_value = self.to_any_type(context).size_of().unwrap();
+    fn size(&self) -> usize {
+        let context = Context::create();
+        let size_int_value = self.to_any_type(&context).size_of().unwrap();
 
         // Calculating the size of a type depends on many things.
         // Instead of guesstimating it, we just ask LLVM to write a program

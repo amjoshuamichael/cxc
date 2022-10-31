@@ -123,7 +123,7 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
                 let TypeEnum::Array(array_type) = object_type.as_type_enum() 
                     else { panic!() };
 
-                *ret_type = array_type.base().clone();
+                *ret_type = array_type.base.clone();
 
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },

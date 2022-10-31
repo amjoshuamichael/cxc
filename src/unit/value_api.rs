@@ -12,8 +12,8 @@ pub struct Value {
 }
 
 impl Value {
-    pub fn new<const N: usize>(typ: Type, data: [u8; N], context: &Context) -> Self {
-        let size = typ.size(context) as usize;
+    pub fn new<const N: usize>(typ: Type, data: [u8; N]) -> Self {
+        let size = typ.size() as usize;
         let data = data[0..size].to_vec();
 
         Self { typ, data }

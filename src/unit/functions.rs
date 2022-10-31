@@ -6,7 +6,7 @@ impl<'a> CompData<'a> {
     pub fn new() -> Self {
         let mut out = Self::default();
 
-        out.insert_code(FuncCode {
+        out.insert_intrinsic(FuncCode {
             name: VarName::from("alloc"),
             ret_type: TypeAlias::Ref(box TypeAlias::GenParam(0)),
             args: Vec::new(),
@@ -15,7 +15,7 @@ impl<'a> CompData<'a> {
             method_of: None,
         });
 
-        out.insert_code(FuncCode {
+        out.insert_intrinsic(FuncCode {
             name: VarName::from("free"),
             ret_type: TypeAlias::Int(32),
             args: vec![VarDecl {
@@ -27,7 +27,7 @@ impl<'a> CompData<'a> {
             method_of: None,
         });
 
-        out.insert_code(FuncCode {
+        out.insert_intrinsic(FuncCode {
             name: VarName::from("memmove"),
             ret_type: TypeAlias::Int(32),
             args: vec![
@@ -49,7 +49,7 @@ impl<'a> CompData<'a> {
             method_of: None,
         });
 
-        out.insert_code(FuncCode {
+        out.insert_intrinsic(FuncCode {
             name: VarName::from("size_of"),
             ret_type: TypeAlias::Int(64),
             args: Vec::new(),
@@ -61,8 +61,13 @@ impl<'a> CompData<'a> {
         out
     }
 
+    fn insert_intrinsic(&mut self, code: FuncCode) {
+        let decl_info = self.insert_code(code);
+        self.intrinsics.insert(decl_info);
+    }
+
     pub fn insert_code(&mut self, code: FuncCode) -> FuncDeclInfo {
-        let decl_info = code.decl_info(self);
+        let decl_info = code.decl_info();
         self.func_code.insert(decl_info.clone(), code);
         self.decl_names
             .entry(decl_info.name.clone())
@@ -122,7 +127,12 @@ impl<'a> CompData<'a> {
     }
 
     pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
-        self.compiled.contains_key(info)
+        let is_intrinsic = if let Some(decl) = self.get_declaration_of(info) {
+            self.intrinsics.contains(&decl)
+        } else {
+            false
+        };
+        is_intrinsic || self.compiled.contains_key(info)
     }
 
     pub fn get_declaration_of(&self, info: &UniqueFuncInfo) -> Option<FuncDeclInfo> {

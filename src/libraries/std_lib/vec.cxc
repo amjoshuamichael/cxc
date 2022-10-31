@@ -1,16 +1,3 @@
-TwoNums {
-    num_one: i64
-    num_two: i64
-}
-
-two_nums_from_one(in: i64): TwoNums {
-    two_nums: TwoNums = 0
-    two_nums.num_one = in
-    two_nums.num_two = in + 42
-
-    ; two_nums
-}
-
 Vec<T> {
     data_loc: &T
     capacity: i64
@@ -49,5 +36,3 @@ create_vec<T>(): Vec<T> {
 
     ; new_vec
 }
-
-

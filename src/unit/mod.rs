@@ -73,6 +73,7 @@ pub struct CompData<'u> {
     func_code: HashMap<FuncDeclInfo, FuncCode>,
     decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
     derivers: HashMap<VarName, DeriverFunc>,
+    intrinsics: HashSet<FuncDeclInfo>,
 }
 
 impl<'u> Debug for CompData<'u> {
@@ -137,7 +138,7 @@ impl<'u> Unit<'u> {
             },
         };
 
-        let funcs_to_compile = {
+        let mut funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
             for decl in script.types_iter().cloned() {
@@ -161,52 +162,40 @@ impl<'u> Unit<'u> {
                 .map(|decl| comp_data.to_unique_func_info(decl, Vec::new()))
                 .collect();
 
-            for func in &funcs_to_compile {
-                comp_data.create_func_placeholder(
-                    func,
-                    &mut self.context,
-                    &mut self.module,
-                );
-            }
-
             funcs_to_compile
         };
 
-        let output = funcs_to_compile.clone();
+        let top_level_functions = funcs_to_process.clone();
 
-        let func_reps: Vec<FuncOutput> = { funcs_to_compile }
-            .drain(..)
-            .map(|info| hlr(info, self.comp_data.clone()))
-            .collect();
+        let mut all_funcs_to_compile = Vec::new();
 
-        let dependencies_to_compile: HashSet<UniqueFuncInfo> = func_reps
-            .iter()
-            .map(|f| f.get_func_dependencies())
-            .flatten()
-            .filter(|f| !self.comp_data.has_been_compiled(f))
-            .collect();
+        while !funcs_to_process.is_empty() {
+            {
+                let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
-        {
-            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-            for func in &dependencies_to_compile {
-                comp_data.create_func_placeholder(
-                    func,
-                    &mut self.context,
-                    &mut self.module,
-                );
+                for func in &funcs_to_process {
+                    comp_data.create_func_placeholder(
+                        func,
+                        &mut self.context,
+                        &mut self.module,
+                    );
+                }
             }
+
+            let func_reps: Vec<FuncOutput> = funcs_to_process
+                .drain(..)
+                .map(|info| hlr(info, self.comp_data.clone()))
+                .collect();
+
+            funcs_to_process = func_reps
+                .iter()
+                .map(|f| f.get_func_dependencies())
+                .flatten()
+                .filter(|f| !self.comp_data.has_been_compiled(f))
+                .collect();
+
+            all_funcs_to_compile.extend({ func_reps }.drain(..));
         }
-
-        let dependency_reps: Vec<FuncOutput> = { dependencies_to_compile }
-            .drain()
-            .map(|info| hlr(info, self.comp_data.clone()))
-            .collect();
-
-        let mut all_funcs_to_compile: Vec<FuncOutput> = { dependency_reps }
-            .drain(..)
-            .chain({ func_reps }.drain(..))
-            .collect();
 
         for func_output in &mut all_funcs_to_compile {
             self.compile(func_output);
@@ -216,7 +205,7 @@ impl<'u> Unit<'u> {
             println!("{}", self.module.print_to_string().to_string());
         }
 
-        output
+        top_level_functions
     }
 
     pub fn get_value(&self, of: &str) -> Value {
@@ -246,7 +235,7 @@ impl<'u> Unit<'u> {
             _ => unreachable!(),
         };
 
-        let get_via_ref = val_type.size(self.context) > size_of::<usize>();
+        let get_via_ref = val_type.size() > size_of::<usize>();
 
         let (mut func_rep, ret_type) = if !get_via_ref {
             (func_rep, val_type.clone())
@@ -287,10 +276,10 @@ impl<'u> Unit<'u> {
 
         let value = if get_via_ref {
             let comp: fn() -> *const [u8; 16] = unsafe { transmute(func_addr) };
-            Value::new(val_type, unsafe { *comp() }, &self.context)
+            Value::new(val_type, unsafe { *comp() })
         } else {
             let comp: fn() -> [u8; 8] = unsafe { transmute(func_addr) };
-            Value::new(val_type, comp(), &self.context)
+            Value::new(val_type, comp())
         };
 
         self.execution_engine.free_fn_machine_code(fcs.function);
@@ -422,8 +411,13 @@ impl<'u> Unit<'u> {
         self
     }
 
-    pub fn add_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
+    pub fn add_deriver(
+        &mut self,
+        func_name: VarName,
+        func: DeriverFunc,
+    ) -> &mut Self {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
         comp_data.add_deriver(func_name, func);
+        self
     }
 }

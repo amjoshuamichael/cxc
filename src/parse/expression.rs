@@ -16,6 +16,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                 Tok::Int(val) => Expr::Number(val),
                 Tok::Float(val) => Expr::Float(val),
                 Tok::Bool(val) => Expr::Bool(val),
+                Tok::Strin(val) => Expr::Strin(val),
                 Tok::VarName(val) => Expr::Ident(val.clone()),
                 Tok::LeftBrack => Expr::Array(parse_list(
                     (Tok::LeftBrack, Tok::RghtBrack),

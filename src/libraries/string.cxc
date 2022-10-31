@@ -1,7 +1,0 @@
-String {
-    inner: Vec<i8>
-
-    .create(from_array: &) {
-
-    }
-}

@@ -53,6 +53,7 @@ fn build_stack_allocas<'comp, 'a>(
             ..
         } => {
             if fcs.variables.contains_key(name) { continue; }
+            if fcs.arg_names.contains(name) { continue; }
 
             let var_ptr = fcs.builder.build_alloca(
                     var_type.to_basic_type(fcs.context),
@@ -106,6 +107,7 @@ fn compile<'comp, 'a>(
                 let param = fcs.function.get_nth_param(0).unwrap();
                 fcs.builder
                     .build_store(param.try_into().unwrap(), to_store_basic);
+                return Some(to_store);
             }
 
             let val = fcs.variables.get(name).unwrap();
@@ -440,7 +442,7 @@ fn compile<'comp, 'a>(
 
             let TypeEnum::Array(s) = var_type.as_type_enum() else { panic!() };
 
-            let array = match s.base().to_any_type(fcs.context) {
+            let array = match s.base.clone().to_any_type(fcs.context) {
                 AnyTypeEnum::IntType(t) => t.const_array(
                     &*c_parts.map(|p| p.into_int_value()).collect::<Vec<_>>(),
                 ),
@@ -470,7 +472,7 @@ fn compile<'comp, 'a>(
 
             Some(val.as_any_value_enum())
         },
-        _ => todo!(),
+        Empty { .. } => todo!(),
     };
 
     if crate::DEBUG {

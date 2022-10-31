@@ -1,5 +1,7 @@
+mod std_lib;
 mod test_lib;
 mod type_interface_lib;
+pub use std_lib::StdLib;
 pub use test_lib::TestLib;
 pub use type_interface_lib::TypeInterfaceLib;
 

@@ -7,9 +7,9 @@
 #![feature(box_syntax)]
 #![feature(yeet_expr)]
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
-pub use typ::{Type, TypeEnum};
+pub use typ::{Kind, Type, TypeEnum};
 pub use unit::{FuncRef, LLVMContext, Unit, Value};
 
 mod hlr;
@@ -23,7 +23,7 @@ mod unit;
 #[cfg(test)]
 mod tests {
     use crate::{
-        libraries::{TestLib, TypeInterfaceLib},
+        libraries::{StdLib, TestLib, TypeInterfaceLib},
         unit::LLVMContext,
     };
 
@@ -219,6 +219,14 @@ mod tests {
         x: i32,
         y: i32,
         z: i32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Point3D64 {
+        x: i64,
+        y: i64,
+        z: i64,
     }
 
     #[test]
@@ -659,12 +667,24 @@ mod tests {
         let context = LLVMContext::new();
         let mut unit = unit::Unit::new(&context);
         unit.add_lib(TestLib);
-
-        unit.push_script(include_str!("libraries/vec.cxc"));
+        unit.add_lib(StdLib);
 
         unit.push_script(
             "
- test_vec(): i32 {
+TwoNums {
+    num_one: i64
+    num_two: i64
+}
+
+two_nums_from_one(in: i64): TwoNums {
+    two_nums: TwoNums = 0
+    two_nums.num_one = in
+    two_nums.num_two = in + 42
+
+    ; two_nums
+}
+
+test_vec(): i32 {
     number_of_checks: i32 = 128
 
     num_vec: Vec<i32> = create_vec<i32>()
@@ -711,37 +731,6 @@ mod tests {
         unsafe { unit.get_fn::<(), i32>("test_vec")(()) };
     }
 
-    fn vec_ffi() {
-        let context = LLVMContext::new();
-        let mut unit = unit::Unit::new(&context);
-
-        unit.add_lib(TestLib);
-        unit.push_script(include_str!("libraries/vec.cxc"));
-
-        unit.push_script(
-            "
-            part_2(info: &Vec<i32>): i32 {
-                none: i32 = info.push(15)
-                none = info.push(16)
-
-                ; 0
-            }
-
-            part_3(info: &Vec<i32>): i32 {
-                none: i32 = info.push(23)
-                none = info.push(42)
-
-                ; 0
-            }
-        ",
-        );
-
-        let info = vec![4, 8];
-
-        unsafe { unit.get_fn::<_, ()>("part_2")(&info) };
-        unsafe { unit.get_fn::<_, ()>("part_3")(&info) };
-    }
-
     #[test]
     fn derivations() {
         let context = LLVMContext::new();
@@ -772,5 +761,77 @@ mod tests {
         );
 
         unsafe { unit.get_fn::<(), ()>("test_derivation")(()) };
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct CXCVec<T> {
+        data_loc: *const T,
+        capacity: i64,
+        len: isize,
+    }
+
+    #[test]
+    fn strings() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.add_lib(StdLib);
+        unit.add_lib(TestLib);
+
+        unit.push_script(
+            r#"
+            dude_thats_cray(output: &String): i32 {
+                print<&String>(&"hello, world!")
+                output = "that's cray"
+                ; 0
+            }
+            "#,
+        );
+
+        let mut output = String::new();
+        unsafe { unit.get_fn::<_, ()>("dude_thats_cray")(&mut output) };
+        assert_eq!(output, "that's cray");
+    }
+
+    #[test]
+    fn to_string() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.add_lib(StdLib);
+        unit.add_lib(TestLib);
+
+        unit.push_script(
+            "
+            meaning(output: &String): i32 {
+                none: i32 = 42.to_string(output)
+                ; 0
+            }
+        ",
+        );
+
+        let mut output = String::new();
+        unsafe { unit.get_fn::<_, ()>("meaning")(&mut output) };
+        assert_eq!(output, 42.to_string());
+    }
+
+    #[test]
+    fn hello_world() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.add_lib(StdLib);
+        unit.add_lib(TestLib);
+
+        unit.push_script(
+            r#"
+            hello_world(): i32 {
+                print<&String>(&"hello, world!")
+                ; 0
+            }
+        "#,
+        );
+
+        unsafe { unit.get_fn::<(), ()>("hello_world")(()) };
     }
 }

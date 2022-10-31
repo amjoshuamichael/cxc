@@ -229,6 +229,7 @@ pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError>
         | Tok::Int(_)
         | Tok::Float(_)
         | Tok::Bool(_)
+        | Tok::Strin(_)
         | Tok::LeftBrack => parse_math_expr(lexer),
         tok if tok.is_un_op() => parse_math_expr(lexer),
         Tok::At => parse_for(lexer),

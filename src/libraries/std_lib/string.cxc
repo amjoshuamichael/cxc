@@ -1,0 +1,32 @@
+String {
+    inner: Vec<i8>
+}
+
+Point3D {
+    x: i64
+    y: i64
+    z: i64
+}
+
+create_string_from_array<T>(array: T): String {
+    new_string: String = String {
+        inner = create_vec<i8>()
+    }
+
+    index: i32 = 0
+
+    @ index < array.len() {
+        none: i32 = new_string.inner.push<i8>(array[index])
+        index = index + 1
+    }    
+
+    ; new_string
+}
+
+create_string(): String {
+    new_string: String = String {
+        inner = create_vec<i8>()
+    }
+
+    ; new_string
+}

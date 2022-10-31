@@ -118,6 +118,45 @@ impl<'a> FuncRep<'a> {
                 },
             ),
             Expr::Bool(value) => self.tree.insert(parent, NodeData::Bool { value }),
+            Expr::Strin(value) => {
+                let call_space = self.tree.make_one_space(parent);
+                let array_space = self.tree.make_one_space(call_space);
+
+                let mut byte_ids = Vec::new();
+                for b in value.bytes() {
+                    let byte_id = self.tree.insert(
+                        array_space,
+                        NodeData::Number {
+                            size: 8,
+                            value: b as u128,
+                        },
+                    );
+
+                    byte_ids.push(byte_id);
+                }
+
+                self.tree.replace(
+                    array_space,
+                    NodeData::ArrayLit {
+                        var_type: Type::i(8),
+                        parts: byte_ids,
+                    },
+                );
+
+                let string_type = self.types.get_by_name(&"String".into()).unwrap();
+
+                let call_data = NodeData::Call {
+                    ret_type: string_type,
+                    f: "create_string_from_array".into(),
+                    a: vec![array_space],
+                    generics: vec![
+                        Type::i(8).get_array(value.bytes().count() as u32)
+                    ],
+                    is_method: false,
+                };
+                self.tree.replace(call_space, call_data);
+                call_space
+            },
             Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name)
             {
                 Some(name) => {

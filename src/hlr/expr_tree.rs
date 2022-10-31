@@ -114,7 +114,6 @@ impl Debug for ExprNode {
             Number { value, .. } => write!(fmt, "{value}"),
             Float { value, .. } => write!(fmt, "{value:?}"),
             Bool { value, .. } => write!(fmt, "{value:?}"),
-            Strin(s) => write!(fmt, "{s}"),
             StructLit {
                 var_type, fields, ..
             } => {
@@ -173,7 +172,6 @@ pub enum NodeData {
         var_type: Type,
         parts: Vec<ExprID>,
     },
-    Strin(String),
     Ident {
         var_type: Type,
         name: VarName,
@@ -249,7 +247,6 @@ impl NodeData {
             Number { size, .. } => Type::i(*size),
             Float { size, .. } => Type::f(*size),
             Bool { .. } => Type::bool(),
-            Strin(_) => todo!(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }
             | ArrayLit { var_type, .. }

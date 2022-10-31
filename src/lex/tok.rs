@@ -98,8 +98,8 @@ impl Debug for TypeName {
     }
 }
 
-impl TypeName {
-    pub fn from(s: &str) -> Self { Self::Other(Arc::from(s)) }
+impl From<&str> for TypeName {
+    fn from(s: &str) -> Self { Self::Other(Arc::from(s)) }
 }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
@@ -201,11 +201,14 @@ pub enum Tok {
     )]
     Int(u128),
 
-    #[regex(r"[0-9_]*\.[0-9_]*(e[+-]?[0-9_]+)?", parse_float)]
+    #[regex(r"[0-9_]*\.[0-9_]+(e[+-]?[0-9_]+)?", parse_float)]
     Float(f64),
 
     #[regex("true|false", parse_bool)]
     Bool(bool),
+
+    #[regex(r#""[^"]*""#, parse_string)]
+    Strin(String),
 
     #[error]
     Error,

@@ -247,10 +247,6 @@ pub static NEVER_STATIC: NeverType = NeverType();
 
 #[derive(PartialEq, Hash, Eq)]
 pub struct ArrayType {
-    base: Type,
-    count: u32,
-}
-
-impl ArrayType {
-    pub fn base(&self) -> Type { self.base.clone() }
+    pub base: Type,
+    pub count: u32,
 }

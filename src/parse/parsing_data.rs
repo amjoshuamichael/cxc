@@ -10,6 +10,7 @@ pub enum Expr {
     Number(u128),
     Float(f64),
     Bool(bool),
+    Strin(String),
     Ident(VarName),
     Struct(TypeAlias, Vec<(VarName, Expr)>),
     Array(Vec<Expr>),
@@ -100,7 +101,7 @@ pub struct FuncCode {
 }
 
 impl FuncCode {
-    pub fn decl_info(&self, comp_data: &CompData) -> FuncDeclInfo {
+    pub fn decl_info(&self) -> FuncDeclInfo {
         FuncDeclInfo {
             name: self.name.clone(),
             method_of: self.method_of.clone(),
