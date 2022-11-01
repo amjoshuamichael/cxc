@@ -39,6 +39,15 @@ pub struct VarDecl {
     pub typ: Option<TypeOrAlias>,
 }
 
+impl VarDecl {
+    pub fn no_name(typ: Option<TypeOrAlias>) -> Self {
+        VarDecl {
+            name: VarName::temp(),
+            typ,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Script(pub Vec<Decl>);
 

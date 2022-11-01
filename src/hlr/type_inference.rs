@@ -107,7 +107,7 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
                 };
 
                 let func_type = comp_data.get_type(&func_info).unwrap();
-                let TypeEnum::Func(FuncType { return_type, .. }) = 
+                let TypeEnum::Func(FuncType { ret_type: return_type, .. }) = 
                     func_type.as_type_enum() else { panic!() };
 
                 *ret_type = return_type.clone();
@@ -131,7 +131,9 @@ pub fn infer_types(hlr: &mut FuncRep, comp_data: Rc<CompData>) {
                 ref mut var_type,
                 ref parts,
             } => {
-                *var_type = type_by_id.get(&parts[0]).unwrap().clone().get_array(parts.len() as u32);
+                if var_type.is_never() {
+                    *var_type = type_by_id.get(&parts[0]).unwrap().clone().get_array(parts.len() as u32);
+                }
                 *type_by_id.get_mut(&n).unwrap() = var_type.clone();
             }
             _ => {},

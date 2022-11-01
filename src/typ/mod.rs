@@ -83,7 +83,7 @@ impl Type {
 
     pub fn func_with_args(self, args: Vec<Type>) -> Type {
         Type::new(TypeEnum::Func(FuncType {
-            return_type: self,
+            ret_type: self,
             args,
         }))
     }
@@ -178,11 +178,16 @@ pub struct RefType {
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct FuncType {
-    pub return_type: Type,
+    pub ret_type: Type,
     pub args: Vec<Type>,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+impl FuncType {
+    pub fn ret_type(&self) -> Type { self.ret_type.clone() }
+    pub fn args(&self) -> Vec<Type> { self.args.clone() }
+}
+
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct StructType {
     pub fields: Vec<(VarName, Type)>,
     pub methods: Vec<VarName>,

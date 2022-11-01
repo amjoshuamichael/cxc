@@ -67,16 +67,16 @@ impl Kind for FuncType {
         let args_names: String = self
             .args
             .iter()
-            .map(|t| format!("{:?}", t.name()))
+            .map(|t| format!("{:?}", t))
             .collect::<Vec<String>>()
             .join(", ");
-        let ret_name = &self.return_type;
+        let ret_name = &self.ret_type;
 
         format!("({args_names}) -> {ret_name:?}")
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        let return_type = self.return_type.to_basic_type(context);
+        let return_type = self.ret_type.to_basic_type(context);
         let args: Vec<BasicMetadataTypeEnum> = self
             .args
             .iter()

@@ -135,10 +135,12 @@ impl<'a> FuncRep<'a> {
                     byte_ids.push(byte_id);
                 }
 
+                let arr_type = Type::i(8).get_array(value.bytes().count() as u32);
+
                 self.tree.replace(
                     array_space,
                     NodeData::ArrayLit {
-                        var_type: Type::i(8),
+                        var_type: arr_type.clone(),
                         parts: byte_ids,
                     },
                 );
@@ -149,9 +151,7 @@ impl<'a> FuncRep<'a> {
                     ret_type: string_type,
                     f: "create_string_from_array".into(),
                     a: vec![array_space],
-                    generics: vec![
-                        Type::i(8).get_array(value.bytes().count() as u32)
-                    ],
+                    generics: vec![arr_type],
                     is_method: false,
                 };
                 self.tree.replace(call_space, call_data);

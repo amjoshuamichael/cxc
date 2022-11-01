@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 #![feature(type_name_of_val)]
 #![feature(let_chains)]
-#![feature(once_cell)]
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 #![feature(yeet_expr)]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 
 pub use typ::{Kind, Type, TypeEnum};
 pub use unit::{FuncRef, LLVMContext, Unit, Value};
@@ -802,8 +801,29 @@ test_vec(): i32 {
 
         unit.push_script(
             "
+            Point2D<T> {
+                x: T
+                y: T
+            }
+
+            TwoPoint2Ds {
+                one: Point2D<i32>
+                two: Point2D<f32>
+            }
+
             meaning(output: &String): i32 {
-                none: i32 = 42.to_string(output)
+                some_points: TwoPoint2Ds = TwoPoint2Ds { 
+                    one = Point2D<i32> {
+                        x = 20,
+                        y = 303,
+                    }, 
+                    two = Point2D<f32> {
+                        x = 3.2,
+                        y = 40.54,
+                    }
+                }
+                
+                output = some_points.to_string()
                 ; 0
             }
         ",
@@ -811,7 +831,10 @@ test_vec(): i32 {
 
         let mut output = String::new();
         unsafe { unit.get_fn::<_, ()>("meaning")(&mut output) };
-        assert_eq!(output, 42.to_string());
+        assert_eq!(
+            output,
+            String::from("{one = {x = 20, y = 303}, two = {x = 3.2, y = 40.54}}")
+        );
     }
 
     #[test]
@@ -825,7 +848,12 @@ test_vec(): i32 {
         unit.push_script(
             r#"
             hello_world(): i32 {
-                print<&String>(&"hello, world!")
+                output: String = create_string()
+                none: i32 = output.push_string("hello")
+                none: i32 = output.push_string(", ")
+                none: i32 = output.push_string(", ")
+                none: i32 = output.push_string("world!")
+                print<&String>(&output)
                 ; 0
             }
         "#,

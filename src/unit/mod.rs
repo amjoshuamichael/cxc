@@ -7,6 +7,7 @@ use crate::parse;
 use crate::parse::*;
 use crate::typ::Kind;
 use crate::Type;
+use crate::TypeEnum;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -14,10 +15,10 @@ use inkwell::targets::CodeModel;
 use inkwell::targets::RelocMode;
 use inkwell::targets::Target;
 use inkwell::targets::TargetMachine;
+use inkwell::types::BasicType;
 use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
-use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -39,10 +40,6 @@ pub use self::value_api::Value;
 pub use output_api::FuncRef;
 
 pub type IOFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
-
-thread_local! {
-    static LLVM: Lazy<Context> = Lazy::new(|| Context::create());
-}
 
 pub struct LLVMContext {
     context: Context,
@@ -323,9 +320,29 @@ impl<'u> Unit<'u> {
         method_of: Option<Type>,
         generics: Vec<Type>,
     ) -> &mut Self {
+        let TypeEnum::Func(func_type_inner) = 
+            func_type.as_type_enum() else { panic!() };
+        let ret_type = func_type_inner.ret_type();
+        let ink_ret_type = ret_type.to_basic_type(&self.context);
+
+        let ink_func_ptr_type = if ret_type.size() > 16 {
+            let mut args = func_type_inner.args();
+            let mut new_args = vec![ret_type.clone().get_ref()];
+            new_args.append(&mut args);
+            Type::never()
+                .func_with_args(new_args)
+                .to_any_type(&self.context)
+                .into_function_type()
+                .ptr_type(AddressSpace::Global)
+        } else { 
+            func_type
+                .to_any_type(&self.context)
+                .into_function_type()
+                .ptr_type(AddressSpace::Global)
+        };
+
         let ink_func_type =
             func_type.to_any_type(&self.context).into_function_type();
-        let ink_func_ptr = ink_func_type.ptr_type(AddressSpace::Global);
 
         let func_info = UniqueFuncInfo {
             name: name.into(),
@@ -344,23 +361,37 @@ impl<'u> Unit<'u> {
             builder.position_at_end(block);
         }
 
-        let callable_value = {
+        let callable = {
             let function_pointer = self
                 .context
                 .i64_type()
                 .const_int(function_ptr as u64, false)
-                .const_to_pointer(ink_func_ptr);
+                .const_to_pointer(ink_func_ptr_type);
 
             CallableValue::try_from(function_pointer).unwrap()
         };
 
-        let param_count = function.count_params();
-        let arg_vals: Vec<BasicMetadataValueEnum> = (0..param_count)
-            .map(|p| function.get_nth_param(p).unwrap().try_into().unwrap())
-            .collect();
+        if ret_type.size() < 16 {
+            let arg_vals: Vec<BasicMetadataValueEnum> = function
+                .get_params()
+                .iter()
+                .map(|p| (*p).try_into().unwrap())
+                .collect();
+            let out = builder.build_call(callable, &*arg_vals, "call");
+            let out = out.try_as_basic_value().unwrap_left();
+            builder.build_return(Some(&out));
+        } else {
+            let output_var = builder.build_alloca(ink_ret_type, "output");
+            let arg_vals: Vec<BasicMetadataValueEnum> = 
+                std::iter::once(output_var.as_basic_value_enum())
+                .chain(function.get_params())
+                .map(|p| p.try_into().unwrap())
+                .collect();
+            builder.build_call(callable, &*arg_vals, "call");
+            let output_loaded = builder.build_load(output_var, "load");
+            builder.build_return(Some(&output_loaded));
+        }
 
-        let out = builder.build_call(callable_value, &*arg_vals, "call");
-        builder.build_return(Some(&out.try_as_basic_value().unwrap_left()));
 
         let function = self.module.get_function(&*func_info.to_string()).unwrap();
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
