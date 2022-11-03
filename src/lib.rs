@@ -5,10 +5,14 @@
 #![feature(box_syntax)]
 #![feature(yeet_expr)]
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
 pub use typ::{Kind, Type, TypeEnum};
-pub use unit::{FuncRef, LLVMContext, Unit, Value};
+pub use unit::{Func, LLVMContext, UniqueFuncInfo, Unit, Value};
+
+pub mod library {
+    pub use crate::libraries::{StdLib, TestLib};
+}
 
 mod hlr;
 mod lex;
@@ -48,7 +52,7 @@ mod tests {
         ",
         );
 
-        let output = unsafe { unit.get_fn::<i32, i32>("factorial")(5) };
+        let output = unsafe { unit.get_fn_by_name::<i32, i32>("factorial")(5) };
         assert_eq!(output, 120);
     }
 
@@ -67,7 +71,7 @@ mod tests {
         );
 
         let mut num = 4;
-        unsafe { unit.get_fn::<&mut i32, i32>("square")(&mut num) };
+        unsafe { unit.get_fn_by_name::<&mut i32, i32>("square")(&mut num) };
         assert_eq!(num, 16);
     }
 
@@ -85,7 +89,7 @@ mod tests {
                 ",
         );
 
-        let output: i32 = unsafe { unit.get_fn("sum")(4, 5) };
+        let output: i32 = unsafe { unit.get_fn_by_name("sum")(4, 5) };
         assert_eq!(output, 9);
     }
 
@@ -103,7 +107,7 @@ mod tests {
                 ",
         );
 
-        let output: f32 = unsafe { unit.get_fn("seventy")(()) };
+        let output: f32 = unsafe { unit.get_fn_by_name("seventy")(()) };
         assert_eq!(output, 70.0);
     }
 
@@ -154,11 +158,11 @@ mod tests {
             ",
         );
 
-        let yeah: bool = unsafe { unit.get_fn("yeah")(()) };
+        let yeah: bool = unsafe { unit.get_fn_by_name("yeah")(()) };
         assert_eq!(yeah, true);
-        let no: bool = unsafe { unit.get_fn("no")(()) };
+        let no: bool = unsafe { unit.get_fn_by_name("no")(()) };
         assert_eq!(no, false);
-        unsafe { unit.get_fn::<_, ()>("if_statements")(()) };
+        unsafe { unit.get_fn_by_name::<_, ()>("if_statements")(()) };
     }
 
     #[test]
@@ -191,7 +195,7 @@ mod tests {
             ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("everything_works")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("everything_works")(()) };
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -253,7 +257,7 @@ mod tests {
         );
 
         let new_point_y: Point3D =
-            unsafe { *unit.get_fn::<(), &mut Point3D>("main")(()) };
+            unsafe { *unit.get_fn_by_name::<(), &mut Point3D>("main")(()) };
 
         assert_eq!(
             new_point_y,
@@ -287,7 +291,8 @@ mod tests {
 
         let point = Point2D { x: 2, y: 3 };
 
-        let sqr_mag: i32 = unsafe { unit.get_fn("sqr_magnitude_of")(&point) };
+        let sqr_mag: i32 =
+            unsafe { unit.get_fn_by_name("sqr_magnitude_of")(&point) };
         assert_eq!(sqr_mag, 13);
     }
 
@@ -337,7 +342,7 @@ mod tests {
         };
 
         let new_square: Square =
-            unsafe { *unit.get_fn::<(), &Square>("make_square")(()) };
+            unsafe { *unit.get_fn_by_name::<(), &Square>("make_square")(()) };
         assert_eq!(new_square, square);
     }
 
@@ -372,12 +377,13 @@ mod tests {
         );
 
         let int_point =
-            unsafe { *unit.get_fn::<(), &GenPoint2D<i32>>("int_point")(()) };
+            unsafe { *unit.get_fn_by_name::<(), &GenPoint2D<i32>>("int_point")(()) };
         assert_eq!(int_point.x, 42);
         assert_eq!(int_point.y, 32);
 
-        let float_point =
-            unsafe { *unit.get_fn::<(), &GenPoint2D<f32>>("float_point")(()) };
+        let float_point = unsafe {
+            *unit.get_fn_by_name::<(), &GenPoint2D<f32>>("float_point")(())
+        };
 
         assert_eq!(float_point.x, 42.8);
         assert_eq!(float_point.y, 32.2);
@@ -415,7 +421,7 @@ mod tests {
             ",
         );
 
-        unsafe { unit.get_fn::<(), i64>("call")(()) };
+        unsafe { unit.get_fn_by_name::<(), i64>("call")(()) };
     }
 
     #[test]
@@ -453,7 +459,7 @@ mod tests {
                 ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("main")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
     }
 
     #[test]
@@ -487,7 +493,7 @@ mod tests {
                 ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("main")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
     }
 
     #[test]
@@ -527,7 +533,7 @@ mod tests {
                 ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("main")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
     }
 
     #[test]
@@ -567,7 +573,7 @@ mod tests {
                 ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("main")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
     }
 
     #[test]
@@ -590,7 +596,7 @@ mod tests {
                 ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("courthouse_1955")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("courthouse_1955")(()) };
     }
 
     #[test]
@@ -614,7 +620,7 @@ mod tests {
             ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("main")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
     }
 
     #[test]
@@ -657,7 +663,7 @@ mod tests {
                 ",
         );
 
-        unsafe { unit.get_fn::<(), i32>("buy_las_vegas")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("buy_las_vegas")(()) };
     }
 
     #[test]
@@ -726,7 +732,7 @@ test_vec(): i32 {
 }",
         );
 
-        unsafe { unit.get_fn::<(), i32>("test_vec")(()) };
+        unsafe { unit.get_fn_by_name::<(), i32>("test_vec")(()) };
     }
 
     #[test]
@@ -758,7 +764,7 @@ test_vec(): i32 {
         ",
         );
 
-        unsafe { unit.get_fn::<(), ()>("test_derivation")(()) };
+        unsafe { unit.get_fn_by_name::<(), ()>("test_derivation")(()) };
     }
 
     #[derive(Clone, Copy, Debug)]
@@ -774,12 +780,10 @@ test_vec(): i32 {
         let mut unit = unit::Unit::new(&context);
 
         unit.add_lib(StdLib);
-        unit.add_lib(TestLib);
 
         unit.push_script(
             r#"
             dude_thats_cray(output: &String): i32 {
-                print<&String>(&"hello, world!")
                 output = "that's cray"
                 ; 0
             }
@@ -787,7 +791,7 @@ test_vec(): i32 {
         );
 
         let mut output = String::new();
-        unsafe { unit.get_fn::<_, ()>("dude_thats_cray")(&mut output) };
+        unsafe { unit.get_fn_by_name::<_, ()>("dude_thats_cray")(&mut output) };
         assert_eq!(output, "that's cray");
     }
 
@@ -824,13 +828,14 @@ test_vec(): i32 {
                 }
                 
                 output = some_points.to_string()
+
                 ; 0
             }
         ",
         );
 
         let mut output = String::new();
-        unsafe { unit.get_fn::<_, ()>("meaning")(&mut output) };
+        unsafe { unit.get_fn_by_name::<_, ()>("meaning")(&mut output) };
         assert_eq!(
             output,
             String::from("{one = {x = 20, y = 303}, two = {x = 3.2, y = 40.54}}")
@@ -859,6 +864,6 @@ test_vec(): i32 {
         "#,
         );
 
-        unsafe { unit.get_fn::<(), ()>("hello_world")(()) };
+        unsafe { unit.get_fn_by_name::<(), ()>("hello_world")(()) };
     }
 }

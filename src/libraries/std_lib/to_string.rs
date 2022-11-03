@@ -56,7 +56,6 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 Expr::UnarOp(Opcode::Ref(1), box output_var_expr.clone());
 
             let mut statements = Vec::new();
-
             let make_var = Expr::MakeVar(
                 VarDecl {
                     name: output_var.clone(),

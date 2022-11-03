@@ -149,16 +149,16 @@ fn compile<'comp, 'a>(
         SetVar {
             ref lhs, ref rhs, ref ret_type,
         } => {
-            let var_ptr = compile_as_ptr(fcs, *lhs);
+            let lhs_type = fcs.tree.get(*lhs).ret_type().clone();
             let rhs_type = fcs.tree.get(*rhs).ret_type().clone();
 
             let var_ptr = if 
-                matches!(ret_type.as_type_enum(), TypeEnum::Ref(_)) &&
+                matches!(lhs_type.as_type_enum(), TypeEnum::Ref(_)) &&
                 !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_)) 
             {
-                fcs.builder.build_load(var_ptr, &*fcs.new_uuid()).into_pointer_value()
+                compile(fcs, *lhs).unwrap().into_pointer_value()
             } else {
-                var_ptr
+                compile_as_ptr(fcs, *lhs)
             };
 
             let rhs = compile(fcs, *rhs).unwrap();
@@ -425,10 +425,14 @@ fn compile<'comp, 'a>(
             )
         },
         Return { to_return, .. } => {
-            let return_value: BasicValueEnum =
-                compile(fcs, to_return).unwrap().try_into().unwrap();
-
-            fcs.builder.build_return(Some(&return_value));
+            if let Some(to_return) = to_return {
+                let val: BasicValueEnum = 
+                    compile(fcs, to_return).unwrap().try_into().unwrap();
+                fcs.builder.build_return(Some(&val));
+            } else {
+                fcs.builder.build_return(None);
+            }
+                    
             None
         },
         ArrayLit { var_type, parts } => {

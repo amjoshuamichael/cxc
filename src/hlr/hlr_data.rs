@@ -16,6 +16,7 @@ pub struct FuncRep<'a> {
     pub types: Rc<CompData<'a>>,
     pub identifiers: Vec<VarName>,
     pub info: UniqueFuncInfo,
+    pub ret_type: Type,
 
     // used to find where variables are declared.
     pub data_flow: HashMap<VarName, DataFlowInfo>,
@@ -24,8 +25,7 @@ pub struct FuncRep<'a> {
 #[derive(Debug)]
 pub struct DataFlowInfo {
     pub typ: Type,
-    pub ids: Vec<ExprID>,
-    pub arg_index: Option<usize>,
+    pub arg_index: Option<u32>,
 }
 
 impl DataFlowInfo {
@@ -40,6 +40,7 @@ impl<'a> FuncRep<'a> {
     ) -> Self {
         let mut new = FuncRep {
             tree: ExprTree::default(),
+            ret_type: comp_data.get_spec(&code.ret_type, &info.generics).unwrap(),
             types: comp_data,
             identifiers: Vec::new(),
             info,
@@ -60,8 +61,7 @@ impl<'a> FuncRep<'a> {
                 arg.name.clone(),
                 DataFlowInfo {
                     typ,
-                    ids: Vec::new(),
-                    arg_index: Some(a),
+                    arg_index: Some(a as u32),
                 },
             );
         }
@@ -89,6 +89,16 @@ impl<'a> FuncRep<'a> {
             .collect::<Vec<_>>()
     }
 
+    pub fn arg_count(&self) -> u32 { self.arg_names().len() as u32 }
+
+    pub fn move_up_arg_indices(&mut self) {
+        for (_, flow) in self.data_flow.iter_mut() {
+            if let Some(arg_index) = &mut flow.arg_index {
+                *arg_index += 1;
+            }
+        }
+    }
+
     pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
         self.types.get_spec(alias, &self.info.generics)
     }
@@ -98,11 +108,13 @@ impl<'a> FuncRep<'a> {
     }
 
     pub fn output(self) -> FuncOutput {
-        FuncOutput {
+        let out = FuncOutput {
             arg_names: Some(self.arg_names()),
             tree: Some(self.tree),
             info: Some(self.info),
-        }
+        };
+
+        out
     }
 
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
@@ -153,6 +165,7 @@ impl<'a> FuncRep<'a> {
                     a: vec![array_space],
                     generics: vec![arr_type],
                     is_method: false,
+                    return_by_ref: false,
                 };
                 self.tree.replace(call_space, call_data);
                 call_space
@@ -164,8 +177,6 @@ impl<'a> FuncRep<'a> {
 
                     let name = name.clone();
                     let data_flow_info = self.data_flow.get_mut(&name).unwrap();
-                    data_flow_info.ids.push(space);
-
                     self.tree.replace(
                         space,
                         NodeData::Ident {
@@ -195,7 +206,6 @@ impl<'a> FuncRep<'a> {
 
                     let new_data_flow_info = DataFlowInfo {
                         typ: var_type.clone(),
-                        ids: vec![space],
                         arg_index: None,
                     };
 
@@ -325,6 +335,7 @@ impl<'a> FuncRep<'a> {
                     generics,
                     a: arg_ids,
                     is_method,
+                    return_by_ref: false,
                 };
 
                 self.tree.replace(space, new_data);
@@ -364,7 +375,7 @@ impl<'a> FuncRep<'a> {
 
                 let new_return = NodeData::Return {
                     ret_type: Type::never(),
-                    to_return: self.add_expr(*to_return, space),
+                    to_return: Some(self.add_expr(*to_return, space)),
                 };
 
                 self.tree.replace(space, new_return);

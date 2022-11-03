@@ -1,4 +1,5 @@
 use super::*;
+use std::iter::once;
 
 use inkwell::context::Context;
 use inkwell::types::AnyType;
@@ -76,14 +77,29 @@ impl Kind for FuncType {
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        let return_type = self.ret_type.to_basic_type(context);
-        let args: Vec<BasicMetadataTypeEnum> = self
-            .args
-            .iter()
-            .map(|t| t.to_basic_type(context).into())
-            .collect();
+        if self.ret_type.size() <= 16 {
+            let return_type = self.ret_type.to_basic_type(context);
 
-        return_type.fn_type(&args[..], true).try_into().unwrap()
+            let args: Vec<BasicMetadataTypeEnum> = self
+                .args
+                .iter()
+                .map(|t| t.to_basic_type(context).into())
+                .collect();
+
+            return_type.fn_type(&args[..], true).try_into().unwrap()
+        } else {
+            let args: Vec<BasicMetadataTypeEnum> =
+                once(&self.ret_type.clone().get_ref())
+                    .chain(self.args.iter())
+                    .map(|t| t.to_basic_type(context).into())
+                    .collect();
+
+            Type::never()
+                .to_basic_type(context)
+                .fn_type(&args[..], true)
+                .try_into()
+                .unwrap()
+        }
     }
 }
 

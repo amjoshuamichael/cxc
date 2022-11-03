@@ -1,3 +1,4 @@
+use std::iter::once;
 use crate::hlr::hlr_anonymous;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
@@ -15,7 +16,6 @@ use inkwell::targets::CodeModel;
 use inkwell::targets::RelocMode;
 use inkwell::targets::Target;
 use inkwell::targets::TargetMachine;
-use inkwell::types::BasicType;
 use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
@@ -28,8 +28,8 @@ use std::mem::transmute;
 use std::rc::Rc;
 
 mod functions;
-pub mod output_api;
-pub mod value_api;
+mod value_api;
+mod func_api;
 
 use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
@@ -37,7 +37,7 @@ pub use functions::UniqueFuncInfo;
 use self::functions::DeriverFunc;
 pub use self::functions::FuncDeclInfo;
 pub use self::value_api::Value;
-pub use output_api::FuncRef;
+pub use self::func_api::Func;
 
 pub type IOFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
@@ -54,7 +54,7 @@ impl LLVMContext {
 }
 
 pub struct Unit<'u> {
-    pub(crate) execution_engine: ExecutionEngine<'u>,
+    pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'u>>>,
     pub(crate) comp_data: Rc<CompData<'u>>,
     pub(crate) module: Module<'u>,
     pub(crate) machine: TargetMachine,
@@ -101,31 +101,36 @@ impl<'u> Unit<'u> {
 
         Self {
             comp_data: Rc::new(CompData::new()),
-            execution_engine,
+            execution_engine: Rc::new(RefCell::new(execution_engine)),
             module,
             machine,
             context: &context.context,
         }
     }
 
+    pub fn reset_execution_engine(&self) {
+        self.execution_engine.borrow().remove_module(&self.module);
+        self.execution_engine.replace(
+            self.module
+            .create_jit_execution_engine(OptimizationLevel::Aggressive)
+            .unwrap()
+        );
+    }
+
     pub fn clear(&mut self) {
         for func in self.comp_data.unique_func_info_iter() {
             let llvm_func = self.module.get_function(&*func.to_string()).unwrap();
-            self.execution_engine.free_fn_machine_code(llvm_func);
+            self.execution_engine.borrow().free_fn_machine_code(llvm_func);
             unsafe { llvm_func.delete() }
         }
 
-        self.execution_engine.remove_module(&self.module).unwrap();
+        self.execution_engine.borrow().remove_module(&self.module).unwrap();
 
-        self.execution_engine = self
-            .module
-            .create_jit_execution_engine(OptimizationLevel::Aggressive)
-            .unwrap();
-
+        self.reset_execution_engine();
         self.comp_data = Rc::new(CompData::new());
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<UniqueFuncInfo> {
+    pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Func<'u>> {
         let lexed = lex(script);
         let script = match parse::file(lexed) {
             Ok(file) => file,
@@ -164,13 +169,32 @@ impl<'u> Unit<'u> {
 
         let top_level_functions = funcs_to_process.clone();
 
+        self.compile_func_set(funcs_to_process);
+
+        if crate::DEBUG {
+            println!("{}", self.module.print_to_string().to_string());
+        }
+
+        top_level_functions.iter().map(|info| self.get_func_ref_by_info(info)).collect()
+
+    }
+
+    pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) {
+        set = set.drain(..).filter(|info| !self.comp_data.has_been_compiled(info)).collect();
+
+        if set.len() == 0 {
+            return;
+        }
+
+        self.reset_execution_engine();
+
         let mut all_funcs_to_compile = Vec::new();
 
-        while !funcs_to_process.is_empty() {
+        while !set.is_empty() {
             {
                 let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
-                for func in &funcs_to_process {
+                for func in &set {
                     comp_data.create_func_placeholder(
                         func,
                         &mut self.context,
@@ -179,12 +203,12 @@ impl<'u> Unit<'u> {
                 }
             }
 
-            let func_reps: Vec<FuncOutput> = funcs_to_process
+            let func_reps: Vec<FuncOutput> = set
                 .drain(..)
                 .map(|info| hlr(info, self.comp_data.clone()))
                 .collect();
 
-            funcs_to_process = func_reps
+            set = func_reps
                 .iter()
                 .map(|f| f.get_func_dependencies())
                 .flatten()
@@ -197,15 +221,11 @@ impl<'u> Unit<'u> {
         for func_output in &mut all_funcs_to_compile {
             self.compile(func_output);
         }
-
-        if crate::DEBUG {
-            println!("{}", self.module.print_to_string().to_string());
-        }
-
-        top_level_functions
     }
 
     pub fn get_value(&self, of: &str) -> Value {
+        if of == "" { return Value::default() }
+
         let temp_name = "temp";
 
         let expr = {
@@ -227,7 +247,7 @@ impl<'u> Unit<'u> {
 
         let val_type = match func_rep.tree_ref().get(ExprID::ROOT) {
             NodeData::Return { to_return, .. } => {
-                func_rep.tree_ref().get(to_return).ret_type()
+                func_rep.tree_ref().get(to_return.unwrap()).ret_type()
             },
             _ => unreachable!(),
         };
@@ -268,6 +288,7 @@ impl<'u> Unit<'u> {
 
         let func_addr = self
             .execution_engine
+            .borrow()
             .get_function_address(temp_name)
             .unwrap();
 
@@ -279,7 +300,7 @@ impl<'u> Unit<'u> {
             Value::new(val_type, comp())
         };
 
-        self.execution_engine.free_fn_machine_code(fcs.function);
+        self.execution_engine.borrow().free_fn_machine_code(fcs.function);
         unsafe { fcs.function.delete() };
 
         value
@@ -325,21 +346,10 @@ impl<'u> Unit<'u> {
         let ret_type = func_type_inner.ret_type();
         let ink_ret_type = ret_type.to_basic_type(&self.context);
 
-        let ink_func_ptr_type = if ret_type.size() > 16 {
-            let mut args = func_type_inner.args();
-            let mut new_args = vec![ret_type.clone().get_ref()];
-            new_args.append(&mut args);
-            Type::never()
-                .func_with_args(new_args)
-                .to_any_type(&self.context)
-                .into_function_type()
-                .ptr_type(AddressSpace::Global)
-        } else { 
-            func_type
-                .to_any_type(&self.context)
-                .into_function_type()
-                .ptr_type(AddressSpace::Global)
-        };
+        let ink_func_ptr_type = func_type
+            .to_any_type(&self.context)
+            .into_function_type()
+            .ptr_type(AddressSpace::Global);
 
         let ink_func_type =
             func_type.to_any_type(&self.context).into_function_type();
@@ -381,15 +391,13 @@ impl<'u> Unit<'u> {
             let out = out.try_as_basic_value().unwrap_left();
             builder.build_return(Some(&out));
         } else {
-            let output_var = builder.build_alloca(ink_ret_type, "output");
-            let arg_vals: Vec<BasicMetadataValueEnum> = 
-                std::iter::once(output_var.as_basic_value_enum())
-                .chain(function.get_params())
-                .map(|p| p.try_into().unwrap())
+            let arg_vals: Vec<BasicMetadataValueEnum> = function
+                .get_params()
+                .iter()
+                .map(|p| (*p).try_into().unwrap())
                 .collect();
             builder.build_call(callable, &*arg_vals, "call");
-            let output_loaded = builder.build_load(output_var, "load");
-            builder.build_return(Some(&output_loaded));
+            builder.build_return(None);
         }
 
 
@@ -420,20 +428,30 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn get_fn<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
+    pub unsafe fn get_fn_by_name<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
         let func_info = UniqueFuncInfo {
             name: name.into(),
             method_of: None,
             generics: Vec::new(),
         };
 
-        unsafe {
-            let func_addr = self
-                .execution_engine
-                .get_function_address(&*func_info.to_string())
-                .unwrap();
+        self.get_fn_by_info::<I, O>(&func_info)
+    }
 
-            transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr)
+    pub unsafe fn get_fn_by_info<I, O>(&self, info: &UniqueFuncInfo) -> unsafe extern "C" fn(_: I, ...) -> O {
+        let func_addr = self
+            .execution_engine
+            .borrow()
+            .get_function_address(&*info.to_string())
+            .unwrap();
+
+        transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr)
+    }
+
+    pub fn get_func_ref_by_info(&self, info: &UniqueFuncInfo) -> Func<'u> {
+        Func {
+            execution_engine: self.execution_engine.clone(),
+            name: info.to_string(),
         }
     }
 

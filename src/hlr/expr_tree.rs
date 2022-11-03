@@ -58,14 +58,24 @@ impl ExprTree {
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
 
+    pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
+        let parent = self.parent(of);
+
+        match self.get(parent) {
+            Block { .. } => (of, parent),
+            _ => self.statement_and_block(parent),
+        }
+    }
+
     fn node_count(&self) -> usize { self.nodes.len() }
 
     pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
-        let NodeData::Call { f, generics, a, is_method, .. } = call.clone()
+        let NodeData::Call { f, generics, a, is_method, return_by_ref, .. } = call.clone()
             else { panic!() };
 
         let method_of = if is_method {
             let object = a.last().unwrap();
+
             Some(self.get(*object).ret_type())
         } else {
             None
@@ -91,6 +101,11 @@ impl Debug for ExprTree {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ExprID(usize);
+
+impl ToString for ExprID {
+    fn to_string(&self) -> String { self.0.to_string() }
+}
+
 impl Debug for ExprID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "ID_{}", self.0)
@@ -192,6 +207,7 @@ pub enum NodeData {
         generics: Vec<Type>,
         a: Vec<ExprID>,
         is_method: bool,
+        return_by_ref: bool,
     },
     Member {
         ret_type: Type,
@@ -235,7 +251,7 @@ pub enum NodeData {
     },
     Return {
         ret_type: Type,
-        to_return: ExprID,
+        to_return: Option<ExprID>,
     },
 }
 

@@ -19,6 +19,10 @@ impl Debug for Type {
     }
 }
 
+impl Default for Type {
+    fn default() -> Self { Type::never() }
+}
+
 impl Type {
     fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
