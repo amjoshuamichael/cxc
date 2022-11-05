@@ -15,12 +15,6 @@ String {
     }
 }
 
-Point3D {
-    x: i64
-    y: i64
-    z: i64
-}
-
 create_string_from_array<T>(array: T): String {
     new_string: String = String {
         inner = create_vec<i8>()

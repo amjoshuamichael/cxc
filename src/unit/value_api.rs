@@ -1,4 +1,5 @@
-use crate::{typ::Kind, Unit};
+use crate::{lex::indent_parens, typ::Kind, Unit};
+use core::slice;
 use std::mem::transmute;
 
 use crate::Type;
@@ -12,12 +13,14 @@ pub struct Value {
 }
 
 impl Value {
-    pub fn new<const N: usize>(typ: Type, data: [u8; N]) -> Self {
+    pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
         let size = typ.size() as usize;
         let data = data[0..size].to_vec();
 
         Self { typ, data }
     }
+
+    pub fn new_from_vec(typ: Type, data: Vec<u8>) -> Self { Self { typ, data } }
 
     pub fn to_string(&self, unit: &mut Unit) -> String {
         let info = UniqueFuncInfo {
@@ -29,11 +32,13 @@ impl Value {
         unit.compile_func_set(vec![info.clone()]);
 
         let mut output = String::new();
+
         unsafe {
             let func = unit.get_fn_by_info::<(&mut String, *const usize), ()>(&info);
-            func((&mut output, self.const_ptr()))
+            func((&mut output, self.const_ptr()));
         };
-        output
+
+        indent_parens(output)
     }
 
     pub unsafe fn get_data_as<T>(&self) -> &T { transmute(&self.data) }

@@ -22,7 +22,7 @@ pub struct FuncRep<'a> {
     pub data_flow: HashMap<VarName, DataFlowInfo>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataFlowInfo {
     pub typ: Type,
     pub arg_index: Option<u32>,
@@ -71,10 +71,11 @@ impl<'a> FuncRep<'a> {
         new
     }
 
-    pub fn arg_names(&self) -> Vec<VarName> {
+    fn args(&self) -> Vec<(VarName, DataFlowInfo)> {
         let mut names_and_flow = self
             .data_flow
             .iter()
+            .map(|(n, d)| (n.clone(), d.clone()))
             .filter(|f| f.1.is_arg())
             .collect::<Vec<_>>();
 
@@ -83,13 +84,17 @@ impl<'a> FuncRep<'a> {
         });
 
         names_and_flow
-            .iter()
-            .map(|f| f.0)
-            .cloned()
-            .collect::<Vec<_>>()
     }
 
-    pub fn arg_count(&self) -> u32 { self.arg_names().len() as u32 }
+    pub fn arg_types(&self) -> Vec<Type> {
+        self.args().drain(..).map(|f| f.1.typ).collect::<Vec<_>>()
+    }
+
+    pub fn arg_names(&self) -> Vec<VarName> {
+        self.args().drain(..).map(|f| f.0).collect::<Vec<_>>()
+    }
+
+    pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
 
     pub fn move_up_arg_indices(&mut self) {
         for (_, flow) in self.data_flow.iter_mut() {
@@ -109,6 +114,7 @@ impl<'a> FuncRep<'a> {
 
     pub fn output(self) -> FuncOutput {
         let out = FuncOutput {
+            func_type: self.ret_type.clone().func_with_args(self.arg_types()),
             arg_names: Some(self.arg_names()),
             tree: Some(self.tree),
             info: Some(self.info),

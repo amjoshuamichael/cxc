@@ -9,6 +9,7 @@ use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
+use memoize::memoize;
 
 pub trait Kind {
     fn name(&self) -> String;
@@ -16,31 +17,6 @@ pub trait Kind {
 
     fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
         self.to_any_type(context).try_into().unwrap()
-    }
-
-    fn size(&self) -> usize {
-        let context = Context::create();
-        let size_int_value = self.to_any_type(&context).size_of().unwrap();
-
-        // Calculating the size of a type depends on many things.
-        // Instead of guesstimating it, we just ask LLVM to write a program
-        // that calculates it for us, and then compile and run that
-        // program.
-        //
-        // TODO: cache this calculation, because it is very innefficient
-        let context = Context::create();
-        let module = context.create_module("");
-        let builder = context.create_builder();
-        let func_type = size_int_value.get_type().fn_type(&[], false);
-        let function = module.add_function("".into(), func_type, None);
-        let basic_block = context.append_basic_block(function, "");
-        builder.position_at_end(basic_block);
-        builder.build_return(Some(&size_int_value));
-        let execution_engine = module
-            .create_jit_execution_engine(OptimizationLevel::None)
-            .unwrap();
-        let val = unsafe { execution_engine.run_function(function, &[]) };
-        val.as_int(false) as usize
     }
 }
 
@@ -77,7 +53,7 @@ impl Kind for FuncType {
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        if self.ret_type.size() <= 16 {
+        if self.ret_type.can_be_returned_directly() {
             let return_type = self.ret_type.to_basic_type(context);
 
             let args: Vec<BasicMetadataTypeEnum> = self

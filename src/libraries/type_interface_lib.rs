@@ -33,7 +33,7 @@ fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
             typ: Some(typ.clone().into()),
         }],
         generic_count: 0,
-        code: Expr::Return(box Expr::Number(field_count as u128)),
+        code: Expr::Number(field_count as u128),
         method_of: Some(typ.into()),
     })
 }

@@ -6,8 +6,10 @@ pub use tok::{Tok, TypeName, VarName};
 
 use tok::Ident;
 
+mod indent_parens;
 mod parse_num;
 mod tok;
+pub use indent_parens::indent_parens;
 
 #[derive(Debug, Clone)]
 struct TokPos(Rc<RefCell<usize>>);
@@ -37,7 +39,7 @@ impl TokenStream for Lexer {
         match out {
             Some(tok) => {
                 if crate::DEBUG {
-                    println!("pre-lexing: {:?}", tok);
+                    print!("{:?} ", tok);
                 }
 
                 Ok(tok.clone())
@@ -67,6 +69,7 @@ impl Lexer {
         generic_labels: GenericLabels,
     ) -> ParseContext<N> {
         if crate::DEBUG {
+            println!();
             println!(
                 "splitting the lexer at index {:?} to parse {name}",
                 self.tok_pos.val()
@@ -112,7 +115,7 @@ impl<N: Ident> ParseContext<N> {
         let token = self.inner.get(at);
 
         if crate::DEBUG && log && let Some(token) = token {
-            println!("lexing: {:?}", token);
+            print!("{:?}", token);
         }
 
         token.map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
@@ -147,4 +150,10 @@ impl<N: Ident> ParseContext<N> {
     pub fn generic_count(&self) -> usize { self.generic_labels.len() }
 }
 
-pub fn lex(input: &str) -> Lexer { Lexer::from(Tok::lexer(input)) }
+pub fn lex(input: &str) -> Lexer {
+    if crate::DEBUG {
+        println!();
+        println!("====NEW LEX====");
+    }
+    Lexer::from(Tok::lexer(input))
+}

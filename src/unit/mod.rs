@@ -1,4 +1,3 @@
-use std::iter::once;
 use crate::hlr::hlr_anonymous;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
@@ -6,6 +5,7 @@ use crate::lex::*;
 use crate::libraries::Library;
 use crate::parse;
 use crate::parse::*;
+use crate::typ::FuncType;
 use crate::typ::Kind;
 use crate::Type;
 use crate::TypeEnum;
@@ -23,7 +23,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::mem::size_of;
 use std::mem::transmute;
 use std::rc::Rc;
 
@@ -109,11 +108,11 @@ impl<'u> Unit<'u> {
     }
 
     pub fn reset_execution_engine(&self) {
-        self.execution_engine.borrow().remove_module(&self.module);
+        self.execution_engine.borrow().remove_module(&self.module).unwrap();
         self.execution_engine.replace(
             self.module
-            .create_jit_execution_engine(OptimizationLevel::Aggressive)
-            .unwrap()
+                .create_jit_execution_engine(OptimizationLevel::Aggressive)
+                .unwrap()
         );
     }
 
@@ -123,8 +122,6 @@ impl<'u> Unit<'u> {
             self.execution_engine.borrow().free_fn_machine_code(llvm_func);
             unsafe { llvm_func.delete() }
         }
-
-        self.execution_engine.borrow().remove_module(&self.module).unwrap();
 
         self.reset_execution_engine();
         self.comp_data = Rc::new(CompData::new());
@@ -171,9 +168,7 @@ impl<'u> Unit<'u> {
 
         self.compile_func_set(funcs_to_process);
 
-        if crate::DEBUG {
-            println!("{}", self.module.print_to_string().to_string());
-        }
+        
 
         top_level_functions.iter().map(|info| self.get_func_ref_by_info(info)).collect()
 
@@ -189,8 +184,11 @@ impl<'u> Unit<'u> {
         self.reset_execution_engine();
 
         let mut all_funcs_to_compile = Vec::new();
+        let mut all_func_infos = Vec::new();
 
         while !set.is_empty() {
+            all_func_infos.extend(set.clone().drain(..));
+
             {
                 let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
@@ -221,63 +219,53 @@ impl<'u> Unit<'u> {
         for func_output in &mut all_funcs_to_compile {
             self.compile(func_output);
         }
+
+        if crate::DEBUG {
+            println!("{}", self.module.print_to_string().to_string());
+            println!("compiled these: ");
+            dbg!(all_func_infos);
+        }
     }
 
-    pub fn get_value(&self, of: &str) -> Value {
+    pub fn get_value(&mut self, of: &str) -> Value {
         if of == "" { return Value::default() }
 
-        let temp_name = "temp";
+        let temp_name = "newfunc";
+        
+        self.reset_execution_engine();
 
         let expr = {
             let mut lexed = lex(of);
             let mut context = lexed.split(VarName::temp(), HashMap::new());
 
-            parse::parse_expr(&mut context).unwrap()
+            Expr::Block(vec![Expr::Return(box parse::parse_expr(&mut context).unwrap())])
         };
 
-        let code = FuncCode::from_expr(Expr::Return(box expr.clone()));
-
+        let code = FuncCode::from_expr(expr);
+            
         let info = UniqueFuncInfo {
-            name: VarName::temp(),
+            name: VarName::from(temp_name),
             method_of: None,
             generics: Vec::new(),
         };
 
-        let func_rep = hlr_anonymous(info.clone(), self.comp_data.clone(), code);
+        let mut func_rep = hlr_anonymous(info.clone(), self.comp_data.clone(), code);
 
-        let val_type = match func_rep.tree_ref().get(ExprID::ROOT) {
-            NodeData::Return { to_return, .. } => {
-                func_rep.tree_ref().get(to_return.unwrap()).ret_type()
-            },
-            _ => unreachable!(),
-        };
-
-        let get_via_ref = val_type.size() > size_of::<usize>();
-
-        let (mut func_rep, ret_type) = if !get_via_ref {
-            (func_rep, val_type.clone())
-        } else {
-            let new_expr = Expr::Return(box Expr::UnarOp(Opcode::Ref(1), box expr));
-            let new_code = FuncCode::from_expr(new_expr.clone());
-
-            let new_func_output =
-                hlr_anonymous(info, self.comp_data.clone(), new_code);
-
-            let new_ret_type = val_type.clone().get_ref();
-
-            (new_func_output, new_ret_type)
-        };
+        {
+            let dependencies = func_rep.get_func_dependencies().drain().collect();
+            self.compile_func_set(dependencies);
+        }
 
         let mut fcs = {
-            let func_type = ret_type.clone().func_with_args(Vec::new());
+            let ink_func_type = func_rep.func_type.clone().to_any_type(self.context).into_function_type();
 
             let function = self.module.add_function(
                 temp_name,
-                func_type.to_any_type(self.context).into_function_type(),
+                ink_func_type,
                 None,
             );
 
-            self.new_func_comp_state(func_rep.take_tree(), function, Vec::new())
+            self.new_func_comp_state(func_rep.take_tree(), function, func_rep.take_arg_names())
         };
 
         {
@@ -286,18 +274,28 @@ impl<'u> Unit<'u> {
             compile_routine(&mut fcs);
         };
 
+        if crate::DEBUG {
+            self.module.get_function(temp_name).unwrap().print_to_stderr();
+        }
+
         let func_addr = self
             .execution_engine
             .borrow()
             .get_function_address(temp_name)
             .unwrap();
 
-        let value = if get_via_ref {
-            let comp: fn() -> *const [u8; 16] = unsafe { transmute(func_addr) };
-            Value::new(val_type, unsafe { *comp() })
+        let TypeEnum::Func(FuncType { ret_type, .. }) = 
+            func_rep.func_type.as_type_enum() else { panic!() };
+
+        let value = if ret_type.can_be_returned_directly() {
+            let new_func: fn() -> [u8; 8] = unsafe { transmute(func_addr) };
+            dbg!(new_func());
+            Value::new_from_arr(ret_type.clone(), new_func())
         } else {
-            let comp: fn() -> [u8; 8] = unsafe { transmute(func_addr) };
-            Value::new(val_type, comp())
+            let data_vec: Vec<u8> = vec![0; ret_type.size()];
+            let new_func: fn(*const u8) = unsafe { transmute(func_addr) };
+            new_func(data_vec.as_ptr());
+            Value::new_from_vec(ret_type.clone(), data_vec)
         };
 
         self.execution_engine.borrow().free_fn_machine_code(fcs.function);
@@ -344,7 +342,6 @@ impl<'u> Unit<'u> {
         let TypeEnum::Func(func_type_inner) = 
             func_type.as_type_enum() else { panic!() };
         let ret_type = func_type_inner.ret_type();
-        let ink_ret_type = ret_type.to_basic_type(&self.context);
 
         let ink_func_ptr_type = func_type
             .to_any_type(&self.context)
@@ -381,7 +378,7 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap()
         };
 
-        if ret_type.size() < 16 {
+        if ret_type.can_be_returned_directly() {
             let arg_vals: Vec<BasicMetadataValueEnum> = function
                 .get_params()
                 .iter()

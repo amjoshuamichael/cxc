@@ -74,7 +74,7 @@ fn compile<'comp, 'a>(
     let expr = fcs.tree.get(expr_id);
 
     if crate::DEBUG {
-        println!("compiling: {expr_id:?}, {expr:?}");
+        print!("c{expr_id:?} ");
     }
 
     let output: Option<AnyValueEnum> = match expr {
@@ -480,7 +480,7 @@ fn compile<'comp, 'a>(
     };
 
     if crate::DEBUG {
-        println!("done compiling: {expr_id:?}");
+        print!("d{expr_id:?}");
     }
 
     output

@@ -6,12 +6,12 @@ use crate::{typ::FuncType, unit::CompData, Kind, Type, TypeEnum};
 use std::{collections::HashMap, rc::Rc};
 
 pub fn handle_large_returns(hlr: &mut FuncRep) { 
-    handle_own_return(hlr); 
     handle_other_calls(hlr);
+    handle_own_return(hlr); 
 }
 
 fn handle_own_return(hlr: &mut FuncRep) {
-    if hlr.ret_type.size() <= 16 {
+    if hlr.ret_type.can_be_returned_directly() {
         return;
     }
 
@@ -77,7 +77,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
         let NodeData::Call { mut a, f, generics, is_method, .. } = 
             data.clone() else { continue; };
-        if data.ret_type().size() <= 16 { continue };
+        if data.ret_type().can_be_returned_directly() { continue };
 
         let (statement_id, block_id) = hlr.tree.statement_and_block(og_id);
 

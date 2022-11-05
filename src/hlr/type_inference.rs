@@ -35,6 +35,10 @@ pub fn infer_types(hlr: &mut FuncRep) {
         let mut node = hlr.tree.get(n);
 
         match node {
+            NodeData::Return { to_return, .. } => {
+                hlr.ret_type = 
+                    type_by_id.get(&to_return.unwrap()).unwrap().clone();
+            }
             NodeData::BinOp {
                 ref mut ret_type,
                 ref lhs,
@@ -70,7 +74,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     _ => unreachable!(),
                 }
 
-                *type_by_id.get_mut(&n).unwrap() = hs_type.clone();
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
             },
             NodeData::SetVar {
                 ref mut ret_type,

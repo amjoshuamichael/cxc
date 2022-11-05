@@ -838,7 +838,7 @@ test_vec(): i32 {
         unsafe { unit.get_fn_by_name::<_, ()>("meaning")(&mut output) };
         assert_eq!(
             output,
-            String::from("{one = {x = 20, y = 303}, two = {x = 3.2, y = 40.54}}")
+            String::from("TwoPoint2Ds {one = Point2D {x = 20, y = 303}, two = Point2D {x = 3.2, y = 40.54}}")
         );
     }
 
@@ -853,12 +853,7 @@ test_vec(): i32 {
         unit.push_script(
             r#"
             hello_world(): i32 {
-                output: String = create_string()
-                none: i32 = output.push_string("hello")
-                none: i32 = output.push_string(", ")
-                none: i32 = output.push_string(", ")
-                none: i32 = output.push_string("world!")
-                print<&String>(&output)
+                print<&String>(&"hello, world!")
                 ; 0
             }
         "#,

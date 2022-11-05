@@ -1,4 +1,4 @@
-use crate::lex::VarName;
+use crate::lex::{indent_parens, VarName};
 use crate::parse::*;
 use crate::typ::FloatType;
 use crate::unit::UniqueFuncInfo;
@@ -61,6 +61,10 @@ impl ExprTree {
     pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
         let parent = self.parent(of);
 
+        if parent == ExprID::ROOT {
+            return (of, parent);
+        }
+
         match self.get(parent) {
             Block { .. } => (of, parent),
             _ => self.statement_and_block(parent),
@@ -86,6 +90,14 @@ impl ExprTree {
             method_of,
             generics,
         }
+    }
+}
+
+impl ToString for ExprTree {
+    fn to_string(&self) -> String {
+        let data = self.get(ExprID::ROOT);
+        let not_indented = data.to_string(self);
+        indent_parens(not_indented)
     }
 }
 
@@ -279,6 +291,156 @@ impl NodeData {
             | Member { ret_type, .. } => ret_type.clone(),
             Empty => unreachable!(),
             While { .. } => Type::never(),
+        }
+    }
+
+    pub fn to_string(&self, tree: &ExprTree) -> String {
+        match self {
+            Empty => "".into(),
+            Number { value, .. } => value.to_string(),
+            Float { value, .. } => value.to_string(),
+            Bool { value, .. } => value.to_string(),
+            Ident { name, .. } => name.to_string(),
+            StructLit { var_type, fields } => {
+                let mut lit = match var_type.name() {
+                    Some(name) => name.to_string(),
+                    None => "".into(),
+                } + " ";
+
+                for (f, field) in fields.iter().enumerate() {
+                    lit += &*field.0.to_string();
+                    lit += &*tree.get(field.1).to_string(tree);
+                }
+
+                lit
+            },
+            ArrayLit { var_type, parts } => {
+                let mut lit = "[".into();
+
+                for (p, part) in parts.iter().enumerate() {
+                    if p > 0 {
+                        lit += ", ";
+                    }
+                    lit += &*tree.get(*part).to_string(tree);
+                }
+
+                lit += "]".into();
+
+                lit
+            },
+            SetVar { lhs, rhs, .. } => {
+                let mut lit = tree.get(*lhs).to_string(tree);
+                lit += " = ";
+                lit += &*tree.get(*rhs).to_string(tree);
+                lit
+            },
+            MakeVar {
+                var_type,
+                name,
+                rhs,
+            } => {
+                let mut lit = name.to_string();
+                lit += ": ";
+                lit += &*format!("{:?}", var_type);
+                lit += " = ";
+                lit += &*tree.get(*rhs).to_string(tree);
+                lit
+            },
+            Call {
+                f,
+                generics,
+                a: args,
+                is_method,
+                ..
+            } => {
+                let mut call = f.to_string();
+
+                if generics.len() > 0 {
+                    call += "<";
+                    for (g, generic) in generics.iter().enumerate() {
+                        if g > 0 {
+                            call += ", ";
+                        }
+                        call += &*format!("{:?}", generic);
+                    }
+                    call += ">";
+                }
+
+                call += "(";
+                for (a, arg) in args.iter().enumerate() {
+                    if a > 0 {
+                        call += ", ";
+                    }
+                    call += &*tree.get(*arg).to_string(tree);
+                }
+                call += ")";
+                call
+            },
+            Member { object, field, .. } => {
+                let mut member = tree.get(*object).to_string(tree);
+                member += ".";
+                member += &*field.to_string();
+                member
+            },
+            Index { object, index, .. } => {
+                let mut object = tree.get(*object).to_string(tree);
+                object += "[";
+                object += &*tree.get(*index).to_string(tree);
+                object += "]";
+                object
+            },
+            UnarOp { op, hs, .. } => {
+                let mut op = format!("{:?}", op);
+                op += &*tree.get(*hs).to_string(tree);
+                op
+            },
+            BinOp { lhs, op, rhs, .. } => {
+                let mut binop = tree.get(*lhs).to_string(tree);
+                binop += " ";
+                binop += &*format!("{:?}", op);
+                binop += " ";
+                binop += &*tree.get(*rhs).to_string(tree);
+                binop
+            },
+            IfThen { i, t, .. } => {
+                let mut it = "? ".into();
+                it += &*tree.get(*i).to_string(tree);
+                it += " ".into();
+                it += &*tree.get(*t).to_string(tree);
+                it
+            },
+            IfThenElse { i, t, e, .. } => {
+                let mut ite = "? ".into();
+                ite += &*tree.get(*i).to_string(tree);
+                ite += " ".into();
+                ite += &*tree.get(*t).to_string(tree);
+                ite += " : ".into();
+                ite += &*tree.get(*t).to_string(tree);
+                ite
+            },
+            While { w, d, .. } => {
+                let mut wh = "@ ".into();
+                wh += &*tree.get(*w).to_string(tree);
+                wh += &*tree.get(*d).to_string(tree);
+                wh
+            },
+            Block { stmts, .. } => {
+                let mut bl = "{ \n".into();
+                for (s, stmt) in stmts.iter().enumerate() {
+                    if s > 0 {
+                        bl += "\n"
+                    }
+                    bl += &*tree.get(*stmt).to_string(tree);
+                }
+                bl
+            },
+            Return { to_return, .. } => {
+                let mut ret = "; ".into();
+                if let Some(to_return) = to_return {
+                    ret += &*tree.get(*to_return).to_string(tree);
+                }
+                ret
+            },
         }
     }
 }

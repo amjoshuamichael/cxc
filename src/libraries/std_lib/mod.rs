@@ -36,7 +36,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
             typ: Some(typ.clone().into()),
         }],
         generic_count: 0,
-        code: Expr::Return(box Expr::Number(*count as u128)),
+        code: Expr::Number(*count as u128),
         method_of: Some(typ.into()),
     })
 }

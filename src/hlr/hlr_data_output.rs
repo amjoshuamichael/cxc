@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{lex::VarName, unit::UniqueFuncInfo};
+use crate::{lex::VarName, unit::UniqueFuncInfo, Type};
 
 use super::expr_tree::{ExprTree, NodeData};
 
@@ -9,6 +9,7 @@ pub struct FuncOutput {
     pub(super) tree: Option<ExprTree>,
     pub(super) arg_names: Option<Vec<VarName>>,
     pub(super) info: Option<UniqueFuncInfo>,
+    pub func_type: Type,
 }
 
 impl FuncOutput {

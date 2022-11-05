@@ -1,4 +1,5 @@
 use crate::lex::{TypeName, VarName};
+use memoize::memoize;
 
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
@@ -6,6 +7,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 mod kind;
+mod size;
 mod typ_or_alias;
 pub use kind::Kind;
 pub use typ_or_alias::TypeOrAlias;
@@ -25,6 +27,18 @@ impl Default for Type {
 
 impl Type {
     fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
+
+    pub fn size(&self) -> usize { size::size_of_type(self.clone()) }
+
+    pub fn can_be_returned_directly(&self) -> bool {
+        match self.clone().as_type_enum() {
+            TypeEnum::Int(IntType { size }) => *size <= 64,
+            TypeEnum::Ref(..) => true,
+            TypeEnum::Float(_) => true,
+            TypeEnum::Array(_) => false,
+            _ => self.size() <= 8,
+        }
+    }
 
     pub fn ref_x_times(mut self, count: u8) -> Type {
         for _ in 0..count {
