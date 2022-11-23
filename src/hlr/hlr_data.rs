@@ -182,7 +182,7 @@ impl<'a> FuncRep<'a> {
                     let space = self.tree.make_one_space(parent);
 
                     let name = name.clone();
-                    let data_flow_info = self.data_flow.get_mut(&name).unwrap();
+
                     self.tree.replace(
                         space,
                         NodeData::Ident {

@@ -147,7 +147,7 @@ fn compile<'comp, 'a>(
             Some(loaded.into())
         },
         SetVar {
-            ref lhs, ref rhs, ref ret_type,
+            ref lhs, ref rhs, ..
         } => {
             let lhs_type = fcs.tree.get(*lhs).ret_type().clone();
             let rhs_type = fcs.tree.get(*rhs).ret_type().clone();

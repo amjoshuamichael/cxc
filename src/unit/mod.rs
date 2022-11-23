@@ -137,7 +137,7 @@ impl<'u> Unit<'u> {
             },
         };
 
-        let mut funcs_to_process = {
+        let funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
             for decl in script.types_iter().cloned() {
@@ -168,10 +168,7 @@ impl<'u> Unit<'u> {
 
         self.compile_func_set(funcs_to_process);
 
-        
-
         top_level_functions.iter().map(|info| self.get_func_ref_by_info(info)).collect()
-
     }
 
     pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) {
@@ -405,6 +402,15 @@ impl<'u> Unit<'u> {
         comp_data.func_types.insert(func_info, func_type);
 
         self
+    }
+
+    pub fn add_opaque_type<T>(&mut self, name: &str) -> Type {
+        let opaque_type = Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
+        comp_data.types.insert(TypeName::from(name), opaque_type.clone());
+
+        opaque_type
     }
 
     fn new_func_comp_state<'s>(

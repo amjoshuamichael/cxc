@@ -1,7 +1,7 @@
-use crate::{Type, TypeEnum, unit::CompData, typ::FuncType};
+use crate::{Type, TypeEnum, typ::FuncType};
 use super::prelude::*;
 use crate::parse::*;
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap};
 
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut type_by_id = HashMap::new();

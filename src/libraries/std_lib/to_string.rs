@@ -127,7 +127,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             statements.push(ret);
             Expr::Block(statements)
         },
-        TypeEnum::Array(ArrayType { base, count }) => {
+        TypeEnum::Array(ArrayType { count, .. }) => {
             let output_var = VarName::from("output");
             let output_var_expr = Expr::Ident(output_var.clone());
             let output_var_ref =
@@ -215,5 +215,8 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     })
 }
 
-fn to_string<T: ToString>(val: &T) -> String { val.to_string() }
+fn to_string<T: ToString + std::fmt::Debug>(val: &T) -> String {
+    dbg!(&val);
+    val.to_string()
+}
 fn string_to_string(val: &String) -> String { format!(r#""{}""#, val) }

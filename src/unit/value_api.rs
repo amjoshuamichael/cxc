@@ -1,5 +1,4 @@
-use crate::{lex::indent_parens, typ::Kind, Unit};
-use core::slice;
+use crate::{lex::indent_parens, Unit};
 use std::mem::transmute;
 
 use crate::Type;
@@ -21,6 +20,14 @@ impl Value {
     }
 
     pub fn new_from_vec(typ: Type, data: Vec<u8>) -> Self { Self { typ, data } }
+
+    pub fn new_opaque<T: bytemuck::NoUninit>(data: T) -> Self {
+        let typ = Type::opaque_type::<T>();
+        Self {
+            typ,
+            data: Vec::from(bytemuck::bytes_of(&data)),
+        }
+    }
 
     pub fn to_string(&self, unit: &mut Unit) -> String {
         let info = UniqueFuncInfo {

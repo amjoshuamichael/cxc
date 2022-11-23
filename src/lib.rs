@@ -210,6 +210,10 @@ mod tests {
         y: i32,
     }
 
+    impl Point2D {
+        fn sqr_magnitude(&self) -> i32 { self.x * self.x + self.y * self.y }
+    }
+
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct GenPoint2D<T> {
         x: T,
@@ -456,7 +460,7 @@ mod tests {
     
                     ; 0
                 }
-                ",
+            ",
         );
 
         unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
@@ -860,5 +864,37 @@ test_vec(): i32 {
         );
 
         unsafe { unit.get_fn_by_name::<(), ()>("hello_world")(()) };
+    }
+
+    #[test]
+    fn opaque_types() {
+        let context = LLVMContext::new();
+        let mut unit = unit::Unit::new(&context);
+
+        unit.add_lib(StdLib);
+        unit.add_lib(TestLib);
+
+        let point_2d_opaque = unit.add_opaque_type::<Point2D>("Point2D");
+        unit.add_rust_func_explicit(
+            "sqr_magnitude",
+            Point2D::sqr_magnitude as *const usize,
+            Type::i(32).func_with_args(vec![point_2d_opaque.clone().get_ref()]),
+            Some(point_2d_opaque.get_ref()),
+            Vec::new(),
+        );
+
+        unit.push_script(
+            r#"
+            hello_world(input: Point2D): i32 {
+                output: i32 = input.sqr_magnitude()
+                ; output
+            }
+            "#,
+        );
+
+        let point = Point2D { x: 2, y: 3 };
+        let output = unsafe { unit.get_fn_by_name::<_, i32>("hello_world")(point) };
+
+        assert_eq!(output, point.sqr_magnitude());
     }
 }

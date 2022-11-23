@@ -1,5 +1,4 @@
 use crate::lex::{TypeName, VarName};
-use memoize::memoize;
 
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
@@ -97,6 +96,22 @@ impl Type {
         Type::new(TypeEnum::Struct(StructType { fields, methods }))
     }
 
+    pub fn opaque_with_size(size: u32, name: &str) -> Type {
+        Type::new(TypeEnum::Opaque(OpaqueType { size }))
+            .with_name(TypeName::from(name))
+    }
+
+    pub fn opaque_type<T>() -> Type {
+        let full_name = std::any::type_name::<T>();
+        let scope_end_position = full_name.rfind(":").unwrap();
+        let basic_name = &full_name[scope_end_position..];
+
+        Type::new(TypeEnum::Opaque(OpaqueType {
+            size: std::mem::size_of::<T>() as u32,
+        }))
+        .with_name(TypeName::from(basic_name))
+    }
+
     pub fn never() -> Type { Type::new(TypeEnum::Never) }
 
     pub fn func_with_args(self, args: Vec<Type>) -> Type {
@@ -157,6 +172,7 @@ pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
     Struct(StructType),
+    Opaque(OpaqueType),
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
@@ -184,6 +200,7 @@ impl Deref for TypeEnum {
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
             TypeEnum::Bool(t) => t,
+            TypeEnum::Opaque(t) => t,
             TypeEnum::Never => &NEVER_STATIC,
         }
     }
@@ -272,4 +289,9 @@ pub static NEVER_STATIC: NeverType = NeverType();
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
+}
+
+#[derive(PartialEq, Hash, Eq)]
+pub struct OpaqueType {
+    pub size: u32,
 }

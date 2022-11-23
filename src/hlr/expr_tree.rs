@@ -74,7 +74,7 @@ impl ExprTree {
     fn node_count(&self) -> usize { self.nodes.len() }
 
     pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
-        let NodeData::Call { f, generics, a, is_method, return_by_ref, .. } = call.clone()
+        let NodeData::Call { f, generics, a, is_method, .. } = call.clone()
             else { panic!() };
 
         let method_of = if is_method {
@@ -307,14 +307,14 @@ impl NodeData {
                     None => "".into(),
                 } + " ";
 
-                for (f, field) in fields.iter().enumerate() {
+                for field in fields.iter() {
                     lit += &*field.0.to_string();
                     lit += &*tree.get(field.1).to_string(tree);
                 }
 
                 lit
             },
-            ArrayLit { var_type, parts } => {
+            ArrayLit { parts, .. } => {
                 let mut lit = "[".into();
 
                 for (p, part) in parts.iter().enumerate() {
@@ -353,6 +353,10 @@ impl NodeData {
                 is_method,
                 ..
             } => {
+                if *is_method {
+                    todo!()
+                }
+
                 let mut call = f.to_string();
 
                 if generics.len() > 0 {
@@ -415,7 +419,7 @@ impl NodeData {
                 ite += " ".into();
                 ite += &*tree.get(*t).to_string(tree);
                 ite += " : ".into();
-                ite += &*tree.get(*t).to_string(tree);
+                ite += &*tree.get(*e).to_string(tree);
                 ite
             },
             While { w, d, .. } => {

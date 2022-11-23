@@ -8,8 +8,6 @@ use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
 use inkwell::AddressSpace;
-use inkwell::OptimizationLevel;
-use memoize::memoize;
 
 pub trait Kind {
     fn name(&self) -> String;
@@ -157,5 +155,15 @@ impl Kind for NeverType {
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.i32_type().as_any_type_enum()
+    }
+}
+
+impl Kind for OpaqueType {
+    fn name(&self) -> String { format!("Opaque with size {} bytes", self.size) }
+
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        context
+            .custom_width_int_type(self.size * 8)
+            .as_any_type_enum()
     }
 }
