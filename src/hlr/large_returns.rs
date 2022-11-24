@@ -2,7 +2,7 @@ use super::hlr_data::DataFlowInfo;
 use super::prelude::*;
 use crate::lex::VarName;
 use crate::parse::*;
-use crate::{Type};
+use crate::Type;
 
 pub fn handle_large_returns(hlr: &mut FuncRep) { 
     handle_other_calls(hlr);

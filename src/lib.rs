@@ -8,7 +8,7 @@
 pub static DEBUG: bool = false;
 
 pub use typ::{Kind, Type, TypeEnum};
-pub use unit::{Func, LLVMContext, UniqueFuncInfo, Unit, Value};
+pub use unit::{Func, LLVMContext, UniqueFuncInfo, Unit, Value, XcReflect};
 
 pub mod library {
     pub use crate::libraries::{Library, StdLib, TestLib};
@@ -28,6 +28,8 @@ mod tests {
         libraries::{StdLib, TestLib, TypeInterfaceLib},
         unit::LLVMContext,
     };
+
+    use cxc_derive::XcReflect;
 
     use super::*;
 
@@ -204,7 +206,7 @@ mod tests {
         size: i32,
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, XcReflect)]
     struct Point2D {
         x: i32,
         y: i32,

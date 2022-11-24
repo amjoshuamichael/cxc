@@ -29,6 +29,7 @@ use std::rc::Rc;
 mod functions;
 mod value_api;
 mod func_api;
+mod reflect;
 
 use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
@@ -37,6 +38,7 @@ use self::functions::DeriverFunc;
 pub use self::functions::FuncDeclInfo;
 pub use self::value_api::Value;
 pub use self::func_api::Func;
+pub use reflect::XcReflect;
 
 pub type IOFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
