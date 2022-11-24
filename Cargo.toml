@@ -15,5 +15,9 @@ bytemuck = "1.12.3"
 
 cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
 
+# these libraries are re-exported into cxc
+
+glam = { version = "0.22.0", optional = true }
+
 [profile.bench]
 debug = true

@@ -11,7 +11,7 @@ pub use typ::{Kind, Type, TypeEnum};
 pub use unit::{Func, LLVMContext, UniqueFuncInfo, Unit, Value, XcReflect};
 
 pub mod library {
-    pub use crate::libraries::{Library, StdLib, TestLib};
+    pub use crate::libraries::*;
 }
 
 mod hlr;
