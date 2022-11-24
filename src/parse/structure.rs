@@ -48,10 +48,7 @@ fn parse_type_and_methods(
         Tok::TypeName(name) => {
             lexer.next_tok()?;
             match name {
-                TypeName::I64 => TypeAlias::Int(64),
-                TypeName::I32 => TypeAlias::Int(32),
-                TypeName::I16 => TypeAlias::Int(16),
-                TypeName::I8 => TypeAlias::Int(8),
+                TypeName::I(size) => TypeAlias::Int(size),
                 TypeName::Bool => TypeAlias::Bool,
                 TypeName::F64 => TypeAlias::Float(FloatType::F64),
                 TypeName::F32 => TypeAlias::Float(FloatType::F32),

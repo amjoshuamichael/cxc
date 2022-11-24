@@ -44,10 +44,7 @@ impl From<&str> for VarName {
 #[derive(PartialEq, Eq, Clone, Hash)]
 pub enum TypeName {
     Other(Arc<str>),
-    I64,
-    I32,
-    I16,
-    I8,
+    I(u32),
     F64,
     F32,
     F16,
@@ -57,11 +54,12 @@ pub enum TypeName {
 
 impl Ident for TypeName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self {
+        if t.slice().chars().nth(0) == Some('i') {
+            // TODO: return result from this function
+            return Self::I(t.slice()[1..].parse().expect("improper int type"));
+        }
+
         match t.slice() {
-            "i64" => Self::I64,
-            "i32" => Self::I32,
-            "i16" => Self::I16,
-            "i8" => Self::I8,
             "f16" => Self::F16,
             "f32" => Self::F32,
             "f64" => Self::F64,
@@ -83,10 +81,7 @@ impl Debug for TypeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let out = match self {
             Self::Other(name) => &*name,
-            Self::I64 => "i64",
-            Self::I32 => "i32",
-            Self::I16 => "i16",
-            Self::I8 => "i8",
+            Self::I(size) => return write!(f, "i{size}"),
             Self::F64 => "f64",
             Self::F32 => "f32",
             Self::F16 => "f16",

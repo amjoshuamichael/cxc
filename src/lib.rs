@@ -29,8 +29,6 @@ mod tests {
         unit::LLVMContext,
     };
 
-    use cxc_derive::XcReflect;
-
     use super::*;
 
     #[test]
@@ -206,7 +204,7 @@ mod tests {
         size: i32,
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, XcReflect)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     struct Point2D {
         x: i32,
         y: i32,
