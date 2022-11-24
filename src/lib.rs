@@ -14,6 +14,9 @@ pub mod library {
     pub use crate::libraries::*;
 }
 
+#[cfg(feature = "cxc_derive")]
+pub use cxc_derive::XcReflect;
+
 mod hlr;
 mod lex;
 mod libraries;
