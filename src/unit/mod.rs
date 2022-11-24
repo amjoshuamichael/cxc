@@ -406,13 +406,30 @@ impl<'u> Unit<'u> {
         self
     }
 
-    pub fn add_opaque_type<T>(&mut self, name: &str) -> Type {
+    pub fn add_opaque_type<T>(&mut self) -> Type {
+        let name = {
+            let name = std::any::type_name::<T>();
+            let last_colon_index = name.rfind(":").map(|p| p + 1).unwrap_or(0);
+            &name[last_colon_index..]
+        };
+
         let opaque_type = Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
         comp_data.types.insert(TypeName::from(name), opaque_type.clone());
 
         opaque_type
+    }
+
+    pub fn add_reflect_type<T: XcReflect>(&mut self) -> Type {
+        let decl = T::type_decl();
+
+        {
+            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+            comp_data.add_type_alias(decl.name, decl.typ.clone());
+        }
+
+        self.comp_data.get_spec(&decl.typ, &Vec::new()).unwrap()
     }
 
     fn new_func_comp_state<'s>(

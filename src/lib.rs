@@ -874,7 +874,7 @@ test_vec(): i32 {
         unit.add_lib(StdLib);
         unit.add_lib(TestLib);
 
-        let point_2d_opaque = unit.add_opaque_type::<Point2D>("Point2D");
+        let point_2d_opaque = unit.add_opaque_type::<Point2D>();
         unit.add_rust_func_explicit(
             "sqr_magnitude",
             Point2D::sqr_magnitude as *const usize,
