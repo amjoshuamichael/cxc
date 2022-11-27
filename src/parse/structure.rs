@@ -13,6 +13,7 @@ pub enum TypeAlias {
     Bool,
     Ref(Box<TypeAlias>),
     Struct(Vec<(VarName, TypeAlias)>, Vec<VarName>),
+    Function(Vec<TypeAlias>, Box<TypeAlias>),
     Array(Box<TypeAlias>, u32),
 }
 
@@ -76,6 +77,32 @@ fn parse_type_and_methods(
                 },
             }
         },
+        Tok::LeftParen => {
+            let arg_types = parse_list(
+                Tok::parens(),
+                Some(Tok::Comma),
+                parse_type_and_methods,
+                lexer,
+            )?;
+
+            let arg_types: Vec<_> =
+                { arg_types }.drain(..).map(|(typ, _)| typ).collect();
+
+            {
+                let probably_arrow = lexer.next_tok()?;
+                if probably_arrow != Tok::RghtArrow {
+                    return Err(ParseError::UnexpectedTok {
+                        got: probably_arrow,
+                        expected: vec![TokName::RightArrow],
+                    });
+                }
+            }
+
+            let ret_type = parse_type_and_methods(lexer)?;
+            let ret_type = ret_type.0;
+
+            TypeAlias::Function(arg_types, box ret_type)
+        },
         _ => {
             return Err(ParseError::UnexpectedTok {
                 got: beginning_of_alias,
@@ -85,10 +112,6 @@ fn parse_type_and_methods(
     };
 
     let suffix = lexer.peek_tok().clone();
-
-    if suffix.is_err() && suffix != Err(ParseError::UnexpectedEndOfFile) {
-        return Err(suffix.err().unwrap());
-    }
 
     let alias = match suffix {
         Ok(Tok::LeftBrack) => {

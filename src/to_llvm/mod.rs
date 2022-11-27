@@ -139,17 +139,17 @@ fn compile<'comp, 'a>(
             return Some(to_store);
         },
         Ident { ref name, .. } => {
-            if fcs.arg_names.contains(name) {
-                let param_index = fcs
-                    .arg_names
-                    .iter()
-                    .position(|arg_name| arg_name == name)
-                    .unwrap();
+            if let Some(param_index) = fcs.arg_names.iter().position(|arg| arg == name) {
                 let param = fcs
                     .function
                     .get_nth_param(param_index.try_into().unwrap())
                     .unwrap();
                 return Some(param.into());
+            }
+
+            if let Some(global) = fcs.comp_data.globals.get(name) {
+                let out = global.1.as_pointer_value();
+                return Some(AnyValueEnum::PointerValue(out));
             }
 
             let val = fcs.variables.get(&name).unwrap().clone();
@@ -377,7 +377,7 @@ fn compile<'comp, 'a>(
             },
             _ => unreachable!(),
         },
-        Call { ref a, .. }=> {
+        Call { ref a, .. } => {
             let info = fcs.tree.unique_func_info_of_call(&expr);
             let internal_function_ouptut = internal_function(fcs, &info, a);
             if internal_function_ouptut.is_some() {
@@ -402,6 +402,27 @@ fn compile<'comp, 'a>(
                 Some(output)
             }
         },
+        FirstClassCall { ref f, ref a, .. } => {
+            let function_ptr = compile(fcs, *f).unwrap().into_pointer_value();
+            let function_ptr = CallableValue::try_from(function_ptr).unwrap();
+
+            let mut arg_vals = Vec::new();
+
+            for arg in a {
+                let basic_arg: BasicValueEnum =
+                    compile(fcs, *arg).unwrap().try_into().unwrap();
+                let basic_meta_arg: BasicMetadataValueEnum =
+                    basic_arg.try_into().unwrap();
+                arg_vals.push(basic_meta_arg);
+            }
+
+            let output = fcs
+                    .builder
+                    .build_call(function_ptr, &*arg_vals, "call")
+                    .as_any_value_enum();
+
+            Some(output)
+        }
         Member { .. } => {
             let ptr = compile_as_ptr(fcs, expr_id);
             let val = fcs.builder.build_load(ptr, "load");

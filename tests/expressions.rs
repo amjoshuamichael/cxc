@@ -34,6 +34,13 @@ fn order_of_op_2() { xc_test!("; 100 / 4 - 5" => i32; 20) }
 fn order_of_op_3() { xc_test!("; 90 * 4 + 90 - 30 * 2" => i32; 390) }
 
 #[test]
+fn parenthesis_1() { xc_test!("; (4 * 12) + 90" => i32; 138) }
+#[test]
+fn parenthesis_2() { xc_test!("; 30 - (100 / 4)" => i32; 5) }
+#[test]
+fn parenthesis_3() { xc_test!("; 90 * (4 + 90) - 30 * 2" => i32; 8400) }
+
+#[test]
 fn bool_complement() { xc_test!("; !true" => bool; false) }
 #[test]
 fn double_bool_complement() { xc_test!("; !!true" => bool; true) }

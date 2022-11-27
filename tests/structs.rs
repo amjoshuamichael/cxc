@@ -118,8 +118,8 @@ fn methods() {
         main(): i32 {
             original: Point2D = Point2D { x = 4.0, y = 3.0 }
 
-            hypotenuse: f32 = original.hypotenuse()
-            assert_eq<f32>(hypotenuse, 5.0)
+            out_hypotenuse: f32 = original.hypotenuse()
+            assert_eq<f32>(out_hypotenuse, 5.0)
 
             scaled_by_2: Point2D = original.scaled(1.5)
             assert_eq<f32>(scaled_by_2.x, 6.0)

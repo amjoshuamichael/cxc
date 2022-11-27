@@ -24,6 +24,10 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                     |lexer| parse_expr(lexer),
                     lexer,
                 )?),
+                Tok::LeftParen => {
+                    lexer.next_tok()?;
+                    Expr::Parens(box parse_math_expr(lexer)?)
+                }
                 Tok::TypeName(struct_name) => {
                     lexer.next_tok()?;
 
@@ -122,11 +126,12 @@ pub fn calls(atoms: &mut Vec<Expr>) {
 
         let being_called = atoms.remove(args_pos - 1);
 
-        if let Expr::Ident(name) = being_called {
-            atoms.push(Expr::Call(name, generics, args, false));
-        } else if let Expr::Member(object, field) = being_called {
+        if let Expr::Member(object, field) = being_called {
             args.push(Expr::UnarOp(Opcode::Ref(1), object));
-            atoms.push(Expr::Call(field, generics, args, true));
+            
+            atoms.push(Expr::Call(box Expr::Ident(field), generics, args, true));
+        } else {
+            atoms.push(Expr::Call(box being_called, generics, args, false));
         }
     }
 }

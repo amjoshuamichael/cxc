@@ -1,3 +1,5 @@
+use std::iter::{empty, once};
+
 use crate::{
     typ::TypeOrAlias,
     unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
@@ -17,7 +19,7 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
     SetVar(Box<Expr>, Box<Expr>),
-    Call(VarName, Vec<TypeAlias>, Vec<Expr>, bool),
+    Call(Box<Expr>, Vec<TypeAlias>, Vec<Expr>, bool),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
     Member(Box<Expr>, VarName),
@@ -26,11 +28,39 @@ pub enum Expr {
     ForWhile(Box<Expr>, Box<Expr>),
     Block(Vec<Expr>),
     Return(Box<Expr>),
+    Parens(Box<Expr>),
 
     // These are used during to make parsing easier, but are not outputted after
     // parsing.
     ArgList(Vec<TypeAlias>, Vec<Expr>),
     Op(Opcode),
+}
+
+impl Expr {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expr> + 'a> {
+        use Expr::*;
+
+        match &self {
+            Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_) => box once(self),
+            Struct(_, fields) => box fields.iter().map(|(_, expr)| expr),
+            Array(exprs) => box exprs.iter(),
+            Index(a, i) => box [&**a, &**i].into_iter(),
+            MakeVar(_, rhs) => box once(&**rhs),
+            SetVar(lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
+            Call(f, _, a, _) => box once(&**f).chain(a.iter()),
+            UnarOp(_, hs) => box once(&**hs),
+            BinOp(_, lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
+            Member(o, _) => box once(&**o),
+            IfThen(i, t) => box [&**i, &**t].into_iter(),
+            IfThenElse(i, t, e) => box [&**i, &**t, &**e].into_iter(),
+            ForWhile(f, w) => box [&**f, &**w].into_iter(),
+            Block(stmts) => box stmts.iter(),
+            Return(r) => box once(&**r),
+            ArgList(_, args) => box args.iter(),
+            Op(_) => box empty(),
+            Parens(expr) => box once(&**expr),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

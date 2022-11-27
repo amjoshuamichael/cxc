@@ -167,6 +167,10 @@ pub enum Tok {
     LeftAngle,
     #[token(">")]
     RghtAngle,
+    #[token("<-")]
+    LeftArrow,
+    #[token("->")]
+    RghtArrow,
 
     #[token("=")]
     Assignment,
@@ -273,5 +277,61 @@ impl Tok {
                 expected: vec![TokName::Int],
             }),
         }
+    }
+
+    pub fn parens() -> (Self, Self) { (Tok::LeftParen, Tok::RghtParen) }
+    pub fn bracks() -> (Self, Self) { (Tok::LeftBrack, Tok::RghtBrack) }
+    pub fn curlys() -> (Self, Self) { (Tok::LeftCurly, Tok::RghtCurly) }
+    pub fn angles() -> (Self, Self) { (Tok::LeftAngle, Tok::RghtAngle) }
+}
+
+impl ToString for Tok {
+    fn to_string(&self) -> String {
+        use Tok::*;
+
+        match self {
+            Comma => ", ",
+            Semicolon => "; ",
+            Bang => "! ",
+            Plus => "+ ",
+            Minus => "- ",
+            AsterickSet(count) => return "*".repeat(*count as _) + " ",
+            Divider => "/ ",
+            Modulus => "% ",
+            BitOR => "| ",
+            BitXOR => "^ ",
+            BitShiftR => ">> ",
+            BitShiftL => "<< ",
+            Dot => ". ",
+            AmpersandSet(count) => return "&".repeat(*count as _) + " ",
+            Or => "|| ",
+            LessOrEqual => "<= ",
+            GreaterOrEqual => ">= ",
+            Equal => "== ",
+            Inequal => "!= ",
+            Question => "? ",
+            Colon => ": ",
+            At => "@ ",
+            LeftParen => "( ",
+            RghtParen => ") ",
+            LeftCurly => "{ ",
+            RghtCurly => "} ",
+            LeftBrack => "[ ",
+            RghtBrack => "] ",
+            LeftAngle => "< ",
+            RghtAngle => "> ",
+            LeftArrow => "<- ",
+            RghtArrow => "-> ",
+            Assignment => "= ",
+            VarName(name) => return ToString::to_string(name),
+            TypeName(name) => return ToString::to_string(name),
+            Int(value) => return value.to_string(),
+            Float(value) => return value.to_string(),
+            Bool(value) => return value.to_string(),
+            Strin(value) => value,
+            Error => "!error!",
+            Whitespace => " ",
+        }
+        .into()
     }
 }

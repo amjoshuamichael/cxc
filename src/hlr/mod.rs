@@ -36,6 +36,7 @@ pub fn hlr(
 
     let code = block_around_expr(code);
     let mut output = FuncRep::from(code, comp_data.clone(), info);
+
     infer_types(&mut output);
     handle_large_returns(&mut output);
     assign_struct(&mut output);

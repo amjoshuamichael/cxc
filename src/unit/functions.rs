@@ -187,15 +187,21 @@ impl<'a> CompData<'a> {
         module: &Module<'a>,
     ) {
         let function_type = self.get_type(info).unwrap();
+        let TypeEnum::Func(llvm_function_type) = function_type.as_type_enum()
+            else { panic!() };
 
         let empty_function = module.add_function(
             &*info.to_string(),
-            function_type.to_any_type(context).into_function_type(),
+            llvm_function_type.llvm_func_type(context),
             None,
         );
 
-        self.compiled.insert(info.clone(), empty_function.into());
-        self.func_types.insert(info.clone(), function_type);
+        self.compiled.insert(info.clone(), empty_function);
+        self.func_types.insert(info.clone(), function_type.clone());
+        self.globals.insert(
+            info.name.clone(),
+            (function_type, empty_function.as_global_value()),
+        );
     }
 
     pub fn get_type(&self, info: &UniqueFuncInfo) -> Option<Type> {

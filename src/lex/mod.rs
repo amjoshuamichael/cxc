@@ -115,7 +115,7 @@ impl<N: Ident> ParseContext<N> {
         let token = self.inner.get(at);
 
         if crate::DEBUG && log && let Some(token) = token {
-            print!("{:?}", token);
+            print!("{}", token.to_string());
         }
 
         token.map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))

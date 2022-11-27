@@ -86,3 +86,85 @@ fn return_large_struct() {
         12111
     )
 }
+
+#[test]
+fn first_class() {
+    xc_test!(
+        "
+        double(in: i32, i_want_zero: bool): i32 {
+            ? i_want_zero { ; 0 }
+
+            ; in * 2
+        }
+
+        triple(in: i32, i_want_zero: bool): i32 {
+            ? i_want_zero { ; 0 }
+
+            ; in * 3
+        }
+
+        get_a_function(multiply_amount: i32): (i32, bool) -> i32 {
+            ? multiply_amount == 2 { ; double }
+
+            ; triple
+        }
+
+        run_with_5(function: (i32, bool) -> i32): i32 {
+            #assert_eq<i32>(function(5, true), 0)
+
+            ; function(5, false)
+        }
+
+        main(): i32 {
+            double: (i32, bool) -> i32 = get_a_function(2)
+            ten: i32 = run_with_5(double)
+            assert_eq<i32>(ten, 10)
+
+            triple: (i32, bool) -> i32 = get_a_function(3)
+            fifteen: i32 = run_with_5(triple)
+            assert_eq<i32>(fifteen, 15)
+
+            ; 0
+        }
+        "
+    )
+}
+
+#[test]
+fn store_first_class() {
+    xc_test!(
+        "
+        Operation {
+            func: (i32) -> i32
+
+            .run(input: i32): i32 {
+                ; (self.func)(input)
+            }
+        }
+
+        double(in: i32): i32 { ; in * 2 }
+
+        triple(in: i32): i32 { ; in * 3 }
+
+        get_operation(multiply_amount: i32): Operation {
+            ? multiply_amount == 2 { 
+                ; Operation { func = double } 
+            }
+
+            ; Operation { func = triple } 
+        }
+
+        main(): i32 {
+            double_operation: Operation = get_operation(2)
+            ten: i32 = double_operation.run(5)
+            assert_eq<i32>(ten, 10)
+
+            triple_operation: Operation = get_operation(3)
+            sixty: i32 = triple_operation.run(20)
+            assert_eq<i32>(sixty, 60)
+
+            ; 0
+        }
+        "
+    )
+}

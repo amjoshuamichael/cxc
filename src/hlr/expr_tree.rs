@@ -3,7 +3,7 @@ use crate::parse::*;
 use crate::typ::FloatType;
 use crate::unit::UniqueFuncInfo;
 use crate::Type;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
 
 #[derive(Default, Clone)]
 pub struct ExprTree {
@@ -168,6 +168,7 @@ impl Debug for ExprNode {
                 write!(fmt, "{parts:?}")
             },
             Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
+            FirstClassCall { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
             Ident { name, .. } => write!(fmt, "{name}"),
             MakeVar {
                 var_type,
@@ -237,6 +238,11 @@ pub enum NodeData {
         a: Vec<ExprID>,
         is_method: bool,
     },
+    FirstClassCall {
+        ret_type: Type,
+        f: ExprID,
+        a: Vec<ExprID>,
+    },
     Member {
         ret_type: Type,
         object: ExprID,
@@ -302,6 +308,7 @@ impl NodeData {
             | IfThenElse { ret_type, .. }
             | SetVar { ret_type, .. }
             | Call { ret_type, .. }
+            | FirstClassCall { ret_type, .. }
             | Block { ret_type, .. }
             | Index { ret_type, .. }
             | Member { ret_type, .. } => ret_type.clone(),
@@ -381,6 +388,22 @@ impl NodeData {
                     }
                     call += ">";
                 }
+
+                call += "(";
+                for (a, arg) in args.iter().enumerate() {
+                    if a > 0 {
+                        call += ", ";
+                    }
+                    call += &*tree.get(*arg).to_string(tree);
+                }
+                call += ")";
+                call
+            },
+            FirstClassCall { f, a: args, .. } => {
+                // TODO: support is_method
+                let mut call = "(".into();
+                call += &*tree.get(*f).to_string(tree);
+                call += ")";
 
                 call += "(";
                 for (a, arg) in args.iter().enumerate() {

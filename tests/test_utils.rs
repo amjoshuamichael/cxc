@@ -65,6 +65,7 @@ macro_rules! xc_test {
 
         unit.add_lib(cxc::library::StdLib);
         unit.add_lib(cxc::library::TestLib);
+
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
         unit.push_script($code);

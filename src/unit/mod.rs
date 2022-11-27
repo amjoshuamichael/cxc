@@ -17,7 +17,6 @@ use inkwell::targets::RelocMode;
 use inkwell::targets::Target;
 use inkwell::targets::TargetMachine;
 use inkwell::values::*;
-use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -66,6 +65,7 @@ pub struct Unit<'u> {
 pub struct CompData<'u> {
     pub(crate) types: HashMap<TypeName, Type>,
     pub(crate) aliases: HashMap<TypeName, TypeAlias>,
+    pub(crate) globals: HashMap<VarName, (Type, GlobalValue<'u>)>,
     compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
     func_types: HashMap<UniqueFuncInfo, Type>,
     func_code: HashMap<FuncDeclInfo, FuncCode>,
@@ -344,13 +344,10 @@ impl<'u> Unit<'u> {
             func_type.as_type_enum() else { panic!() };
         let ret_type = func_type_inner.ret_type();
 
-        let ink_func_ptr_type = func_type
-            .to_any_type(&self.context)
-            .into_function_type()
-            .ptr_type(AddressSpace::Global);
+        let ink_func_ptr_type = func_type.to_any_type(&self.context).into_pointer_type();
 
         let ink_func_type =
-            func_type.to_any_type(&self.context).into_function_type();
+            func_type_inner.llvm_func_type(&self.context);
 
         let func_info = UniqueFuncInfo {
             name: name.into(),

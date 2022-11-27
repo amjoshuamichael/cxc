@@ -49,7 +49,11 @@ pub enum TokName {
     LeftBrack,
     RightBrack,
     LeftAngle,
+    LeftArrow,
+    RightArrow,
+
     RightAngle,
+
     Assignment,
 
     VarName,
@@ -101,6 +105,8 @@ impl From<Tok> for TokName {
             RghtBrack => TokName::RightBrack,
             LeftAngle => TokName::LeftAngle,
             RghtAngle => TokName::RightAngle,
+            LeftArrow => TokName::LeftArrow,
+            RghtArrow => TokName::RightArrow,
             Assignment => TokName::Assignment,
             VarName(_) => TokName::VarName,
             TypeName(_) => TokName::TypeName,

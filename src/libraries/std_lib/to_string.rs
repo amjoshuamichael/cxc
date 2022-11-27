@@ -50,8 +50,9 @@ impl Library for ToStringLib {
 pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     let string_type = comp_data.get_by_name(&"String".into()).unwrap();
 
-    let to_string = VarName::from("to_string");
-    let input_var = VarName::from("input");
+    let to_string = box Expr::Ident(VarName::from("to_string"));
+    let input_var = box Expr::Ident(VarName::from("input"));
+    let push_string = box Expr::Ident(VarName::from("push_string"));
 
     let expr = match typ.clone().get_deref().unwrap().as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
@@ -78,8 +79,6 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             );
             statements.push(make_var);
 
-            let push_string = VarName::from("push_string");
-
             for (field_index, field) in fields.iter().enumerate() {
                 let field_prefix = if field_index > 0 {
                     String::from(", ") + &*field.0.to_string() + " = "
@@ -97,10 +96,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 );
                 statements.push(push_prefix_call);
 
-                let field = Expr::Member(
-                    box Expr::Ident(input_var.clone()),
-                    field.0.clone(),
-                );
+                let field = Expr::Member(input_var.clone(), field.0.clone());
 
                 let field_ref = Expr::UnarOp(Opcode::Ref(1), box field);
 
@@ -143,7 +139,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             );
             statements.push(make_var);
 
-            let push_string = VarName::from("push_string");
+            let push_string = box Expr::Ident(VarName::from("push_string"));
 
             for index in 0..*count {
                 let comma = if index > 0 {
@@ -168,10 +164,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     vec![Expr::UnarOp(
                         Opcode::Ref(1),
                         box Expr::Index(
-                            box Expr::UnarOp(
-                                Opcode::Deref(1),
-                                box Expr::Ident(input_var.clone()),
-                            ),
+                            box Expr::UnarOp(Opcode::Deref(1), input_var.clone()),
                             box Expr::Number(index as u128),
                         ),
                     )],
@@ -203,10 +196,10 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     };
 
     Some(FuncCode {
-        name: to_string.clone(),
+        name: VarName::from("to_string"),
         ret_type: TypeAlias::Named("String".into()),
         args: vec![VarDecl {
-            name: input_var,
+            name: VarName::from("input"),
             typ: Some(typ.clone().into()),
         }],
         generic_count: 0,

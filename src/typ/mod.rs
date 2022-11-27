@@ -9,6 +9,7 @@ mod kind;
 mod nested_field_count;
 mod size;
 mod typ_or_alias;
+use inkwell::types::FunctionType;
 pub use kind::Kind;
 pub use typ_or_alias::TypeOrAlias;
 
@@ -64,7 +65,8 @@ impl Type {
             TypeEnum::Int(_)
             | TypeEnum::Ref(_)
             | TypeEnum::Float(_)
-            | TypeEnum::Bool(_) => ReturnStyle::Direct,
+            | TypeEnum::Bool(_)
+            | TypeEnum::Func(_) => ReturnStyle::Direct,
             TypeEnum::Struct(_) | TypeEnum::Array(_) => {
                 if self.size() > 16 {
                     ReturnStyle::Pointer

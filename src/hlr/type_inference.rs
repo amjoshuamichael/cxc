@@ -21,8 +21,19 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 ref mut var_type,
                 ref name,
             } => {
-                let instances = hlr.data_flow.get_mut(&name.clone()).unwrap();
-                *var_type = instances.typ.clone();
+                match hlr.data_flow.get(&name.clone()) {
+                    Some(data_flow_info) => {
+                        *var_type = data_flow_info.typ.clone();
+                    }
+                    None => {
+                        let global = hlr
+                            .types
+                            .globals
+                            .get(&name.clone())
+                            .expect(&*format!("could not find identifier {name}"));
+                        *var_type = global.0.clone();
+                    }
+                }
             },
             _ => {},
         };

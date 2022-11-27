@@ -22,7 +22,7 @@ pub struct FuncRep<'a> {
     pub data_flow: HashMap<VarName, DataFlowInfo>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct DataFlowInfo {
     pub typ: Type,
     pub arg_index: Option<u32>,
@@ -64,6 +64,14 @@ impl<'a> FuncRep<'a> {
                     arg_index: Some(a as u32),
                 },
             );
+        }
+
+        for expr in code.code.iter() {
+            if let Expr::Ident(name) = expr {
+                if !new.data_flow.contains_key(name) {
+                    new.data_flow.insert(name.clone(), DataFlowInfo::default());
+                }
+            }
         }
 
         new.add_expr(code.code, ExprID::ROOT);
@@ -321,17 +329,27 @@ impl<'a> FuncRep<'a> {
                     arg_ids.push(self.add_expr(arg, space));
                 }
 
-                let generics = generics
-                    .iter()
-                    .map(|spec| self.get_type_spec(spec).unwrap())
-                    .collect();
+                let new_data = if let Expr::Ident(ref func_name) = *f 
+                    && !self.data_flow.contains_key(func_name) {
+                    let generics = generics
+                        .iter()
+                        .map(|spec| self.get_type_spec(spec).unwrap())
+                        .collect();
 
-                let new_data = NodeData::Call {
-                    ret_type: Type::never(),
-                    f,
-                    generics,
-                    a: arg_ids,
-                    is_method,
+                    NodeData::Call {
+                        ret_type: Type::never(),
+                        f: func_name.clone(),
+                        generics,
+                        a: arg_ids,
+                        is_method,
+                    }
+                } else {
+                    let f = self.add_expr(*f, space);
+                    NodeData::FirstClassCall {
+                        ret_type: Type::never(),
+                        f,
+                        a: arg_ids,
+                    }
                 };
 
                 self.tree.replace(space, new_data);
@@ -405,6 +423,9 @@ impl<'a> FuncRep<'a> {
 
                 self.tree.replace(space, new_index);
                 space
+            },
+            Expr::Parens(expr) => {
+                self.add_expr(*expr, parent)
             },
             Expr::Op(_) | Expr::ArgList(..) => unreachable!(),
         }

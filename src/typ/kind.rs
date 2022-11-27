@@ -51,6 +51,15 @@ impl Kind for FuncType {
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        self.llvm_func_type(context)
+            .ptr_type(AddressSpace::Global)
+            .try_into()
+            .unwrap()
+    }
+}
+
+impl FuncType {
+    pub fn llvm_func_type<'t>(&self, context: &'t Context) -> FunctionType<'t> {
         let return_style = self.ret_type.return_style();
 
         if return_style != ReturnStyle::Pointer {
@@ -62,7 +71,7 @@ impl Kind for FuncType {
                 .map(|t| t.to_basic_type(context).into())
                 .collect();
 
-            return_type.fn_type(&args[..], true).try_into().unwrap()
+            return_type.fn_type(&args[..], true)
         } else {
             let args: Vec<BasicMetadataTypeEnum> =
                 once(&self.ret_type.clone().get_ref())
@@ -73,8 +82,6 @@ impl Kind for FuncType {
             Type::never()
                 .to_basic_type(context)
                 .fn_type(&args[..], true)
-                .try_into()
-                .unwrap()
         }
     }
 }

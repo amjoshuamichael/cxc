@@ -42,6 +42,14 @@ impl<'a> CompData<'a> {
 
                 Type::new_struct(typed_fields, methods.to_vec())
             },
+            TypeAlias::Function(args, ret_type) => {
+                let args = args
+                    .iter()
+                    .map(|arg| self.get_spec(arg, generics))
+                    .collect::<Option<Vec<Type>>>()?;
+                let ret_type = self.get_spec(ret_type, generics)?;
+                ret_type.func_with_args(args)
+            },
             TypeAlias::Generic(name, generic_aliases) => {
                 let generics = generic_aliases
                     .iter()
