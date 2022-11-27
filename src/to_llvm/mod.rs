@@ -1,4 +1,4 @@
-use crate::typ::Kind;
+use crate::typ::{Kind, ReturnStyle};
 use crate::{Type, TypeEnum};
 use crate::lex::VarName;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
@@ -7,9 +7,10 @@ use crate::parse::Opcode::*;
 use crate::unit::*;
 use core::cell::RefCell;
 use std::rc::Rc;
+use inkwell::attributes::{AttributeLoc, Attribute};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::types::*;
+use inkwell::{types::*};
 use inkwell::values::*;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
@@ -24,6 +25,7 @@ pub struct FunctionCompilationState<'f> {
     pub comp_data: Rc<CompData<'f>>,
     pub arg_names: Vec<VarName>,
     pub llvm_ir_uuid: RefCell<u32>,
+    pub ret_type: Type,
 }
 
 impl<'f> FunctionCompilationState<'f> {
@@ -37,7 +39,16 @@ impl<'f> FunctionCompilationState<'f> {
     pub fn delete(self) {}
 }
 
-pub fn compile_routine<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) -> Option<AnyValueEnum<'a>>{
+pub fn compile_routine<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) -> Option<AnyValueEnum<'a>> {
+    if fcs.ret_type.return_style() == ReturnStyle::Pointer {
+        // informs llvm that we are returning via the first parameter in the function, which is a
+        // pointer.
+        let sret_id = Attribute::get_named_enum_kind_id("sret");
+        let any_type = fcs.ret_type.to_any_type(&fcs.context);
+        let sret_attribute = fcs.context.create_type_attribute(sret_id, any_type);
+        fcs.function.add_attribute(AttributeLoc::Param(0), sret_attribute);
+    }
+
     build_stack_allocas(fcs);
     compile(fcs, ExprID::ROOT)
 }
@@ -74,7 +85,7 @@ fn compile<'comp, 'a>(
     let expr = fcs.tree.get(expr_id);
 
     if crate::DEBUG {
-        print!("c{expr_id:?} ");
+        println!("compiling: {}", expr.to_string(&fcs.tree));
     }
 
     let output: Option<AnyValueEnum> = match expr {
@@ -426,9 +437,24 @@ fn compile<'comp, 'a>(
         },
         Return { to_return, .. } => {
             if let Some(to_return) = to_return {
-                let val: BasicValueEnum = 
+                let ret_val: BasicValueEnum = 
                     compile(fcs, to_return).unwrap().try_into().unwrap();
-                fcs.builder.build_return(Some(&val));
+
+                let type_of_return = fcs.tree.get(to_return).ret_type();
+                let raw_type_of_return = type_of_return.raw_return_type();
+
+
+                if type_of_return == raw_type_of_return {
+                    fcs.builder.build_return(Some(&ret_val));
+                } else {
+                    let casted_value = fcs.builder.build_alloca(
+                        raw_type_of_return.to_basic_type(&fcs.context), 
+                        "castedret"
+                    );
+                    fcs.builder.build_store(casted_value, ret_val);
+                    let loaded_cast = fcs.builder.build_load(casted_value, "loadcast");
+                    fcs.builder.build_return(Some(&loaded_cast));
+                }
             } else {
                 fcs.builder.build_return(None);
             }
@@ -480,7 +506,7 @@ fn compile<'comp, 'a>(
     };
 
     if crate::DEBUG {
-        print!("d{expr_id:?}");
+        println!("done compiling: {}", fcs.tree.get(expr_id).to_string(&fcs.tree));
     }
 
     output
@@ -539,7 +565,7 @@ fn compile_as_ptr<'comp, 'a>(
             let index = compile(fcs, index).unwrap().into_int_value();
 
             let gepped_array = unsafe {
-                fcs.builder.build_gep(
+                fcs.builder.build_in_bounds_gep(
                     object,
                     &[fcs.context.i32_type().const_int(0, false), index],
                     "gep",
@@ -596,12 +622,19 @@ fn internal_function<'comp, 'a>(
         },
         "memmove" => {
             let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
-
             let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
-
             let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
 
             fcs.builder.build_memmove(dest, 1, src, 1, size).unwrap();
+
+            None
+        },
+        "memcpy" => {
+            let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
+
+            fcs.builder.build_memcpy(dest, 1, src, 1, size).unwrap();
 
             None
         },

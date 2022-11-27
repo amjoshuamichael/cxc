@@ -92,8 +92,8 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
 
     members(&mut atoms);
     calls(&mut atoms);
-    unops(&mut atoms);
-    binops(&mut atoms);
+    unary_ops(&mut atoms);
+    binary_ops(&mut atoms);
 
     assert_eq!(atoms.len(), 1);
     Ok(atoms[0].clone())
@@ -131,10 +131,10 @@ pub fn calls(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn unops(atoms: &mut Vec<Expr>) {
-    for prec_level in 0..=Opcode::MAX_UN_PREC {
+pub fn unary_ops(atoms: &mut Vec<Expr>) {
+    for prec_level in 0..=Opcode::MAX_UNARY_PREC {
         loop {
-            let opcode_pos = atoms.iter().position(|atom| match atom {
+            let opcode_pos = atoms.iter().rposition(|atom| match atom {
                 Expr::Op(opcode) => opcode.un_prec_level() == Some(prec_level),
                 _ => false,
             });
@@ -150,8 +150,8 @@ pub fn unops(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn binops(atoms: &mut Vec<Expr>) {
-    for prec_level in 0..=Opcode::MAX_BIN_PREC {
+pub fn binary_ops(atoms: &mut Vec<Expr>) {
+    for prec_level in 0..=Opcode::MAX_BINARY_PREC {
         loop {
             let opcode_pos = atoms.iter().position(|atom| match atom {
                 Expr::Op(opcode) => opcode.bin_prec_level() == Some(prec_level),

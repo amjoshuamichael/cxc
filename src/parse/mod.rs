@@ -270,5 +270,13 @@ fn parse_if(ctx: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
     let i = parse_expr(ctx)?;
     let t = parse_block(ctx)?;
 
-    Ok(Expr::IfThen(box i, box t))
+    if ctx.peek_tok()? == Tok::Colon {
+        ctx.next_tok()?;
+
+        let e = parse_block(ctx)?;
+
+        Ok(Expr::IfThenElse(box i, box t, box e))
+    } else {
+        Ok(Expr::IfThen(box i, box t))
+    }
 }

@@ -5,7 +5,6 @@ use crate::Type;
 
 mod rust_type_name_conversion;
 
-// TODO: cache types
 impl<'a> CompData<'a> {
     pub fn add_type_alias(&mut self, name: TypeName, a: TypeAlias) {
         self.aliases.insert(name, a);
@@ -14,7 +13,6 @@ impl<'a> CompData<'a> {
     pub fn contains(&self, key: &TypeName) -> bool { self.aliases.contains_key(key) }
 
     pub fn get_by_name(&self, name: &TypeName) -> Option<Type> {
-        // TODO: cache types
         {
             let cached_type = self.types.get(name);
             if cached_type.is_some() {

@@ -215,8 +215,5 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     })
 }
 
-fn to_string<T: ToString + std::fmt::Debug>(val: &T) -> String {
-    dbg!(&val);
-    val.to_string()
-}
+fn to_string<T: ToString + std::fmt::Debug>(val: &T) -> String { val.to_string() }
 fn string_to_string(val: &String) -> String { format!(r#""{}""#, val) }

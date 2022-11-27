@@ -1,4 +1,3 @@
-use crate::hlr::hlr_anonymous;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
 use crate::lex::*;
@@ -9,6 +8,7 @@ use crate::typ::FuncType;
 use crate::typ::Kind;
 use crate::Type;
 use crate::TypeEnum;
+use crate::typ::ReturnStyle;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -202,7 +202,10 @@ impl<'u> Unit<'u> {
 
             let func_reps: Vec<FuncOutput> = set
                 .drain(..)
-                .map(|info| hlr(info, self.comp_data.clone()))
+                .map(|info| {
+                    let code = self.comp_data.get_code(info.clone()).unwrap();
+                    hlr(info, self.comp_data.clone(), code)
+                })
                 .collect();
 
             set = func_reps
@@ -248,7 +251,7 @@ impl<'u> Unit<'u> {
             generics: Vec::new(),
         };
 
-        let mut func_rep = hlr_anonymous(info.clone(), self.comp_data.clone(), code);
+        let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code);
 
         {
             let dependencies = func_rep.get_func_dependencies().drain().collect();
@@ -286,9 +289,8 @@ impl<'u> Unit<'u> {
         let TypeEnum::Func(FuncType { ret_type, .. }) = 
             func_rep.func_type.as_type_enum() else { panic!() };
 
-        let value = if ret_type.can_be_returned_directly() {
+        let value = if ret_type.return_style() != ReturnStyle::Pointer {
             let new_func: fn() -> [u8; 8] = unsafe { transmute(func_addr) };
-            dbg!(new_func());
             Value::new_from_arr(ret_type.clone(), new_func())
         } else {
             let data_vec: Vec<u8> = vec![0; ret_type.size()];
@@ -377,7 +379,7 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap()
         };
 
-        if ret_type.can_be_returned_directly() {
+        if ret_type.return_style() != ReturnStyle::Pointer {
             let arg_vals: Vec<BasicMetadataValueEnum> = function
                 .get_params()
                 .iter()
@@ -421,17 +423,6 @@ impl<'u> Unit<'u> {
         opaque_type
     }
 
-    pub fn add_reflect_type<T: XcReflect>(&mut self) -> Type {
-        let decl = T::type_decl();
-
-        {
-            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-            comp_data.add_type_alias(decl.name, decl.typ.clone());
-        }
-
-        self.comp_data.get_spec(&decl.typ, &Vec::new()).unwrap()
-    }
-
     fn new_func_comp_state<'s>(
         &'s self,
         tree: ExprTree,
@@ -439,6 +430,7 @@ impl<'u> Unit<'u> {
         arg_names: Vec<VarName>,
     ) -> FunctionCompilationState<'s> {
         FunctionCompilationState {
+            ret_type: tree.return_type(),
             tree,
             variables: HashMap::new(),
             function,
@@ -461,6 +453,16 @@ impl<'u> Unit<'u> {
     }
 
     pub unsafe fn get_fn_by_info<I, O>(&self, info: &UniqueFuncInfo) -> unsafe extern "C" fn(_: I, ...) -> O {
+        assert!(
+            self.
+                module
+                .get_function(&*info.to_string())
+                .unwrap()
+                .get_param_iter()
+                .all(|param_type| !param_type.is_array_value()),
+            "Cannot run function that has array value as parameter. Pass in an array pointer instead."
+        );
+
         let func_addr = self
             .execution_engine
             .borrow()

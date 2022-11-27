@@ -13,7 +13,7 @@ memoize = "0.3.1"
 
 bytemuck = "1.12.3"
 
-cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
+cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive" }
 
 # these libraries are re-exported into cxc
 

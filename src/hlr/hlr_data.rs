@@ -96,14 +96,6 @@ impl<'a> FuncRep<'a> {
 
     pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
 
-    pub fn move_up_arg_indices(&mut self) {
-        for (_, flow) in self.data_flow.iter_mut() {
-            if let Some(arg_index) = &mut flow.arg_index {
-                *arg_index += 1;
-            }
-        }
-    }
-
     pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
         self.types.get_spec(alias, &self.info.generics)
     }
@@ -171,7 +163,6 @@ impl<'a> FuncRep<'a> {
                     a: vec![array_space],
                     generics: vec![arr_type],
                     is_method: false,
-                    return_by_ref: false,
                 };
                 self.tree.replace(call_space, call_data);
                 call_space
@@ -341,7 +332,6 @@ impl<'a> FuncRep<'a> {
                     generics,
                     a: arg_ids,
                     is_method,
-                    return_by_ref: false,
                 };
 
                 self.tree.replace(space, new_data);

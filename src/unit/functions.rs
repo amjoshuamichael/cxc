@@ -50,6 +50,28 @@ impl<'a> CompData<'a> {
         });
 
         out.insert_intrinsic(FuncCode {
+            name: VarName::from("memcpy"),
+            ret_type: TypeAlias::Int(32),
+            args: vec![
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                },
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                },
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(Type::i(64).into()),
+                },
+            ],
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            method_of: None,
+        });
+
+        out.insert_intrinsic(FuncCode {
             name: VarName::from("size_of"),
             ret_type: TypeAlias::Int(64),
             args: Vec::new(),

@@ -28,8 +28,10 @@ pub enum Opcode {
     Dot,
 }
 
+use Opcode::*;
+
 impl Opcode {
-    pub const MAX_UN_PREC: u8 = 1;
+    pub const MAX_UNARY_PREC: u8 = 1;
     pub fn un_prec_level(&self) -> Option<u8> {
         use Opcode::*;
 
@@ -40,10 +42,8 @@ impl Opcode {
         }
     }
 
-    pub const MAX_BIN_PREC: u8 = 10;
+    pub const MAX_BINARY_PREC: u8 = 10;
     pub fn bin_prec_level(&self) -> Option<u8> {
-        use Opcode::*;
-
         // lower is more significant
         match self {
             Or => Some(10),
@@ -59,5 +59,39 @@ impl Opcode {
             Exponential => Some(0),
             _ => None,
         }
+    }
+}
+
+impl ToString for Opcode {
+    fn to_string(&self) -> String {
+        match self {
+            Exponential => "**",
+            Plus => "+",
+            Minus => "-",
+            Multiplier => "*",
+            Divider => "/",
+            Modulus => "%",
+            BitAND => "&",
+            BitOR => "|",
+            BitXOR => "^",
+            BitShiftL => "<<",
+            BitShiftR => ">>",
+            Not => "!",
+            Or => "||",
+            And => "&&",
+            LessThan => "<",
+            GrtrThan => ">",
+            LessOrEqual => "<=",
+            GreaterOrEqual => ">=",
+            Equal => "==",
+            Inequal => "!=",
+            TernaryQuestion => "?",
+            TernaryColon => ":",
+            Assignment => "=",
+            Ref(count) => return String::from("&".repeat(*count as usize)),
+            Deref(count) => return String::from("*".repeat(*count as usize)),
+            Dot => ".",
+        }
+        .into()
     }
 }

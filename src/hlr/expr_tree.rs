@@ -3,7 +3,7 @@ use crate::parse::*;
 use crate::typ::FloatType;
 use crate::unit::UniqueFuncInfo;
 use crate::Type;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 #[derive(Default, Clone)]
 pub struct ExprTree {
@@ -56,6 +56,10 @@ impl ExprTree {
 
     pub fn get(&self, at: ExprID) -> NodeData { self.nodes[at.0].data.clone() }
 
+    pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData {
+        &mut self.nodes[at.0].data
+    }
+
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
 
     pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
@@ -65,11 +69,25 @@ impl ExprTree {
             return (of, parent);
         }
 
-        match self.get(parent) {
-            Block { .. } => (of, parent),
-            _ => self.statement_and_block(parent),
+        if matches!(self.get(parent), Block { .. }) {
+            (of, parent)
+        } else {
+            self.statement_and_block(parent)
         }
     }
+
+    pub fn with_space(
+        &mut self,
+        parent: ExprID,
+        closure: impl Fn(ExprID, &mut Self) -> NodeData,
+    ) -> ExprID {
+        let new_space = self.make_one_space(parent);
+        let new_data = closure(new_space, self);
+        self.replace(new_space, new_data);
+        new_space
+    }
+
+    pub fn return_type(&self) -> Type { self.get(ExprID::ROOT).ret_type() }
 
     fn node_count(&self) -> usize { self.nodes.len() }
 
@@ -175,7 +193,6 @@ impl Debug for ExprNode {
     }
 }
 
-// TODO: refactor Call to use UniqueFuncInfo
 // TODO: combine SetVar and MakeVar
 #[derive(Clone, Debug)]
 pub enum NodeData {
@@ -219,7 +236,6 @@ pub enum NodeData {
         generics: Vec<Type>,
         a: Vec<ExprID>,
         is_method: bool,
-        return_by_ref: bool,
     },
     Member {
         ret_type: Type,
@@ -350,13 +366,9 @@ impl NodeData {
                 f,
                 generics,
                 a: args,
-                is_method,
                 ..
             } => {
-                if *is_method {
-                    todo!()
-                }
-
+                // TODO: support is_method
                 let mut call = f.to_string();
 
                 if generics.len() > 0 {
@@ -394,14 +406,14 @@ impl NodeData {
                 object
             },
             UnarOp { op, hs, .. } => {
-                let mut op = format!("{:?}", op);
+                let mut op = op.to_string();
                 op += &*tree.get(*hs).to_string(tree);
                 op
             },
             BinOp { lhs, op, rhs, .. } => {
                 let mut binop = tree.get(*lhs).to_string(tree);
                 binop += " ";
-                binop += &*format!("{:?}", op);
+                binop += &*op.to_string();
                 binop += " ";
                 binop += &*tree.get(*rhs).to_string(tree);
                 binop
@@ -425,17 +437,20 @@ impl NodeData {
             While { w, d, .. } => {
                 let mut wh = "@ ".into();
                 wh += &*tree.get(*w).to_string(tree);
+                wh += " ";
                 wh += &*tree.get(*d).to_string(tree);
                 wh
             },
             Block { stmts, .. } => {
-                let mut bl = "{ \n".into();
+                let mut bl = "{".into();
                 for (s, stmt) in stmts.iter().enumerate() {
-                    if s > 0 {
+                    bl += &*tree.get(*stmt).to_string(tree);
+
+                    if s != stmts.len() - 1 {
                         bl += "\n"
                     }
-                    bl += &*tree.get(*stmt).to_string(tree);
                 }
+                bl += "}";
                 bl
             },
             Return { to_return, .. } => {

@@ -6,6 +6,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 mod kind;
+mod nested_field_count;
 mod size;
 mod typ_or_alias;
 pub use kind::Kind;
@@ -24,18 +25,87 @@ impl Default for Type {
     fn default() -> Self { Type::never() }
 }
 
+#[derive(PartialEq, Eq, Debug)]
+pub enum ReturnStyle {
+    Direct,
+    ThroughI64,
+    ThroughI64I32,
+    ThroughI64I64,
+    Pointer,
+    Void,
+}
+
 impl Type {
     fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
     pub fn size(&self) -> usize { size::size_of_type(self.clone()) }
 
-    pub fn can_be_returned_directly(&self) -> bool {
-        match self.clone().as_type_enum() {
-            TypeEnum::Int(IntType { size }) => *size <= 64,
-            TypeEnum::Ref(..) => true,
-            TypeEnum::Float(_) => true,
-            TypeEnum::Array(_) => false,
-            _ => self.size() <= 8,
+    pub fn nested_field_count(&self) -> usize {
+        let mut total = 0;
+
+        match self.as_type_enum() {
+            TypeEnum::Struct(struct_type) => {
+                for (_, field_type) in &struct_type.fields {
+                    total += field_type.nested_field_count()
+                }
+            },
+            TypeEnum::Array(array_type) => {
+                total +=
+                    array_type.count as usize * array_type.base.nested_field_count();
+            },
+            _ => total += 1,
+        }
+
+        total
+    }
+
+    pub fn return_style(&self) -> ReturnStyle {
+        match self.as_type_enum() {
+            TypeEnum::Int(_)
+            | TypeEnum::Ref(_)
+            | TypeEnum::Float(_)
+            | TypeEnum::Bool(_) => ReturnStyle::Direct,
+            TypeEnum::Struct(_) | TypeEnum::Array(_) => {
+                if self.size() > 16 {
+                    ReturnStyle::Pointer
+                } else if self.nested_field_count() == 1 {
+                    ReturnStyle::Direct
+                } else if self.size() == 16 {
+                    ReturnStyle::ThroughI64I64
+                } else if self.size() == 12 {
+                    ReturnStyle::ThroughI64I32
+                } else if self.size() == 8 {
+                    ReturnStyle::ThroughI64
+                } else if self.size() == 8 {
+                    ReturnStyle::Direct
+                } else {
+                    todo!("cannot return style for this type: {:?}", self);
+                }
+            },
+            TypeEnum::Never => ReturnStyle::Void,
+            _ => todo!("cannot return style for this type: {:?}", self),
+        }
+    }
+
+    pub fn raw_return_type(&self) -> Type {
+        match self.return_style() {
+            ReturnStyle::ThroughI64 => Type::i(64),
+            ReturnStyle::ThroughI64I32 => Type::new_struct(
+                vec![
+                    (VarName::from("ret_0"), Type::i(64)),
+                    (VarName::from("ret_1"), Type::i(32)),
+                ],
+                Vec::new(),
+            ),
+            ReturnStyle::ThroughI64I64 => Type::new_struct(
+                vec![
+                    (VarName::from("ret_0"), Type::i(64)),
+                    (VarName::from("ret_1"), Type::i(64)),
+                ],
+                Vec::new(),
+            ),
+            ReturnStyle::Pointer | ReturnStyle::Void => Type::never(),
+            ReturnStyle::Direct => self.clone(),
         }
     }
 
@@ -65,7 +135,9 @@ impl Type {
         Some(output)
     }
 
-    pub fn get_ref(self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self })) }
+    pub fn get_ref(&self) -> Type {
+        Type::new(TypeEnum::Ref(RefType { base: self.clone() }))
+    }
 
     pub fn get_deref(self) -> Option<Type> {
         match &self.0.type_enum {

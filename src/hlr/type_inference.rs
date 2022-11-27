@@ -95,7 +95,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 let complete_deref = typ.complete_deref();
                 let TypeEnum::Struct(struct_type) = complete_deref
                     .as_type_enum()
-                    else { panic!() };
+                        else { panic!() };
 
                 *ret_type = struct_type.get_field_type(field).unwrap().clone();
 
@@ -139,6 +139,16 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     *var_type = type_by_id.get(&parts[0]).unwrap().clone().get_array(parts.len() as u32);
                 }
                 *type_by_id.get_mut(&n).unwrap() = var_type.clone();
+            }
+            NodeData::Block { ref mut ret_type, ref stmts } => {
+                match hlr.tree.get(*stmts.last().unwrap()) {
+                    NodeData::Return{to_return, ..} => {
+                        if to_return.is_some() {
+                            *ret_type = type_by_id.get(&to_return.unwrap()).unwrap().clone();
+                        }
+                    }
+                    _ => {}
+                }
             }
             _ => {},
         }

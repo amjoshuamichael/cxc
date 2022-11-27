@@ -51,8 +51,10 @@ impl Kind for FuncType {
     }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        if self.ret_type.can_be_returned_directly() {
-            let return_type = self.ret_type.to_basic_type(context);
+        let return_style = self.ret_type.return_style();
+
+        if return_style != ReturnStyle::Pointer {
+            let return_type = self.ret_type.raw_return_type().to_basic_type(context);
 
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
