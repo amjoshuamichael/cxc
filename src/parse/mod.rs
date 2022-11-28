@@ -1,6 +1,7 @@
 pub use crate::lex::ParseContext;
 pub use crate::lex::TokenStream;
 use crate::lex::{Lexer, Tok, TypeName, VarName};
+use crate::typ::TypeOrAlias;
 pub use opcode::Opcode;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,34 +23,72 @@ pub use structure::*;
 
 pub type GenericLabels = HashMap<TypeName, u8>;
 
+pub fn merge(one: &GenericLabels, another: &GenericLabels) -> GenericLabels {
+    one.iter()
+        .chain(another.iter())
+        .map(|(n, i)| (n.clone(), i.clone()))
+        .collect()
+}
+
 pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
     let mut declarations: Vec<Decl> = Vec::new();
 
     loop {
-        match lexer.next_tok()? {
-            Tok::VarName(name) => {
-                let generic_labels = parse_generics(&mut lexer)?;
-                let context = lexer.split(name, generic_labels);
-
-                declarations.push(Decl::Func(parse_func(context, None)?));
+        match lexer.peek_tok()? {
+            Tok::VarName(_) => {
+                declarations.push(Decl::Func(parse_func(
+                    &mut lexer,
+                    None,
+                    GenericLabels::new(),
+                )?));
             },
-            Tok::TypeName(name) => {
+            _ => {
+                // could either the type we are declaring methods for, as in:
+                //
+                // Struct.this(): # .. code
+                //
+                // or it could be the type we are declaring, as in:
+                //
+                // Struct = { x: i32, y: i32 }
                 let generic_labels = parse_generics(&mut lexer)?;
-                let context = lexer.split(name, generic_labels);
 
-                let (strct, methods) = parse_type_decl(context)?;
+                if matches!(lexer.peek_by(1)?, Tok::LeftAngle | Tok::Assignment)
+                    && generic_labels.len() == 0
+                {
+                    let type_name = lexer.get_type_name_next()?;
+                    let generic_labels = parse_generics(&mut lexer)?;
 
-                declarations.push(Decl::Type(strct));
+                    lexer.assert_next_tok_is(Tok::Assignment)?;
 
-                for m in methods {
-                    declarations.push(Decl::Func(m));
+                    let context = lexer.split(type_name, generic_labels);
+
+                    let type_decl = parse_type_decl(context)?;
+
+                    declarations.push(Decl::Type(type_decl));
+                } else {
+                    let mut method_of_parser =
+                        lexer.split(VarName::temp(), generic_labels.clone());
+                    let method_of = parse_type_alias(&mut method_of_parser)?;
+
+                    lexer.assert_next_tok_is(Tok::Dot)?;
+
+                    let methods = parse_one_or_list(
+                        Tok::curlys(),
+                        None,
+                        move |lexer| {
+                            parse_func(
+                                lexer,
+                                Some(method_of.clone()),
+                                generic_labels.clone(),
+                            )
+                        },
+                        &mut lexer,
+                    )?;
+
+                    for method in methods {
+                        declarations.push(Decl::Func(method));
+                    }
                 }
-            },
-            err => {
-                return Err(ParseError::UnexpectedTok {
-                    got: err,
-                    expected: vec![TokName::VarName, TokName::TypeName],
-                });
             },
         }
 
@@ -65,16 +104,12 @@ pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
 
 pub fn parse_generics(lexer: &mut Lexer) -> Result<GenericLabels, ParseError> {
     if lexer.peek_tok()? == Tok::LeftAngle {
-        let list = parse_list(
-            (Tok::LeftAngle, Tok::RghtAngle),
-            Some(Tok::Comma),
-            parse_generic_label,
-            lexer,
-        )?
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (s.clone(), i as u8))
-        .collect();
+        let list =
+            parse_list(Tok::angles(), Some(Tok::Comma), parse_generic_label, lexer)?
+                .iter()
+                .enumerate()
+                .map(|(i, s)| (s.clone(), i as u8))
+                .collect();
 
         Ok(list)
     } else {
@@ -93,10 +128,28 @@ pub fn parse_generic_label(lexer: &mut Lexer) -> Result<TypeName, ParseError> {
 }
 
 pub fn parse_func(
-    mut lexer: ParseContext<VarName>,
-    method_of: Option<TypeName>,
+    lexer: &mut Lexer,
+    method_of: Option<TypeAlias>,
+    outer_generics: GenericLabels,
 ) -> Result<FuncCode, ParseError> {
-    let args = parse_list(
+    let func_name = lexer.get_var_name_next()?;
+    let generic_labels = parse_generics(lexer)?;
+
+    let all_generics = merge(&generic_labels, &outer_generics);
+
+    if all_generics.len() != generic_labels.len() + outer_generics.len() {
+        todo!("reused generics error")
+    }
+
+    let func_context = lexer.split(func_name, all_generics);
+    parse_func_code(func_context, method_of)
+}
+
+pub fn parse_func_code(
+    mut lexer: ParseContext<VarName>,
+    method_of: Option<TypeAlias>,
+) -> Result<FuncCode, ParseError> {
+    let mut args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
         Some(Tok::Comma),
         parse_var_decl,
@@ -112,14 +165,14 @@ pub fn parse_func(
     let generic_count = lexer.generic_count() as u32;
     let (name, _) = lexer.return_info();
 
-    let generic_params = (0..(generic_count as u8))
-        .into_iter()
-        .map(|index| TypeAlias::GenParam(index))
-        .collect();
+    let method_of = method_of.map(|mo| TypeOrAlias::Alias(mo));
 
-    let method_of = method_of.map(|name| {
-        TypeAlias::Ref(box TypeAlias::Generic(name, generic_params)).into()
-    });
+    if let Some(method_of) = &method_of {
+        args.push(VarDecl {
+            name: VarName::from("self"),
+            typ: Some(method_of.clone()),
+        });
+    }
 
     Ok(FuncCode {
         name,
@@ -212,7 +265,7 @@ fn parse_stmt(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
 fn parse_setvar(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
     let assignable = parse_assignable(lexer)?;
 
-    assert_eq!(lexer.next_tok()?, Tok::Assignment);
+    lexer.assert_next_tok_is(Tok::Assignment)?;
 
     let rhs = parse_expr(lexer)?;
 
@@ -257,7 +310,7 @@ pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError>
 }
 
 fn parse_for(ctx: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
-    assert_eq!(ctx.next_tok()?, Tok::At);
+    ctx.assert_next_tok_is(Tok::At)?;
 
     let w = parse_expr(ctx)?;
     let d = parse_block(ctx)?;
@@ -266,7 +319,7 @@ fn parse_for(ctx: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
 }
 
 fn parse_if(ctx: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
-    assert_eq!(ctx.next_tok()?, Tok::Question);
+    ctx.assert_next_tok_is(Tok::Question)?;
 
     let i = parse_expr(ctx)?;
     let t = parse_block(ctx)?;

@@ -35,7 +35,12 @@ where
                     list.push(parser(lexer)?)
                 },
                 s if s == closer => break,
-                _ => panic!(),
+                err => {
+                    return Err(ParseError::UnexpectedTok {
+                        got: err,
+                        expected: vec![TokName::from(separator)],
+                    })
+                },
             }
         }
     } else {
@@ -52,4 +57,20 @@ where
     }
 
     Ok(list)
+}
+
+pub fn parse_one_or_list<E, F, T: TokenStream>(
+    opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
+    separator: Option<Tok>,
+    mut parser: F,
+    lexer: &mut T,
+) -> Result<Vec<E>, ParseError>
+where
+    F: FnMut(&mut T) -> Result<E, ParseError>,
+{
+    if lexer.peek_tok()? == opener_and_closer.0 {
+        parse_list(opener_and_closer, separator, parser, lexer)
+    } else {
+        Ok(vec![parser(lexer)?])
+    }
 }

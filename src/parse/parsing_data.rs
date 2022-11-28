@@ -105,6 +105,8 @@ impl Script {
             .filter(|d| matches!(d, Decl::Func { .. }))
             .map(|d| d.as_func().unwrap())
     }
+
+    pub fn decl_count(&self) -> usize { self.0.len() }
 }
 
 #[derive(Debug, Clone)]

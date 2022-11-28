@@ -74,9 +74,9 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
         } else if matches!(last_atom.clone(), Expr::Ident(_))
             && matches!(next, Tok::LeftBrack) {
 
-            assert_eq!(lexer.next_tok()?, Tok::LeftBrack);
+            lexer.next_tok()?;
             let index = parse_expr(lexer)?;
-            assert_eq!(lexer.next_tok()?, Tok::RghtBrack);
+            lexer.assert_next_tok_is(Tok::RghtBrack)?;
 
             let object = atoms.pop().unwrap();
 
@@ -191,7 +191,7 @@ pub fn parse_struct_literal(lexer: &mut ParseContext<VarName>, struct_name: Type
         |lexer| {
             let field = lexer.next_tok()?.var_name()?;
 
-            assert_eq!(lexer.next_tok()?, Tok::Assignment);
+            lexer.assert_next_tok_is(Tok::Assignment)?;
 
             let rhs = parse_expr(lexer)?;
 

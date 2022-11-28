@@ -1,9 +1,11 @@
-Vec<T> {
-    data_loc: &T
-    capacity: i64
-    len: i64
-    
-    .push(val: T): i32 {
+Vec<T> = {
+    data_loc: &T,
+    capacity: i64,
+    len: i64,
+}
+
+<T> &Vec<T>. {
+    push(val: T): i32 {
         ? self.len >= self.capacity {
             # reallocate memory
             self.capacity = self.capacity * to_i64(2)
@@ -22,7 +24,7 @@ Vec<T> {
         ; 0 
     }
 
-    .get(index: i64): T {
+    get(index: i64): T {
         ptr: &T = self.data_loc + index
         ; *ptr
     }

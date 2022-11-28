@@ -112,7 +112,7 @@ pub struct TwoOf<T> {
 }
 
 impl<T> XcReflect for TwoOf<T> {
-    fn alias_code<'a>() -> &'a str { "TwoOf<T> { one: T two: T }" }
+    fn alias_code<'a>() -> &'a str { "TwoOf<T> = { one: T, two: T }" }
 }
 
 #[derive(Clone, Copy, Debug, XcReflect, PartialEq, Eq)]

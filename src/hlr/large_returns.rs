@@ -12,19 +12,10 @@ pub fn handle_large_returns(hlr: &mut FuncRep) {
 
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
-        ReturnStyle::ThroughI64 => change_ret_type(hlr, Type::i(64)),
-        ReturnStyle::ThroughI64I32 => change_ret_type(hlr, Type::new_struct(
-            vec![
-                (VarName::from("ret_0"), Type::i(64)),
-                (VarName::from("ret_1"), Type::i(32))
-            ], Vec::new()
-        )),
-        ReturnStyle::ThroughI64I64 => change_ret_type(hlr, Type::new_struct(
-            vec![
-                (VarName::from("ret_0"), Type::i(64)),
-                (VarName::from("ret_1"), Type::i(32))
-            ], Vec::new()
-        )),
+        ReturnStyle::ThroughI64 
+        | ReturnStyle::ThroughI64I32 
+        | ReturnStyle::ThroughI64I64 => 
+            change_ret_type(hlr, hlr.ret_type.raw_return_type()),
         ReturnStyle::Pointer => return_by_pointer(hlr),
         ReturnStyle::Void | ReturnStyle::Direct => {},
     }

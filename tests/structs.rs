@@ -20,7 +20,7 @@ fn basic_struct() {
 fn anonymous() {
     xc_test!(
         "
-            x: { x: i32 y: i32 } = 0
+            x: { x: i32, y: i32 } = 0
             x.x = 30
             x.y = 90
             ; x.x + x.y
@@ -34,7 +34,7 @@ fn anonymous() {
 fn anonymous_extra() {
     xc_test!(
         "
-            x: { x: i32 y: { x: i32 y: i32 } } = 0
+            x: { x: i32, y: { x: i32, y: i32 } } = 0
             x.x = 30
             x.y.x = 40
             x.y.y = 50
@@ -102,26 +102,28 @@ fn opaque_types() {
 fn methods() {
     xc_test!(
         "
-        Point2D {
-            x: f32
+        MyPoint = {
+            x: f32,
             y: f32
-
-            .hypotenuse(): f32 {
-                ; sqrt(self.x * self.x + self.y * self.y)
-            }
-
-            .scaled(by: f32): Point2D {
-                ; Point2D { x = self.x * by, y = self.y * by }
-            }
         }
 
+        &MyPoint.sqr_hypotenuse(): f32 {
+            ; self.x * self.x + self.y * self.y
+        }
+
+        &MyPoint. {
+            scaled(by: f32): MyPoint {
+                ; MyPoint { x = self.x * by, y = self.y * by }
+            }
+        }
+        
         main(): i32 {
-            original: Point2D = Point2D { x = 4.0, y = 3.0 }
+            original: MyPoint = MyPoint { x = 4.0, y = 3.0 }
 
-            out_hypotenuse: f32 = original.hypotenuse()
-            assert_eq<f32>(out_hypotenuse, 5.0)
+            out_hypotenuse: f32 = original.sqr_hypotenuse()
+            assert_eq<f32>(out_hypotenuse, 25.0)
 
-            scaled_by_2: Point2D = original.scaled(1.5)
+            scaled_by_2: MyPoint = original.scaled(1.5)
             assert_eq<f32>(scaled_by_2.x, 6.0)
             assert_eq<f32>(scaled_by_2.y, 4.5)
 
@@ -164,8 +166,8 @@ fn arrays() {
 fn struct_arrays() {
     xc_test!(
         "
-        Point2D {
-            x: i32
+        Point2D = {
+            x: i32,
             y: i32
         }
 

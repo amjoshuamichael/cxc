@@ -134,12 +134,12 @@ fn first_class() {
 fn store_first_class() {
     xc_test!(
         "
-        Operation {
-            func: (i32) -> i32
+        Operation = {
+            func: (i32) -> i32,
+        }
 
-            .run(input: i32): i32 {
-                ; (self.func)(input)
-            }
+        &Operation.run(input: i32): i32 {
+            ; (self.func)(input)
         }
 
         double(in: i32): i32 { ; in * 2 }

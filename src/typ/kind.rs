@@ -87,18 +87,7 @@ impl FuncType {
 }
 
 impl Kind for StructType {
-    fn name(&self) -> String {
-        // the indexmap crate formats a map like this:
-        // { x: i32, y: i32, }
-        //
-        // to this:
-        // { "x": i32, "y": i32, }
-        //
-        // here, we remove the quotes.
-        let struct_with_quotes = format!("{:?} | {:?}", self.fields, self.methods);
-
-        struct_with_quotes.chars().filter(|c| *c != '"').collect()
-    }
+    fn name(&self) -> String { format!("{:?}", self.fields) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         let field_types: Vec<BasicTypeEnum> = self

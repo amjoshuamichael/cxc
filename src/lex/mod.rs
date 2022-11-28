@@ -1,4 +1,4 @@
-use crate::parse::{GenericLabels, ParseError};
+use crate::parse::{GenericLabels, ParseError, TokName};
 use logos::{Lexer as LogosLexer, Logos};
 use std::{cell::RefCell, collections::HashSet, fmt::Display, rc::Rc};
 
@@ -21,8 +21,56 @@ impl TokPos {
 }
 
 pub trait TokenStream {
-    fn next_tok(&mut self) -> Result<Tok, ParseError>;
-    fn peek_tok(&mut self) -> Result<Tok, ParseError>;
+    fn move_ahead(&mut self) -> usize;
+    fn peek_by(&self, offset: usize) -> Result<Tok, ParseError>;
+
+    fn peek_tok(&mut self) -> Result<Tok, ParseError> { self.peek_by(0) }
+
+    fn next_tok(&mut self) -> Result<Tok, ParseError> {
+        let out = self.peek_by(0)?;
+        self.move_ahead();
+
+        if crate::DEBUG {
+            print!("{}", out.to_string());
+        }
+
+        Ok(out)
+    }
+
+    fn assert_next_tok_is(&mut self, tok: Tok) -> Result<(), ParseError> {
+        let next = self.next_tok()?;
+
+        if next != tok {
+            return Err(ParseError::UnexpectedTok {
+                got: next,
+                expected: vec![TokName::from(tok)],
+            });
+        }
+
+        Ok(())
+    }
+
+    fn get_var_name_next(&mut self) -> Result<VarName, ParseError> {
+        let next = self.next_tok()?;
+        match next {
+            Tok::VarName(name) => Ok(name),
+            _ => Err(ParseError::UnexpectedTok {
+                got: next,
+                expected: vec![TokName::VarName],
+            }),
+        }
+    }
+
+    fn get_type_name_next(&mut self) -> Result<TypeName, ParseError> {
+        let next = self.next_tok()?;
+        match next {
+            Tok::TypeName(name) => Ok(name),
+            _ => Err(ParseError::UnexpectedTok {
+                got: next,
+                expected: vec![TokName::TypeName],
+            }),
+        }
+    }
 }
 
 pub struct Lexer {
@@ -31,26 +79,14 @@ pub struct Lexer {
 }
 
 impl TokenStream for Lexer {
-    fn next_tok(&mut self) -> Result<Tok, ParseError> {
-        let out = self.inner.get(self.tok_pos.val());
-
+    fn move_ahead(&mut self) -> usize {
         self.tok_pos.inc();
-
-        match out {
-            Some(tok) => {
-                if crate::DEBUG {
-                    print!("{:?} ", tok);
-                }
-
-                Ok(tok.clone())
-            },
-            None => Err(ParseError::UnexpectedEndOfFile),
-        }
+        self.tok_pos.val()
     }
 
-    fn peek_tok(&mut self) -> Result<Tok, ParseError> {
+    fn peek_by(&self, offset: usize) -> Result<Tok, ParseError> {
         self.inner
-            .get(self.tok_pos.val())
+            .get(self.tok_pos.val() + offset)
             .map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
     }
 }
@@ -95,32 +131,20 @@ pub struct ParseContext<N: Ident> {
 }
 
 impl<N: Ident> TokenStream for ParseContext<N> {
-    fn next_tok(&mut self) -> Result<Tok, ParseError> {
-        let out = self.get(self.tok_pos.val(), true);
+    fn move_ahead(&mut self) -> usize {
         self.tok_pos.inc();
-        out
+        self.tok_pos.val()
     }
 
-    fn peek_tok(&mut self) -> Result<Tok, ParseError> {
-        self.get(self.tok_pos.val(), false)
+    fn peek_by(&self, offset: usize) -> Result<Tok, ParseError> {
+        match self.inner.get(self.tok_pos.val() + offset) {
+            Some(tok) => Ok(tok.clone()),
+            None => Err(ParseError::UnexpectedEndOfFile),
+        }
     }
 }
 
 impl<N: Ident> ParseContext<N> {
-    pub fn peek_by(&self, offset: usize) -> Result<Tok, ParseError> {
-        self.get(self.tok_pos.val() + offset, false)
-    }
-
-    fn get(&self, at: usize, log: bool) -> Result<Tok, ParseError> {
-        let token = self.inner.get(at);
-
-        if crate::DEBUG && log && let Some(token) = token {
-            print!("{}", token.to_string());
-        }
-
-        token.map_or(Err(ParseError::UnexpectedEndOfFile), |t| Ok(t.clone()))
-    }
-
     pub fn push_type_dependency(&mut self, name: TypeName) {
         self.type_dependencies.insert(name);
     }

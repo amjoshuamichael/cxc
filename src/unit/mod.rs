@@ -225,7 +225,6 @@ impl<'u> Unit<'u> {
         if crate::DEBUG {
             println!("{}", self.module.print_to_string().to_string());
             println!("compiled these: ");
-            dbg!(all_func_infos);
         }
     }
 

@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::{
-    lex::{lex, Tok},
-    parse::{parse_generics, parse_type_decl, TokenStream, TypeDecl},
+    lex::lex,
+    parse::{self, TypeDecl},
     Type, Unit,
 };
 
@@ -10,14 +10,27 @@ pub trait XcReflect {
     fn alias_code<'a>() -> &'a str;
 
     fn type_decl() -> TypeDecl {
-        let mut lexer = lex(Self::alias_code());
-        let Tok::TypeName(type_name) = lexer.next_tok().unwrap() else { panic!() };
-        let generics =
-            parse_generics(&mut lexer).expect("failure to parse generics");
-        let parser = lexer.split(type_name, generics);
-        parse_type_decl(parser)
-            .expect("failure to parse type alias")
-            .0
+        let lexer = lex(Self::alias_code());
+        let parsed = match parse::file(lexer) {
+            Ok(file) => file,
+            Err(err) => {
+                dbg!(&err);
+                panic!();
+            },
+        };
+
+        assert_eq!(
+            parsed.decl_count(),
+            1,
+            "you can only create one type in the reflection!"
+        );
+
+        let type_decl = parsed
+            .types_iter()
+            .next()
+            .expect("cannot declare function in type reflection!");
+
+        type_decl.clone()
     }
 }
 

@@ -92,20 +92,14 @@ impl Type {
     pub fn raw_return_type(&self) -> Type {
         match self.return_style() {
             ReturnStyle::ThroughI64 => Type::i(64),
-            ReturnStyle::ThroughI64I32 => Type::new_struct(
-                vec![
-                    (VarName::from("ret_0"), Type::i(64)),
-                    (VarName::from("ret_1"), Type::i(32)),
-                ],
-                Vec::new(),
-            ),
-            ReturnStyle::ThroughI64I64 => Type::new_struct(
-                vec![
-                    (VarName::from("ret_0"), Type::i(64)),
-                    (VarName::from("ret_1"), Type::i(64)),
-                ],
-                Vec::new(),
-            ),
+            ReturnStyle::ThroughI64I32 => Type::new_struct(vec![
+                (VarName::from("ret_0"), Type::i(64)),
+                (VarName::from("ret_1"), Type::i(32)),
+            ]),
+            ReturnStyle::ThroughI64I64 => Type::new_struct(vec![
+                (VarName::from("ret_0"), Type::i(64)),
+                (VarName::from("ret_1"), Type::i(64)),
+            ]),
             ReturnStyle::Pointer | ReturnStyle::Void => Type::never(),
             ReturnStyle::Direct => self.clone(),
         }
@@ -166,8 +160,8 @@ impl Type {
 
     pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
 
-    pub fn new_struct(fields: Vec<(VarName, Type)>, methods: Vec<VarName>) -> Type {
-        Type::new(TypeEnum::Struct(StructType { fields, methods }))
+    pub fn new_struct(fields: Vec<(VarName, Type)>) -> Type {
+        Type::new(TypeEnum::Struct(StructType { fields }))
     }
 
     pub fn opaque_with_size(size: u32, name: &str) -> Type {
@@ -299,7 +293,6 @@ impl FuncType {
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct StructType {
     pub fields: Vec<(VarName, Type)>,
-    pub methods: Vec<VarName>,
 }
 
 impl StructType {
@@ -311,10 +304,6 @@ impl StructType {
         }
 
         return None;
-    }
-
-    pub fn get_full_method_name(&self, field_name: &VarName) -> Option<&VarName> {
-        self.methods.iter().find(|m| m == &field_name)
     }
 
     pub fn get_field_index(&self, field_name: &VarName) -> usize {

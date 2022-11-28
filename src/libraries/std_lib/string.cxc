@@ -1,18 +1,18 @@
-String {
-    inner: Vec<i8>
+String = {
+    inner: Vec<i8>,
+}
 
-    .push_string(other: String): i32 {
-        index: i32 = 0
-        other_string_len: i32 = other.inner.len
+&String.push_string(other: String): i32 {
+    index: i32 = 0
+    other_string_len: i32 = other.inner.len
 
-        @ index < other_string_len {
-            byte: i8 = other.inner.get<i8>(index)
-            none: i32 = self.inner.push<i8>(byte)
-            index = index + 1
-        }
-
-        ; 0
+    @ index < other_string_len {
+        byte: i8 = other.inner.get<i8>(index)
+        none: i32 = self.inner.push<i8>(byte)
+        index = index + 1
     }
+
+    ; 0
 }
 
 create_string_from_array<T>(array: T): String {

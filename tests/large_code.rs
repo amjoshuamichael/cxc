@@ -1,5 +1,6 @@
 mod test_utils;
 use cxc::library::{StdLib, TestLib, TypeInterfaceLib};
+use cxc::XcReflect;
 use cxc::{LLVMContext, Unit};
 use test_utils::xc_test;
 
@@ -7,15 +8,15 @@ use test_utils::xc_test;
 fn backwards_struct_dependency() {
     xc_test!(
         "
-        Julie {
+        Julie = {
             letter: DreamFrom<TheEndOfTheWorld>
         }
 
-        DreamFrom<T> {
+        DreamFrom<T> = {
             location: T
         }
 
-        TheEndOfTheWorld {
+        TheEndOfTheWorld = {
             time: i32
         }
 
@@ -42,8 +43,8 @@ fn backwards_struct_dependency() {
 fn vec() {
     xc_test!(
         "     
-        TwoNums {
-            num_one: i64
+        TwoNums = {
+            num_one: i64,
             num_two: i64
         }
 
@@ -104,22 +105,22 @@ fn vec() {
 fn generic_methods() {
     xc_test!(
         "
-        Roll<T> {
+        Roll<T> = {
             val: T
+        }
 
-            .come_on(): T {
-                output: T = self.val
+        <T> &Roll<T>.come_on(): T {
+            output: T = self.val
 
-                counter: i32 = 1
+            counter: i32 = 1
 
-                @ counter < 111 {
-                    output = output + self.val
+            @ counter < 111 {
+                output = output + self.val
 
-                    counter = counter + 1
-                }
-
-                ; output
+                counter = counter + 1
             }
+
+            ; output
         }
 
         # buy las vegas
@@ -163,10 +164,10 @@ fn backwards_call() {
 fn hello_world() {
     xc_test!(
         r#"
-            hello_world(): i32 {
-                print<&String>(&"hello, world!")
-                ; 0
-            }
+        hello_world(): i32 {
+            print<&String>(&"hello, world!")
+            ; 0
+        }
         "#
     )
 }
@@ -177,14 +178,14 @@ fn derivations() {
     let mut unit = Unit::new(&context);
     unit.add_lib(TestLib).add_lib(TypeInterfaceLib).push_script(
         "
-        Point2D {
-            x: i32
+        Point2D = {
+            x: i32,
             y: i32
         }
 
-        Point3D {
-            x: i32
-            y: i32
+        Point3D = {
+            x: i32,
+            y: i32,
             z: i32
         }
 
@@ -205,11 +206,12 @@ fn derivations() {
 
 #[test]
 fn to_string() {
+    dbg!(test_utils::TwoOf::<()>::alias_code());
     xc_test!(
         use StdLib, TestLib;
         "
-            OutputType {
-                one: TwoOf<i32>
+            OutputType = {
+                one: TwoOf<i32>,
                 two: TwoOf<f32>
             }
 

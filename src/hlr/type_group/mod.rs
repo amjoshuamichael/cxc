@@ -32,7 +32,7 @@ impl<'a> CompData<'a> {
             TypeAlias::Float(size) => Type::f(*size),
             TypeAlias::Bool => Type::bool(),
             TypeAlias::Ref(base) => self.get_spec(base, generics)?.get_ref(),
-            TypeAlias::Struct(fields, methods) => {
+            TypeAlias::Struct(fields) => {
                 let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
 
                 for field in fields {
@@ -40,7 +40,7 @@ impl<'a> CompData<'a> {
                     typed_fields.push((field.0.clone(), field_type));
                 }
 
-                Type::new_struct(typed_fields, methods.to_vec())
+                Type::new_struct(typed_fields)
             },
             TypeAlias::Function(args, ret_type) => {
                 let args = args

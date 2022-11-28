@@ -12,7 +12,7 @@ pub enum TypeAlias {
     Float(FloatType),
     Bool,
     Ref(Box<TypeAlias>),
-    Struct(Vec<(VarName, TypeAlias)>, Vec<VarName>),
+    Struct(Vec<(VarName, TypeAlias)>),
     Function(Vec<TypeAlias>, Box<TypeAlias>),
     Array(Box<TypeAlias>, u32),
 }
@@ -23,22 +23,19 @@ pub struct StructParsingContext {
     pub dependencies: HashSet<String>,
 }
 
-fn parse_type_and_methods(
+fn parse_type(
     lexer: &mut ParseContext<TypeName>,
-) -> Result<(TypeAlias, Vec<FuncCode>), ParseError> {
+) -> Result<TypeAlias, ParseError> {
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
-    let mut methods = Vec::new();
     let type_alias = match beginning_of_alias {
         Tok::LeftCurly => {
-            let strct = parse_struct(lexer)?;
-            methods = strct.1;
-            strct.0
+            parse_struct(lexer)?
         },
         Tok::AmpersandSet(count) => {
             lexer.next_tok()?;
 
-            let mut output = parse_type_and_methods(lexer)?.0;
+            let mut output = parse_type(lexer)?;
 
             for _ in 0..count {
                 output = TypeAlias::Ref(box output);
@@ -60,9 +57,9 @@ fn parse_type_and_methods(
                         TypeAlias::GenParam(generic_index)
                     } else if let Tok::LeftAngle = lexer.peek_tok()? {
                         let generics = parse_list(
-                            (Tok::LeftAngle, Tok::RghtAngle),
+                            Tok::angles(),
                             Some(Tok::Comma),
-                            |lexer| Ok(parse_type_and_methods(lexer)?.0),
+                            parse_type,
                             lexer,
                         )?;
 
@@ -81,12 +78,9 @@ fn parse_type_and_methods(
             let arg_types = parse_list(
                 Tok::parens(),
                 Some(Tok::Comma),
-                parse_type_and_methods,
+                parse_type,
                 lexer,
             )?;
-
-            let arg_types: Vec<_> =
-                { arg_types }.drain(..).map(|(typ, _)| typ).collect();
 
             {
                 let probably_arrow = lexer.next_tok()?;
@@ -98,8 +92,7 @@ fn parse_type_and_methods(
                 }
             }
 
-            let ret_type = parse_type_and_methods(lexer)?;
-            let ret_type = ret_type.0;
+            let ret_type = parse_type(lexer)?;
 
             TypeAlias::Function(arg_types, box ret_type)
         },
@@ -124,13 +117,13 @@ fn parse_type_and_methods(
         _ => type_alias,
     };
 
-    Ok((alias, methods))
+    Ok(alias)
 }
 
 pub fn parse_type_decl(
     mut lexer: ParseContext<TypeName>,
-) -> Result<(TypeDecl, Vec<FuncCode>), ParseError> {
-    let (alias, methods) = parse_type_and_methods(&mut lexer)?;
+) -> Result<TypeDecl, ParseError> {
+    let alias = parse_type(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
     let (name, dependencies) = lexer.return_info();
@@ -142,106 +135,47 @@ pub fn parse_type_decl(
         dependencies,
     };
 
-    Ok((type_decl, methods))
+    Ok(type_decl)
 }
 
 pub fn parse_type_alias(
     lexer: &mut ParseContext<VarName>,
 ) -> Result<TypeAlias, ParseError> {
     let temp_lexer = lexer.create_new_with_name(TypeName::Anonymous);
-    Ok(parse_type_decl(temp_lexer)?.0.typ)
+    Ok(parse_type_decl(temp_lexer)?.typ)
 }
 
 pub fn parse_struct(
     lexer: &mut ParseContext<TypeName>,
-) -> Result<(TypeAlias, Vec<FuncCode>), ParseError> {
-    let parts = parse_list(
+) -> Result<TypeAlias, ParseError> {
+    fn parse_field(lexer: &mut ParseContext<TypeName>) 
+        -> Result<(VarName, TypeAlias), ParseError> {
+        let field = lexer.next_tok()?;
+        let Tok::VarName(name) = field else {
+            return Err(ParseError::UnexpectedTok { 
+                got: field, 
+                expected: vec![TokName::VarName] 
+            });
+        };
+
+        lexer.assert_next_tok_is(Tok::Colon)?;
+
+        let typ = parse_type(lexer)?;
+
+        Ok((name, typ))
+    }
+
+    let fields = parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
-        None,
-        parse_struct_part,
+        Some(Tok::Comma),
+        parse_field,
         lexer,
     )?;
 
-    let mut fields = Vec::new();
-    let mut methods = Vec::new();
-    let mut method_declarations = Vec::new();
-
-    for p in parts {
-        match p {
-            StructPart::Field { name, typ } => {
-                fields.push((name, typ));
-            },
-            StructPart::Method { decl, .. } => {
-                methods.push(decl.name.clone());
-                method_declarations.push(decl.into());
-            },
-        }
-    }
-
-    Ok((TypeAlias::Struct(fields, methods), method_declarations))
+    Ok(TypeAlias::Struct(fields))
 }
 
 enum StructPart {
     Field { name: VarName, typ: TypeAlias },
     Method { is_static: bool, decl: FuncCode },
-}
-
-fn parse_struct_part(
-    lexer: &mut ParseContext<TypeName>,
-) -> Result<StructPart, ParseError> {
-    let beginning_of_part = lexer.peek_tok()?;
-
-    if let Ok(name) = beginning_of_part.clone().var_name() {
-        lexer.next_tok()?;
-        assert_eq!(lexer.next_tok()?, Tok::Colon);
-        let typ = parse_type_and_methods(lexer)?.0;
-
-        Ok(StructPart::Field { name, typ })
-    } else if beginning_of_part == Tok::Dot {
-        lexer.next_tok()?;
-
-        let name = lexer.next_tok()?.var_name()?;
-        let func_context = lexer.create_new_with_name(name);
-
-        let mut decl = parse_func(func_context, Some(lexer.name_of_this().clone()))?;
-
-        if lexer.has_generics() {
-            let mut generic_params = Vec::new();
-
-            for g in 0..lexer.generic_count() {
-                generic_params.push(TypeAlias::GenParam(g as u8));
-            }
-
-            decl.args.push(VarDecl {
-                name: "self".into(),
-                typ: Some(
-                    TypeAlias::Ref(box TypeAlias::Generic(
-                        lexer.name_of_this().clone(),
-                        generic_params,
-                    ))
-                    .into(),
-                ),
-            });
-        } else {
-            decl.args.push(VarDecl {
-                name: "self".into(),
-                typ: Some(
-                    TypeAlias::Ref(box TypeAlias::Named(
-                        lexer.name_of_this().clone(),
-                    ))
-                    .into(),
-                ),
-            });
-        }
-
-        Ok(StructPart::Method {
-            is_static: false,
-            decl,
-        })
-    } else {
-        Err(ParseError::UnexpectedTok {
-            got: beginning_of_part,
-            expected: vec![TokName::VarName, TokName::Dot],
-        })
-    }
 }
