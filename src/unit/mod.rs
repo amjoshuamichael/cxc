@@ -34,6 +34,7 @@ use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
 
 use self::functions::DeriverFunc;
+use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
 pub use self::value_api::Value;
 pub use self::func_api::Func;
@@ -70,7 +71,7 @@ pub struct CompData<'u> {
     func_types: HashMap<UniqueFuncInfo, Type>,
     func_code: HashMap<FuncDeclInfo, FuncCode>,
     decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
-    derivers: HashMap<VarName, DeriverFunc>,
+    derivers: HashMap<DeriverInfo, DeriverFunc>,
     intrinsics: HashSet<FuncDeclInfo>,
 }
 
@@ -246,9 +247,8 @@ impl<'u> Unit<'u> {
             
         let info = UniqueFuncInfo {
             name: VarName::from(temp_name),
-            method_of: None,
-            generics: Vec::new(),
-        };
+            ..Default::default()        
+        } ;
 
         let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code);
 
@@ -328,7 +328,13 @@ impl<'u> Unit<'u> {
 
         let function_ptr: *const usize = unsafe { transmute(function[0]) };
 
-        self.add_rust_func_explicit(name, function_ptr, func_type, None, Vec::new())
+        self.add_rust_func_explicit(
+            name, 
+            function_ptr, 
+            func_type, 
+            TypeRelation::Unrelated, 
+            Vec::new()
+        )
     }
 
     pub fn add_rust_func_explicit(
@@ -336,7 +342,7 @@ impl<'u> Unit<'u> {
         name: &str,
         function_ptr: *const usize,
         func_type: Type,
-        method_of: Option<Type>,
+        relation: TypeRelation,
         generics: Vec<Type>,
     ) -> &mut Self {
         let TypeEnum::Func(func_type_inner) = 
@@ -350,7 +356,7 @@ impl<'u> Unit<'u> {
 
         let func_info = UniqueFuncInfo {
             name: name.into(),
-            method_of,
+            relation,
             generics,
         };
 
@@ -441,8 +447,7 @@ impl<'u> Unit<'u> {
     pub unsafe fn get_fn_by_name<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
         let func_info = UniqueFuncInfo {
             name: name.into(),
-            method_of: None,
-            generics: Vec::new(),
+            ..Default::default()
         };
 
         self.get_fn_by_info::<I, O>(&func_info)
@@ -480,13 +485,23 @@ impl<'u> Unit<'u> {
         self
     }
 
-    pub fn add_deriver(
+    pub fn add_method_deriver(
         &mut self,
         func_name: VarName,
         func: DeriverFunc,
     ) -> &mut Self {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.add_deriver(func_name, func);
+        comp_data.add_method_deriver(func_name, func);
+        self
+    }
+
+    pub fn add_static_deriver(
+        &mut self,
+        func_name: VarName,
+        func: DeriverFunc,
+    ) -> &mut Self {
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+        comp_data.add_static_deriver(func_name, func);
         self
     }
 }

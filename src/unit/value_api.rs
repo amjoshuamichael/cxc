@@ -1,4 +1,4 @@
-use crate::{lex::indent_parens, Unit};
+use crate::{lex::indent_parens, parse::TypeRelation, Unit};
 use std::mem::transmute;
 
 use crate::Type;
@@ -32,8 +32,8 @@ impl Value {
     pub fn to_string(&self, unit: &mut Unit) -> String {
         let info = UniqueFuncInfo {
             name: "to_string".into(),
-            method_of: Some(self.typ.clone().get_ref()),
-            generics: Vec::new(),
+            relation: TypeRelation::MethodOf(self.typ.clone()),
+            ..Default::default()
         };
 
         unit.compile_func_set(vec![info.clone()]);

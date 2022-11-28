@@ -20,6 +20,10 @@ impl VarName {
     pub fn temp() -> Self { VarName(Arc::from("temp")) }
 }
 
+impl Default for VarName {
+    fn default() -> Self { Self::temp() }
+}
+
 impl Ident for VarName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self { Self(Arc::from(t.slice())) }
     fn to_string(&self) -> String { String::from(&*self.0) }
@@ -183,7 +187,7 @@ pub enum Tok {
     VarName(VarName),
 
     #[regex(
-        "[A-Z][A-Za-z0-9_]+(:[A-Za-z0-9_]+)*|\
+        "[A-Z][A-Za-z0-9]+|\
         [A-Z]|\
         i8|i16|i32|i64|f16|f32|f64|f128|bool",
         TypeName::from_tok,

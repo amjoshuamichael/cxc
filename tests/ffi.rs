@@ -1,6 +1,6 @@
 mod test_utils;
 use cxc::library::{StdLib, TestLib};
-use cxc::XcReflect;
+use cxc::TypeRelation;
 use cxc::{LLVMContext, Type, Unit};
 use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 
@@ -109,8 +109,6 @@ fn struct_pointer() {
 
 #[test]
 fn small_struct() {
-    dbg!(test_utils::Point2D::alias_code());
-
     xc_test!(
         "; Point2D { x = 32, y = 43 }" => Point2D;
         Point2D { x: 32, y: 43 }
@@ -146,7 +144,7 @@ fn external_function() {
         "print_num",
         print_num as *const usize,
         Type::never().func_with_args(vec![Type::i(64)]),
-        None,
+        TypeRelation::Unrelated,
         Vec::new(),
     )
     .push_script(

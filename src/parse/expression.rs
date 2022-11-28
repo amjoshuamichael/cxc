@@ -28,10 +28,16 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                     lexer.next_tok()?;
                     Expr::Parens(box parse_math_expr(lexer)?)
                 }
-                Tok::TypeName(struct_name) => {
-                    lexer.next_tok()?;
+                Tok::TypeName(_) => {
+                    let type_alias = parse_type_alias(lexer)?;
 
-                    parse_struct_literal(lexer, struct_name)?
+                    if matches!(lexer.peek_tok()?, Tok::Colon) {
+                        lexer.next_tok()?;
+                        let func_name = lexer.get_var_name_next()?;
+                        Expr::StaticMethodPath(type_alias, func_name)
+                    } else {
+                        parse_struct_literal(lexer, type_alias)?
+                    }
                 },
                 opcode if opcode.is_un_op() => {
                     Expr::Op(opcode.get_un_opcode().unwrap())
@@ -39,12 +45,12 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
                 _ => break,
             };
 
-            if !matches!(atom, Expr::Array(_) | Expr::Struct{..}) {
+            if !matches!(atom, Expr::Array(_) | Expr::Struct{..} | Expr::StaticMethodPath(..)) {
                 lexer.next_tok()?;
             }
 
             atom
-        } else if matches!(last_atom.clone(), Expr::Ident(_))
+        } else if matches!(last_atom.clone(), Expr::Ident(_) | Expr::StaticMethodPath(..))
             && matches!(next, Tok::LeftAngle) 
             && after_generics(lexer, Tok::LeftParen)? {
             let generics = parse_list(
@@ -175,16 +181,7 @@ pub fn binary_ops(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn parse_struct_literal(lexer: &mut ParseContext<VarName>, struct_name: TypeName) -> Result<Expr, ParseError> {
-    let generics = if lexer.peek_tok()? == Tok::LeftAngle {
-        Some(parse_list(
-            (Tok::LeftAngle, Tok::RghtAngle),
-            Some(Tok::Comma),
-            parse_type_alias,
-            lexer,
-        )?)
-    } else { None };
-
+pub fn parse_struct_literal(lexer: &mut ParseContext<VarName>, type_alias: TypeAlias) -> Result<Expr, ParseError> {
     let fields = parse_list(
         (Tok::LeftCurly, Tok::RghtCurly),
         Some(Tok::Comma),
@@ -200,11 +197,7 @@ pub fn parse_struct_literal(lexer: &mut ParseContext<VarName>, struct_name: Type
         lexer,
     )?;
 
-    if let Some(generics) = generics {
-        Ok(Expr::Struct(TypeAlias::Generic(struct_name, generics), fields))
-    } else {
-        Ok(Expr::Struct(TypeAlias::Named(struct_name), fields))
-    }
+    Ok(Expr::Struct(type_alias, fields))
 }
 
 

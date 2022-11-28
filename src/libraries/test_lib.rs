@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::Type;
+use crate::{parse::TypeRelation, Type};
 
 use super::Library;
 
@@ -13,7 +13,7 @@ impl Library for TestLib {
                 "print",
                 print::<&String> as *const usize,
                 Type::never().func_with_args(vec![string_type.clone().get_ref()]),
-                None,
+                TypeRelation::Unrelated,
                 vec![string_type.get_ref()],
             );
         }
@@ -22,49 +22,49 @@ impl Library for TestLib {
             "print",
             print::<i32> as *const usize,
             Type::never().func_with_args(vec![Type::i(32)]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::i(32)],
         )
         .add_rust_func_explicit(
             "print",
             print::<i64> as *const usize,
             Type::never().func_with_args(vec![Type::i(64)]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::i(64)],
         )
         .add_rust_func_explicit(
             "print",
             print::<f32> as *const usize,
             Type::never().func_with_args(vec![Type::f(32)]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::f(32)],
         )
         .add_rust_func_explicit(
             "assert_eq",
             assert::<i32> as *const usize,
             Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::i(32)],
         )
         .add_rust_func_explicit(
             "assert_eq",
             assert::<i64> as *const usize,
             Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::i(64)],
         )
         .add_rust_func_explicit(
             "assert_eq",
             assert::<f32> as *const usize,
             Type::never().func_with_args(vec![Type::f(32), Type::f(32)]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::f(32)],
         )
         .add_rust_func_explicit(
             "assert_eq",
             assert::<bool> as *const usize,
             Type::never().func_with_args(vec![Type::bool(), Type::bool()]),
-            None,
+            TypeRelation::Unrelated,
             vec![Type::bool()],
         )
         .add_rust_func("sqrt", [f32::sqrt])
@@ -72,7 +72,7 @@ impl Library for TestLib {
             "panic",
             panic as *const usize,
             Type::never().func_with_args(vec![]),
-            None,
+            TypeRelation::Unrelated,
             vec![],
         );
     }

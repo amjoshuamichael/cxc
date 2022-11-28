@@ -1,8 +1,13 @@
-use std::iter::{empty, once};
+use std::{
+    fmt::Debug,
+    hash::Hash,
+    iter::{empty, once},
+};
 
 use crate::{
     typ::TypeOrAlias,
     unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
+    Type,
 };
 
 use super::*;
@@ -14,6 +19,7 @@ pub enum Expr {
     Bool(bool),
     Strin(String),
     Ident(VarName),
+    StaticMethodPath(TypeAlias, VarName),
     Struct(TypeAlias, Vec<(VarName, Expr)>),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
@@ -41,7 +47,8 @@ impl Expr {
         use Expr::*;
 
         match &self {
-            Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_) => box once(self),
+            Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_)
+            | StaticMethodPath(..) => box once(self),
             Struct(_, fields) => box fields.iter().map(|(_, expr)| expr),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
@@ -131,6 +138,40 @@ impl Decl {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeRelationGeneric<T> {
+    Static(T),
+    MethodOf(T),
+    Unrelated,
+}
+
+pub type TypeOrAliasRelation = TypeRelationGeneric<TypeOrAlias>;
+pub type TypeAliasRelation = TypeRelationGeneric<TypeAlias>;
+pub type TypeRelation = TypeRelationGeneric<Type>;
+
+impl<T: Clone> TypeRelationGeneric<T> {
+    pub fn map<U>(self, closure: impl FnOnce(T) -> U) -> TypeRelationGeneric<U> {
+        match self {
+            Self::Static(inner) => TypeRelationGeneric::<U>::Static(closure(inner)),
+            Self::MethodOf(inner) => {
+                TypeRelationGeneric::<U>::MethodOf(closure(inner))
+            },
+            Self::Unrelated => TypeRelationGeneric::<U>::Unrelated,
+        }
+    }
+
+    pub fn inner(&self) -> Option<T> {
+        match self {
+            Self::Static(inner) | Self::MethodOf(inner) => Some(inner.clone()),
+            Self::Unrelated => None,
+        }
+    }
+}
+
+impl<T> Default for TypeRelationGeneric<T> {
+    fn default() -> Self { Self::Unrelated }
+}
+
 #[derive(Debug, Clone)]
 pub struct FuncCode {
     pub name: VarName,
@@ -138,26 +179,26 @@ pub struct FuncCode {
     pub args: Vec<VarDecl>,
     pub generic_count: u32,
     pub code: Expr,
-    pub method_of: Option<TypeOrAlias>,
+    pub relation: TypeOrAliasRelation,
 }
 
 impl FuncCode {
     pub fn decl_info(&self) -> FuncDeclInfo {
         FuncDeclInfo {
             name: self.name.clone(),
-            method_of: self.method_of.clone(),
+            relation: self.relation.clone(),
         }
     }
 
     pub fn to_unique_func_info(&self, comp_data: &CompData) -> UniqueFuncInfo {
-        let method_of = self
-            .method_of
+        let relation = self
+            .relation
             .clone()
             .map(|toa| toa.into_type(comp_data).unwrap());
 
         UniqueFuncInfo {
             name: self.name.clone(),
-            method_of,
+            relation,
             generics: Vec::new(),
         }
     }
@@ -169,7 +210,7 @@ impl FuncCode {
             args: Vec::new(),
             generic_count: 0,
             code,
-            method_of: None,
+            relation: TypeOrAliasRelation::Unrelated,
         }
     }
 

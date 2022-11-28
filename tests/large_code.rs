@@ -1,6 +1,5 @@
 mod test_utils;
 use cxc::library::{StdLib, TestLib, TypeInterfaceLib};
-use cxc::XcReflect;
 use cxc::{LLVMContext, Unit};
 use test_utils::xc_test;
 
@@ -164,7 +163,7 @@ fn backwards_call() {
 fn hello_world() {
     xc_test!(
         r#"
-        hello_world(): i32 {
+        main(): i32 {
             print<&String>(&"hello, world!")
             ; 0
         }
@@ -206,7 +205,6 @@ fn derivations() {
 
 #[test]
 fn to_string() {
-    dbg!(test_utils::TwoOf::<()>::alias_code());
     xc_test!(
         use StdLib, TestLib;
         "

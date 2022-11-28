@@ -205,7 +205,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
                 f: VarName::from("memcpy"), 
                 generics: vec![raw_ret_var_type.clone()], 
                 a: vec![src_ref, dest_ref, size], 
-                is_method: false
+                relation: TypeRelation::Unrelated
             }
         );
 
@@ -231,7 +231,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let data = hlr.tree.get(og_call_id);
-    let NodeData::Call { a, f, generics, is_method, .. } = 
+    let NodeData::Call { a, f, generics, relation, .. } = 
         data.clone() else { panic!(); };
 
     let data = hlr.tree.get(og_call_id);
@@ -278,7 +278,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
             f,
             generics,
             a,
-            is_method,
+            relation,
         },
     );
 

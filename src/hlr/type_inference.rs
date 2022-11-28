@@ -1,7 +1,7 @@
-use crate::{Type, TypeEnum, typ::FuncType};
+use crate::{Type, TypeEnum, typ::FuncType, UniqueFuncInfo};
 use super::prelude::*;
 use crate::parse::*;
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut type_by_id = HashMap::new();
@@ -114,13 +114,25 @@ pub fn infer_types(hlr: &mut FuncRep) {
             },
             NodeData::Call {
                 ref mut ret_type,
-                ..            
+                ref mut relation,
+                ref a,
+                ref f,
+                ref generics,
             } => {
-                let func_info = {
-                    let call = hlr.tree.get(n);
-                    hlr.tree.unique_func_info_of_call(&call)
-                };
+                match relation {
+                    TypeRelation::MethodOf(ref mut method_origin) => {
+                        let method_arg = a.last().unwrap();
+                        *method_origin = type_by_id.get(method_arg).unwrap().clone();
+                    },
+                    _ => {}
+                }
 
+                let func_info = UniqueFuncInfo {
+                    name: f.clone(),
+                    relation: relation.clone(),
+                    generics: generics.clone(),
+                };
+                    
                 let func_type = hlr.types.get_type(&func_info).unwrap();
                 let TypeEnum::Func(FuncType { ret_type: return_type, .. }) = 
                     func_type.as_type_enum() else { panic!() };

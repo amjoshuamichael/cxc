@@ -92,20 +92,12 @@ impl ExprTree {
     fn node_count(&self) -> usize { self.nodes.len() }
 
     pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
-        let NodeData::Call { f, generics, a, is_method, .. } = call.clone()
+        let NodeData::Call { f, generics, relation, .. } = call.clone()
             else { panic!() };
-
-        let method_of = if is_method {
-            let object = a.last().unwrap();
-
-            Some(self.get(*object).ret_type())
-        } else {
-            None
-        };
 
         UniqueFuncInfo {
             name: f,
-            method_of,
+            relation,
             generics,
         }
     }
@@ -236,7 +228,7 @@ pub enum NodeData {
         f: VarName,
         generics: Vec<Type>,
         a: Vec<ExprID>,
-        is_method: bool,
+        relation: TypeRelation,
     },
     FirstClassCall {
         ret_type: Type,

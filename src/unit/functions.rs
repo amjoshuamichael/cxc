@@ -1,6 +1,29 @@
-use crate::{typ::TypeOrAlias, Type};
+use crate::{Type, TypeRelation};
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DeriverInfo {
+    func_name: VarName,
+    is_static: bool,
+}
+
+impl TryFrom<UniqueFuncInfo> for DeriverInfo {
+    type Error = ();
+
+    fn try_from(info: UniqueFuncInfo) -> Result<Self, ()> {
+        let is_static = match info.relation {
+            TypeRelation::MethodOf(_) => false,
+            TypeRelation::Static(_) => true,
+            TypeRelation::Unrelated => return Err(()),
+        };
+
+        Ok(DeriverInfo {
+            func_name: info.name,
+            is_static,
+        })
+    }
+}
 
 impl<'a> CompData<'a> {
     pub fn new() -> Self {
@@ -12,7 +35,7 @@ impl<'a> CompData<'a> {
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            method_of: None,
+            relation: TypeOrAliasRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -24,7 +47,7 @@ impl<'a> CompData<'a> {
             }],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            method_of: None,
+            relation: TypeOrAliasRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -46,7 +69,7 @@ impl<'a> CompData<'a> {
             ],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            method_of: None,
+            relation: TypeOrAliasRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -68,7 +91,7 @@ impl<'a> CompData<'a> {
             ],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            method_of: None,
+            relation: TypeOrAliasRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -77,7 +100,7 @@ impl<'a> CompData<'a> {
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            method_of: None,
+            relation: TypeOrAliasRelation::Unrelated,
         });
 
         out
@@ -104,14 +127,14 @@ impl<'a> CompData<'a> {
         decl_info: FuncDeclInfo,
         generics: Vec<Type>,
     ) -> UniqueFuncInfo {
-        let method_of = decl_info
-            .method_of
+        let relation = decl_info
+            .relation
             .clone()
             .map(|toa| toa.into_type_with_generics(self, &generics).unwrap());
 
         let unique_func_info = UniqueFuncInfo {
             name: decl_info.name.clone(),
-            method_of,
+            relation,
             generics,
         };
 
@@ -122,14 +145,14 @@ impl<'a> CompData<'a> {
         let name = VarName::from("T_temp");
         let decl_info = FuncDeclInfo {
             name: name.clone(),
-            method_of: None,
+            ..Default::default()
         };
+
         self.func_code.insert(decl_info, code);
 
         UniqueFuncInfo {
             name,
-            method_of: None,
-            generics: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -161,11 +184,11 @@ impl<'a> CompData<'a> {
         let possible_decls = self.decl_names.get(&info.name)?;
 
         for decl in possible_decls {
-            let decl_method_of = decl.method_of.clone().map(|toa| {
+            let decl_method_of = decl.relation.clone().map(|toa| {
                 toa.into_type_with_generics(self, &info.generics).unwrap()
             });
 
-            if decl_method_of == info.method_of {
+            if decl_method_of == info.relation {
                 return Some(decl.clone());
             }
         }
@@ -232,8 +255,9 @@ impl<'a> CompData<'a> {
     }
 
     pub fn get_derived_code(&self, info: &UniqueFuncInfo) -> Option<FuncCode> {
-        let deriver = self.derivers.get(&info.name)?;
-        deriver(self, info.method_of.as_ref()?.clone())
+        let deriver_info = DeriverInfo::try_from(info.clone()).unwrap();
+        let deriver = self.derivers.get(&deriver_info)?;
+        deriver(self, info.relation.inner()?)
     }
 
     pub fn get_code(&self, info: UniqueFuncInfo) -> Option<FuncCode> {
@@ -245,8 +269,24 @@ impl<'a> CompData<'a> {
         self.get_derived_code(&info)
     }
 
-    pub fn add_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
-        self.derivers.insert(func_name, func);
+    pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
+        self.derivers.insert(
+            DeriverInfo {
+                func_name,
+                is_static: false,
+            },
+            func,
+        );
+    }
+
+    pub fn add_static_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
+        self.derivers.insert(
+            DeriverInfo {
+                func_name,
+                is_static: true,
+            },
+            func,
+        );
     }
 }
 
@@ -254,24 +294,29 @@ use std::hash::Hash;
 
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct FuncDeclInfo {
     pub name: VarName,
-    pub method_of: Option<TypeOrAlias>,
+    pub relation: TypeOrAliasRelation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct UniqueFuncInfo {
     pub name: VarName,
-    pub method_of: Option<Type>,
+    pub relation: TypeRelation,
     pub generics: Vec<Type>,
 }
 
 impl ToString for UniqueFuncInfo {
     fn to_string(&self) -> String {
-        match &self.method_of {
-            Some(typ) => format!("M_{:?}{:?}{:?}", typ, self.name, self.generics),
-            None => format!("{:?}{:?}", self.name, self.generics),
+        match &self.relation {
+            TypeRelation::Static(typ) => {
+                format!("{:?}::{:?}{:?}", typ, self.name, self.generics)
+            },
+            TypeRelation::MethodOf(typ) => {
+                format!("M_{:?}{:?}{:?}", typ, self.name, self.generics)
+            },
+            TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.generics),
         }
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '_')
@@ -282,17 +327,22 @@ impl ToString for UniqueFuncInfo {
 impl UniqueFuncInfo {
     pub fn new(
         og_name: &VarName,
-        method_of: &Option<Type>,
+        relation: &TypeRelation,
         generics: Vec<Type>,
     ) -> UniqueFuncInfo {
         UniqueFuncInfo {
             name: og_name.clone(),
-            method_of: method_of.clone(),
+            relation: relation.clone(),
             generics,
         }
     }
 
     pub fn og_name(&self) -> VarName { self.name.clone() }
-    pub fn is_method(&self) -> bool { self.method_of.is_some() }
+    pub fn is_method(&self) -> bool {
+        matches!(self.relation, TypeRelation::MethodOf(_))
+    }
+    pub fn is_static(&self) -> bool {
+        matches!(self.relation, TypeRelation::Static(_))
+    }
     pub fn has_generics(&self) -> bool { self.generics.len() > 0 }
 }

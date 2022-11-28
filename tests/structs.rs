@@ -1,6 +1,7 @@
 mod test_utils;
 use cxc::LLVMContext;
 use cxc::Type;
+use cxc::TypeRelation;
 use cxc::Unit;
 use test_utils::{xc_test, Point2D};
 
@@ -79,7 +80,7 @@ fn opaque_types() {
         "sqr_magnitude",
         Point2D::sqr_magnitude as *const usize,
         Type::i(32).func_with_args(vec![point_2d_opaque.clone().get_ref()]),
-        Some(point_2d_opaque.get_ref()),
+        TypeRelation::MethodOf(point_2d_opaque.get_ref()),
         Vec::new(),
     );
 

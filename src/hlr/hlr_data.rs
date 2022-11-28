@@ -166,11 +166,11 @@ impl<'a> FuncRep<'a> {
                 let string_type = self.types.get_by_name(&"String".into()).unwrap();
 
                 let call_data = NodeData::Call {
-                    ret_type: string_type,
-                    f: "create_string_from_array".into(),
+                    ret_type: string_type.clone(),
+                    f: "from_i8_array".into(),
                     a: vec![array_space],
                     generics: vec![arr_type],
-                    is_method: false,
+                    relation: TypeRelationGeneric::Static(string_type),
                 };
                 self.tree.replace(call_space, call_data);
                 call_space
@@ -329,19 +329,35 @@ impl<'a> FuncRep<'a> {
                     arg_ids.push(self.add_expr(arg, space));
                 }
 
-                let new_data = if let Expr::Ident(ref func_name) = *f 
-                    && !self.data_flow.contains_key(func_name) {
-                    let generics = generics
-                        .iter()
-                        .map(|spec| self.get_type_spec(spec).unwrap())
-                        .collect();
+                let generics = generics
+                    .iter()
+                    .map(|spec| self.get_type_spec(spec).unwrap())
+                    .collect();
+
+                let new_data = if let Expr::Ident(ref func_name) = *f && 
+                    !self.data_flow.contains_key(func_name) {
+                        let relation = if is_method {
+                            TypeRelation::MethodOf(Type::never())
+                        } else {
+                            TypeRelation::Unrelated
+                        };
+
+                        NodeData::Call {
+                            ret_type: Type::never(),
+                            f: func_name.clone(),
+                            generics,
+                            a: arg_ids,
+                            relation,
+                        }
+                } else if let Expr::StaticMethodPath(ref type_alias, ref func_name) = *f {
+                    let type_origin = self.get_type_spec(type_alias).unwrap();
 
                     NodeData::Call {
                         ret_type: Type::never(),
                         f: func_name.clone(),
                         generics,
                         a: arg_ids,
-                        is_method,
+                        relation: TypeRelation::Static(type_origin),
                     }
                 } else {
                     let f = self.add_expr(*f, space);
@@ -424,10 +440,8 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_index);
                 space
             },
-            Expr::Parens(expr) => {
-                self.add_expr(*expr, parent)
-            },
-            Expr::Op(_) | Expr::ArgList(..) => unreachable!(),
+            Expr::Parens(expr) => self.add_expr(*expr, parent),
+            Expr::Op(_) | Expr::ArgList(..) | Expr::StaticMethodPath(..) => unreachable!(),
         }
     }
 }

@@ -38,7 +38,7 @@ pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
             Tok::VarName(_) => {
                 declarations.push(Decl::Func(parse_func(
                     &mut lexer,
-                    None,
+                    TypeAliasRelation::Unrelated,
                     GenericLabels::new(),
                 )?));
             },
@@ -66,24 +66,44 @@ pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
 
                     declarations.push(Decl::Type(type_decl));
                 } else {
-                    let mut method_of_parser =
-                        lexer.split(VarName::temp(), generic_labels.clone());
+                    let mut method_of_parser = lexer.split(
+                        VarName::from("beginning_of_impl"),
+                        generic_labels.clone(),
+                    );
                     let method_of = parse_type_alias(&mut method_of_parser)?;
 
-                    lexer.assert_next_tok_is(Tok::Dot)?;
-
-                    let methods = parse_one_or_list(
-                        Tok::curlys(),
-                        None,
-                        move |lexer| {
-                            parse_func(
-                                lexer,
-                                Some(method_of.clone()),
-                                generic_labels.clone(),
-                            )
+                    let methods = match lexer.next_tok()? {
+                        Tok::Dot => parse_one_or_list(
+                            Tok::curlys(),
+                            None,
+                            move |lexer| {
+                                parse_func(
+                                    lexer,
+                                    TypeRelationGeneric::MethodOf(method_of.clone()),
+                                    generic_labels.clone(),
+                                )
+                            },
+                            &mut lexer,
+                        )?,
+                        Tok::Colon => parse_one_or_list(
+                            Tok::curlys(),
+                            None,
+                            move |lexer| {
+                                parse_func(
+                                    lexer,
+                                    TypeRelationGeneric::Static(method_of.clone()),
+                                    generic_labels.clone(),
+                                )
+                            },
+                            &mut lexer,
+                        )?,
+                        got => {
+                            return Err(ParseError::UnexpectedTok {
+                                got,
+                                expected: vec![TokName::Dot, TokName::Colon],
+                            })
                         },
-                        &mut lexer,
-                    )?;
+                    };
 
                     for method in methods {
                         declarations.push(Decl::Func(method));
@@ -129,7 +149,7 @@ pub fn parse_generic_label(lexer: &mut Lexer) -> Result<TypeName, ParseError> {
 
 pub fn parse_func(
     lexer: &mut Lexer,
-    method_of: Option<TypeAlias>,
+    relation: TypeAliasRelation,
     outer_generics: GenericLabels,
 ) -> Result<FuncCode, ParseError> {
     let func_name = lexer.get_var_name_next()?;
@@ -142,12 +162,12 @@ pub fn parse_func(
     }
 
     let func_context = lexer.split(func_name, all_generics);
-    parse_func_code(func_context, method_of)
+    parse_func_code(func_context, relation)
 }
 
 pub fn parse_func_code(
     mut lexer: ParseContext<VarName>,
-    method_of: Option<TypeAlias>,
+    relation: TypeAliasRelation,
 ) -> Result<FuncCode, ParseError> {
     let mut args = parse_list(
         (Tok::LeftParen, Tok::RghtParen),
@@ -165,12 +185,12 @@ pub fn parse_func_code(
     let generic_count = lexer.generic_count() as u32;
     let (name, _) = lexer.return_info();
 
-    let method_of = method_of.map(|mo| TypeOrAlias::Alias(mo));
+    let relation = relation.map(|mo| TypeOrAlias::Alias(mo));
 
-    if let Some(method_of) = &method_of {
+    if let TypeOrAliasRelation::MethodOf(relation) = &relation {
         args.push(VarDecl {
             name: VarName::from("self"),
-            typ: Some(method_of.clone()),
+            typ: Some(relation.clone()),
         });
     }
 
@@ -180,7 +200,7 @@ pub fn parse_func_code(
         args,
         code,
         generic_count,
-        method_of,
+        relation,
     })
 }
 

@@ -5,8 +5,10 @@ use crate::parse::TypeAlias;
 use crate::Type;
 use crate::TypeEnum;
 
+use crate::parse::TypeOrAliasRelation;
 use crate::parse::VarDecl;
 use crate::typ::StructType;
+use crate::typ::TypeOrAlias;
 use crate::unit::CompData;
 
 use super::Library;
@@ -15,7 +17,7 @@ pub struct TypeInterfaceLib;
 
 impl Library for TypeInterfaceLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        unit.add_deriver(VarName::from("type_field_count"), field_count);
+        unit.add_method_deriver(VarName::from("type_field_count"), field_count);
     }
 }
 
@@ -34,6 +36,6 @@ fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
         }],
         generic_count: 0,
         code: Expr::Number(field_count as u128),
-        method_of: Some(typ.into()),
+        relation: TypeOrAliasRelation::Static(TypeOrAlias::Type(typ.into())),
     })
 }

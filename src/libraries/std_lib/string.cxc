@@ -15,19 +15,20 @@ String = {
     ; 0
 }
 
-create_string_from_array<T>(array: T): String {
+String:from_i8_array<T>(array: T): String {
     new_string: String = String {
         inner = create_vec<i8>()
     }
 
     index: i32 = 0
 
-    @ index < array.len() {
+    @ index < T:len() {
         none: i32 = new_string.inner.push<i8>(array[index])
         index = index + 1
     }    
 
     ; new_string
+
 }
 
 create_string(): String {

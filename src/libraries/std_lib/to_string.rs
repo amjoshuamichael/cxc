@@ -1,6 +1,8 @@
 use crate::lex::VarName;
-use crate::parse::{Expr, Opcode, TypeAlias, VarDecl};
-use crate::typ::{ArrayType, StructType};
+use crate::parse::{
+    Expr, Opcode, TypeAlias, TypeOrAliasRelation, TypeRelation, VarDecl,
+};
+use crate::typ::{ArrayType, StructType, TypeOrAlias};
 
 use crate::TypeEnum;
 use crate::{parse::FuncCode, unit::CompData, Type};
@@ -11,7 +13,7 @@ pub(super) struct ToStringLib;
 
 impl Library for ToStringLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        unit.add_deriver("to_string".into(), derive_to_string);
+        unit.add_method_deriver("to_string".into(), derive_to_string);
 
         let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
 
@@ -21,7 +23,7 @@ impl Library for ToStringLib {
             string_type
                 .clone()
                 .func_with_args(vec![Type::i(32).get_ref()]),
-            Some(Type::i(32).get_ref()),
+            TypeRelation::MethodOf(Type::i(32).get_ref()),
             Vec::new(),
         );
 
@@ -31,7 +33,7 @@ impl Library for ToStringLib {
             string_type
                 .clone()
                 .func_with_args(vec![Type::f(32).get_ref()]),
-            Some(Type::f(32).get_ref()),
+            TypeRelation::MethodOf(Type::f(32).get_ref()),
             Vec::new(),
         );
 
@@ -41,7 +43,7 @@ impl Library for ToStringLib {
             string_type
                 .clone()
                 .func_with_args(vec![string_type.clone().get_ref()]),
-            Some(string_type.clone().get_ref()),
+            TypeRelation::MethodOf(string_type.clone().get_ref()),
             Vec::new(),
         );
     }
@@ -204,7 +206,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         }],
         generic_count: 0,
         code: expr,
-        method_of: Some(typ.into()),
+        relation: TypeOrAliasRelation::MethodOf(TypeOrAlias::Type(typ.into())),
     })
 }
 
