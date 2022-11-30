@@ -1,106 +1,17 @@
 use crate::lex::{indent_parens, VarName};
 use crate::parse::*;
 use crate::typ::FloatType;
-use crate::unit::UniqueFuncInfo;
 use crate::Type;
 use std::fmt::{Debug, Formatter};
+
+mod expr_tree_helper;
+mod quick;
+
+pub use quick::*;
 
 #[derive(Default, Clone)]
 pub struct ExprTree {
     nodes: Vec<ExprNode>,
-}
-
-impl ExprTree {
-    pub fn iter_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &mut NodeData)> + 'a> {
-        Box::new(
-            self.nodes
-                .iter_mut()
-                .enumerate()
-                .map(|(id, node)| (ExprID(id), &mut node.data)),
-        )
-    }
-
-    pub fn iter<'a>(
-        &'a self,
-    ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &NodeData)> + 'a> {
-        Box::new(
-            self.nodes
-                .iter()
-                .enumerate()
-                .map(|(id, node)| (ExprID(id), &node.data)),
-        )
-    }
-
-    pub fn ids(&self) -> impl DoubleEndedIterator<Item = ExprID> {
-        (0..self.node_count()).map(ExprID)
-    }
-
-    pub fn insert(&mut self, parent: ExprID, data: NodeData) -> ExprID {
-        self.nodes.push(ExprNode { parent, data });
-        ExprID(self.nodes.len() - 1)
-    }
-
-    pub fn replace(&mut self, at: ExprID, with: NodeData) {
-        self.nodes[at.0].data = with;
-    }
-
-    pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
-        self.nodes.push(ExprNode {
-            parent,
-            data: NodeData::Empty,
-        });
-        ExprID(self.nodes.len() - 1)
-    }
-
-    pub fn get(&self, at: ExprID) -> NodeData { self.nodes[at.0].data.clone() }
-
-    pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData {
-        &mut self.nodes[at.0].data
-    }
-
-    pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
-
-    pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
-        let parent = self.parent(of);
-
-        if parent == ExprID::ROOT {
-            return (of, parent);
-        }
-
-        if matches!(self.get(parent), Block { .. }) {
-            (of, parent)
-        } else {
-            self.statement_and_block(parent)
-        }
-    }
-
-    pub fn with_space(
-        &mut self,
-        parent: ExprID,
-        closure: impl Fn(ExprID, &mut Self) -> NodeData,
-    ) -> ExprID {
-        let new_space = self.make_one_space(parent);
-        let new_data = closure(new_space, self);
-        self.replace(new_space, new_data);
-        new_space
-    }
-
-    pub fn return_type(&self) -> Type { self.get(ExprID::ROOT).ret_type() }
-
-    fn node_count(&self) -> usize { self.nodes.len() }
-
-    pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
-        let NodeData::Call { f, generics, relation, .. } = call.clone()
-            else { panic!() };
-
-        UniqueFuncInfo {
-            name: f,
-            relation,
-            generics,
-        }
-    }
 }
 
 impl ToString for ExprTree {
@@ -367,7 +278,7 @@ impl NodeData {
                 a: args,
                 ..
             } => {
-                // TODO: support is_method
+                // TODO: support relation
                 let mut call = f.to_string();
 
                 if generics.len() > 0 {

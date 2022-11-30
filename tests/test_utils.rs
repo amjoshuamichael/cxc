@@ -123,6 +123,14 @@ pub struct Point3D {
 }
 
 #[derive(Clone, Copy, Debug, XcReflect, PartialEq, Eq)]
+pub struct Numbers4 {
+    pub a: i32,
+    pub b: i32,
+    pub c: i32,
+    pub d: i32,
+}
+
+#[derive(Clone, Copy, Debug, XcReflect, PartialEq, Eq)]
 pub struct Numbers5 {
     pub a: i32,
     pub b: i32,
@@ -147,6 +155,10 @@ impl<'a> Library for TestUtilsLib<'a> {
 
         if self.code.contains("Point3D") {
             unit.add_reflect_type::<Point3D>();
+        }
+
+        if self.code.contains("Numbers4") {
+            unit.add_reflect_type::<Numbers4>();
         }
 
         if self.code.contains("Numbers5") {

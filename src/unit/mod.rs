@@ -4,7 +4,6 @@ use crate::lex::*;
 use crate::libraries::Library;
 use crate::parse;
 use crate::parse::*;
-use crate::typ::FuncType;
 use crate::typ::Kind;
 use crate::Type;
 use crate::TypeEnum;
@@ -36,11 +35,11 @@ pub use functions::UniqueFuncInfo;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
-pub use self::value_api::Value;
+pub use self::value_api::XcValue;
 pub use self::func_api::Func;
 pub use reflect::XcReflect;
 
-pub type IOFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
+pub type XcFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
 pub struct LLVMContext {
     context: Context,
@@ -229,80 +228,7 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub fn get_value(&mut self, of: &str) -> Value {
-        if of == "" { return Value::default() }
-
-        let temp_name = "newfunc";
-        
-        self.reset_execution_engine();
-
-        let expr = {
-            let mut lexed = lex(of);
-            let mut context = lexed.split(VarName::temp(), HashMap::new());
-
-            Expr::Block(vec![Expr::Return(box parse::parse_expr(&mut context).unwrap())])
-        };
-
-        let code = FuncCode::from_expr(expr);
-            
-        let info = UniqueFuncInfo {
-            name: VarName::from(temp_name),
-            ..Default::default()        
-        } ;
-
-        let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code);
-
-        {
-            let dependencies = func_rep.get_func_dependencies().drain().collect();
-            self.compile_func_set(dependencies);
-        }
-
-        let mut fcs = {
-            let ink_func_type = func_rep.func_type.clone().to_any_type(self.context).into_function_type();
-
-            let function = self.module.add_function(
-                temp_name,
-                ink_func_type,
-                None,
-            );
-
-            self.new_func_comp_state(func_rep.take_tree(), function, func_rep.take_arg_names())
-        };
-
-        {
-            let block = fcs.context.append_basic_block(fcs.function, "");
-            fcs.builder.position_at_end(block);
-            compile_routine(&mut fcs);
-        };
-
-        if crate::DEBUG {
-            self.module.get_function(temp_name).unwrap().print_to_stderr();
-        }
-
-        let func_addr = self
-            .execution_engine
-            .borrow()
-            .get_function_address(temp_name)
-            .unwrap();
-
-        let TypeEnum::Func(FuncType { ret_type, .. }) = 
-            func_rep.func_type.as_type_enum() else { panic!() };
-
-        let value = if ret_type.return_style() != ReturnStyle::Pointer {
-            let new_func: fn() -> [u8; 8] = unsafe { transmute(func_addr) };
-            Value::new_from_arr(ret_type.clone(), new_func())
-        } else {
-            let data_vec: Vec<u8> = vec![0; ret_type.size()];
-            let new_func: fn(*const u8) = unsafe { transmute(func_addr) };
-            new_func(data_vec.as_ptr());
-            Value::new_from_vec(ret_type.clone(), data_vec)
-        };
-
-        self.execution_engine.borrow().free_fn_machine_code(fcs.function);
-        unsafe { fcs.function.delete() };
-
-        value
-    }
+    
 
     fn compile(&mut self, output: &mut FuncOutput) {
         let function = self.comp_data.get_func_value(output.info_ref()).unwrap();

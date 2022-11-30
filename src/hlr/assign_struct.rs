@@ -1,77 +1,58 @@
-use crate::{TypeEnum, Type};
+use crate::{lex::VarName, typ::StructType, TypeEnum};
 
-use super::{expr_tree::NodeData, hlr_data::FuncRep};
+use super::{
+    expr_tree::{MakeVarGen, MemberGen, NodeData, SetVarGen},
+    hlr_data::FuncRep,
+};
 
 pub fn assign_struct(hlr: &mut FuncRep) {
-    for setvar_id in hlr.tree.ids() {
-        let data = hlr.tree.get(setvar_id);
+    hlr.modify_many_rev(
+        |data| matches!(data, NodeData::StructLit { .. }),
+        |structlit, struct_data, hlr| {
+            let new_struct_name = VarName::from(structlit.to_string() + "struct");
+            let struct_type = struct_data.ret_type();
+            let NodeData::StructLit { fields: fields_ids, .. } = struct_data 
+                else { unreachable!() };
 
-        if let NodeData::SetVar { lhs: lhs_id, rhs, .. } = data {
-            let lhs_data = hlr.tree.get(lhs_id);
+            let mut current_statement = hlr
+                .insert_statement_before(
+                    structlit,
+                    MakeVarGen {
+                        set: new_struct_name.clone(),
+                        var_type: struct_type.clone(),
+                        ..Default::default()
+                    },
+                )
+                .inserted_id();
 
-            let lhs_type = lhs_data.ret_type();
-            let lhs_type = lhs_type.complete_deref();
-            let TypeEnum::Struct(lhs_type) = lhs_type.as_type_enum()
-                else { continue };
+            let TypeEnum::Struct(StructType { fields }) = struct_type.as_type_enum()
+                else { unreachable!() };
 
-            let (_, block_id) = hlr.tree.statement_and_block(setvar_id);
-            let NodeData::Block { mut stmts, ret_type: block_ret_type } =
-                hlr.tree.get(block_id)
-                    else { continue };
-                    
-            let id_in_block = stmts.iter().position(|id| *id == setvar_id).unwrap();
-
-            let NodeData::StructLit { fields: field_stmts, .. } = 
-                hlr.tree.get(rhs) else { continue; };
-
-            stmts.remove(id_in_block);
-
-            for (field_index, (field_name, field_value)) 
-                in { field_stmts }.drain(..).enumerate().rev() {
-                let field_type = lhs_type.get_field_type(&field_name).unwrap();
-
-                let set_space = hlr.tree.make_one_space(block_id);
-
-                if field_index != 0 {
-                    let member_space = hlr.tree.make_one_space(set_space);
-                    let object = hlr.tree.insert(member_space, lhs_data.clone());
-                    hlr.tree.replace(member_space, NodeData::Member {
-                        ret_type: field_type,
-                        object,
-                        field: field_name,
-                    });
-
-                    hlr.tree.replace(set_space, NodeData::SetVar { 
-                        ret_type: Type::never(), 
-                        lhs: member_space, 
-                        rhs: field_value 
-                    });
-                } else {
-                    // if we are in the first field, we can set the object directly, because the
-                    // first field is always aligned to the first byte of the object.
-                    let object_to_set = hlr.tree.insert(set_space, lhs_data.clone());
-                    hlr.tree.replace(
-                        set_space, 
-                        NodeData::SetVar { 
-                            ret_type: Type::never(), 
-                            lhs: object_to_set, 
-                            rhs: field_value 
-                        }
-                    );
-                }
-
-                stmts.insert(id_in_block, set_space);
+            for ((field_name, field_type), (_, field_id)) 
+                in fields.iter().zip(fields_ids) {
+                current_statement = hlr
+                    .insert_statement_after(
+                        current_statement,
+                        SetVarGen {
+                            lhs: box MemberGen {
+                                object: box NodeData::Ident {
+                                    var_type: struct_type.clone(),
+                                    name: new_struct_name.clone(),
+                                },
+                                field: field_name.clone(),
+                                ret_type: field_type.clone(),
+                            },
+                            rhs: box *field_id,
+                            ..Default::default()
+                        },
+                    )
+                    .inserted_id();
             }
 
-            hlr.tree.replace(
-                block_id, 
-                NodeData::Block { stmts, ret_type: block_ret_type }
-            );
-
-            hlr.tree.replace(
-                setvar_id, 
-                lhs_data.clone()
-            );
-        }
-    }
+            *struct_data = NodeData::Ident {
+                var_type: struct_type.clone(),
+                name: new_struct_name.clone(),
+            };
+        },
+    )
 }

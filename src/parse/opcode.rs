@@ -1,10 +1,11 @@
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
-    Exponential,
+    #[default]
     Plus,
     Minus,
     Multiplier,
     Divider,
+    Exponential,
     Modulus,
     BitAND,
     BitOR,

@@ -18,6 +18,21 @@ fn basic_struct() {
 }
 
 #[test]
+fn set_to_with_function() {
+    xc_test!(
+        "
+            double(in: i32): i32 { ; in * 2 }
+
+            main(): i32 {
+                x: Point2D = Point2D { x = double(2), y = 9 }
+                ; x.x + x.y
+            }
+        ";
+        13
+    )
+}
+
+#[test]
 fn anonymous() {
     xc_test!(
         "

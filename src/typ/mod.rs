@@ -78,7 +78,7 @@ impl Type {
                     ReturnStyle::ThroughI64I32
                 } else if self.size() == 8 {
                     ReturnStyle::ThroughI64
-                } else if self.size() == 8 {
+                } else if self.size() == 4 {
                     ReturnStyle::Direct
                 } else {
                     todo!("cannot return style for this type: {:?}", self);

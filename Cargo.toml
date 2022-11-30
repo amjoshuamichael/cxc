@@ -21,3 +21,6 @@ glam = { version = "0.22.0", optional = true }
 
 [profile.bench]
 debug = true
+
+[profile.release]
+opt-level = 3

@@ -45,6 +45,10 @@ impl From<&str> for VarName {
     fn from(s: &str) -> Self { Self(Arc::from(s)) }
 }
 
+impl From<String> for VarName {
+    fn from(s: String) -> Self { Self(Arc::from(&*s)) }
+}
+
 #[derive(PartialEq, Eq, Clone, Hash)]
 pub enum TypeName {
     Other(Arc<str>),
