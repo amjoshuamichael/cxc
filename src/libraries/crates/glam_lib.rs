@@ -17,9 +17,9 @@ impl Library for GlamLib {
 
 impl XcReflect for Vec3 {
     fn alias_code<'a>() -> &'a str {
-        "Vec3 {
-            x: f32
-            y: f32
+        "Vec3 = {
+            x: f32,
+            y: f32,
             z: f32
         }"
     }
@@ -27,8 +27,8 @@ impl XcReflect for Vec3 {
 
 impl XcReflect for Vec2 {
     fn alias_code<'a>() -> &'a str {
-        "Vec2 {
-            x: f32
+        "Vec2 = {
+            x: f32,
             y: f32
         }"
     }

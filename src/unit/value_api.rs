@@ -1,4 +1,4 @@
-use crate::{lex::{indent_parens, VarName, lex}, parse::{TypeRelation, FuncCode, Expr, self}, Unit, TypeEnum, hlr::hlr, typ::{ReturnStyle, FuncType}, to_llvm::compile_routine};
+use crate::{lex::{indent_parens, VarName, lex}, parse::{TypeRelation, FuncCode, Expr, self}, Unit, TypeEnum, hlr::hlr, typ::{ReturnStyle, FuncType}, to_llvm::compile_routine, XcReflect};
 use std::{mem::transmute, collections::HashMap};
 
 use crate::Type;
@@ -23,6 +23,16 @@ impl XcValue {
 
     pub fn new_opaque<T: bytemuck::NoUninit>(data: T) -> Self {
         let typ = Type::opaque_type::<T>();
+
+        Self {
+            typ,
+            data: Vec::from(bytemuck::bytes_of(&data)),
+        }
+    }
+
+    pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(data: T, unit: &mut Unit) -> Self {
+        let typ = unit.get_reflect_type::<T>().expect("type contains generics");
+
         Self {
             typ,
             data: Vec::from(bytemuck::bytes_of(&data)),

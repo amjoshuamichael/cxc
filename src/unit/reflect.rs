@@ -14,6 +14,11 @@ pub trait XcReflect {
         let parsed = match parse::file(lexer) {
             Ok(file) => file,
             Err(err) => {
+                println!(
+                    "found error in reflection of {}",
+                    std::any::type_name::<Self>()
+                );
+                println!("{}", Self::alias_code());
                 dbg!(&err);
                 panic!();
             },
