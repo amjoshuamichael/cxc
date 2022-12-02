@@ -7,7 +7,10 @@
 pub static DEBUG: bool = false;
 
 pub use parse::TypeRelation;
-pub use typ::{Kind, Type, TypeEnum};
+pub use typ::{
+    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType,
+    StructType, Type, TypeEnum,
+};
 pub use unit::{
     Func, LLVMContext, UniqueFuncInfo, Unit, XcFunc, XcReflect, XcValue,
 };
