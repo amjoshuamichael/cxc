@@ -1,7 +1,7 @@
 use crate::lex::{TypeName, VarName};
-use crate::parse::*;
 use crate::unit::CompData;
 use crate::Type;
+use crate::{parse::*, TypeEnum};
 
 mod rust_type_name_conversion;
 
@@ -61,6 +61,24 @@ impl<'a> CompData<'a> {
             TypeAlias::GenParam(index) => generics[*index as usize].clone(),
             TypeAlias::Array(base, count) => {
                 self.get_spec(base, generics)?.get_array(*count)
+            },
+            TypeAlias::Union(left, right) => {
+                let left = self.get_spec(left, generics)?;
+                let right = self.get_spec(right, generics)?;
+
+                let TypeEnum::Struct(l_struct_type) = left.as_type_enum() 
+                    else { panic!() };
+                let TypeEnum::Struct(r_struct_type) = right.as_type_enum() 
+                    else { panic!() };
+
+                let new_fields = l_struct_type
+                    .fields
+                    .iter()
+                    .chain(r_struct_type.fields.iter())
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                Type::new_struct(new_fields)
             },
         };
 

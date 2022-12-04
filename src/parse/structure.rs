@@ -15,6 +15,7 @@ pub enum TypeAlias {
     Struct(Vec<(VarName, TypeAlias)>),
     Function(Vec<TypeAlias>, Box<TypeAlias>),
     Array(Box<TypeAlias>, u32),
+    Union(Box<TypeAlias>, Box<TypeAlias>),
 }
 
 #[derive(Default)]
@@ -23,15 +24,11 @@ pub struct StructParsingContext {
     pub dependencies: HashSet<String>,
 }
 
-fn parse_type(
-    lexer: &mut ParseContext<TypeName>,
-) -> Result<TypeAlias, ParseError> {
+fn parse_type(lexer: &mut ParseContext<TypeName>) -> Result<TypeAlias, ParseError> {
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {
-        Tok::LeftCurly => {
-            parse_struct(lexer)?
-        },
+        Tok::LeftCurly => parse_struct(lexer)?,
         Tok::AmpersandSet(count) => {
             lexer.next_tok()?;
 
@@ -75,12 +72,8 @@ fn parse_type(
             }
         },
         Tok::LeftParen => {
-            let arg_types = parse_list(
-                Tok::parens(),
-                Some(Tok::Comma),
-                parse_type,
-                lexer,
-            )?;
+            let arg_types =
+                parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
 
             {
                 let probably_arrow = lexer.next_tok()?;
@@ -106,7 +99,7 @@ fn parse_type(
 
     let suffix = lexer.peek_tok().clone();
 
-    let alias = match suffix {
+    let type_alias = match suffix {
         Ok(Tok::LeftBrack) => {
             lexer.next_tok()?;
             let count = lexer.next_tok()?.int_value()?;
@@ -114,10 +107,16 @@ fn parse_type(
 
             TypeAlias::Array(box type_alias, count.try_into().unwrap())
         },
+        Ok(Tok::Plus) => {
+            lexer.next_tok()?;
+            let other_alias = parse_type(lexer)?;
+
+            TypeAlias::Union(box type_alias, box other_alias)
+        },
         _ => type_alias,
     };
 
-    Ok(alias)
+    Ok(type_alias)
 }
 
 pub fn parse_type_decl(
@@ -148,8 +147,9 @@ pub fn parse_type_alias(
 pub fn parse_struct(
     lexer: &mut ParseContext<TypeName>,
 ) -> Result<TypeAlias, ParseError> {
-    fn parse_field(lexer: &mut ParseContext<TypeName>) 
-        -> Result<(VarName, TypeAlias), ParseError> {
+    fn parse_field(
+        lexer: &mut ParseContext<TypeName>,
+    ) -> Result<(VarName, TypeAlias), ParseError> {
         let field = lexer.next_tok()?;
         let Tok::VarName(name) = field else {
             return Err(ParseError::UnexpectedTok { 

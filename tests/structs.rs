@@ -233,3 +233,34 @@ fn active_initialize() {
         }
     );
 }
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct ThisUnion {
+    a: i32,
+    b: i32,
+    c: f32,
+    d: i32,
+    e: f32,
+}
+
+#[test]
+fn unions() {
+    xc_test!(
+        "
+        Num2 = { a: i32, b: i32 }
+        Num3<T> = { c: T, d: i32, e: T }
+        Union = Num2 + Num3<f32>
+
+        main(): Union {
+            ; Union { a = 10, b = 20, e = 90.9, d = 30, c = 32.7 }
+        }
+        ";
+        ThisUnion {
+            a: 10,
+            b: 20,
+            e: 90.9,
+            d: 30,
+            c: 32.7,
+        }
+    );
+}
