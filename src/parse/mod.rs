@@ -55,7 +55,7 @@ pub fn file(mut lexer: Lexer) -> Result<Script, ParseError> {
                 if matches!(lexer.peek_by(1)?, Tok::LeftAngle | Tok::Assignment)
                     && generic_labels.len() == 0
                 {
-                    let type_name = lexer.get_type_name_next()?;
+                    let type_name = lexer.next_tok()?.type_name()?;
                     let generic_labels = parse_generics(&mut lexer)?;
 
                     lexer.assert_next_tok_is(Tok::Assignment)?;
@@ -152,7 +152,7 @@ pub fn parse_func(
     relation: TypeAliasRelation,
     outer_generics: GenericLabels,
 ) -> Result<FuncCode, ParseError> {
-    let func_name = lexer.get_var_name_next()?;
+    let func_name = lexer.next_tok()?.var_name()?;
     let generic_labels = parse_generics(lexer)?;
 
     let all_generics = merge(&generic_labels, &outer_generics);
@@ -176,7 +176,7 @@ pub fn parse_func_code(
         &mut lexer,
     )?;
 
-    assert_or_error(lexer.next_tok()?, Tok::Colon)?;
+    lexer.assert_next_tok_is(Tok::Colon)?;
 
     let ret_type = parse_type_alias(&mut lexer)?;
 
@@ -196,7 +196,7 @@ pub fn parse_func_code(
 
     Ok(FuncCode {
         name,
-        ret_type,
+        ret_type: ret_type.into(),
         args,
         code,
         generic_count,

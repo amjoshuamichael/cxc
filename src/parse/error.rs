@@ -25,6 +25,9 @@ pub enum TokName {
     BitShiftR,
     BitShiftL,
 
+    DoublePlus,
+    DoubleMinus,
+
     Ref,
     Deref,
 
@@ -88,6 +91,8 @@ impl From<Tok> for TokName {
             BitShiftR => TokName::BitShiftR,
             BitShiftL => TokName::BitShiftL,
             Dot => TokName::Dot,
+            DoublePlus => TokName::DoublePlus,
+            DoubleMinus => TokName::DoubleMinus,
             AmpersandSet(_) => todo!(),
             Or => TokName::Or,
             LessOrEqual => TokName::LessOrEqual,
@@ -117,16 +122,5 @@ impl From<Tok> for TokName {
             Error => TokName::Error,
             Whitespace => TokName::Whitespace,
         }
-    }
-}
-
-pub fn assert_or_error(check: Tok, against: Tok) -> Result<(), ParseError> {
-    if check == against {
-        Ok(())
-    } else {
-        Err(ParseError::UnexpectedTok {
-            got: check,
-            expected: vec![against.into()],
-        })
     }
 }

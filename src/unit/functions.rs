@@ -31,7 +31,7 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("alloc"),
-            ret_type: TypeAlias::Ref(box TypeAlias::GenParam(0)),
+            ret_type: TypeAlias::Ref(box TypeAlias::GenParam(0)).into(),
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
@@ -40,7 +40,7 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("free"),
-            ret_type: TypeAlias::Int(32),
+            ret_type: Type::i(32).into(),
             args: vec![VarDecl {
                 name: VarName::temp(),
                 typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
@@ -52,7 +52,7 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("memmove"),
-            ret_type: TypeAlias::Int(32),
+            ret_type: Type::i(32).into(),
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
@@ -74,7 +74,7 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("memcpy"),
-            ret_type: TypeAlias::Int(32),
+            ret_type: Type::i(32).into(),
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
@@ -96,7 +96,7 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("size_of"),
-            ret_type: TypeAlias::Int(64),
+            ret_type: Type::i(64).into(),
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
@@ -235,7 +235,10 @@ impl<'a> CompData<'a> {
 
         let code = self.get_code(info.clone())?;
 
-        let ret_type = self.get_spec(&code.ret_type, &info.generics).unwrap();
+        let ret_type = &code
+            .ret_type
+            .into_type_with_generics(self, &info.generics)
+            .unwrap();
 
         let arg_types = code
             .args
@@ -249,7 +252,7 @@ impl<'a> CompData<'a> {
             })
             .collect();
 
-        let func_type = ret_type.func_with_args(arg_types);
+        let func_type = ret_type.clone().func_with_args(arg_types);
 
         Some(func_type)
     }

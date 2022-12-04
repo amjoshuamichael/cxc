@@ -1,9 +1,10 @@
 mod test_utils;
+use cxc::library::StdLib;
 use cxc::LLVMContext;
 use cxc::Type;
 use cxc::TypeRelation;
 use cxc::Unit;
-use test_utils::{xc_test, Point2D};
+use test_utils::{xc_test, Numbers5, Point2D};
 
 #[test]
 fn basic_struct() {
@@ -211,4 +212,24 @@ fn struct_arrays() {
         }
         "
     )
+}
+
+#[test]
+fn active_initialize() {
+    xc_test!(
+        use StdLib;
+        "
+        main(): Numbers5 {
+            numbers: Numbers5 = Numbers5 { a = 10, b = 20, e = 90, ++ }
+
+            ; numbers
+        }
+        ";
+        Numbers5 {
+            a: 10,
+            b: 20,
+            e: 90,
+            ..Default::default()
+        }
+    );
 }

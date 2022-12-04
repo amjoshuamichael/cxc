@@ -5,13 +5,13 @@ use super::{
     hlr_data::FuncRep,
 };
 
-pub fn assign_struct(hlr: &mut FuncRep) {
+pub fn handle_struct_literals(hlr: &mut FuncRep) {
     hlr.modify_many_rev(
         |data| matches!(data, NodeData::StructLit { .. }),
         |structlit, struct_data, hlr| {
             let new_struct_name = VarName::from(structlit.to_string() + "struct");
             let struct_type = struct_data.ret_type();
-            let NodeData::StructLit { fields: fields_ids, .. } = struct_data 
+            let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
                 else { unreachable!() };
 
             let mut current_statement = hlr
@@ -25,11 +25,17 @@ pub fn assign_struct(hlr: &mut FuncRep) {
                 )
                 .inserted_id();
 
-            let TypeEnum::Struct(StructType { fields }) = struct_type.as_type_enum()
-                else { unreachable!() };
+            let TypeEnum::Struct(StructType { fields: field_types }) = 
+                struct_type.as_type_enum() else { unreachable!() };
 
-            for ((field_name, field_type), (_, field_id)) 
-                in fields.iter().zip(fields_ids) {
+            for (field_name, field_expr) in field_exprs {
+                let (_, field_type) = field_types
+                    .iter()
+                    .find(|(name, _)| {
+                        name == field_name
+                    })
+                    .unwrap();
+
                 current_statement = hlr
                     .insert_statement_after(
                         current_statement,
@@ -42,7 +48,7 @@ pub fn assign_struct(hlr: &mut FuncRep) {
                                 field: field_name.clone(),
                                 ret_type: field_type.clone(),
                             },
-                            rhs: box *field_id,
+                            rhs: box *field_expr,
                             ..Default::default()
                         },
                     )

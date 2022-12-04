@@ -199,7 +199,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
     Some(FuncCode {
         name: VarName::from("to_string"),
-        ret_type: TypeAlias::Named("String".into()),
+        ret_type: TypeAlias::Named("String".into()).into(),
         args: vec![VarDecl {
             name: VarName::from("input"),
             typ: Some(typ.clone().into()),

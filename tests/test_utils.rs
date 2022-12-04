@@ -105,7 +105,7 @@ impl Point2D {
     pub fn sqr_magnitude(&self) -> i32 { self.x * self.x + self.y * self.y }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TwoOf<T> {
     pub one: T,
     pub two: T,
@@ -130,7 +130,7 @@ pub struct Numbers4 {
     pub d: i32,
 }
 
-#[derive(Clone, Copy, Debug, XcReflect, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, XcReflect, PartialEq, Eq)]
 pub struct Numbers5 {
     pub a: i32,
     pub b: i32,

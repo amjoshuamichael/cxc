@@ -9,7 +9,9 @@ use crate::{
 use super::Library;
 
 pub struct StdLib;
+mod default;
 mod to_string;
+use default::DefaultLib;
 use to_string::ToStringLib;
 
 impl Library for StdLib {
@@ -20,6 +22,7 @@ impl Library for StdLib {
         unit.push_script(include_str!("string.cxc"));
 
         unit.add_lib(ToStringLib);
+        unit.add_lib(DefaultLib);
     }
 }
 
@@ -30,7 +33,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
 
     Some(FuncCode {
         name: VarName::from("len"),
-        ret_type: TypeAlias::Int(32),
+        ret_type: Type::i(32).into(),
         args: vec![VarDecl {
             name: VarName::temp(),
             typ: Some(typ.clone().into()),

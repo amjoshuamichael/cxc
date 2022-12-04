@@ -12,7 +12,7 @@ where
 {
     let (opener, closer) = opener_and_closer;
 
-    assert_or_error(lexer.next_tok()?, opener)?;
+    lexer.assert_next_tok_is(opener)?;
 
     if lexer.peek_tok()? == closer.clone() {
         lexer.next_tok()?;

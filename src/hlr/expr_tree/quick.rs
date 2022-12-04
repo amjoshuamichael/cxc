@@ -2,7 +2,7 @@ use crate::{
     hlr::hlr_data::{DataFlowInfo, FuncRep},
     lex::VarName,
     parse::Opcode,
-    Type, UniqueFuncInfo,
+    FuncType, Type, TypeEnum, UniqueFuncInfo,
 };
 
 use super::{ExprID, NodeData};
@@ -147,6 +147,7 @@ impl NodeDataGen for UnarOpGen {
     }
 }
 
+#[derive(Default)]
 pub struct CallGen {
     pub info: UniqueFuncInfo,
     pub args: Vec<Box<dyn NodeDataGen>>,
@@ -162,7 +163,9 @@ impl NodeDataGen for CallGen {
             .map(|gen| gen.add_to_expr_tree(hlr, space))
             .collect();
 
-        let ret_type = hlr.types.get_type(&self.info).unwrap();
+        let func_type = hlr.types.get_type(&self.info).unwrap();
+        let TypeEnum::Func(FuncType { ret_type, .. } ) = func_type.as_type_enum()
+            else { panic!() };
 
         hlr.tree.replace(
             space,
@@ -170,7 +173,7 @@ impl NodeDataGen for CallGen {
                 f: self.info.name.clone(),
                 generics: self.info.generics.clone(),
                 relation: self.info.relation.clone(),
-                ret_type,
+                ret_type: ret_type.clone(),
                 a: args,
             },
         );

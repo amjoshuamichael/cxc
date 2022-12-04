@@ -1,7 +1,7 @@
 mod test_utils;
 use cxc::library::{StdLib, TestLib, TypeInterfaceLib};
 use cxc::{LLVMContext, Unit};
-use test_utils::xc_test;
+use test_utils::{xc_test, TwoOf};
 
 #[test]
 fn backwards_struct_dependency() {
@@ -229,5 +229,57 @@ fn to_string() {
             }
         ";
         String::from("OutputType {one = TwoOf {one = 20, two = 303}, two = TwoOf {one = 3.2, two = 40.54}}")
+    )
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct OutputType {
+    one: i32,
+    two: f32,
+}
+
+#[test]
+fn default() {
+    xc_test!(
+        use StdLib;
+        "
+            OutputType = {
+                one: i32,
+                two: f32
+            }
+
+            main(): OutputType {
+                output: OutputType = OutputType:default()                
+
+                ; output
+            }
+        ";
+        OutputType::default()
+    )
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct OutputType2 {
+    one: TwoOf<i32>,
+    two: TwoOf<f32>,
+}
+
+#[test]
+fn default_generic() {
+    xc_test!(
+        use StdLib;
+        "
+            OutputType = {
+                one: TwoOf<i32>,
+                two: TwoOf<f32>
+            }
+
+            main(): OutputType {
+                output: OutputType = OutputType:default()                
+
+                ; output
+            }
+        ";
+        OutputType2::default()
     )
 }

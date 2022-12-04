@@ -1,4 +1,5 @@
 use crate::{lex::{indent_parens, VarName, lex}, parse::{TypeRelation, FuncCode, Expr, self}, Unit, TypeEnum, hlr::hlr, typ::{ReturnStyle, FuncType}, to_llvm::compile_routine, XcReflect};
+use inkwell::values::AnyValue;
 use std::{mem::transmute, collections::HashMap};
 
 use crate::Type;
@@ -134,7 +135,8 @@ impl<'u> Unit<'u> {
         };
 
         if crate::DEBUG {
-            self.module.get_function(temp_name).unwrap().print_to_stderr();
+            let func = self.module.get_function(temp_name).unwrap().print_to_string();
+            println!("{func}");
         }
 
         let func_addr = self

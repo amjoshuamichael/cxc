@@ -19,8 +19,8 @@ pub enum Expr {
     Bool(bool),
     Strin(String),
     Ident(VarName),
-    StaticMethodPath(TypeAlias, VarName),
-    Struct(TypeAlias, Vec<(VarName, Expr)>),
+    StaticMethodPath(TypeOrAlias, VarName),
+    Struct(TypeOrAlias, Vec<(VarName, Expr)>, bool),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
@@ -49,7 +49,7 @@ impl Expr {
         match &self {
             Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_)
             | StaticMethodPath(..) => box once(self),
-            Struct(_, fields) => box fields.iter().map(|(_, expr)| expr),
+            Struct(_, fields, _) => box fields.iter().map(|(_, expr)| expr),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
             MakeVar(_, rhs) => box once(&**rhs),
@@ -175,7 +175,7 @@ impl<T> Default for TypeRelationGeneric<T> {
 #[derive(Debug, Clone)]
 pub struct FuncCode {
     pub name: VarName,
-    pub ret_type: TypeAlias,
+    pub ret_type: TypeOrAlias,
     pub args: Vec<VarDecl>,
     pub generic_count: u32,
     pub code: Expr,
@@ -206,7 +206,7 @@ impl FuncCode {
     pub fn from_expr(code: Expr) -> Self {
         Self {
             name: VarName::temp(),
-            ret_type: TypeAlias::Int(0),
+            ret_type: Type::i(32).into(), // TODO: void type
             args: Vec::new(),
             generic_count: 0,
             code,

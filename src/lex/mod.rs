@@ -49,28 +49,6 @@ pub trait TokenStream {
 
         Ok(())
     }
-
-    fn get_var_name_next(&mut self) -> Result<VarName, ParseError> {
-        let next = self.next_tok()?;
-        match next {
-            Tok::VarName(name) => Ok(name),
-            _ => Err(ParseError::UnexpectedTok {
-                got: next,
-                expected: vec![TokName::VarName],
-            }),
-        }
-    }
-
-    fn get_type_name_next(&mut self) -> Result<TypeName, ParseError> {
-        let next = self.next_tok()?;
-        match next {
-            Tok::TypeName(name) => Ok(name),
-            _ => Err(ParseError::UnexpectedTok {
-                got: next,
-                expected: vec![TokName::TypeName],
-            }),
-        }
-    }
 }
 
 pub struct Lexer {

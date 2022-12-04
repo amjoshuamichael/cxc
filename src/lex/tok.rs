@@ -137,6 +137,11 @@ pub enum Tok {
     #[token(".", priority = 3)]
     Dot,
 
+    #[token("++")]
+    DoublePlus,
+    #[token("--")]
+    DoubleMinus,
+
     #[regex(r"&+", |set| set.slice().len() as u8)]
     AmpersandSet(u8),
     #[token("||")]
@@ -277,6 +282,16 @@ impl Tok {
         }
     }
 
+    pub fn type_name(self) -> Result<TypeName, ParseError> {
+        match self {
+            Tok::TypeName(name) => Ok(name),
+            err => Err(ParseError::UnexpectedTok {
+                got: err,
+                expected: vec![TokName::TypeName],
+            }),
+        }
+    }
+
     pub fn int_value(self) -> Result<u128, ParseError> {
         match self {
             Tok::Int(val) => Ok(val),
@@ -311,6 +326,8 @@ impl ToString for Tok {
             BitShiftR => ">> ",
             BitShiftL => "<< ",
             Dot => ". ",
+            DoublePlus => "++",
+            DoubleMinus => "--",
             AmpersandSet(count) => return "&".repeat(*count as _) + " ",
             Or => "|| ",
             LessOrEqual => "<= ",
@@ -321,13 +338,13 @@ impl ToString for Tok {
             Colon => ": ",
             At => "@ ",
             LeftParen => "( ",
-            RghtParen => ") ",
+            RghtParen => " ) ",
             LeftCurly => "{ ",
-            RghtCurly => "} ",
+            RghtCurly => " } ",
             LeftBrack => "[ ",
-            RghtBrack => "] ",
+            RghtBrack => " ] ",
             LeftAngle => "< ",
-            RghtAngle => "> ",
+            RghtAngle => " > ",
             LeftArrow => "<- ",
             RghtArrow => "-> ",
             Assignment => "= ",

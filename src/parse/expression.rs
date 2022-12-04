@@ -33,8 +33,8 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseE
 
                     if matches!(lexer.peek_tok()?, Tok::Colon) {
                         lexer.next_tok()?;
-                        let func_name = lexer.get_var_name_next()?;
-                        Expr::StaticMethodPath(type_alias, func_name)
+                        let func_name = lexer.next_tok()?.var_name()?;
+                        Expr::StaticMethodPath(type_alias.into(), func_name)
                     } else {
                         parse_struct_literal(lexer, type_alias)?
                     }
@@ -182,22 +182,38 @@ pub fn binary_ops(atoms: &mut Vec<Expr>) {
 }
 
 pub fn parse_struct_literal(lexer: &mut ParseContext<VarName>, type_alias: TypeAlias) -> Result<Expr, ParseError> {
-    let fields = parse_list(
-        (Tok::LeftCurly, Tok::RghtCurly),
-        Some(Tok::Comma),
-        |lexer| {
-            let field = lexer.next_tok()?.var_name()?;
+    let mut fields = Vec::new();
 
-            lexer.assert_next_tok_is(Tok::Assignment)?;
+    lexer.assert_next_tok_is(Tok::LeftCurly)?;
 
-            let rhs = parse_expr(lexer)?;
+    while let Ok(field_name) = lexer.next_tok()?.var_name() {
+        lexer.assert_next_tok_is(Tok::Assignment)?;
+        let rhs = parse_expr(lexer)?;
 
-            Ok((field, rhs))
+        fields.push((field_name, rhs));
+
+        if lexer.peek_tok()? != Tok::Comma {
+            break;
+        }
+        lexer.next_tok()?;
+        if matches!(lexer.peek_tok()?, Tok::RghtCurly | Tok::DoublePlus) {
+            break;
+        }
+    }
+
+    let initialize = match lexer.next_tok()? {
+        Tok::DoublePlus => {
+            lexer.assert_next_tok_is(Tok::RghtCurly)?;
+            true
         },
-        lexer,
-    )?;
+        Tok::RghtCurly => false,
+        got => return Err(ParseError::UnexpectedTok { 
+            got, 
+            expected: vec![TokName::DoublePlus, TokName::RightCurly] 
+        })
+    };
 
-    Ok(Expr::Struct(type_alias, fields))
+    Ok(Expr::Struct(type_alias.into(), fields, initialize))
 }
 
 

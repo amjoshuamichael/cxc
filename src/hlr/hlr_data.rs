@@ -40,7 +40,7 @@ impl<'a> FuncRep<'a> {
     ) -> Self {
         let mut new = FuncRep {
             tree: ExprTree::default(),
-            ret_type: comp_data.get_spec(&code.ret_type, &info.generics).unwrap(),
+            ret_type: code.ret_type.into_type_with_generics(&comp_data, &info.generics).unwrap(),
             types: comp_data,
             identifiers: Vec::new(),
             info,
@@ -349,8 +349,8 @@ impl<'a> FuncRep<'a> {
                             a: arg_ids,
                             relation,
                         }
-                } else if let Expr::StaticMethodPath(ref type_alias, ref func_name) = *f {
-                    let type_origin = self.get_type_spec(type_alias).unwrap();
+                } else if let Expr::StaticMethodPath(ref type_or_alias, ref func_name) = *f {
+                    let type_origin = self.get_type_or_alias(type_or_alias).unwrap();
 
                     NodeData::Call {
                         ret_type: Type::never(),
@@ -383,7 +383,7 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_member);
                 space
             },
-            Expr::Struct(type_alias, expr_fields) => {
+            Expr::Struct(type_alias, expr_fields, initialize) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut fields = Vec::new();
@@ -393,8 +393,9 @@ impl<'a> FuncRep<'a> {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: self.get_type_spec(&type_alias).unwrap(),
+                    var_type: type_alias.into_type(&self.types).unwrap(),
                     fields,
+                    initialize,
                 };
 
                 self.tree.replace(space, new_struct);

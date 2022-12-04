@@ -115,6 +115,7 @@ pub enum NodeData {
     StructLit {
         var_type: Type,
         fields: Vec<(VarName, ExprID)>,
+        initialize: bool,
     },
     ArrayLit {
         var_type: Type,
@@ -227,16 +228,28 @@ impl NodeData {
             Float { value, .. } => value.to_string(),
             Bool { value, .. } => value.to_string(),
             Ident { name, .. } => name.to_string(),
-            StructLit { var_type, fields } => {
+            StructLit {
+                var_type,
+                fields,
+                initialize,
+            } => {
                 let mut lit = match var_type.name() {
                     Some(name) => name.to_string(),
                     None => "".into(),
                 } + " ";
 
+                lit += "{ \n";
+
                 for field in fields.iter() {
                     lit += &*field.0.to_string();
                     lit += &*tree.get(field.1).to_string(tree);
                 }
+
+                if *initialize {
+                    lit += "++\n";
+                }
+
+                lit += "} \n";
 
                 lit
             },
