@@ -54,8 +54,8 @@ impl LLVMContext {
 }
 
 pub struct Unit<'u> {
+    pub comp_data: Rc<CompData<'u>>,
     pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'u>>>,
-    pub(crate) comp_data: Rc<CompData<'u>>,
     pub(crate) module: Module<'u>,
     pub(crate) machine: TargetMachine,
     pub(crate) context: &'u Context,

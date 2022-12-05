@@ -218,11 +218,57 @@ fn reflected_type_masks() {
     unit.push_script(
         "
         main(): i32 {
-            print<i32>(3)
-
-
             assert_is_five(&5)
             assert_is_five(&5.0)
+
+            ; 0
+        }
+        ",
+    );
+
+    unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
+}
+
+#[test]
+fn value_from_code() {
+    pub fn assert_is_five(val: &XcValue) {
+        match val.get_type().as_type_enum() {
+            TypeEnum::Int(IntType { size: 32 }) => {
+                let five: i32 = unsafe { *val.get_data_as::<i32>() };
+
+                assert_eq!(val.get_size(), std::mem::size_of::<i32>());
+                assert_eq!(five, 5);
+            },
+            TypeEnum::Float(FloatType::F32) => {
+                let five: f32 = unsafe { *val.get_data_as::<f32>() };
+
+                assert_eq!(val.get_size(), std::mem::size_of::<f32>());
+                assert_eq!(five, 5.0);
+            },
+            _ => panic!("wrong type!"),
+        }
+    }
+
+    let context = LLVMContext::new();
+    let mut unit = Unit::new(&context);
+
+    unit.add_lib(StdLib);
+
+    let value_type = unit.comp_data.get_by_name(&"XcValue".into()).unwrap();
+
+    unit.add_rust_func_explicit(
+        "assert_is_five",
+        assert_is_five as *const usize,
+        ExternalFuncAdd {
+            arg_types: vec![value_type.clone()],
+            ..ExternalFuncAdd::empty()
+        },
+    );
+    unit.push_script(
+        "
+        main(): i32 {
+            assert_is_five(&XcValue:from(&5))
+            assert_is_five(&XcValue:from(&5.0))
 
             ; 0
         }

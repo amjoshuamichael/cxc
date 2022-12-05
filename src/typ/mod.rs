@@ -73,7 +73,7 @@ impl Type {
             | TypeEnum::Float(_)
             | TypeEnum::Bool(_)
             | TypeEnum::Func(_) => ReturnStyle::Direct,
-            TypeEnum::Struct(_) | TypeEnum::Array(_) => {
+            TypeEnum::Struct(_) | TypeEnum::Array(_) | TypeEnum::Opaque(_) => {
                 if self.size() > 16 {
                     ReturnStyle::Pointer
                 } else if self.nested_field_count() == 1 {
@@ -91,7 +91,6 @@ impl Type {
                 }
             },
             TypeEnum::Never => ReturnStyle::Void,
-            _ => todo!("cannot return style for this type: {:?}", self),
         }
     }
 

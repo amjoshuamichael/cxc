@@ -11,8 +11,10 @@ use super::Library;
 pub struct StdLib;
 mod default;
 mod to_string;
+mod value_lib;
 use default::DefaultLib;
 use to_string::ToStringLib;
+use value_lib::ValueLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
@@ -23,6 +25,7 @@ impl Library for StdLib {
 
         unit.add_lib(ToStringLib);
         unit.add_lib(DefaultLib);
+        unit.add_lib(ValueLib);
     }
 }
 

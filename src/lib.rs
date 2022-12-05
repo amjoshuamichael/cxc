@@ -4,7 +4,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 
-pub static DEBUG: bool = true;
+pub static DEBUG: bool = false;
 
 pub use parse::TypeRelation;
 pub use typ::{
