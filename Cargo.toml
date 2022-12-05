@@ -10,6 +10,7 @@ llvm-sys = "120"
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm12-0"] }
 
 memoize = "0.3.1"
+lazy_static = "1.4.0"
 
 bytemuck = "1.12.3"
 

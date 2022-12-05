@@ -1,6 +1,6 @@
 use crate::{
     lex::VarName,
-    parse::{Expr, FuncCode, TypeAlias, TypeOrAliasRelation, VarDecl},
+    parse::{Expr, FuncCode, TypeOrAliasRelation, VarDecl},
     typ::ArrayType,
     unit::CompData,
     Type, TypeEnum,

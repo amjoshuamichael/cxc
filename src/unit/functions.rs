@@ -1,4 +1,4 @@
-use crate::{Type, TypeRelation};
+use crate::{FuncType, Type, TypeRelation};
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
 
@@ -169,6 +169,26 @@ impl<'a> CompData<'a> {
 
     pub fn func_exists(&self, info: &FuncDeclInfo) -> bool {
         self.func_code.contains_key(info)
+    }
+
+    pub fn reflect_arg_types(&mut self, info: &UniqueFuncInfo, mask: Vec<bool>) {
+        assert!({
+            let func_type = self.get_type(info).unwrap();
+            let TypeEnum::Func(FuncType { args, .. }) = 
+                func_type.as_type_enum() else { panic!() };
+
+            let arg_count = mask.iter().filter(|refl| **refl).count() + mask.len();
+            args.len() == arg_count
+        });
+
+        self.reflect_arg_types.insert(info.clone(), mask);
+    }
+
+    pub fn get_reflect_type_masks(&self, info: &UniqueFuncInfo) -> Vec<bool> {
+        self.reflect_arg_types
+            .get(info)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {

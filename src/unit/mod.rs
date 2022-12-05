@@ -4,10 +4,8 @@ use crate::lex::*;
 use crate::libraries::Library;
 use crate::parse;
 use crate::parse::*;
-use crate::typ::Kind;
 use crate::Type;
 use crate::TypeEnum;
-use crate::typ::ReturnStyle;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -24,19 +22,21 @@ use std::fmt::Debug;
 use std::mem::transmute;
 use std::rc::Rc;
 
-mod functions;
-mod value_api;
+mod add_external;
 mod func_api;
+mod functions;
 mod reflect;
+mod value_api;
 
 use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
 
+pub use self::func_api::Func;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
 pub use self::value_api::XcValue;
-pub use self::func_api::Func;
+pub use add_external::ExternalFuncAdd;
 pub use reflect::XcReflect;
 
 pub type XcFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
@@ -72,6 +72,7 @@ pub struct CompData<'u> {
     decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
     derivers: HashMap<DeriverInfo, DeriverFunc>,
     intrinsics: HashSet<FuncDeclInfo>,
+    reflect_arg_types: HashMap<UniqueFuncInfo, Vec<bool>>,
 }
 
 impl<'u> Debug for CompData<'u> {
@@ -110,18 +111,23 @@ impl<'u> Unit<'u> {
     }
 
     pub fn reset_execution_engine(&self) {
-        self.execution_engine.borrow().remove_module(&self.module).unwrap();
+        self.execution_engine
+            .borrow()
+            .remove_module(&self.module)
+            .unwrap();
         self.execution_engine.replace(
             self.module
                 .create_jit_execution_engine(OptimizationLevel::Aggressive)
-                .unwrap()
+                .unwrap(),
         );
     }
 
     pub fn clear(&mut self) {
         for func in self.comp_data.unique_func_info_iter() {
             let llvm_func = self.module.get_function(&*func.to_string()).unwrap();
-            self.execution_engine.borrow().free_fn_machine_code(llvm_func);
+            self.execution_engine
+                .borrow()
+                .free_fn_machine_code(llvm_func);
             unsafe { llvm_func.delete() }
         }
 
@@ -170,11 +176,17 @@ impl<'u> Unit<'u> {
 
         self.compile_func_set(funcs_to_process);
 
-        top_level_functions.iter().map(|info| self.get_func_ref_by_info(info)).collect()
+        top_level_functions
+            .iter()
+            .map(|info| self.get_func_ref_by_info(info))
+            .collect()
     }
 
     pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) {
-        set = set.drain(..).filter(|info| !self.comp_data.has_been_compiled(info)).collect();
+        set = set
+            .drain(..)
+            .filter(|info| !self.comp_data.has_been_compiled(info))
+            .collect();
 
         if set.len() == 0 {
             return;
@@ -228,8 +240,6 @@ impl<'u> Unit<'u> {
         }
     }
 
-    
-
     fn compile(&mut self, output: &mut FuncOutput) {
         let function = self.comp_data.get_func_value(output.info_ref()).unwrap();
 
@@ -245,97 +255,6 @@ impl<'u> Unit<'u> {
         compile_routine(&mut fcs);
     }
 
-    pub fn add_rust_func<A, R>(
-        &mut self,
-        name: &str,
-        function: [fn(A) -> R; 1],
-    ) -> &mut Self {
-        let func_type = self.comp_data.type_of(&function[0]);
-
-        let function_ptr: *const usize = unsafe { transmute(function[0]) };
-
-        self.add_rust_func_explicit(
-            name, 
-            function_ptr, 
-            func_type, 
-            TypeRelation::Unrelated, 
-            Vec::new()
-        )
-    }
-
-    pub fn add_rust_func_explicit(
-        &mut self,
-        name: &str,
-        function_ptr: *const usize,
-        func_type: Type,
-        relation: TypeRelation,
-        generics: Vec<Type>,
-    ) -> &mut Self {
-        let TypeEnum::Func(func_type_inner) = 
-            func_type.as_type_enum() else { panic!() };
-        let ret_type = func_type_inner.ret_type();
-
-        let ink_func_ptr_type = func_type.to_any_type(&self.context).into_pointer_type();
-
-        let ink_func_type =
-            func_type_inner.llvm_func_type(&self.context);
-
-        let func_info = UniqueFuncInfo {
-            name: name.into(),
-            relation,
-            generics,
-        };
-
-        let function =
-            self.module
-                .add_function(&*func_info.to_string(), ink_func_type, None);
-
-        let builder = self.context.create_builder();
-
-        {
-            let block = self.context.append_basic_block(function, "link");
-            builder.position_at_end(block);
-        }
-
-        let callable = {
-            let function_pointer = self
-                .context
-                .i64_type()
-                .const_int(function_ptr as u64, false)
-                .const_to_pointer(ink_func_ptr_type);
-
-            CallableValue::try_from(function_pointer).unwrap()
-        };
-
-        if ret_type.return_style() != ReturnStyle::Pointer {
-            let arg_vals: Vec<BasicMetadataValueEnum> = function
-                .get_params()
-                .iter()
-                .map(|p| (*p).try_into().unwrap())
-                .collect();
-            let out = builder.build_call(callable, &*arg_vals, "call");
-            let out = out.try_as_basic_value().unwrap_left();
-            builder.build_return(Some(&out));
-        } else {
-            let arg_vals: Vec<BasicMetadataValueEnum> = function
-                .get_params()
-                .iter()
-                .map(|p| (*p).try_into().unwrap())
-                .collect();
-            builder.build_call(callable, &*arg_vals, "call");
-            builder.build_return(None);
-        }
-
-
-        let function = self.module.get_function(&*func_info.to_string()).unwrap();
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-        comp_data.compiled.insert(func_info.clone(), function);
-        comp_data.func_types.insert(func_info, func_type);
-
-        self
-    }
-
     pub fn add_opaque_type<T>(&mut self) -> Type {
         let name = {
             let name = std::any::type_name::<T>();
@@ -343,10 +262,13 @@ impl<'u> Unit<'u> {
             &name[last_colon_index..]
         };
 
-        let opaque_type = Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
+        let opaque_type =
+            Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
-        comp_data.types.insert(TypeName::from(name), opaque_type.clone());
+        comp_data
+            .types
+            .insert(TypeName::from(name), opaque_type.clone());
 
         opaque_type
     }
@@ -370,7 +292,10 @@ impl<'u> Unit<'u> {
         }
     }
 
-    pub unsafe fn get_fn_by_name<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
+    pub unsafe fn get_fn_by_name<I, O>(
+        &self,
+        name: &str,
+    ) -> unsafe extern "C" fn(_: I, ...) -> O {
         let func_info = UniqueFuncInfo {
             name: name.into(),
             ..Default::default()
@@ -379,7 +304,10 @@ impl<'u> Unit<'u> {
         self.get_fn_by_info::<I, O>(&func_info)
     }
 
-    pub unsafe fn get_fn_by_info<I, O>(&self, info: &UniqueFuncInfo) -> unsafe extern "C" fn(_: I, ...) -> O {
+    pub unsafe fn get_fn_by_info<I, O>(
+        &self,
+        info: &UniqueFuncInfo,
+    ) -> unsafe extern "C" fn(_: I, ...) -> O {
         assert!(
             self.
                 module

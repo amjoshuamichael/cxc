@@ -1,10 +1,10 @@
 use crate::{
     lex::VarName,
     libraries::Library,
-    parse::{Expr, FuncCode, TypeAlias, TypeOrAliasRelation},
+    parse::{Expr, FuncCode, TypeOrAliasRelation},
     typ::TypeOrAlias,
     unit::CompData,
-    Type, TypeEnum, TypeRelation,
+    ExternalFuncAdd, Type, TypeEnum, TypeRelation,
 };
 
 pub(super) struct DefaultLib;
@@ -16,22 +16,26 @@ impl Library for DefaultLib {
         unit.add_rust_func_explicit(
             "default",
             i32::default as *const usize,
-            Type::i(32).func_with_args(Vec::new()),
-            TypeRelation::Static(Type::i(32)),
-            Vec::new(),
+            ExternalFuncAdd {
+                ret_type: Type::i(32),
+                relation: TypeRelation::Static(Type::i(32)),
+                ..ExternalFuncAdd::empty()
+            },
         );
 
         unit.add_rust_func_explicit(
             "default",
             f32::default as *const usize,
-            Type::f(32).func_with_args(Vec::new()),
-            TypeRelation::Static(Type::f(32)),
-            Vec::new(),
+            ExternalFuncAdd {
+                ret_type: Type::f(32),
+                relation: TypeRelation::Static(Type::f(32)),
+                ..ExternalFuncAdd::empty()
+            },
         );
     }
 }
 
-fn derive_default(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
+fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
     match typ.as_type_enum() {
         TypeEnum::Struct(struct_type) => {
             let mut fields = Vec::<(VarName, Expr)>::new();

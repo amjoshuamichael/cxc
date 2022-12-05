@@ -40,7 +40,10 @@ impl<'a> FuncRep<'a> {
     ) -> Self {
         let mut new = FuncRep {
             tree: ExprTree::default(),
-            ret_type: code.ret_type.into_type_with_generics(&comp_data, &info.generics).unwrap(),
+            ret_type: code
+                .ret_type
+                .into_type_with_generics(&comp_data, &info.generics)
+                .unwrap(),
             types: comp_data,
             identifiers: Vec::new(),
             info,
@@ -442,7 +445,9 @@ impl<'a> FuncRep<'a> {
                 space
             },
             Expr::Parens(expr) => self.add_expr(*expr, parent),
-            Expr::Op(_) | Expr::ArgList(..) | Expr::StaticMethodPath(..) => unreachable!(),
+            Expr::Op(_) | Expr::ArgList(..) | Expr::StaticMethodPath(..) => {
+                unreachable!()
+            },
         }
     }
 }

@@ -4,8 +4,8 @@ use crate::parse::{
 };
 use crate::typ::{ArrayType, StructType, TypeOrAlias};
 
-use crate::TypeEnum;
 use crate::{parse::FuncCode, unit::CompData, Type};
+use crate::{ExternalFuncAdd, TypeEnum};
 
 use crate::libraries::Library;
 
@@ -16,35 +16,35 @@ impl Library for ToStringLib {
         unit.add_method_deriver("to_string".into(), derive_to_string);
 
         let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
-
         unit.add_rust_func_explicit(
             "to_string",
             to_string::<i32> as *const usize,
-            string_type
-                .clone()
-                .func_with_args(vec![Type::i(32).get_ref()]),
-            TypeRelation::MethodOf(Type::i(32).get_ref()),
-            Vec::new(),
+            ExternalFuncAdd {
+                ret_type: string_type.clone(),
+                arg_types: vec![Type::i(32).get_ref()],
+                relation: TypeRelation::MethodOf(Type::i(32).get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
         );
-
         unit.add_rust_func_explicit(
             "to_string",
             to_string::<f32> as *const usize,
-            string_type
-                .clone()
-                .func_with_args(vec![Type::f(32).get_ref()]),
-            TypeRelation::MethodOf(Type::f(32).get_ref()),
-            Vec::new(),
+            ExternalFuncAdd {
+                ret_type: string_type.clone(),
+                arg_types: vec![Type::f(32).get_ref()],
+                relation: TypeRelation::MethodOf(Type::f(32).get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
         );
-
         unit.add_rust_func_explicit(
             "to_string",
             string_to_string as *const usize,
-            string_type
-                .clone()
-                .func_with_args(vec![string_type.clone().get_ref()]),
-            TypeRelation::MethodOf(string_type.clone().get_ref()),
-            Vec::new(),
+            ExternalFuncAdd {
+                ret_type: string_type.clone(),
+                arg_types: vec![string_type.get_ref()],
+                relation: TypeRelation::MethodOf(string_type.get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
         );
     }
 }

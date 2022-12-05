@@ -1,20 +1,20 @@
-use crate::typ::{Kind, ReturnStyle};
-use crate::{Type, TypeEnum};
-use crate::lex::VarName;
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
+use crate::lex::VarName;
 use crate::parse::Opcode::*;
+use crate::typ::{Kind, ReturnStyle};
 use crate::unit::*;
+use crate::{Type, TypeEnum};
 use core::cell::RefCell;
-use std::rc::Rc;
-use inkwell::attributes::{AttributeLoc, Attribute};
+use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::{types::*};
+use inkwell::types::*;
 use inkwell::values::*;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub struct FunctionCompilationState<'f> {
     pub tree: ExprTree,
@@ -39,41 +39,46 @@ impl<'f> FunctionCompilationState<'f> {
     pub fn delete(self) {}
 }
 
-pub fn compile_routine<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) -> Option<AnyValueEnum<'a>> {
+pub fn compile_routine<'comp, 'a>(
+    fcs: &'a mut FunctionCompilationState<'comp>,
+) -> Option<AnyValueEnum<'a>> {
     if fcs.ret_type.return_style() == ReturnStyle::Pointer {
-        // informs llvm that we are returning via the first parameter in the function, which is a
-        // pointer.
+        // informs llvm that we are returning via the first parameter in the
+        // function, which is a pointer.
         let sret_id = Attribute::get_named_enum_kind_id("sret");
         let any_type = fcs.ret_type.to_any_type(&fcs.context);
         let sret_attribute = fcs.context.create_type_attribute(sret_id, any_type);
-        fcs.function.add_attribute(AttributeLoc::Param(0), sret_attribute);
+        fcs.function
+            .add_attribute(AttributeLoc::Param(0), sret_attribute);
     }
 
     build_stack_allocas(fcs);
     compile(fcs, ExprID::ROOT)
 }
 
-fn build_stack_allocas<'comp, 'a>(
-    fcs: &'a mut FunctionCompilationState<'comp>,
-) {
+fn build_stack_allocas<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) {
     for expr in fcs.tree.iter_mut() {
         match expr.1 {
-        MakeVar {
-            ref var_type,
-            ref name,
-            ..
-        } => {
-            if fcs.variables.contains_key(name) { continue; }
-            if fcs.arg_names.contains(name) { continue; }
+            MakeVar {
+                ref var_type,
+                ref name,
+                ..
+            } => {
+                if fcs.variables.contains_key(name) {
+                    continue;
+                }
+                if fcs.arg_names.contains(name) {
+                    continue;
+                }
 
-            let var_ptr = fcs.builder.build_alloca(
+                let var_ptr = fcs.builder.build_alloca(
                     var_type.to_basic_type(fcs.context),
                     &*name.to_string(),
-                ) ;
+                );
 
-            fcs.variables.insert(name.clone(), var_ptr);
-        }
-    _ => {}
+                fcs.variables.insert(name.clone(), var_ptr);
+            },
+            _ => {},
         }
     }
 }
@@ -89,8 +94,11 @@ fn compile<'comp, 'a>(
     }
 
     let output: Option<AnyValueEnum> = match expr {
-        Number { ref value, .. } => Some(
-            Type::i(32)
+        Number {
+            ref value,
+            ref size,
+        } => Some(
+            Type::i(*size)
                 .to_any_type(&fcs.context)
                 .into_int_type()
                 .const_int(*value as u64, false)
@@ -110,7 +118,12 @@ fn compile<'comp, 'a>(
                 .const_int(if *value { 1 } else { 0 }, false)
                 .into(),
         ),
-        MakeVar { ref var_type, ref name, ref rhs, .. } => {
+        MakeVar {
+            ref var_type,
+            ref name,
+            ref rhs,
+            ..
+        } => {
             let to_store = compile(fcs, *rhs).unwrap();
             let to_store_basic: BasicValueEnum = to_store.try_into().unwrap();
 
@@ -125,11 +138,12 @@ fn compile<'comp, 'a>(
 
             let rhs_type = fcs.tree.get(*rhs).ret_type().clone();
 
-            let val = if 
-                matches!(var_type.as_type_enum(), TypeEnum::Ref(_)) &&
-                !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_)) 
+            let val = if matches!(var_type.as_type_enum(), TypeEnum::Ref(_))
+                && !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_))
             {
-                fcs.builder.build_load(*val, &*fcs.new_uuid()).into_pointer_value()
+                fcs.builder
+                    .build_load(*val, &*fcs.new_uuid())
+                    .into_pointer_value()
             } else {
                 *val
             };
@@ -139,7 +153,9 @@ fn compile<'comp, 'a>(
             return Some(to_store);
         },
         Ident { ref name, .. } => {
-            if let Some(param_index) = fcs.arg_names.iter().position(|arg| arg == name) {
+            if let Some(param_index) =
+                fcs.arg_names.iter().position(|arg| arg == name)
+            {
                 let param = fcs
                     .function
                     .get_nth_param(param_index.try_into().unwrap())
@@ -163,9 +179,8 @@ fn compile<'comp, 'a>(
             let lhs_type = fcs.tree.get(*lhs).ret_type().clone();
             let rhs_type = fcs.tree.get(*rhs).ret_type().clone();
 
-            let var_ptr = if 
-                matches!(lhs_type.as_type_enum(), TypeEnum::Ref(_)) &&
-                !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_)) 
+            let var_ptr = if matches!(lhs_type.as_type_enum(), TypeEnum::Ref(_))
+                && !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_))
             {
                 compile(fcs, *lhs).unwrap().into_pointer_value()
             } else {
@@ -206,13 +221,20 @@ fn compile<'comp, 'a>(
                         Modulus => {
                             fcs.builder.build_int_unsigned_rem(lhs, rhs, "mod")
                         },
-                        Inequal => fcs.builder.build_int_compare( 
-                            NE, lhs, rhs, "eq"),
-                        Equal => fcs.builder.build_int_compare(EQ, lhs, rhs, "eq",),
-                        LessThan => fcs.builder.build_int_compare( ULT, lhs, rhs, "lt",),
-                        GrtrThan => fcs.builder.build_int_compare( UGT, lhs, rhs, "gt",),
-                       LessOrEqual => fcs.builder.build_int_compare( ULE, lhs, rhs, "gt",), 
-                       GreaterOrEqual => fcs.builder.build_int_compare( UGE, lhs, rhs, "gt",),
+                        Inequal => fcs.builder.build_int_compare(NE, lhs, rhs, "eq"),
+                        Equal => fcs.builder.build_int_compare(EQ, lhs, rhs, "eq"),
+                        LessThan => {
+                            fcs.builder.build_int_compare(ULT, lhs, rhs, "lt")
+                        },
+                        GrtrThan => {
+                            fcs.builder.build_int_compare(UGT, lhs, rhs, "gt")
+                        },
+                        LessOrEqual => {
+                            fcs.builder.build_int_compare(ULE, lhs, rhs, "gt")
+                        },
+                        GreaterOrEqual => {
+                            fcs.builder.build_int_compare(UGE, lhs, rhs, "gt")
+                        },
                         _ => todo!(),
                     };
 
@@ -360,9 +382,7 @@ fn compile<'comp, 'a>(
             None
         },
         UnarOp { op, hs, .. } => match op {
-            Ref(_) => {
-                Some(compile_as_ptr(fcs, hs).as_any_value_enum())
-            },
+            Ref(_) => Some(compile_as_ptr(fcs, hs).as_any_value_enum()),
             Deref(_) => {
                 let var_ptr = compile(fcs, hs).unwrap();
                 let val = fcs
@@ -417,12 +437,12 @@ fn compile<'comp, 'a>(
             }
 
             let output = fcs
-                    .builder
-                    .build_call(function_ptr, &*arg_vals, "call")
-                    .as_any_value_enum();
+                .builder
+                .build_call(function_ptr, &*arg_vals, "call")
+                .as_any_value_enum();
 
             Some(output)
-        }
+        },
         Member { .. } => {
             let ptr = compile_as_ptr(fcs, expr_id);
             let val = fcs.builder.build_load(ptr, "load");
@@ -458,28 +478,28 @@ fn compile<'comp, 'a>(
         },
         Return { to_return, .. } => {
             if let Some(to_return) = to_return {
-                let ret_val: BasicValueEnum = 
+                let ret_val: BasicValueEnum =
                     compile(fcs, to_return).unwrap().try_into().unwrap();
 
                 let type_of_return = fcs.tree.get(to_return).ret_type();
                 let raw_type_of_return = type_of_return.raw_return_type();
 
-
                 if type_of_return == raw_type_of_return {
                     fcs.builder.build_return(Some(&ret_val));
                 } else {
                     let casted_value = fcs.builder.build_alloca(
-                        raw_type_of_return.to_basic_type(&fcs.context), 
-                        "castedret"
+                        raw_type_of_return.to_basic_type(&fcs.context),
+                        "castedret",
                     );
                     fcs.builder.build_store(casted_value, ret_val);
-                    let loaded_cast = fcs.builder.build_load(casted_value, "loadcast");
+                    let loaded_cast =
+                        fcs.builder.build_load(casted_value, "loadcast");
                     fcs.builder.build_return(Some(&loaded_cast));
                 }
             } else {
                 fcs.builder.build_return(None);
             }
-                    
+
             None
         },
         ArrayLit { var_type, parts } => {
@@ -610,10 +630,11 @@ fn compile_as_ptr<'comp, 'a>(
                 "temp",
             );
 
-            fcs.builder.build_store(ptr, BasicValueEnum::try_from(value).unwrap());
+            fcs.builder
+                .build_store(ptr, BasicValueEnum::try_from(value).unwrap());
 
             ptr
-        }
+        },
     }
 }
 
@@ -642,8 +663,10 @@ fn internal_function<'comp, 'a>(
             None
         },
         "memmove" => {
-            let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let src: PointerValue =
+                compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let dest: PointerValue =
+                compile(fcs, args[1]).unwrap().try_into().unwrap();
             let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
 
             fcs.builder.build_memmove(dest, 1, src, 1, size).unwrap();
@@ -651,8 +674,10 @@ fn internal_function<'comp, 'a>(
             None
         },
         "memcpy" => {
-            let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let src: PointerValue =
+                compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let dest: PointerValue =
+                compile(fcs, args[1]).unwrap().try_into().unwrap();
             let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
 
             fcs.builder.build_memcpy(dest, 1, src, 1, size).unwrap();
@@ -664,10 +689,8 @@ fn internal_function<'comp, 'a>(
             let size = typ.size_of().unwrap().as_any_value_enum();
 
             Some(size)
-        }
-        _ => {
-            return None
         },
+        _ => return None,
     };
 
     Some(output)

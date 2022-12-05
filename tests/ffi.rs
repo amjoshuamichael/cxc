@@ -1,6 +1,6 @@
 mod test_utils;
 use cxc::library::{StdLib, TestLib};
-use cxc::TypeRelation;
+use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, XcValue};
 use cxc::{LLVMContext, Type, Unit};
 use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 
@@ -143,9 +143,10 @@ fn external_function() {
     unit.add_rust_func_explicit(
         "print_num",
         print_num as *const usize,
-        Type::never().func_with_args(vec![Type::i(64)]),
-        TypeRelation::Unrelated,
-        Vec::new(),
+        ExternalFuncAdd {
+            arg_types: vec![Type::i(64)],
+            ..ExternalFuncAdd::empty()
+        },
     )
     .push_script(
         "
@@ -176,4 +177,57 @@ fn strings() {
         "#;
         String::from("that's cray")
     )
+}
+
+#[test]
+fn reflected_type_masks() {
+    pub fn assert_is_five(type_ptr: *const TypeData, input: *const u8) {
+        let the_type = unsafe { Type::from_raw(type_ptr) };
+        let val = unsafe { XcValue::new_from_ptr(the_type.clone(), input) };
+
+        match the_type.as_type_enum() {
+            TypeEnum::Int(IntType { size: 32 }) => {
+                let five: i32 = unsafe { *val.get_data_as::<i32>() };
+
+                assert_eq!(val.get_size(), std::mem::size_of::<i32>());
+                assert_eq!(five, 5);
+            },
+            TypeEnum::Float(FloatType::F32) => {
+                let five: f32 = unsafe { *val.get_data_as::<f32>() };
+
+                assert_eq!(val.get_size(), std::mem::size_of::<f32>());
+                assert_eq!(five, 5.0);
+            },
+            _ => panic!("wrong type!"),
+        }
+    }
+
+    let context = LLVMContext::new();
+    let mut unit = Unit::new(&context);
+
+    unit.add_rust_func_explicit(
+        "assert_is_five",
+        assert_is_five as *const usize,
+        ExternalFuncAdd {
+            arg_types: vec![Type::void_ptr()],
+            ..ExternalFuncAdd::empty()
+        }
+        .reflect_variable_types(),
+    );
+    unit.add_lib(cxc::library::TestLib);
+    unit.push_script(
+        "
+        main(): i32 {
+            print<i32>(3)
+
+
+            assert_is_five(&5)
+            assert_is_five(&5.0)
+
+            ; 0
+        }
+        ",
+    );
+
+    unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
 }

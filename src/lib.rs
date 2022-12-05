@@ -4,15 +4,16 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 
 pub use parse::TypeRelation;
 pub use typ::{
     ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType,
-    StructType, Type, TypeEnum,
+    StructType, Type, TypeData, TypeEnum,
 };
 pub use unit::{
-    Func, LLVMContext, UniqueFuncInfo, Unit, XcFunc, XcReflect, XcValue,
+    ExternalFuncAdd, Func, LLVMContext, UniqueFuncInfo, Unit, XcFunc, XcReflect,
+    XcValue,
 };
 
 pub mod library {

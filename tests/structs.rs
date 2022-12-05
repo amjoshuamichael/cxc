@@ -1,5 +1,6 @@
 mod test_utils;
 use cxc::library::StdLib;
+use cxc::ExternalFuncAdd;
 use cxc::LLVMContext;
 use cxc::Type;
 use cxc::TypeRelation;
@@ -95,9 +96,12 @@ fn opaque_types() {
     unit.add_rust_func_explicit(
         "sqr_magnitude",
         Point2D::sqr_magnitude as *const usize,
-        Type::i(32).func_with_args(vec![point_2d_opaque.clone().get_ref()]),
-        TypeRelation::MethodOf(point_2d_opaque.get_ref()),
-        Vec::new(),
+        ExternalFuncAdd {
+            arg_types: vec![point_2d_opaque.clone().get_ref()],
+            ret_type: Type::i(32),
+            relation: TypeRelation::MethodOf(point_2d_opaque.get_ref()),
+            ..ExternalFuncAdd::empty()
+        },
     );
 
     unit.push_script(

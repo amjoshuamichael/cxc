@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{parse::TypeRelation, Type};
+use crate::{ExternalFuncAdd, Type};
 
 use super::Library;
 
@@ -12,68 +12,82 @@ impl Library for TestLib {
             unit.add_rust_func_explicit(
                 "print",
                 print::<&String> as *const usize,
-                Type::never().func_with_args(vec![string_type.clone().get_ref()]),
-                TypeRelation::Unrelated,
-                vec![string_type.get_ref()],
+                ExternalFuncAdd {
+                    arg_types: vec![string_type.clone().get_ref()],
+                    generics: vec![string_type.get_ref()],
+                    ..ExternalFuncAdd::empty()
+                },
             );
         }
 
         unit.add_rust_func_explicit(
             "print",
             print::<i32> as *const usize,
-            Type::never().func_with_args(vec![Type::i(32)]),
-            TypeRelation::Unrelated,
-            vec![Type::i(32)],
-        )
-        .add_rust_func_explicit(
+            ExternalFuncAdd {
+                arg_types: vec![Type::i(32)],
+                generics: vec![Type::i(32)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
             "print",
             print::<i64> as *const usize,
-            Type::never().func_with_args(vec![Type::i(64)]),
-            TypeRelation::Unrelated,
-            vec![Type::i(64)],
-        )
-        .add_rust_func_explicit(
+            ExternalFuncAdd {
+                arg_types: vec![Type::i(64)],
+                generics: vec![Type::i(64)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
             "print",
             print::<f32> as *const usize,
-            Type::never().func_with_args(vec![Type::f(32)]),
-            TypeRelation::Unrelated,
-            vec![Type::f(32)],
-        )
-        .add_rust_func_explicit(
-            "assert_eq",
-            assert::<i32> as *const usize,
-            Type::never().func_with_args(vec![Type::i(32), Type::i(32)]),
-            TypeRelation::Unrelated,
-            vec![Type::i(32)],
-        )
-        .add_rust_func_explicit(
-            "assert_eq",
-            assert::<i64> as *const usize,
-            Type::never().func_with_args(vec![Type::i(64), Type::i(64)]),
-            TypeRelation::Unrelated,
-            vec![Type::i(64)],
-        )
-        .add_rust_func_explicit(
+            ExternalFuncAdd {
+                arg_types: vec![Type::f(32)],
+                generics: vec![Type::f(32)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
             "assert_eq",
             assert::<f32> as *const usize,
-            Type::never().func_with_args(vec![Type::f(32), Type::f(32)]),
-            TypeRelation::Unrelated,
-            vec![Type::f(32)],
-        )
-        .add_rust_func_explicit(
+            ExternalFuncAdd {
+                arg_types: vec![Type::f(32); 2],
+                generics: vec![Type::f(32)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
+            "assert_eq",
+            assert::<i32> as *const usize,
+            ExternalFuncAdd {
+                arg_types: vec![Type::i(32); 2],
+                generics: vec![Type::i(32)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
+            "assert_eq",
+            assert::<i64> as *const usize,
+            ExternalFuncAdd {
+                arg_types: vec![Type::i(64); 2],
+                generics: vec![Type::i(64)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
             "assert_eq",
             assert::<bool> as *const usize,
-            Type::never().func_with_args(vec![Type::bool(), Type::bool()]),
-            TypeRelation::Unrelated,
-            vec![Type::bool()],
-        )
-        .add_rust_func("sqrt", [f32::sqrt])
-        .add_rust_func_explicit(
+            ExternalFuncAdd {
+                arg_types: vec![Type::bool(); 2],
+                generics: vec![Type::bool()],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func("sqrt", [f32::sqrt]);
+        unit.add_rust_func_explicit(
             "panic",
             panic as *const usize,
-            Type::never().func_with_args(vec![]),
-            TypeRelation::Unrelated,
-            vec![],
+            ExternalFuncAdd::empty(),
         );
     }
 }

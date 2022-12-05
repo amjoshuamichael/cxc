@@ -31,9 +31,7 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
             for (field_name, field_expr) in field_exprs {
                 let (_, field_type) = field_types
                     .iter()
-                    .find(|(name, _)| {
-                        name == field_name
-                    })
+                    .find(|(name, _)| name == field_name)
                     .unwrap();
 
                 current_statement = hlr

@@ -1,6 +1,13 @@
-use crate::{lex::{indent_parens, VarName, lex}, parse::{TypeRelation, FuncCode, Expr, self}, Unit, TypeEnum, hlr::hlr, typ::{ReturnStyle, FuncType}, to_llvm::compile_routine, XcReflect};
+use crate::{
+    hlr::hlr,
+    lex::{indent_parens, lex, VarName},
+    parse::{self, Expr, FuncCode, TypeRelation},
+    to_llvm::compile_routine,
+    typ::{FuncType, ReturnStyle},
+    TypeEnum, Unit, XcReflect,
+};
 use inkwell::values::AnyValue;
-use std::{mem::transmute, collections::HashMap};
+use std::{collections::HashMap, mem::transmute};
 
 use crate::Type;
 
@@ -22,6 +29,15 @@ impl XcValue {
 
     pub fn new_from_vec(typ: Type, data: Vec<u8>) -> Self { Self { typ, data } }
 
+    pub unsafe fn new_from_ptr(typ: Type, ptr: *const u8) -> Self {
+        let slice = std::slice::from_raw_parts(ptr, typ.size());
+
+        Self {
+            typ,
+            data: slice.to_vec(),
+        }
+    }
+
     pub fn new_opaque<T: bytemuck::NoUninit>(data: T) -> Self {
         let typ = Type::opaque_type::<T>();
 
@@ -31,8 +47,13 @@ impl XcValue {
         }
     }
 
-    pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(data: T, unit: &mut Unit) -> Self {
-        let typ = unit.get_reflect_type::<T>().expect("type contains generics");
+    pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(
+        data: T,
+        unit: &mut Unit,
+    ) -> Self {
+        let typ = unit
+            .get_reflect_type::<T>()
+            .expect("type contains generics");
 
         Self {
             typ,
@@ -59,7 +80,9 @@ impl XcValue {
         indent_parens(output)
     }
 
-    pub unsafe fn get_data_as<T>(&self) -> &T { transmute(&self.data) }
+    pub unsafe fn get_data_as<T>(&self) -> *const T {
+        self.data.as_ptr() as *const T
+    }
     pub unsafe fn consume_as<T>(mut self) -> T {
         let capacity = self.data.capacity();
         let data_ptr = self.data.as_mut_ptr();
@@ -87,25 +110,29 @@ impl XcValue {
 
 impl<'u> Unit<'u> {
     pub fn get_value(&mut self, of: &str) -> XcValue {
-        if of == "" { return XcValue::default() }
+        if of == "" {
+            return XcValue::default();
+        }
 
         let temp_name = "newfunc";
-        
+
         self.reset_execution_engine();
 
         let expr = {
             let mut lexed = lex(of);
             let mut context = lexed.split(VarName::temp(), HashMap::new());
 
-            Expr::Block(vec![Expr::Return(box parse::parse_expr(&mut context).unwrap())])
+            Expr::Block(vec![Expr::Return(
+                box parse::parse_expr(&mut context).unwrap(),
+            )])
         };
 
         let code = FuncCode::from_expr(expr);
-            
+
         let info = UniqueFuncInfo {
             name: VarName::from(temp_name),
-            ..Default::default()        
-        } ;
+            ..Default::default()
+        };
 
         let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code);
 
@@ -119,13 +146,13 @@ impl<'u> Unit<'u> {
                 else { unreachable!() };
             let ink_func_type = function_type.llvm_func_type(self.context);
 
-            let function = self.module.add_function(
-                temp_name,
-                ink_func_type,
-                None,
-            );
+            let function = self.module.add_function(temp_name, ink_func_type, None);
 
-            self.new_func_comp_state(func_rep.take_tree(), function, func_rep.take_arg_names())
+            self.new_func_comp_state(
+                func_rep.take_tree(),
+                function,
+                func_rep.take_arg_names(),
+            )
         };
 
         {
@@ -135,7 +162,11 @@ impl<'u> Unit<'u> {
         };
 
         if crate::DEBUG {
-            let func = self.module.get_function(temp_name).unwrap().print_to_string();
+            let func = self
+                .module
+                .get_function(temp_name)
+                .unwrap()
+                .print_to_string();
             println!("{func}");
         }
 
@@ -155,20 +186,26 @@ impl<'u> Unit<'u> {
                 XcValue::new_from_arr(ret_type.clone(), out)
             },
             ReturnStyle::ThroughI64I32 | ReturnStyle::ThroughI64I64 => {
-                let new_func: XcFunc<(), (i64, i64)> = unsafe { transmute(func_addr) };
+                let new_func: XcFunc<(), (i64, i64)> =
+                    unsafe { transmute(func_addr) };
                 let out: [u8; 16] = unsafe { transmute(new_func(())) };
                 XcValue::new_from_arr(ret_type.clone(), out)
             },
             ReturnStyle::Pointer => {
                 let data_vec: Vec<u8> = vec![0; ret_type.size()];
-                let new_func: XcFunc<*const u8, ()> = unsafe { transmute(func_addr) };
+                let new_func: XcFunc<*const u8, ()> =
+                    unsafe { transmute(func_addr) };
                 unsafe { new_func(data_vec.as_ptr()) };
                 XcValue::new_from_vec(ret_type.clone(), data_vec)
             },
-            ReturnStyle::Void => { panic!("value returns none!") }
+            ReturnStyle::Void => {
+                panic!("value returns none!")
+            },
         };
 
-        self.execution_engine.borrow().free_fn_machine_code(fcs.function);
+        self.execution_engine
+            .borrow()
+            .free_fn_machine_code(fcs.function);
         unsafe { fcs.function.delete() };
 
         value

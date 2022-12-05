@@ -1,6 +1,6 @@
-use crate::{Type, TypeEnum, typ::FuncType, UniqueFuncInfo};
 use super::prelude::*;
 use crate::parse::*;
+use crate::{typ::FuncType, Type, TypeEnum, UniqueFuncInfo};
 use std::collections::HashMap;
 
 pub fn infer_types(hlr: &mut FuncRep) {
@@ -20,20 +20,18 @@ pub fn infer_types(hlr: &mut FuncRep) {
             NodeData::Ident {
                 ref mut var_type,
                 ref name,
-            } => {
-                match hlr.data_flow.get(&name.clone()) {
-                    Some(data_flow_info) => {
-                        *var_type = data_flow_info.typ.clone();
-                    }
-                    None => {
-                        let global = hlr
-                            .types
-                            .globals
-                            .get(&name.clone())
-                            .expect(&*format!("could not find identifier {name}"));
-                        *var_type = global.0.clone();
-                    }
-                }
+            } => match hlr.data_flow.get(&name.clone()) {
+                Some(data_flow_info) => {
+                    *var_type = data_flow_info.typ.clone();
+                },
+                None => {
+                    let global = hlr
+                        .types
+                        .globals
+                        .get(&name.clone())
+                        .expect(&*format!("could not find identifier {name}"));
+                    *var_type = global.0.clone();
+                },
             },
             _ => {},
         };
@@ -47,9 +45,8 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
         match node {
             NodeData::Return { to_return, .. } => {
-                hlr.ret_type = 
-                    type_by_id.get(&to_return.unwrap()).unwrap().clone();
-            }
+                hlr.ret_type = type_by_id.get(&to_return.unwrap()).unwrap().clone();
+            },
             NodeData::BinOp {
                 ref mut ret_type,
                 ref lhs,
@@ -79,9 +76,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     Opcode::Ref(count) => {
                         *ret_type = hs_type.clone().ref_x_times(count)
                     },
-                    Opcode::Not => {
-                        *ret_type = Type::bool()
-                    }
+                    Opcode::Not => *ret_type = Type::bool(),
                     _ => unreachable!(),
                 }
 
@@ -124,7 +119,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                         let method_arg = a.last().unwrap();
                         *method_origin = type_by_id.get(method_arg).unwrap().clone();
                     },
-                    _ => {}
+                    _ => {},
                 }
 
                 let func_info = UniqueFuncInfo {
@@ -132,7 +127,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     relation: relation.clone(),
                     generics: generics.clone(),
                 };
-                    
+
                 let func_type = hlr.types.get_type(&func_info).unwrap();
                 let TypeEnum::Func(FuncType { ret_type: return_type, .. }) = 
                     func_type.as_type_enum() else { panic!() };
@@ -159,20 +154,26 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 ref parts,
             } => {
                 if var_type.is_never() {
-                    *var_type = type_by_id.get(&parts[0]).unwrap().clone().get_array(parts.len() as u32);
+                    *var_type = type_by_id
+                        .get(&parts[0])
+                        .unwrap()
+                        .clone()
+                        .get_array(parts.len() as u32);
                 }
                 *type_by_id.get_mut(&n).unwrap() = var_type.clone();
-            }
-            NodeData::Block { ref mut ret_type, ref stmts } => {
-                match hlr.tree.get(*stmts.last().unwrap()) {
-                    NodeData::Return{to_return, ..} => {
-                        if to_return.is_some() {
-                            *ret_type = type_by_id.get(&to_return.unwrap()).unwrap().clone();
-                        }
+            },
+            NodeData::Block {
+                ref mut ret_type,
+                ref stmts,
+            } => match hlr.tree.get(*stmts.last().unwrap()) {
+                NodeData::Return { to_return, .. } => {
+                    if to_return.is_some() {
+                        *ret_type =
+                            type_by_id.get(&to_return.unwrap()).unwrap().clone();
                     }
-                    _ => {}
-                }
-            }
+                },
+                _ => {},
+            },
             _ => {},
         }
 

@@ -1,7 +1,6 @@
 use crate::lex::VarName;
 use crate::parse::Expr;
 use crate::parse::FuncCode;
-use crate::parse::TypeAlias;
 use crate::Type;
 use crate::TypeEnum;
 

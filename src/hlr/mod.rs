@@ -1,5 +1,6 @@
 pub mod expr_tree;
 mod handle_active_initialization;
+mod handle_arg_type_reflection;
 mod handle_struct_literals;
 pub mod hlr_data;
 pub mod hlr_data_output;
@@ -22,6 +23,7 @@ pub mod prelude {
 use prelude::*;
 
 use self::handle_active_initialization::handle_active_initialization;
+use self::handle_arg_type_reflection::handle_arg_type_reflection;
 use self::handle_struct_literals::handle_struct_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::handle_large_returns;
@@ -41,6 +43,7 @@ pub fn hlr(
 
     infer_types(&mut output);
     handle_active_initialization(&mut output);
+    handle_arg_type_reflection(&mut output);
     handle_large_returns(&mut output);
     handle_struct_literals(&mut output);
 

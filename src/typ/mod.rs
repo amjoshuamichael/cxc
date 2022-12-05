@@ -1,9 +1,11 @@
 use crate::lex::{TypeName, VarName};
+use lazy_static::lazy_static;
 
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 mod kind;
 mod nested_field_count;
@@ -24,6 +26,10 @@ impl Debug for Type {
 
 impl Default for Type {
     fn default() -> Self { Type::never() }
+}
+
+lazy_static! {
+    static ref SAVED_TYPES: Mutex<HashSet<Type>> = Mutex::new(HashSet::new());
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -146,6 +152,12 @@ impl Type {
         Type::new(TypeEnum::Array(ArrayType { base: self, count }))
     }
 
+    pub fn as_u64(self) -> u64 { self.into_raw() as u64 }
+    pub fn into_raw(self) -> *const TypeData { Arc::into_raw(self.0) }
+    pub unsafe fn from_raw(data: *const TypeData) -> Self {
+        Self(Arc::from_raw(data))
+    }
+
     pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size })) }
 
     pub fn f16() -> Type { Type::new(TypeEnum::Float(FloatType::F16)) }
@@ -181,6 +193,8 @@ impl Type {
     }
 
     pub fn never() -> Type { Type::new(TypeEnum::Never) }
+
+    pub fn void_ptr() -> Type { Type::new(TypeEnum::Never).get_ref() }
 
     pub fn func_with_args(self, args: Vec<Type>) -> Type {
         Type::new(TypeEnum::Func(FuncType {
