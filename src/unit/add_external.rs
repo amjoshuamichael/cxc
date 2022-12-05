@@ -53,6 +53,31 @@ impl<'u> Unit<'u> {
         self.add_rust_func_explicit(name, function_ptr, ext_add)
     }
 
+    pub fn add_external_default<T: Default>(&mut self, typ: Type) {
+        self.add_rust_func_explicit(
+            "default",
+            T::default as *const usize,
+            ExternalFuncAdd {
+                ret_type: typ.clone(),
+                relation: TypeRelation::Static(typ),
+                ..ExternalFuncAdd::empty()
+            },
+        );
+    }
+
+    pub fn add_external_clone<T: Clone>(&mut self, typ: Type) {
+        self.add_rust_func_explicit(
+            "clone",
+            T::clone as *const usize,
+            ExternalFuncAdd {
+                arg_types: vec![typ.get_ref()],
+                ret_type: typ.clone(),
+                relation: TypeRelation::MethodOf(typ.get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
+        );
+    }
+
     pub fn add_rust_func_explicit(
         &mut self,
         name: &str,
