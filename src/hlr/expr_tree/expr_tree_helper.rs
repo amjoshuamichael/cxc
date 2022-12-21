@@ -1,5 +1,6 @@
 use crate::hlr::hlr_data::FuncRep;
 use crate::{Type, UniqueFuncInfo};
+use std::iter::once;
 
 use super::{ExprID, ExprTree, NodeData, NodeDataGen};
 use super::{ExprNode, NodeData::*};
@@ -7,61 +8,105 @@ use super::{ExprNode, NodeData::*};
 impl ExprTree {
     pub fn iter_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &mut NodeData)> + 'a> {
-        Box::new(
-            self.nodes
-                .iter_mut()
-                .enumerate()
-                .map(|(id, node)| (ExprID(id), &mut node.data)),
-        )
+    ) -> Box<dyn Iterator<Item = (ExprID, &mut NodeData)> + 'a> {
+        box self.nodes.iter_mut().map(|(id, node)| (id, &mut node.data))
     }
 
-    pub fn iter<'a>(
-        &'a self,
-    ) -> Box<dyn DoubleEndedIterator<Item = (ExprID, &NodeData)> + 'a> {
-        Box::new(
-            self.nodes
-                .iter()
-                .enumerate()
-                .map(|(id, node)| (ExprID(id), &node.data)),
-        )
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (ExprID, &NodeData)> + 'a> {
+        box self.nodes.iter().map(|(id, node)| (id, &node.data))
     }
 
-    pub fn ids(&self) -> impl DoubleEndedIterator<Item = ExprID> {
-        (0..self.node_count()).map(ExprID)
+    pub fn ids_in_order(&self) -> Vec<ExprID> {
+        use NodeData::*;
+
+        fn ids_of<'a>(tree: &'a ExprTree, id: ExprID) -> Vec<ExprID> {
+            let mut rest = match tree.get(id) {
+                Number { .. } | Float { .. } | Bool { .. } | Ident { .. } => {
+                    Vec::new()
+                },
+                StructLit { fields, .. } => fields
+                    .iter()
+                    .map(|(_, id)| ids_of(tree, *id))
+                    .flatten()
+                    .collect(),
+                ArrayLit { parts: many, .. }
+                | Call { a: many, .. }
+                | Block { stmts: many, .. } => {
+                    many.iter().map(|id| ids_of(tree, *id)).flatten().collect()
+                },
+                FirstClassCall {
+                    f: one, a: many, ..
+                } => many
+                    .iter()
+                    .map(|id| ids_of(tree, *id))
+                    .flatten()
+                    .chain(ids_of(tree, one).drain(..))
+                    .collect(),
+                BinOp { lhs: l, rhs: r, .. }
+                | SetVar { lhs: l, rhs: r, .. }
+                | IfThen { i: l, t: r, .. }
+                | While { w: l, d: r, .. }
+                | Index {
+                    object: l,
+                    index: r,
+                    ..
+                } => ids_of(tree, l)
+                    .drain(..)
+                    .chain(ids_of(tree, r).drain(..))
+                    .collect(),
+                MakeVar { rhs: one, .. }
+                | UnarOp { hs: one, .. }
+                | Member { object: one, .. } => ids_of(tree, one),
+                IfThenElse { i, t, e, .. } => ids_of(tree, i)
+                    .drain(..)
+                    .chain(ids_of(tree, t).drain(..))
+                    .chain(ids_of(tree, e).drain(..))
+                    .collect(),
+                Return { to_return, .. } => {
+                    if let Some(to_return) = to_return {
+                        ids_of(tree, to_return)
+                    } else {
+                        Vec::new()
+                    }
+                },
+                err => todo!("cannot iterate over {err:?}"),
+            };
+
+            vec![id].drain(..).chain(rest.drain(..)).collect()
+        }
+
+        ids_of(self, self.root)
     }
 
     pub fn insert(&mut self, parent: ExprID, data: NodeData) -> ExprID {
-        self.nodes.push(ExprNode { parent, data });
-        ExprID(self.nodes.len() - 1)
+        self.nodes.insert(ExprNode { parent, data })
     }
 
     pub fn replace(&mut self, at: ExprID, with: NodeData) {
-        self.nodes[at.0].data = with;
+        self.nodes.get_mut(at).unwrap().data = with;
     }
 
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
-        self.nodes.push(ExprNode {
+        self.nodes.insert(ExprNode {
             parent,
             data: NodeData::Empty,
-        });
-        ExprID(self.nodes.len() - 1)
+        })
     }
 
-    pub fn get(&self, at: ExprID) -> NodeData { self.nodes[at.0].data.clone() }
+    pub fn get(&self, at: ExprID) -> NodeData { self.nodes[at].data.clone() }
 
-    pub fn get_ref(&self, at: ExprID) -> &NodeData { &self.nodes[at.0].data }
+    pub fn get_ref(&self, at: ExprID) -> &NodeData { &self.nodes[at].data }
 
     pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData {
-        &mut self.nodes[at.0].data
+        &mut self.nodes[at].data
     }
 
-    pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of.0].parent }
+    pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of].parent }
 
     pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
         let parent = self.parent(of);
 
-        if parent == ExprID::ROOT {
+        if parent == self.root {
             return (of, parent);
         }
 
@@ -83,7 +128,7 @@ impl ExprTree {
         new_space
     }
 
-    pub fn return_type(&self) -> Type { self.get(ExprID::ROOT).ret_type() }
+    pub fn return_type(&self) -> Type { self.get(self.root).ret_type() }
 
     fn node_count(&self) -> usize { self.nodes.len() }
 
@@ -105,7 +150,7 @@ impl<'a> FuncRep<'a> {
         filter: impl Fn(&NodeData) -> bool,
         modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
     ) {
-        self.modify_many_inner(self.tree.ids(), filter, modifier)
+        self.modify_many_inner(self.tree.ids_in_order().drain(..), filter, modifier)
     }
 
     pub fn modify_many_rev(
@@ -113,7 +158,11 @@ impl<'a> FuncRep<'a> {
         filter: impl Fn(&NodeData) -> bool,
         modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
     ) {
-        self.modify_many_inner(self.tree.ids().rev(), filter, modifier)
+        self.modify_many_inner(
+            self.tree.ids_in_order().drain(..).rev(),
+            filter,
+            modifier,
+        )
     }
 
     fn modify_many_inner(

@@ -10,19 +10,23 @@ use super::Library;
 
 pub struct StdLib;
 mod default;
+mod string;
 mod to_string;
 mod value_lib;
 use default::DefaultLib;
+use string::StringLib;
 use to_string::ToStringLib;
 use value_lib::ValueLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_rust_func("to_i64", [to_i64]);
-        unit.add_static_deriver("len".into(), derive_array_len)
-            .push_script(include_str!("vec.cxc"));
-        unit.push_script(include_str!("string.cxc"));
+        unit.add_static_deriver("len".into(), derive_array_len);
 
+        unit.push_script(include_str!("vec.cxc"));
+        unit.push_script(include_str!("rc.cxc"));
+
+        unit.add_lib(StringLib);
         unit.add_lib(ToStringLib);
         unit.add_lib(DefaultLib);
         unit.add_lib(ValueLib);

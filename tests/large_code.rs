@@ -1,4 +1,6 @@
 mod test_utils;
+use std::rc::Rc;
+
 use cxc::library::{StdLib, TestLib, TypeInterfaceLib};
 use cxc::{LLVMContext, Unit};
 use test_utils::{xc_test, TwoOf};
@@ -58,8 +60,8 @@ fn vec() {
         main(): i32 {
             number_of_checks: i32 = 128
 
-            num_vec: Vec<i32> = create_vec<i32>()
-            two_num_vec: Vec<TwoNums> = create_vec<TwoNums>(two_nums_from_one(to_i64(0)))
+            num_vec: Vec<i32> = Vec<i32>:new<i32>()
+            two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new<TwoNums>()
 
             current_index: i32 = 0
             @ current_index < number_of_checks + 0 {
@@ -97,6 +99,22 @@ fn vec() {
 
             ; 0
         }"
+    )
+}
+
+#[test]
+fn rc() {
+    xc_test!(
+        use StdLib, TestLib;
+        "
+        main(): Rc<i32> {
+            x: i32 = 90
+            rcx: Rc<i32> = Rc<i32>:new<i32>(x)
+
+            ; rcx
+        }
+        ";
+        Rc::new(90i32)
     )
 }
 
@@ -209,17 +227,17 @@ fn to_string() {
         use StdLib, TestLib;
         "
             OutputType = {
-                one: TwoOf<i32>,
-                two: TwoOf<f32>
+                ints: TwoOf<i32>,
+                floats: TwoOf<f32>
             }
 
             main(): String {
                 output: OutputType = OutputType { 
-                    one = TwoOf<i32> {
+                    ints = TwoOf<i32> {
                         one = 20,
                         two = 303,
                     }, 
-                    two = TwoOf<f32> {
+                    floats = TwoOf<f32> {
                         one = 3.2,
                         two = 40.54,
                     },
@@ -228,7 +246,7 @@ fn to_string() {
                 ; output.to_string()
             }
         ";
-        String::from("OutputType {one = TwoOf {one = 20, two = 303}, two = TwoOf {one = 3.2, two = 40.54}}")
+        String::from("OutputType {ints = TwoOf {one = 20, two = 303}, floats = TwoOf {one = 3.2, two = 40.54}}")
     )
 }
 

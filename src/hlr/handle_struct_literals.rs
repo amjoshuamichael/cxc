@@ -9,7 +9,7 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
     hlr.modify_many_rev(
         |data| matches!(data, NodeData::StructLit { .. }),
         |structlit, struct_data, hlr| {
-            let new_struct_name = VarName::from(structlit.to_string() + "struct");
+            let new_struct_name = hlr.uniqueify_varname("struct");
             let struct_type = struct_data.ret_type();
             let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
                 else { unreachable!() };
@@ -46,7 +46,7 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
                                 field: field_name.clone(),
                                 ret_type: field_type.clone(),
                             },
-                            rhs: box *field_expr,
+                            rhs: box hlr.tree.get(*field_expr),
                             ..Default::default()
                         },
                     )

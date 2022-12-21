@@ -30,7 +30,7 @@ fn pointer() {
     unit.push_script(
         "
             square(num: &i32): i32 {
-                num = *num * *num
+                num.write<i32>(*num * *num)
                 ; 0
             }
             ",

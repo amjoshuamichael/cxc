@@ -26,14 +26,14 @@ fn handle_own_return(hlr: &mut FuncRep) {
 
 fn change_ret_type(hlr: &mut FuncRep, typ: Type) {
     hlr.ret_type = typ.clone();
-    let NodeData::Block { ref mut ret_type, .. } = hlr.tree.get_mut(ExprID::ROOT)
+    let NodeData::Block { ref mut ret_type, .. } = hlr.tree.get_mut(hlr.tree.root)
         else { panic!() };
 
     *ret_type = typ;
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
-    let output_var = VarName::from("T_output");
+    let output_var = VarName::from("Sret");
 
     for (_, flow) in hlr.data_flow.iter_mut() {
         if let Some(arg_index) = &mut flow.arg_index {
@@ -41,10 +41,12 @@ fn return_by_pointer(hlr: &mut FuncRep) {
         }
     }
 
+    let output_var_typ = hlr.ret_type.clone().get_ref();
+
     hlr.data_flow.insert(
         output_var.clone(),
         DataFlowInfo {
-            typ: hlr.ret_type.clone(),
+            typ: output_var_typ.clone(),
             arg_index: Some(0),
         },
     );
@@ -52,19 +54,35 @@ fn return_by_pointer(hlr: &mut FuncRep) {
     hlr.modify_many(
         |data| matches!(data, NodeData::Return { .. }),
         |return_id, data, hlr| {
-            let NodeData::Return { ref mut to_return, .. } = data
+            let NodeData::Return { to_return: Some(to_return), .. } = data
             else { unreachable!() };
 
             hlr.insert_statement_before(
                 return_id,
-                SetVarGen {
-                    lhs: box NodeData::Ident {
-                        var_type: hlr.ret_type.clone().get_ref(),
-                        name: output_var.clone(),
+                CallGen {
+                    info: UniqueFuncInfo {
+                        name: VarName::from("write"),
+                        relation: TypeRelationGeneric::MethodOf(
+                            output_var_typ.get_ref(),
+                        ),
+                        generics: vec![hlr.ret_type.clone()],
                     },
-                    rhs: box hlr.tree.get(to_return.unwrap()),
+                    args: vec![
+                        box hlr.tree.get(*to_return),
+                        box UnarOpGen {
+                            hs: box NodeData::Ident {
+                                var_type: output_var_typ.clone(),
+                                name: output_var.clone(),
+                            },
+                            op: Opcode::Ref(1),
+                            ret_type: output_var_typ.get_ref(),
+                        },
+                    ],
                 },
             );
+
+            let NodeData::Return { ref mut to_return, .. } = data
+            else { unreachable!() };
 
             *to_return = None;
         },
@@ -72,7 +90,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 }
 
 fn handle_other_calls(hlr: &mut FuncRep) {
-    for call_id in hlr.tree.ids() {
+    for call_id in hlr.tree.ids_in_order().drain(..).rev() {
         let data = hlr.tree.get(call_id);
         if !matches!(data, NodeData::Call { .. }) {
             continue;
@@ -92,10 +110,11 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
 fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let og_call_data = hlr.tree.get(og_call);
+    let (statement, _) = hlr.tree.statement_and_block(og_call);
 
-    let raw_ret_var_name = VarName::from(&*(og_call.to_string() + "raw_call_out"));
+    let raw_ret_var_name = hlr.uniqueify_varname("raw_call_out");
     let raw_ret_var_type = og_call_data.ret_type().raw_return_type();
-    let casted_var_name = VarName::from(&*(og_call.to_string() + "casted_call_out"));
+    let casted_var_name = hlr.uniqueify_varname("casted_call_out");
     let casted_var_type = og_call_data.ret_type();
 
     hlr.insert_statement_before(
@@ -157,7 +176,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let NodeData::Call { a: old_args, f, generics, relation, ret_type: call_ret_type } = 
         data.clone() else { panic!(); };
 
-    let call_var = VarName::from(&*(og_call_id.to_string() + "call_out"));
+    let call_var = hlr.uniqueify_varname("call_out");
 
     hlr.insert_statement_before(
         og_call_id,
@@ -180,7 +199,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     });
 
     for arg in old_args {
-        new_args.push(box arg);
+        new_args.push(box hlr.tree.get(arg));
     }
 
     hlr.insert_statement_before(

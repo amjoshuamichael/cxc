@@ -53,7 +53,7 @@ pub fn compile_routine<'comp, 'a>(
     }
 
     build_stack_allocas(fcs);
-    compile(fcs, ExprID::ROOT)
+    compile(fcs, fcs.tree.root)
 }
 
 fn build_stack_allocas<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) {
@@ -89,7 +89,7 @@ fn compile<'comp, 'a>(
 ) -> Option<AnyValueEnum<'a>> {
     let expr = fcs.tree.get(expr_id);
 
-    if crate::DEBUG {
+    if crate::DEBUG && !crate::BLOCK_LLVM {
         println!("compiling: {}", expr.to_string(&fcs.tree));
     }
 
@@ -176,16 +176,7 @@ fn compile<'comp, 'a>(
         SetVar {
             ref lhs, ref rhs, ..
         } => {
-            let lhs_type = fcs.tree.get(*lhs).ret_type().clone();
-            let rhs_type = fcs.tree.get(*rhs).ret_type().clone();
-
-            let var_ptr = if matches!(lhs_type.as_type_enum(), TypeEnum::Ref(_))
-                && !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_))
-            {
-                compile(fcs, *lhs).unwrap().into_pointer_value()
-            } else {
-                compile_as_ptr(fcs, *lhs)
-            };
+            let var_ptr = compile_as_ptr(fcs, *lhs);
 
             let rhs = compile(fcs, *rhs).unwrap();
             let rhs_basic: BasicValueEnum = rhs.try_into().unwrap();
@@ -546,7 +537,7 @@ fn compile<'comp, 'a>(
         Empty { .. } => todo!(),
     };
 
-    if crate::DEBUG {
+    if crate::DEBUG && !crate::BLOCK_LLVM {
         println!("done compiling: {}", fcs.tree.get(expr_id).to_string(&fcs.tree));
     }
 
@@ -576,7 +567,7 @@ fn compile_as_ptr<'comp, 'a>(
 
                 let ident_type =
                     fcs.tree.get(expr_id).ret_type().to_basic_type(fcs.context);
-                let new_temp = fcs.builder.build_alloca(ident_type, "temp");
+                let new_temp = fcs.builder.build_alloca(ident_type, "tempptr");
                 fcs.builder.build_store(new_temp, ident_no_ptr);
                 new_temp
             },
@@ -594,7 +585,11 @@ fn compile_as_ptr<'comp, 'a>(
             let object = compile_as_ptr_unless_already_ptr(fcs, object);
 
             fcs.builder
-                .build_struct_gep(object, field_index as u32, "access")
+                .build_struct_gep(
+                    object,
+                    field_index as u32,
+                    &*(field.to_string() + "access"),
+                )
                 .unwrap()
         },
         Index {
@@ -690,13 +685,26 @@ fn internal_function<'comp, 'a>(
 
             Some(size)
         },
+        "write" => {
+            let src: BasicValueEnum =
+                compile(fcs, args[0]).unwrap().try_into().unwrap();
+
+            let dest: PointerValue =
+                compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let dest_loaded: PointerValue =
+                fcs.builder.build_load(dest, "loaddest").try_into().unwrap();
+
+            fcs.builder.build_store(dest_loaded, src);
+
+            None
+        },
         _ => return None,
     };
 
     Some(output)
 }
 
-pub fn get_alignment<'a, 'ctx>(basic: &'a BasicTypeEnum<'ctx>) -> IntValue<'ctx> {
+pub fn get_alignment<'ctx>(basic: &BasicTypeEnum<'ctx>) -> IntValue<'ctx> {
     match basic {
         BasicTypeEnum::ArrayType(t) => t.get_alignment(),
         BasicTypeEnum::FloatType(t) => t.get_alignment(),

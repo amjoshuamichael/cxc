@@ -23,10 +23,6 @@ impl NodeDataGen for NodeData {
     }
 }
 
-impl NodeDataGen for ExprID {
-    fn add_to_expr_tree(&self, _: &mut FuncRep, _: ExprID) -> ExprID { *self }
-}
-
 impl Default for Box<dyn NodeDataGen> {
     fn default() -> Self { box NodeData::Number { value: 0, size: 32 } }
 }

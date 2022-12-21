@@ -17,7 +17,7 @@ Vec<T> = {
         }
 
         ptr: &T = self.data_loc + self.len
-        ptr = val
+        ptr.write<T>(val)
         
         self.len = self.len + to_i64(1)
 
@@ -30,11 +30,13 @@ Vec<T> = {
     }
 }
 
-create_vec<T>(): Vec<T> {
-    new_vec: Vec<T> = 0
-    new_vec.len = to_i64(0)
-    new_vec.capacity = to_i64(4)
-    new_vec.data_loc = alloc<T>(new_vec.capacity)
+<T> Vec<T>: {
+    new(): Vec<T> {
+        new_vec: Vec<T> = 0
+        new_vec.len = to_i64(0)
+        new_vec.capacity = to_i64(4)
+        new_vec.data_loc = alloc<T>(new_vec.capacity)
 
-    ; new_vec
+        ; new_vec
+    }
 }

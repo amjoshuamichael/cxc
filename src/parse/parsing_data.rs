@@ -68,6 +68,8 @@ impl Expr {
             Parens(expr) => box once(&**expr),
         }
     }
+
+    pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref(1), box self.clone()) }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

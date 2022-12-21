@@ -270,15 +270,28 @@ fn parse_block(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
 }
 
 fn parse_stmt(lexer: &mut ParseContext<VarName>) -> Result<Expr, ParseError> {
-    let next = lexer.peek_tok()?;
-    let after_that = lexer.peek_by(1)?;
+    let lhs = parse_expr(lexer)?;
 
-    match (next, after_that) {
-        (
-            Tok::VarName(_),
-            Tok::LeftBrack | Tok::Dot | Tok::Colon | Tok::Assignment,
-        ) => parse_setvar(lexer),
-        _ => parse_expr(lexer),
+    if lexer.peek_tok()? == Tok::Assignment {
+        lexer.next_tok()?;
+
+        let rhs = parse_expr(lexer)?;
+        Ok(Expr::SetVar(box lhs, box rhs))
+    } else if lexer.peek_tok()? == Tok::Colon {
+        lexer.next_tok()?;
+
+        let Expr::Ident(var_name) = lhs else { return Err(todo!()) };
+        let var = VarDecl {
+            name: var_name,
+            typ: Some(parse_type_alias(lexer)?.into()),
+        };
+
+        lexer.assert_next_tok_is(Tok::Assignment)?;
+
+        let rhs = parse_expr(lexer)?;
+        Ok(Expr::MakeVar(var, box rhs))
+    } else {
+        Ok(lhs)
     }
 }
 

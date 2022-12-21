@@ -237,11 +237,19 @@ fn after_generics(
         return Ok(false);
     }
 
-    // TODO: make this check over scope
+    let mut scope = 0;
+
     for index in 0.. {
         match lexer.peek_by(index)? {
+            Tok::LeftAngle => {
+                scope += 1;
+            },
             Tok::RghtAngle => {
-                return Ok(lexer.peek_by(index + 1)? == tok);
+                scope -= 1;
+
+                if scope == 0 {
+                    return Ok(lexer.peek_by(index + 1)? == tok);
+                }
             },
             Tok::LeftCurly => return Ok(false),
             _ => {},

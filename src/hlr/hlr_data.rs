@@ -77,7 +77,8 @@ impl<'a> FuncRep<'a> {
             }
         }
 
-        new.add_expr(code.code, ExprID::ROOT);
+        let new_root = new.add_expr(code.code, new.tree.root);
+        new.tree.root = new_root;
 
         new
     }
@@ -126,6 +127,21 @@ impl<'a> FuncRep<'a> {
         out
     }
 
+    pub fn uniqueify_varname(&mut self, name: &str) -> VarName {
+        let name = VarName::from(name);
+        let mut uniqueified = name.clone();
+
+        while self.identifiers.contains(&uniqueified) {
+            let mut inner_name = uniqueified.to_string();
+            inner_name += "_";
+            uniqueified = VarName::from(&*inner_name);
+        }
+
+        self.identifiers.push(uniqueified.clone());
+
+        uniqueified
+    }
+
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
             Expr::Number(value) => self
@@ -141,7 +157,8 @@ impl<'a> FuncRep<'a> {
             Expr::Bool(value) => self.tree.insert(parent, NodeData::Bool { value }),
             Expr::Strin(value) => {
                 let call_space = self.tree.make_one_space(parent);
-                let array_space = self.tree.make_one_space(call_space);
+                let ref_space = self.tree.make_one_space(call_space);
+                let array_space = self.tree.make_one_space(ref_space);
 
                 let mut byte_ids = Vec::new();
                 for b in value.bytes() {
@@ -162,7 +179,23 @@ impl<'a> FuncRep<'a> {
                     array_space,
                     NodeData::ArrayLit {
                         var_type: arr_type.clone(),
-                        parts: byte_ids,
+                        parts: byte_ids.clone(),
+                    },
+                );
+                self.tree.replace(
+                    ref_space,
+                    NodeData::UnarOp {
+                        ret_type: Type::void_ptr(),
+                        op: Opcode::Ref(1),
+                        hs: array_space,
+                    },
+                );
+
+                let len_arg = self.tree.insert(
+                    call_space,
+                    NodeData::Number {
+                        value: byte_ids.len() as u128,
+                        size: 64,
                     },
                 );
 
@@ -170,9 +203,9 @@ impl<'a> FuncRep<'a> {
 
                 let call_data = NodeData::Call {
                     ret_type: string_type.clone(),
-                    f: "from_i8_array".into(),
-                    a: vec![array_space],
-                    generics: vec![arr_type],
+                    f: "from_bytes".into(),
+                    a: vec![ref_space, len_arg],
+                    generics: Vec::new(),
                     relation: TypeRelationGeneric::Static(string_type),
                 };
                 self.tree.replace(call_space, call_data);

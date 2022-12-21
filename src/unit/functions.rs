@@ -103,6 +103,26 @@ impl<'a> CompData<'a> {
             relation: TypeOrAliasRelation::Unrelated,
         });
 
+        out.insert_intrinsic(FuncCode {
+            name: VarName::from("write"),
+            ret_type: Type::i(32).into(),
+            args: vec![
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::GenParam(0).get_ref().get_ref().into()),
+                },
+                VarDecl {
+                    name: VarName::temp(),
+                    typ: Some(TypeAlias::GenParam(0).get_ref().into()),
+                },
+            ],
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            relation: TypeOrAliasRelation::MethodOf(
+                TypeAlias::GenParam(0).get_ref().get_ref().into(),
+            ),
+        });
+
         out
     }
 

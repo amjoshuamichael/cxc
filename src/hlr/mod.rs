@@ -44,9 +44,14 @@ pub fn hlr(
     infer_types(&mut output);
     handle_active_initialization(&mut output);
     handle_arg_type_reflection(&mut output);
-    handle_large_returns(&mut output);
+    if crate::DEBUG {
+        println!("{}", &output.tree.to_string());
+    }
     handle_struct_literals(&mut output);
-
+    if crate::DEBUG {
+        println!("{}", &output.tree.to_string());
+    }
+    handle_large_returns(&mut output);
     if crate::DEBUG {
         println!("{}", &output.tree.to_string());
     }

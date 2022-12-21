@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut type_by_id = HashMap::new();
 
-    for n in hlr.tree.ids() {
+    for n in hlr.tree.ids_in_order() {
         let mut node = hlr.tree.get(n);
 
         match node {
@@ -40,7 +40,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
         hlr.tree.replace(n, node)
     }
 
-    for n in hlr.tree.ids().rev() {
+    for n in hlr.tree.ids_in_order().drain(..).rev() {
         let mut node = hlr.tree.get(n);
 
         match node {

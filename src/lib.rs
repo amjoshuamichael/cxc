@@ -5,6 +5,7 @@
 #![feature(box_syntax)]
 
 pub static DEBUG: bool = false;
+pub static BLOCK_LLVM: bool = false;
 
 pub use parse::TypeRelation;
 pub use typ::{

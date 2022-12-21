@@ -11,12 +11,13 @@ pub use quick::*;
 
 #[derive(Default, Clone)]
 pub struct ExprTree {
-    nodes: Vec<ExprNode>,
+    pub root: ExprID,
+    nodes: SlotMap<ExprID, ExprNode>,
 }
 
 impl ToString for ExprTree {
     fn to_string(&self) -> String {
-        let data = self.get(ExprID::ROOT);
+        let data = self.get(self.root);
         let not_indented = data.to_string(self);
         indent_parens(not_indented)
     }
@@ -32,21 +33,8 @@ impl Debug for ExprTree {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ExprID(usize);
-
-impl ToString for ExprID {
-    fn to_string(&self) -> String { self.0.to_string() }
-}
-
-impl Debug for ExprID {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ID_{}", self.0)
-    }
-}
-
-impl ExprID {
-    pub const ROOT: ExprID = ExprID(0);
+new_key_type! {
+    pub struct ExprID;
 }
 
 #[derive(Clone)]
@@ -193,6 +181,7 @@ pub enum NodeData {
     },
 }
 
+use slotmap::{new_key_type, SlotMap};
 use NodeData::*;
 
 impl NodeData {
@@ -289,10 +278,17 @@ impl NodeData {
                 f,
                 generics,
                 a: args,
+                relation,
                 ..
             } => {
                 // TODO: support relation
-                let mut call = f.to_string();
+                let mut call = match relation {
+                    TypeRelation::Static(typ) => format!("{typ:?}") + "::",
+                    TypeRelation::MethodOf(typ) => format!("{typ:?}") + ".",
+                    TypeRelation::Unrelated => String::default(),
+                };
+
+                call += &*f.to_string();
 
                 if generics.len() > 0 {
                     call += "<";

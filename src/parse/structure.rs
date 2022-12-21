@@ -18,6 +18,10 @@ pub enum TypeAlias {
     Union(Box<TypeAlias>, Box<TypeAlias>),
 }
 
+impl TypeAlias {
+    pub fn get_ref(self) -> TypeAlias { TypeAlias::Ref(box self) }
+}
+
 #[derive(Default)]
 pub struct StructParsingContext {
     pub name: String,

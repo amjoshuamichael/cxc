@@ -225,7 +225,7 @@ pub struct TypeData {
 impl Debug for TypeData {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.name {
-            Some(name) => write!(fmt, "{} = {:?}", name, self.type_enum),
+            Some(name) => write!(fmt, "{}...{:?}", name, self.type_enum),
             None => write!(fmt, "{:?}", self.type_enum),
         }
     }

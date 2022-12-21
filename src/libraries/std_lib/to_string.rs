@@ -1,4 +1,4 @@
-use crate::lex::VarName;
+use crate::lex::{TypeName, VarName};
 use crate::parse::{
     Expr, Opcode, TypeAlias, TypeOrAliasRelation, TypeRelation, VarDecl,
 };
@@ -68,8 +68,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
             let output_var = VarName::from("output");
             let output_var_expr = Expr::Ident(output_var.clone());
-            let output_var_ref =
-                Expr::UnarOp(Opcode::Ref(1), box output_var_expr.clone());
+            let output_var_ref = output_var_expr.get_ref();
 
             let mut statements = Vec::new();
             let make_var = Expr::MakeVar(
@@ -81,11 +80,11 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             );
             statements.push(make_var);
 
-            for (field_index, field) in fields.iter().enumerate() {
+            for (field_index, (field_name, field_typ)) in fields.iter().enumerate() {
                 let field_prefix = if field_index > 0 {
-                    String::from(", ") + &*field.0.to_string() + " = "
+                    String::from(", ") + &*field_name.to_string() + " = "
                 } else {
-                    field.0.to_string() + " = "
+                    field_name.to_string() + " = "
                 };
 
                 let field_prefix_expr = Expr::Strin(field_prefix);
@@ -93,21 +92,23 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 let push_prefix_call = Expr::Call(
                     push_string.clone(),
                     Vec::new(),
-                    vec![field_prefix_expr, output_var_ref.clone()],
+                    vec![field_prefix_expr.get_ref(), output_var_ref.clone()],
                     true,
                 );
                 statements.push(push_prefix_call);
 
-                let field = Expr::Member(input_var.clone(), field.0.clone());
+                let field = Expr::Member(input_var.clone(), field_name.clone());
 
-                let field_ref = Expr::UnarOp(Opcode::Ref(1), box field);
-
-                let field_to_string =
-                    Expr::Call(to_string.clone(), Vec::new(), vec![field_ref], true);
+                let field_to_string = Expr::Call(
+                    to_string.clone(),
+                    Vec::new(),
+                    vec![field.get_ref()],
+                    true,
+                );
                 let push_string_call = Expr::Call(
                     push_string.clone(),
                     Vec::new(),
-                    vec![field_to_string.clone(), output_var_ref.clone()],
+                    vec![field_to_string.get_ref(), output_var_ref.clone()],
                     true,
                 );
                 statements.push(push_string_call);
@@ -116,7 +117,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let push_closer_call = Expr::Call(
                 push_string.clone(),
                 Vec::new(),
-                vec![Expr::Strin("}".into()), output_var_ref.clone()],
+                vec![Expr::Strin("}".into()).get_ref(), output_var_ref.clone()],
                 true,
             );
             statements.push(push_closer_call);

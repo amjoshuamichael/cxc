@@ -141,6 +141,7 @@ impl<'u> Unit<'u> {
             Ok(file) => file,
             Err(err) => {
                 dbg!(&err);
+                panic!();
                 return Vec::new();
             },
         };
@@ -234,9 +235,9 @@ impl<'u> Unit<'u> {
             self.compile(func_output);
         }
 
-        if crate::DEBUG {
-            println!("{}", self.module.print_to_string().to_string());
+        if crate::DEBUG && !crate::BLOCK_LLVM {
             println!("compiled these: ");
+            println!("{}", self.module.print_to_string().to_string());
         }
     }
 

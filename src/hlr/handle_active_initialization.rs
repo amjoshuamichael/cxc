@@ -19,8 +19,7 @@ pub fn handle_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
                 else { panic!() };
 
-            let new_default_var_name =
-                VarName::from(structlit_id.to_string() + "default");
+            let new_default_var_name = hlr.uniqueify_varname("default");
 
             hlr.insert_statement_before(
                 structlit_id,
