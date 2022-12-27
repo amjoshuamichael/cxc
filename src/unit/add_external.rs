@@ -3,8 +3,7 @@ use std::{mem::transmute, rc::Rc};
 use inkwell::values::{BasicMetadataValueEnum, CallableValue};
 
 use crate::{
-    typ::ReturnStyle, FuncType, Kind, Type, TypeEnum, TypeRelation, UniqueFuncInfo,
-    Unit,
+    typ::ReturnStyle, FuncType, Kind, Type, TypeEnum, TypeRelation, UniqueFuncInfo, Unit,
 };
 
 pub struct ExternalFuncAdd {
@@ -18,7 +17,7 @@ pub struct ExternalFuncAdd {
 impl ExternalFuncAdd {
     pub fn empty() -> Self {
         ExternalFuncAdd {
-            ret_type: Type::never(), // TODO: void type
+            ret_type: Type::void(),
             arg_types: Vec::new(),
             relation: TypeRelation::Unrelated,
             generics: Vec::new(),
@@ -33,11 +32,7 @@ impl ExternalFuncAdd {
 }
 
 impl<'u> Unit<'u> {
-    pub fn add_rust_func<A, R>(
-        &mut self,
-        name: &str,
-        function: [fn(A) -> R; 1],
-    ) -> &mut Self {
+    pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) -> &mut Self {
         let func_type = self.comp_data.type_of(&function[0]);
         let TypeEnum::Func(FuncType { args, ret_type }) = 
             func_type.as_type_enum() else { panic!() };
@@ -102,8 +97,7 @@ impl<'u> Unit<'u> {
             func_type.as_type_enum() else { panic!() };
         let ret_type = func_type_inner.ret_type();
 
-        let ink_func_ptr_type =
-            func_type.to_any_type(&self.context).into_pointer_type();
+        let ink_func_ptr_type = func_type.to_any_type(&self.context).into_pointer_type();
 
         let ink_func_type = func_type_inner.llvm_func_type(&self.context);
 
@@ -113,9 +107,9 @@ impl<'u> Unit<'u> {
             generics: ext_add.generics,
         };
 
-        let function =
-            self.module
-                .add_function(&*func_info.to_string(), ink_func_type, None);
+        let function = self
+            .module
+            .add_function(&*func_info.to_string(), ink_func_type, None);
 
         let builder = self.context.create_builder();
 
@@ -134,7 +128,15 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap()
         };
 
-        if ret_type.return_style() != ReturnStyle::Pointer {
+        if ret_type.return_style() == ReturnStyle::Sret || ret_type.is_void() {
+            let arg_vals: Vec<BasicMetadataValueEnum> = function
+                .get_params()
+                .iter()
+                .map(|p| (*p).try_into().unwrap())
+                .collect();
+            builder.build_call(callable, &*arg_vals, "call");
+            builder.build_return(None);
+        } else {
             let arg_vals: Vec<BasicMetadataValueEnum> = function
                 .get_params()
                 .iter()
@@ -143,14 +145,6 @@ impl<'u> Unit<'u> {
             let out = builder.build_call(callable, &*arg_vals, "call");
             let out = out.try_as_basic_value().unwrap_left();
             builder.build_return(Some(&out));
-        } else {
-            let arg_vals: Vec<BasicMetadataValueEnum> = function
-                .get_params()
-                .iter()
-                .map(|p| (*p).try_into().unwrap())
-                .collect();
-            builder.build_call(callable, &*arg_vals, "call");
-            builder.build_return(None);
         }
 
         let function = self.module.get_function(&*func_info.to_string()).unwrap();

@@ -64,7 +64,7 @@ pub struct Unit<'u> {
 #[derive(Clone, Default)]
 pub struct CompData<'u> {
     pub(crate) types: HashMap<TypeName, Type>,
-    pub(crate) aliases: HashMap<TypeName, TypeAlias>,
+    pub(crate) aliases: HashMap<TypeName, TypeSpec>,
     pub(crate) globals: HashMap<VarName, (Type, GlobalValue<'u>)>,
     compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
     func_types: HashMap<UniqueFuncInfo, Type>,
@@ -142,7 +142,6 @@ impl<'u> Unit<'u> {
             Err(err) => {
                 dbg!(&err);
                 panic!();
-                return Vec::new();
             },
         };
 
@@ -244,11 +243,8 @@ impl<'u> Unit<'u> {
     fn compile(&mut self, output: &mut FuncOutput) {
         let function = self.comp_data.get_func_value(output.info_ref()).unwrap();
 
-        let mut fcs = self.new_func_comp_state(
-            output.take_tree(),
-            function,
-            output.take_arg_names(),
-        );
+        let mut fcs =
+            self.new_func_comp_state(output.take_tree(), function, output.take_arg_names());
 
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
@@ -263,8 +259,11 @@ impl<'u> Unit<'u> {
             &name[last_colon_index..]
         };
 
-        let opaque_type =
-            Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
+        self.add_named_opaque_type::<T>(name)
+    }
+
+    pub fn add_named_opaque_type<T>(&mut self, name: &str) -> Type {
+        let opaque_type = Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
         comp_data
@@ -340,21 +339,13 @@ impl<'u> Unit<'u> {
         self
     }
 
-    pub fn add_method_deriver(
-        &mut self,
-        func_name: VarName,
-        func: DeriverFunc,
-    ) -> &mut Self {
+    pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) -> &mut Self {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
         comp_data.add_method_deriver(func_name, func);
         self
     }
 
-    pub fn add_static_deriver(
-        &mut self,
-        func_name: VarName,
-        func: DeriverFunc,
-    ) -> &mut Self {
+    pub fn add_static_deriver(&mut self, func_name: VarName, func: DeriverFunc) -> &mut Self {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
         comp_data.add_static_deriver(func_name, func);
         self

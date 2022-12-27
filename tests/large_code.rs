@@ -21,7 +21,7 @@ fn backwards_struct_dependency() {
             time: i32
         }
 
-        main(): i32 {
+        main() {
             location: TheEndOfTheWorld =
                 TheEndOfTheWorld { time = 2095 }
 
@@ -33,8 +33,6 @@ fn backwards_struct_dependency() {
             julie: Julie = Julie { letter = dream }
 
             assert_eq<i32>(julie.letter.location.time, 2095)
-
-            ; 0
         }
         "
     )
@@ -57,7 +55,7 @@ fn vec() {
             ; two_nums
         }
 
-        main(): i32 {
+        main() {
             number_of_checks: i32 = 128
 
             num_vec: Vec<i32> = Vec<i32>:new<i32>()
@@ -65,7 +63,7 @@ fn vec() {
 
             current_index: i32 = 0
             @ current_index < number_of_checks + 0 {
-                x: i32 = num_vec.push<i32>(current_index)
+                num_vec.push<i32>(current_index)
 
                 current_index = current_index + 1
             }
@@ -80,7 +78,7 @@ fn vec() {
 
             current_index: i64 = 0
             @ current_index < number_of_checks + 0 {
-                x: i32 = two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
+                two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
 
                 current_index = current_index + 1
             }
@@ -95,9 +93,6 @@ fn vec() {
 
                 current_index = current_index + 1
             }
-
-
-            ; 0
         }"
     )
 }
@@ -141,14 +136,12 @@ fn generic_methods() {
         }
 
         # buy las vegas
-        main(): i32 {
+        main() {
             after_this: Roll<f32> = Roll<f32> { val = 7.0 }
             assert_eq<f32>(after_this.come_on<f32>(), 7_7_7.0) # let's go!
 
             roll: Roll<i32> = Roll<i32> { val = 7 }
             assert_eq<f32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
-
-            ; 0
         }
         "
     )
@@ -181,9 +174,8 @@ fn backwards_call() {
 fn hello_world() {
     xc_test!(
         r#"
-        main(): i32 {
+        main() {
             print<&String>(&"hello, world!")
-            ; 0
         }
         "#
     )
@@ -206,14 +198,12 @@ fn derivations() {
             z: i32
         }
 
-        test_derivation(): i32 {
+        test_derivation() {
             point2D: Point2D = Point2D { x = 0, y = 0 }
             assert_eq<i32>(point2D.type_field_count(), 2)
 
             point3D: Point3D = Point3D { x = 0, y = 0, z = 0 }
             assert_eq<i32>(point3D.type_field_count(), 3)
-
-            ; 0
         }
     ",
     );

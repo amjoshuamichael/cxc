@@ -6,7 +6,7 @@ use crate::{parse::*, TypeEnum};
 mod rust_type_name_conversion;
 
 impl<'a> CompData<'a> {
-    pub fn add_type_alias(&mut self, name: TypeName, a: TypeAlias) {
+    pub fn add_type_alias(&mut self, name: TypeName, a: TypeSpec) {
         self.aliases.insert(name, a);
     }
 
@@ -25,14 +25,14 @@ impl<'a> CompData<'a> {
         Some(realized_type.with_name(name.clone()))
     }
 
-    pub fn get_spec(&self, alias: &TypeAlias, generics: &Vec<Type>) -> Option<Type> {
+    pub fn get_spec(&self, alias: &TypeSpec, generics: &Vec<Type>) -> Option<Type> {
         let typ = match alias {
-            TypeAlias::Named(name) => self.get_by_name(name)?,
-            TypeAlias::Int(size) => Type::i(*size),
-            TypeAlias::Float(size) => Type::f(*size),
-            TypeAlias::Bool => Type::bool(),
-            TypeAlias::Ref(base) => self.get_spec(base, generics)?.get_ref(),
-            TypeAlias::Struct(fields) => {
+            TypeSpec::Named(name) => self.get_by_name(name)?,
+            TypeSpec::Int(size) => Type::i(*size),
+            TypeSpec::Float(size) => Type::f(*size),
+            TypeSpec::Bool => Type::bool(),
+            TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
+            TypeSpec::Struct(fields) => {
                 let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
 
                 for field in fields {
@@ -42,7 +42,7 @@ impl<'a> CompData<'a> {
 
                 Type::new_struct(typed_fields)
             },
-            TypeAlias::Function(args, ret_type) => {
+            TypeSpec::Function(args, ret_type) => {
                 let args = args
                     .iter()
                     .map(|arg| self.get_spec(arg, generics))
@@ -50,19 +50,22 @@ impl<'a> CompData<'a> {
                 let ret_type = self.get_spec(ret_type, generics)?;
                 ret_type.func_with_args(args)
             },
-            TypeAlias::Generic(name, generic_aliases) => {
+            TypeSpec::Generic(name, generic_aliases) => {
                 let generics = generic_aliases
                     .iter()
                     .map(|ga| self.get_spec(ga, generics).unwrap())
                     .collect();
-                self.get_spec(self.aliases.get(name)?, &generics)?
-                    .with_name(name.clone())
+                let cached_type = self.types.get(name);
+                if cached_type.is_some() {
+                    cached_type.unwrap().clone()
+                } else {
+                    self.get_spec(self.aliases.get(name)?, &generics)?
+                        .with_name(name.clone())
+                }
             },
-            TypeAlias::GenParam(index) => generics[*index as usize].clone(),
-            TypeAlias::Array(base, count) => {
-                self.get_spec(base, generics)?.get_array(*count)
-            },
-            TypeAlias::Union(left, right) => {
+            TypeSpec::GenParam(index) => generics[*index as usize].clone(),
+            TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
+            TypeSpec::Union(left, right) => {
                 let left = self.get_spec(left, generics)?;
                 let right = self.get_spec(right, generics)?;
 
@@ -80,6 +83,8 @@ impl<'a> CompData<'a> {
 
                 Type::new_struct(new_fields)
             },
+            TypeSpec::Void => Type::void(),
+            TypeSpec::Type(typ) => typ.clone(),
         };
 
         Some(typ)

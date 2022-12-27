@@ -29,11 +29,10 @@ fn pointer() {
 
     unit.push_script(
         "
-            square(num: &i32): i32 {
+            square(num: &i32) {
                 num.write<i32>(*num * *num)
-                ; 0
             }
-            ",
+        ",
     );
 
     let mut num = 4;
@@ -217,11 +216,9 @@ fn reflected_type_masks() {
     unit.add_lib(cxc::library::TestLib);
     unit.push_script(
         "
-        main(): i32 {
+        main() {
             assert_is_five(&5)
             assert_is_five(&5.0)
-
-            ; 0
         }
         ",
     );
@@ -266,11 +263,9 @@ fn value_from_code() {
     );
     unit.push_script(
         "
-        main(): i32 {
+        main() {
             assert_is_five(&XcValue:from(&5))
             assert_is_five(&XcValue:from(&5.0))
-
-            ; 0
         }
         ",
     );

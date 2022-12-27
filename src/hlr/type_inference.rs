@@ -26,7 +26,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 },
                 None => {
                     let global = hlr
-                        .types
+                        .comp_data
                         .globals
                         .get(&name.clone())
                         .expect(&*format!("could not find identifier {name}"));
@@ -55,8 +55,9 @@ pub fn infer_types(hlr: &mut FuncRep) {
             } => {
                 use crate::parse::Opcode::*;
                 *ret_type = match op {
-                    Equal | Inequal | GrtrThan | GreaterOrEqual | LessThan
-                    | LessOrEqual => Type::i(64),
+                    Equal | Inequal | GrtrThan | GreaterOrEqual | LessThan | LessOrEqual => {
+                        Type::i(64)
+                    },
                     _ => type_by_id.get(lhs).unwrap().clone(),
                 };
                 *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
@@ -73,9 +74,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     Opcode::Deref(count) => {
                         *ret_type = hs_type.clone().deref_x_times(count).unwrap();
                     },
-                    Opcode::Ref(count) => {
-                        *ret_type = hs_type.clone().ref_x_times(count)
-                    },
+                    Opcode::Ref(count) => *ret_type = hs_type.clone().ref_x_times(count),
                     Opcode::Not => *ret_type = Type::bool(),
                     _ => unreachable!(),
                 }
@@ -128,7 +127,20 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     generics: generics.clone(),
                 };
 
-                let func_type = hlr.types.get_type(&func_info).unwrap();
+                let func_type = hlr.comp_data.get_type(&func_info).unwrap();
+                let TypeEnum::Func(FuncType { ret_type: return_type, .. }) = 
+                    func_type.as_type_enum() else { panic!() };
+
+                *ret_type = return_type.clone();
+
+                *type_by_id.get_mut(&n).unwrap() = ret_type.clone();
+            },
+            NodeData::FirstClassCall {
+                ref mut ret_type,
+                ref mut f,
+                ..
+            } => {
+                let func_type = type_by_id.get(f).unwrap().clone();
                 let TypeEnum::Func(FuncType { ret_type: return_type, .. }) = 
                     func_type.as_type_enum() else { panic!() };
 
@@ -153,7 +165,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 ref mut var_type,
                 ref parts,
             } => {
-                if var_type.is_never() {
+                if var_type.is_unknown() {
                     *var_type = type_by_id
                         .get(&parts[0])
                         .unwrap()
@@ -168,8 +180,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
             } => match hlr.tree.get(*stmts.last().unwrap()) {
                 NodeData::Return { to_return, .. } => {
                     if to_return.is_some() {
-                        *ret_type =
-                            type_by_id.get(&to_return.unwrap()).unwrap().clone();
+                        *ret_type = type_by_id.get(&to_return.unwrap()).unwrap().clone();
                     }
                 },
                 _ => {},

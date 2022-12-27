@@ -30,10 +30,14 @@ impl Kind for RefType {
     fn name(&self) -> String { "&".to_string() + &*format!("{:?}", self.base) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        self.base
-            .to_basic_type(context)
-            .ptr_type(AddressSpace::Generic)
-            .into()
+        if self.base.is_void() {
+            context.i32_type().ptr_type(AddressSpace::Generic).into()
+        } else {
+            self.base
+                .to_basic_type(context)
+                .ptr_type(AddressSpace::Generic)
+                .into()
+        }
     }
 }
 
@@ -60,28 +64,27 @@ impl Kind for FuncType {
 
 impl FuncType {
     pub fn llvm_func_type<'t>(&self, context: &'t Context) -> FunctionType<'t> {
-        let return_style = self.ret_type.return_style();
-
-        if return_style != ReturnStyle::Pointer {
-            let return_type = self.ret_type.raw_return_type().to_basic_type(context);
-
+        dbg!(&self.ret_type, &self.args);
+        if self.ret_type.return_style() != ReturnStyle::Sret {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
                 .map(|t| t.to_basic_type(context).into())
                 .collect();
 
-            return_type.fn_type(&args[..], true)
+            if self.ret_type.is_void() {
+                context.void_type().fn_type(&*args, false)
+            } else {
+                let return_type = self.ret_type.raw_return_type().to_basic_type(context);
+                return_type.fn_type(&*args, false)
+            }
         } else {
-            let args: Vec<BasicMetadataTypeEnum> =
-                once(&self.ret_type.clone().get_ref())
-                    .chain(self.args.iter())
-                    .map(|t| t.to_basic_type(context).into())
-                    .collect();
+            let args: Vec<BasicMetadataTypeEnum> = once(&self.ret_type.clone().get_ref())
+                .chain(self.args.iter())
+                .map(|t| t.to_basic_type(context).into())
+                .collect();
 
-            Type::never()
-                .to_basic_type(context)
-                .fn_type(&args[..], true)
+            context.void_type().fn_type(&args[..], true)
         }
     }
 }
@@ -148,11 +151,19 @@ impl Kind for ArrayType {
     }
 }
 
-impl Kind for NeverType {
-    fn name(&self) -> String { String::from("NEVER") }
+impl Kind for UnknownType {
+    fn name(&self) -> String { String::from("Unknown") }
+
+    fn to_any_type<'t>(&self, _: &'t Context) -> AnyTypeEnum<'t> {
+        panic!("Unknown type cannot be converted to LLVM type")
+    }
+}
+
+impl Kind for VoidType {
+    fn name(&self) -> String { String::from("Void") }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
-        context.i32_type().as_any_type_enum()
+        context.void_type().as_any_type_enum()
     }
 }
 

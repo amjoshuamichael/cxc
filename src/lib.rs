@@ -5,16 +5,15 @@
 #![feature(box_syntax)]
 
 pub static DEBUG: bool = false;
-pub static BLOCK_LLVM: bool = false;
+pub static BLOCK_LLVM: bool = true;
 
 pub use parse::TypeRelation;
 pub use typ::{
-    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType,
-    StructType, Type, TypeData, TypeEnum,
+    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType, StructType,
+    Type, TypeData, TypeEnum,
 };
 pub use unit::{
-    ExternalFuncAdd, Func, LLVMContext, UniqueFuncInfo, Unit, XcFunc, XcReflect,
-    XcValue,
+    ExternalFuncAdd, Func, LLVMContext, UniqueFuncInfo, Unit, XcFunc, XcReflect, XcValue,
 };
 
 pub mod library {

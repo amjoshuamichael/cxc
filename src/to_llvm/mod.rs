@@ -42,7 +42,7 @@ impl<'f> FunctionCompilationState<'f> {
 pub fn compile_routine<'comp, 'a>(
     fcs: &'a mut FunctionCompilationState<'comp>,
 ) -> Option<AnyValueEnum<'a>> {
-    if fcs.ret_type.return_style() == ReturnStyle::Pointer {
+    if fcs.ret_type.return_style() == ReturnStyle::Sret {
         // informs llvm that we are returning via the first parameter in the
         // function, which is a pointer.
         let sret_id = Attribute::get_named_enum_kind_id("sret");
@@ -71,10 +71,9 @@ fn build_stack_allocas<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) 
                     continue;
                 }
 
-                let var_ptr = fcs.builder.build_alloca(
-                    var_type.to_basic_type(fcs.context),
-                    &*name.to_string(),
-                );
+                let var_ptr = fcs
+                    .builder
+                    .build_alloca(var_type.to_basic_type(fcs.context), &*name.to_string());
 
                 fcs.variables.insert(name.clone(), var_ptr);
             },
@@ -153,9 +152,7 @@ fn compile<'comp, 'a>(
             return Some(to_store);
         },
         Ident { ref name, .. } => {
-            if let Some(param_index) =
-                fcs.arg_names.iter().position(|arg| arg == name)
-            {
+            if let Some(param_index) = fcs.arg_names.iter().position(|arg| arg == name) {
                 let param = fcs
                     .function
                     .get_nth_param(param_index.try_into().unwrap())
@@ -206,26 +203,14 @@ fn compile<'comp, 'a>(
                         Plus => fcs.builder.build_int_add(lhs, rhs, "sum"),
                         Minus => fcs.builder.build_int_sub(lhs, rhs, "sub"),
                         Multiplier => fcs.builder.build_int_mul(lhs, rhs, "mul"),
-                        Divider => {
-                            fcs.builder.build_int_unsigned_div(lhs, rhs, "div")
-                        },
-                        Modulus => {
-                            fcs.builder.build_int_unsigned_rem(lhs, rhs, "mod")
-                        },
+                        Divider => fcs.builder.build_int_unsigned_div(lhs, rhs, "div"),
+                        Modulus => fcs.builder.build_int_unsigned_rem(lhs, rhs, "mod"),
                         Inequal => fcs.builder.build_int_compare(NE, lhs, rhs, "eq"),
                         Equal => fcs.builder.build_int_compare(EQ, lhs, rhs, "eq"),
-                        LessThan => {
-                            fcs.builder.build_int_compare(ULT, lhs, rhs, "lt")
-                        },
-                        GrtrThan => {
-                            fcs.builder.build_int_compare(UGT, lhs, rhs, "gt")
-                        },
-                        LessOrEqual => {
-                            fcs.builder.build_int_compare(ULE, lhs, rhs, "gt")
-                        },
-                        GreaterOrEqual => {
-                            fcs.builder.build_int_compare(UGE, lhs, rhs, "gt")
-                        },
+                        LessThan => fcs.builder.build_int_compare(ULT, lhs, rhs, "lt"),
+                        GrtrThan => fcs.builder.build_int_compare(UGT, lhs, rhs, "gt"),
+                        LessOrEqual => fcs.builder.build_int_compare(ULE, lhs, rhs, "gt"),
+                        GreaterOrEqual => fcs.builder.build_int_compare(UGE, lhs, rhs, "gt"),
                         _ => todo!(),
                     };
 
@@ -239,9 +224,7 @@ fn compile<'comp, 'a>(
                         let result: FloatValue = match op {
                             Plus => fcs.builder.build_float_add(lhs, rhs, "sum"),
                             Minus => fcs.builder.build_float_sub(lhs, rhs, "sub"),
-                            Multiplier => {
-                                fcs.builder.build_float_mul(lhs, rhs, "mul")
-                            },
+                            Multiplier => fcs.builder.build_float_mul(lhs, rhs, "mul"),
                             Divider => fcs.builder.build_float_div(lhs, rhs, "div"),
                             Modulus => fcs.builder.build_float_rem(lhs, rhs, "mod"),
                             _ => todo!(),
@@ -251,30 +234,22 @@ fn compile<'comp, 'a>(
                     }
 
                     let result: IntValue = match op {
-                        Inequal => fcs.builder.build_float_compare(
-                            FloatPredicate::ONE,
-                            lhs,
-                            rhs,
-                            "eq",
-                        ),
-                        Equal => fcs.builder.build_float_compare(
-                            FloatPredicate::OEQ,
-                            lhs,
-                            rhs,
-                            "eq",
-                        ),
-                        LessThan => fcs.builder.build_float_compare(
-                            FloatPredicate::ULT,
-                            lhs,
-                            rhs,
-                            "lt",
-                        ),
-                        GrtrThan => fcs.builder.build_float_compare(
-                            FloatPredicate::UGT,
-                            lhs,
-                            rhs,
-                            "gt",
-                        ),
+                        Inequal => {
+                            fcs.builder
+                                .build_float_compare(FloatPredicate::ONE, lhs, rhs, "eq")
+                        },
+                        Equal => {
+                            fcs.builder
+                                .build_float_compare(FloatPredicate::OEQ, lhs, rhs, "eq")
+                        },
+                        LessThan => {
+                            fcs.builder
+                                .build_float_compare(FloatPredicate::ULT, lhs, rhs, "lt")
+                        },
+                        GrtrThan => {
+                            fcs.builder
+                                .build_float_compare(FloatPredicate::UGT, lhs, rhs, "gt")
+                        },
                         _ => todo!(),
                     };
 
@@ -346,23 +321,17 @@ fn compile<'comp, 'a>(
             return None;
         },
         While { w, d } => {
-            let prewhile_block =
-                fcs.context.append_basic_block(fcs.function, "prewhile");
-            let whilecode_block =
-                fcs.context.append_basic_block(fcs.function, "whilecode");
-            let postwhile_block =
-                fcs.context.append_basic_block(fcs.function, "postwhile");
+            let prewhile_block = fcs.context.append_basic_block(fcs.function, "prewhile");
+            let whilecode_block = fcs.context.append_basic_block(fcs.function, "whilecode");
+            let postwhile_block = fcs.context.append_basic_block(fcs.function, "postwhile");
 
             fcs.builder.build_unconditional_branch(prewhile_block);
             fcs.builder.position_at_end(prewhile_block);
 
             let cond = compile(fcs, w).unwrap().into_int_value();
 
-            fcs.builder.build_conditional_branch(
-                cond,
-                whilecode_block,
-                postwhile_block,
-            );
+            fcs.builder
+                .build_conditional_branch(cond, whilecode_block, postwhile_block);
 
             fcs.builder.position_at_end(whilecode_block);
             compile(fcs, d);
@@ -400,8 +369,7 @@ fn compile<'comp, 'a>(
                 for arg in a {
                     let basic_arg: BasicValueEnum =
                         compile(fcs, *arg).unwrap().try_into().unwrap();
-                    let basic_meta_arg: BasicMetadataValueEnum =
-                        basic_arg.try_into().unwrap();
+                    let basic_meta_arg: BasicMetadataValueEnum = basic_arg.try_into().unwrap();
                     arg_vals.push(basic_meta_arg);
                 }
 
@@ -420,10 +388,8 @@ fn compile<'comp, 'a>(
             let mut arg_vals = Vec::new();
 
             for arg in a {
-                let basic_arg: BasicValueEnum =
-                    compile(fcs, *arg).unwrap().try_into().unwrap();
-                let basic_meta_arg: BasicMetadataValueEnum =
-                    basic_arg.try_into().unwrap();
+                let basic_arg: BasicValueEnum = compile(fcs, *arg).unwrap().try_into().unwrap();
+                let basic_meta_arg: BasicMetadataValueEnum = basic_arg.try_into().unwrap();
                 arg_vals.push(basic_meta_arg);
             }
 
@@ -478,13 +444,13 @@ fn compile<'comp, 'a>(
                 if type_of_return == raw_type_of_return {
                     fcs.builder.build_return(Some(&ret_val));
                 } else {
+                    dbg!(&type_of_return);
                     let casted_value = fcs.builder.build_alloca(
                         raw_type_of_return.to_basic_type(&fcs.context),
                         "castedret",
                     );
                     fcs.builder.build_store(casted_value, ret_val);
-                    let loaded_cast =
-                        fcs.builder.build_load(casted_value, "loadcast");
+                    let loaded_cast = fcs.builder.build_load(casted_value, "loadcast");
                     fcs.builder.build_return(Some(&loaded_cast));
                 }
             } else {
@@ -505,24 +471,24 @@ fn compile<'comp, 'a>(
             let TypeEnum::Array(s) = var_type.as_type_enum() else { panic!() };
 
             let array = match s.base.clone().to_any_type(fcs.context) {
-                AnyTypeEnum::IntType(t) => t.const_array(
-                    &*c_parts.map(|p| p.into_int_value()).collect::<Vec<_>>(),
-                ),
-                AnyTypeEnum::FloatType(t) => t.const_array(
-                    &*c_parts.map(|p| p.into_float_value()).collect::<Vec<_>>(),
-                ),
-                AnyTypeEnum::PointerType(t) => t.const_array(
-                    &*c_parts.map(|p| p.into_pointer_value()).collect::<Vec<_>>(),
-                ),
-                AnyTypeEnum::VectorType(t) => t.const_array(
-                    &*c_parts.map(|p| p.into_vector_value()).collect::<Vec<_>>(),
-                ),
-                AnyTypeEnum::StructType(t) => t.const_array(
-                    &*c_parts.map(|p| p.into_struct_value()).collect::<Vec<_>>(),
-                ),
-                AnyTypeEnum::ArrayType(t) => t.const_array(
-                    &*c_parts.map(|p| p.into_array_value()).collect::<Vec<_>>(),
-                ),
+                AnyTypeEnum::IntType(t) => {
+                    t.const_array(&*c_parts.map(|p| p.into_int_value()).collect::<Vec<_>>())
+                },
+                AnyTypeEnum::FloatType(t) => {
+                    t.const_array(&*c_parts.map(|p| p.into_float_value()).collect::<Vec<_>>())
+                },
+                AnyTypeEnum::PointerType(t) => {
+                    t.const_array(&*c_parts.map(|p| p.into_pointer_value()).collect::<Vec<_>>())
+                },
+                AnyTypeEnum::VectorType(t) => {
+                    t.const_array(&*c_parts.map(|p| p.into_vector_value()).collect::<Vec<_>>())
+                },
+                AnyTypeEnum::StructType(t) => {
+                    t.const_array(&*c_parts.map(|p| p.into_struct_value()).collect::<Vec<_>>())
+                },
+                AnyTypeEnum::ArrayType(t) => {
+                    t.const_array(&*c_parts.map(|p| p.into_array_value()).collect::<Vec<_>>())
+                },
                 _ => todo!(),
             };
 
@@ -565,8 +531,7 @@ fn compile_as_ptr<'comp, 'a>(
                 let ident_no_ptr: BasicValueEnum =
                     compile(fcs, expr_id).unwrap().try_into().unwrap();
 
-                let ident_type =
-                    fcs.tree.get(expr_id).ret_type().to_basic_type(fcs.context);
+                let ident_type = fcs.tree.get(expr_id).ret_type().to_basic_type(fcs.context);
                 let new_temp = fcs.builder.build_alloca(ident_type, "tempptr");
                 fcs.builder.build_store(new_temp, ident_no_ptr);
                 new_temp
@@ -585,11 +550,7 @@ fn compile_as_ptr<'comp, 'a>(
             let object = compile_as_ptr_unless_already_ptr(fcs, object);
 
             fcs.builder
-                .build_struct_gep(
-                    object,
-                    field_index as u32,
-                    &*(field.to_string() + "access"),
-                )
+                .build_struct_gep(object, field_index as u32, &*(field.to_string() + "access"))
                 .unwrap()
         },
         Index {
@@ -620,10 +581,9 @@ fn compile_as_ptr<'comp, 'a>(
         other_expression => {
             let value = compile(fcs, expr_id).unwrap();
 
-            let ptr = fcs.builder.build_alloca(
-                other_expression.ret_type().to_basic_type(fcs.context),
-                "temp",
-            );
+            let ptr = fcs
+                .builder
+                .build_alloca(other_expression.ret_type().to_basic_type(fcs.context), "temp");
 
             fcs.builder
                 .build_store(ptr, BasicValueEnum::try_from(value).unwrap());
@@ -658,10 +618,8 @@ fn internal_function<'comp, 'a>(
             None
         },
         "memmove" => {
-            let src: PointerValue =
-                compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let dest: PointerValue =
-                compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
             let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
 
             fcs.builder.build_memmove(dest, 1, src, 1, size).unwrap();
@@ -669,10 +627,8 @@ fn internal_function<'comp, 'a>(
             None
         },
         "memcpy" => {
-            let src: PointerValue =
-                compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let dest: PointerValue =
-                compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let src: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
             let size = compile(fcs, args[2]).unwrap().try_into().unwrap();
 
             fcs.builder.build_memcpy(dest, 1, src, 1, size).unwrap();
@@ -686,11 +642,9 @@ fn internal_function<'comp, 'a>(
             Some(size)
         },
         "write" => {
-            let src: BasicValueEnum =
-                compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let src: BasicValueEnum = compile(fcs, args[0]).unwrap().try_into().unwrap();
 
-            let dest: PointerValue =
-                compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
             let dest_loaded: PointerValue =
                 fcs.builder.build_load(dest, "loaddest").try_into().unwrap();
 

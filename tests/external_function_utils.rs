@@ -2,7 +2,6 @@ mod test_utils;
 use cxc::ExternalFuncAdd;
 use cxc::LLVMContext;
 use cxc::Unit;
-use test_utils::xc_test;
 
 #[test]
 fn default_util() {

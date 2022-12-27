@@ -84,10 +84,7 @@ impl Lexer {
     ) -> ParseContext<N> {
         if crate::DEBUG {
             println!();
-            println!(
-                "splitting the lexer at index {:?} to parse {name}",
-                self.tok_pos.val()
-            );
+            println!("splitting the lexer at index {:?} to parse {name}", self.tok_pos.val());
         }
 
         ParseContext {
@@ -135,9 +132,7 @@ impl<N: Ident> ParseContext<N> {
 
     pub fn name_of_this(&self) -> &N { &self.name }
 
-    pub fn return_info(self) -> (N, HashSet<TypeName>) {
-        (self.name, self.type_dependencies)
-    }
+    pub fn return_info(self) -> (N, HashSet<TypeName>) { (self.name, self.type_dependencies) }
 
     pub fn create_new_with_name<T: Ident>(&self, name: T) -> ParseContext<T> {
         ParseContext::<T> {

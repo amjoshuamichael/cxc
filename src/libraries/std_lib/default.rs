@@ -1,8 +1,7 @@
 use crate::{
     lex::VarName,
     libraries::Library,
-    parse::{Expr, FuncCode, TypeOrAliasRelation},
-    typ::TypeOrAlias,
+    parse::{Expr, FuncCode, TypeSpec, TypeSpecRelation},
     unit::CompData,
     ExternalFuncAdd, Type, TypeEnum, TypeRelation,
 };
@@ -42,10 +41,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
 
             for (field_name, field_type) in &struct_type.fields {
                 let other_default_call = Expr::Call(
-                    box Expr::StaticMethodPath(
-                        field_type.clone().into(),
-                        "default".into(),
-                    ),
+                    box Expr::StaticMethodPath(field_type.clone().into(), "default".into()),
                     Vec::new(),
                     Vec::new(),
                     false,
@@ -56,15 +52,14 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
 
             let struct_lit = Expr::Struct(typ.clone().into(), fields, false);
 
-            let relation =
-                TypeOrAliasRelation::Static(TypeOrAlias::Type(typ.clone()));
+            let relation = TypeSpecRelation::Static(TypeSpec::Type(typ.clone()));
 
             Some(FuncCode {
                 name: VarName::from("default"),
                 ret_type: typ.into(),
                 args: Vec::new(),
                 generic_count: 0,
-                code: struct_lit,
+                code: struct_lit.wrap_in_block(),
                 relation,
             })
         },

@@ -1,6 +1,5 @@
 use crate::hlr::hlr_data::FuncRep;
 use crate::{Type, UniqueFuncInfo};
-use std::iter::once;
 
 use super::{ExprID, ExprTree, NodeData, NodeDataGen};
 use super::{ExprNode, NodeData::*};
@@ -21,9 +20,7 @@ impl ExprTree {
 
         fn ids_of<'a>(tree: &'a ExprTree, id: ExprID) -> Vec<ExprID> {
             let mut rest = match tree.get(id) {
-                Number { .. } | Float { .. } | Bool { .. } | Ident { .. } => {
-                    Vec::new()
-                },
+                Number { .. } | Float { .. } | Bool { .. } | Ident { .. } => Vec::new(),
                 StructLit { fields, .. } => fields
                     .iter()
                     .map(|(_, id)| ids_of(tree, *id))
@@ -97,9 +94,7 @@ impl ExprTree {
 
     pub fn get_ref(&self, at: ExprID) -> &NodeData { &self.nodes[at].data }
 
-    pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData {
-        &mut self.nodes[at].data
-    }
+    pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData { &mut self.nodes[at].data }
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of].parent }
 
@@ -158,11 +153,7 @@ impl<'a> FuncRep<'a> {
         filter: impl Fn(&NodeData) -> bool,
         modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
     ) {
-        self.modify_many_inner(
-            self.tree.ids_in_order().drain(..).rev(),
-            filter,
-            modifier,
-        )
+        self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), filter, modifier)
     }
 
     fn modify_many_inner(
@@ -189,8 +180,7 @@ impl<'a> FuncRep<'a> {
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
     ) -> InsertionData<'b, 'a> {
-        let new_statement =
-            self.insert_statement_inner(statement_origin, new_data, 0);
+        let new_statement = self.insert_statement_inner(statement_origin, new_data, 0);
         InsertionData(self, new_statement)
     }
 
@@ -199,8 +189,7 @@ impl<'a> FuncRep<'a> {
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
     ) -> InsertionData<'b, 'a> {
-        let new_statement =
-            self.insert_statement_inner(statement_origin, new_data, 1);
+        let new_statement = self.insert_statement_inner(statement_origin, new_data, 1);
         InsertionData(self, new_statement)
     }
 
@@ -217,8 +206,7 @@ impl<'a> FuncRep<'a> {
         let NodeData::Block { ref mut stmts, .. } = self.tree.get_mut(block)
             else { unreachable!() };
 
-        let block_pos =
-            stmts.iter().position(|s_id| *s_id == statement).unwrap() + offset;
+        let block_pos = stmts.iter().position(|s_id| *s_id == statement).unwrap() + offset;
         stmts.insert(block_pos, new);
 
         new

@@ -1,6 +1,6 @@
 use crate::{
     lex::VarName,
-    parse::{Expr, FuncCode, TypeOrAliasRelation, VarDecl},
+    parse::{Expr, FuncCode, TypeSpecRelation, VarDecl},
     typ::ArrayType,
     unit::CompData,
     Type, TypeEnum,
@@ -43,11 +43,11 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
         ret_type: Type::i(32).into(),
         args: vec![VarDecl {
             name: VarName::temp(),
-            typ: Some(typ.clone().into()),
+            type_spec: Some(typ.clone().into()),
         }],
         generic_count: 0,
         code: Expr::Number(*count as u128),
-        relation: TypeOrAliasRelation::Static(typ.into()),
+        relation: TypeSpecRelation::Static(typ.into()),
     })
 }
 

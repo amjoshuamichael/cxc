@@ -1,4 +1,4 @@
-max_width = 85
+max_width = 96
 fn_call_width = 85
 reorder_imports = true
 reorder_modules = true

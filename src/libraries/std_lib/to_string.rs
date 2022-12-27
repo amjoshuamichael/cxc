@@ -1,8 +1,6 @@
-use crate::lex::{TypeName, VarName};
-use crate::parse::{
-    Expr, Opcode, TypeAlias, TypeOrAliasRelation, TypeRelation, VarDecl,
-};
-use crate::typ::{ArrayType, StructType, TypeOrAlias};
+use crate::lex::VarName;
+use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDecl};
+use crate::typ::{ArrayType, StructType};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
 use crate::{ExternalFuncAdd, TypeEnum};
@@ -74,7 +72,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let make_var = Expr::MakeVar(
                 VarDecl {
                     name: output_var.clone(),
-                    typ: Some(string_type.into()),
+                    type_spec: Some(string_type.into()),
                 },
                 box Expr::Strin(prefix),
             );
@@ -99,12 +97,8 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
                 let field = Expr::Member(input_var.clone(), field_name.clone());
 
-                let field_to_string = Expr::Call(
-                    to_string.clone(),
-                    Vec::new(),
-                    vec![field.get_ref()],
-                    true,
-                );
+                let field_to_string =
+                    Expr::Call(to_string.clone(), Vec::new(), vec![field.get_ref()], true);
                 let push_string_call = Expr::Call(
                     push_string.clone(),
                     Vec::new(),
@@ -129,14 +123,13 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         TypeEnum::Array(ArrayType { count, .. }) => {
             let output_var = VarName::from("output");
             let output_var_expr = Expr::Ident(output_var.clone());
-            let output_var_ref =
-                Expr::UnarOp(Opcode::Ref(1), box output_var_expr.clone());
+            let output_var_ref = Expr::UnarOp(Opcode::Ref(1), box output_var_expr.clone());
 
             let mut statements = Vec::new();
             let make_var = Expr::MakeVar(
                 VarDecl {
                     name: output_var.clone(),
-                    typ: Some(string_type.into()),
+                    type_spec: Some(string_type.into()),
                 },
                 box Expr::Strin("[".into()),
             );
@@ -200,14 +193,14 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
     Some(FuncCode {
         name: VarName::from("to_string"),
-        ret_type: TypeAlias::Named("String".into()).into(),
+        ret_type: TypeSpec::Named("String".into()).into(),
         args: vec![VarDecl {
             name: VarName::from("input"),
-            typ: Some(typ.clone().into()),
+            type_spec: Some(typ.clone().into()),
         }],
         generic_count: 0,
         code: expr,
-        relation: TypeOrAliasRelation::MethodOf(TypeOrAlias::Type(typ.into())),
+        relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ.into())),
     })
 }
 

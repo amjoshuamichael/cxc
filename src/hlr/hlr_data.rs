@@ -5,7 +5,7 @@ use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
 use crate::lex::VarName;
 use crate::parse::*;
-use crate::typ::{FloatType, TypeOrAlias};
+use crate::typ::FloatType;
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 
@@ -13,7 +13,7 @@ use crate::Type;
 #[derive(Debug)]
 pub struct FuncRep<'a> {
     pub tree: ExprTree,
-    pub types: Rc<CompData<'a>>,
+    pub comp_data: Rc<CompData<'a>>,
     pub identifiers: Vec<VarName>,
     pub info: UniqueFuncInfo,
     pub ret_type: Type,
@@ -33,18 +33,15 @@ impl DataFlowInfo {
 }
 
 impl<'a> FuncRep<'a> {
-    pub fn from(
+    pub fn from_code(
         code: FuncCode,
         comp_data: Rc<CompData<'a>>,
         info: UniqueFuncInfo,
     ) -> Self {
         let mut new = FuncRep {
             tree: ExprTree::default(),
-            ret_type: code
-                .ret_type
-                .into_type_with_generics(&comp_data, &info.generics)
-                .unwrap(),
-            types: comp_data,
+            ret_type: comp_data.get_spec(&code.ret_type, &info.generics).unwrap(),
+            comp_data,
             identifiers: Vec::new(),
             info,
             data_flow: HashMap::new(),
@@ -53,9 +50,10 @@ impl<'a> FuncRep<'a> {
         for (a, arg) in code.args.iter().enumerate() {
             new.identifiers.push(arg.name.clone());
 
-            let typ = match arg.typ {
-                Some(ref type_spec) => type_spec
-                    .into_type_with_generics(&*new.types, &new.info.generics)
+            let typ = match arg.type_spec {
+                Some(ref type_spec) => new
+                    .comp_data
+                    .get_spec(type_spec, &new.info.generics)
                     .unwrap(),
                 None => todo!(),
             };
@@ -91,9 +89,8 @@ impl<'a> FuncRep<'a> {
             .filter(|f| f.1.is_arg())
             .collect::<Vec<_>>();
 
-        names_and_flow.sort_by(|(_, df), (_, df2)| {
-            df.arg_index.unwrap().cmp(&df2.arg_index.unwrap())
-        });
+        names_and_flow
+            .sort_by(|(_, df), (_, df2)| df.arg_index.unwrap().cmp(&df2.arg_index.unwrap()));
 
         names_and_flow
     }
@@ -108,12 +105,8 @@ impl<'a> FuncRep<'a> {
 
     pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
 
-    pub fn get_type_spec(&self, alias: &TypeAlias) -> Option<Type> {
-        self.types.get_spec(alias, &self.info.generics)
-    }
-
-    pub fn get_type_or_alias(&self, toa: &TypeOrAlias) -> Option<Type> {
-        toa.into_type_with_generics(&self.types, &self.info.generics)
+    pub fn get_type_spec(&self, alias: &TypeSpec) -> Option<Type> {
+        self.comp_data.get_spec(alias, &self.info.generics)
     }
 
     pub fn output(self) -> FuncOutput {
@@ -199,7 +192,7 @@ impl<'a> FuncRep<'a> {
                     },
                 );
 
-                let string_type = self.types.get_by_name(&"String".into()).unwrap();
+                let string_type = self.comp_data.get_by_name(&"String".into()).unwrap();
 
                 let call_data = NodeData::Call {
                     ret_type: string_type.clone(),
@@ -211,8 +204,7 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(call_space, call_data);
                 call_space
             },
-            Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name)
-            {
+            Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name) {
                 Some(name) => {
                     let space = self.tree.make_one_space(parent);
 
@@ -242,8 +234,7 @@ impl<'a> FuncRep<'a> {
                 let var_type = if self.data_flow.contains_key(&decl.name) {
                     self.data_flow.get(&decl.name).unwrap().typ.clone()
                 } else {
-                    let var_type =
-                        self.get_type_or_alias(&decl.typ.unwrap()).unwrap();
+                    let var_type = self.get_type_spec(&decl.type_spec.unwrap()).unwrap();
 
                     let new_data_flow_info = DataFlowInfo {
                         typ: var_type.clone(),
@@ -386,7 +377,7 @@ impl<'a> FuncRep<'a> {
                             relation,
                         }
                 } else if let Expr::StaticMethodPath(ref type_or_alias, ref func_name) = *f {
-                    let type_origin = self.get_type_or_alias(type_or_alias).unwrap();
+                    let type_origin = self.get_type_spec(type_or_alias).unwrap();
 
                     NodeData::Call {
                         ret_type: Type::never(),
@@ -419,7 +410,7 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_member);
                 space
             },
-            Expr::Struct(type_alias, expr_fields, initialize) => {
+            Expr::Struct(type_spec, expr_fields, initialize) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut fields = Vec::new();
@@ -429,7 +420,7 @@ impl<'a> FuncRep<'a> {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: type_alias.into_type(&self.types).unwrap(),
+                    var_type: self.comp_data.get_spec(&type_spec, &Vec::new()).unwrap(),
                     fields,
                     initialize,
                 };
@@ -477,7 +468,7 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_index);
                 space
             },
-            Expr::Parens(expr) => self.add_expr(*expr, parent),
+            Expr::Enclosed(expr) => self.add_expr(*expr, parent),
             Expr::Op(_) | Expr::ArgList(..) | Expr::StaticMethodPath(..) => {
                 unreachable!()
             },

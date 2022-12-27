@@ -5,7 +5,6 @@ use std::{
 };
 
 use crate::{
-    typ::TypeOrAlias,
     unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
     Type,
 };
@@ -19,13 +18,13 @@ pub enum Expr {
     Bool(bool),
     Strin(String),
     Ident(VarName),
-    StaticMethodPath(TypeOrAlias, VarName),
-    Struct(TypeOrAlias, Vec<(VarName, Expr)>, bool),
+    StaticMethodPath(TypeSpec, VarName),
+    Struct(TypeSpec, Vec<(VarName, Expr)>, bool),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
     SetVar(Box<Expr>, Box<Expr>),
-    Call(Box<Expr>, Vec<TypeAlias>, Vec<Expr>, bool),
+    Call(Box<Expr>, Vec<TypeSpec>, Vec<Expr>, bool),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
     Member(Box<Expr>, VarName),
@@ -34,11 +33,11 @@ pub enum Expr {
     ForWhile(Box<Expr>, Box<Expr>),
     Block(Vec<Expr>),
     Return(Box<Expr>),
-    Parens(Box<Expr>),
+    Enclosed(Box<Expr>),
 
     // These are used during to make parsing easier, but are not outputted after
     // parsing.
-    ArgList(Vec<TypeAlias>, Vec<Expr>),
+    ArgList(Vec<TypeSpec>, Vec<Expr>),
     Op(Opcode),
 }
 
@@ -47,8 +46,9 @@ impl Expr {
         use Expr::*;
 
         match &self {
-            Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_)
-            | StaticMethodPath(..) => box once(self),
+            Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_) | StaticMethodPath(..) => {
+                box once(self)
+            },
             Struct(_, fields, _) => box fields.iter().map(|(_, expr)| expr),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
@@ -65,24 +65,31 @@ impl Expr {
             Return(r) => box once(&**r),
             ArgList(_, args) => box args.iter(),
             Op(_) => box empty(),
-            Parens(expr) => box once(&**expr),
+            Enclosed(expr) => box once(&**expr),
         }
     }
 
     pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref(1), box self.clone()) }
+
+    pub fn wrap_in_block(self) -> Expr {
+        match self {
+            Expr::Block(_) => self,
+            _ => Expr::Block(vec![Expr::Return(box self)]),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarDecl {
     pub name: VarName,
-    pub typ: Option<TypeOrAlias>,
+    pub type_spec: Option<TypeSpec>,
 }
 
 impl VarDecl {
-    pub fn no_name(typ: Option<TypeOrAlias>) -> Self {
+    pub fn no_name(typ: Option<TypeSpec>) -> Self {
         VarDecl {
             name: VarName::temp(),
-            typ,
+            type_spec: typ,
         }
     }
 }
@@ -147,17 +154,14 @@ pub enum TypeRelationGeneric<T> {
     Unrelated,
 }
 
-pub type TypeOrAliasRelation = TypeRelationGeneric<TypeOrAlias>;
-pub type TypeAliasRelation = TypeRelationGeneric<TypeAlias>;
+pub type TypeSpecRelation = TypeRelationGeneric<TypeSpec>;
 pub type TypeRelation = TypeRelationGeneric<Type>;
 
 impl<T: Clone> TypeRelationGeneric<T> {
     pub fn map<U>(self, closure: impl FnOnce(T) -> U) -> TypeRelationGeneric<U> {
         match self {
             Self::Static(inner) => TypeRelationGeneric::<U>::Static(closure(inner)),
-            Self::MethodOf(inner) => {
-                TypeRelationGeneric::<U>::MethodOf(closure(inner))
-            },
+            Self::MethodOf(inner) => TypeRelationGeneric::<U>::MethodOf(closure(inner)),
             Self::Unrelated => TypeRelationGeneric::<U>::Unrelated,
         }
     }
@@ -177,11 +181,11 @@ impl<T> Default for TypeRelationGeneric<T> {
 #[derive(Debug, Clone)]
 pub struct FuncCode {
     pub name: VarName,
-    pub ret_type: TypeOrAlias,
+    pub ret_type: TypeSpec,
     pub args: Vec<VarDecl>,
     pub generic_count: u32,
     pub code: Expr,
-    pub relation: TypeOrAliasRelation,
+    pub relation: TypeSpecRelation,
 }
 
 impl FuncCode {
@@ -196,7 +200,7 @@ impl FuncCode {
         let relation = self
             .relation
             .clone()
-            .map(|toa| toa.into_type(comp_data).unwrap());
+            .map(|spec| comp_data.get_spec(&spec, &Vec::new()).unwrap());
 
         UniqueFuncInfo {
             name: self.name.clone(),
@@ -208,11 +212,11 @@ impl FuncCode {
     pub fn from_expr(code: Expr) -> Self {
         Self {
             name: VarName::temp(),
-            ret_type: Type::i(32).into(), // TODO: void type
+            ret_type: Type::void().into(),
             args: Vec::new(),
             generic_count: 0,
             code,
-            relation: TypeOrAliasRelation::Unrelated,
+            relation: TypeSpecRelation::Unrelated,
         }
     }
 
@@ -222,7 +226,16 @@ impl FuncCode {
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
     pub name: TypeName,
-    pub typ: TypeAlias,
+    pub typ: TypeSpec,
     pub contains_generics: bool,
     pub dependencies: HashSet<TypeName>,
+}
+
+pub type GenericLabels = HashMap<TypeName, u8>;
+
+pub fn merge(one: &GenericLabels, another: &GenericLabels) -> GenericLabels {
+    one.iter()
+        .chain(another.iter())
+        .map(|(n, i)| (n.clone(), i.clone()))
+        .collect()
 }

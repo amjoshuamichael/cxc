@@ -1,5 +1,7 @@
 use crate::lex::Tok;
 
+pub type ParseResult<T> = Result<T, ParseError>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseError {
     IncorrectBeginningOfDeclaration,

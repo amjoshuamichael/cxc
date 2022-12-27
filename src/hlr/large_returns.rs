@@ -14,12 +14,10 @@ pub fn handle_large_returns(hlr: &mut FuncRep) {
 
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
-        ReturnStyle::ThroughI64
-        | ReturnStyle::ThroughI64I32
-        | ReturnStyle::ThroughI64I64 => {
+        ReturnStyle::ThroughI64 | ReturnStyle::ThroughI64I32 | ReturnStyle::ThroughI64I64 => {
             change_ret_type(hlr, hlr.ret_type.raw_return_type())
         },
-        ReturnStyle::Pointer => return_by_pointer(hlr),
+        ReturnStyle::Sret => return_by_pointer(hlr),
         ReturnStyle::Void | ReturnStyle::Direct => {},
     }
 }
@@ -62,9 +60,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                 CallGen {
                     info: UniqueFuncInfo {
                         name: VarName::from("write"),
-                        relation: TypeRelationGeneric::MethodOf(
-                            output_var_typ.get_ref(),
-                        ),
+                        relation: TypeRelationGeneric::MethodOf(output_var_typ.get_ref()),
                         generics: vec![hlr.ret_type.clone()],
                     },
                     args: vec![
@@ -97,7 +93,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
         };
 
         match data.ret_type().return_style() {
-            ReturnStyle::Pointer => format_call_returning_pointer(hlr, call_id),
+            ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
             ReturnStyle::ThroughI64
             | ReturnStyle::ThroughI64I32
             | ReturnStyle::ThroughI64I64 => {
@@ -110,7 +106,6 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
 fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let og_call_data = hlr.tree.get(og_call);
-    let (statement, _) = hlr.tree.statement_and_block(og_call);
 
     let raw_ret_var_name = hlr.uniqueify_varname("raw_call_out");
     let raw_ret_var_type = og_call_data.ret_type().raw_return_type();

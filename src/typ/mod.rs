@@ -1,4 +1,5 @@
 use crate::lex::{TypeName, VarName};
+use crate::parse::TypeSpec;
 use lazy_static::lazy_static;
 
 use std::collections::HashSet;
@@ -10,18 +11,15 @@ use std::sync::{Arc, Mutex};
 mod kind;
 mod nested_field_count;
 mod size;
-mod typ_or_alias;
+
 use inkwell::types::FunctionType;
 pub use kind::Kind;
-pub use typ_or_alias::TypeOrAlias;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "{:?}", self.0) }
 }
 
 impl Default for Type {
@@ -38,7 +36,7 @@ pub enum ReturnStyle {
     ThroughI64,
     ThroughI64I32,
     ThroughI64I64,
-    Pointer,
+    Sret,
     Void,
 }
 
@@ -57,8 +55,7 @@ impl Type {
                 }
             },
             TypeEnum::Array(array_type) => {
-                total +=
-                    array_type.count as usize * array_type.base.nested_field_count();
+                total += array_type.count as usize * array_type.base.nested_field_count();
             },
             _ => total += 1,
         }
@@ -75,7 +72,7 @@ impl Type {
             | TypeEnum::Func(_) => ReturnStyle::Direct,
             TypeEnum::Struct(_) | TypeEnum::Array(_) | TypeEnum::Opaque(_) => {
                 if self.size() > 16 {
-                    ReturnStyle::Pointer
+                    ReturnStyle::Sret
                 } else if self.nested_field_count() == 1 {
                     ReturnStyle::Direct
                 } else if self.size() == 16 {
@@ -90,7 +87,7 @@ impl Type {
                     todo!("cannot return style for this type: {:?}", self);
                 }
             },
-            TypeEnum::Never => ReturnStyle::Void,
+            TypeEnum::Unknown | TypeEnum::Void => ReturnStyle::Void,
         }
     }
 
@@ -105,7 +102,7 @@ impl Type {
                 (VarName::from("ret_0"), Type::i(64)),
                 (VarName::from("ret_1"), Type::i(64)),
             ]),
-            ReturnStyle::Pointer | ReturnStyle::Void => Type::never(),
+            ReturnStyle::Sret | ReturnStyle::Void => Type::void(),
             ReturnStyle::Direct => self.clone(),
         }
     }
@@ -136,9 +133,7 @@ impl Type {
         Some(output)
     }
 
-    pub fn get_ref(&self) -> Type {
-        Type::new(TypeEnum::Ref(RefType { base: self.clone() }))
-    }
+    pub fn get_ref(&self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self.clone() })) }
 
     pub fn get_deref(self) -> Option<Type> {
         match &self.0.type_enum {
@@ -153,9 +148,7 @@ impl Type {
 
     pub fn as_u64(self) -> u64 { self.into_raw() as u64 }
     pub fn into_raw(self) -> *const TypeData { Arc::into_raw(self.0) }
-    pub unsafe fn from_raw(data: *const TypeData) -> Self {
-        Self(Arc::from_raw(data))
-    }
+    pub unsafe fn from_raw(data: *const TypeData) -> Self { Self(Arc::from_raw(data)) }
 
     pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size })) }
 
@@ -165,9 +158,7 @@ impl Type {
 
     pub fn f64() -> Type { Type::new(TypeEnum::Float(FloatType::F64)) }
 
-    pub fn f(size: impl Into<FloatType>) -> Type {
-        Type::new(TypeEnum::Float(size.into()))
-    }
+    pub fn f(size: impl Into<FloatType>) -> Type { Type::new(TypeEnum::Float(size.into())) }
 
     pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
 
@@ -176,8 +167,7 @@ impl Type {
     }
 
     pub fn opaque_with_size(size: u32, name: &str) -> Type {
-        Type::new(TypeEnum::Opaque(OpaqueType { size }))
-            .with_name(TypeName::from(name))
+        Type::new(TypeEnum::Opaque(OpaqueType { size })).with_name(TypeName::from(name))
     }
 
     pub fn opaque_type<T>() -> Type {
@@ -191,9 +181,10 @@ impl Type {
         .with_name(TypeName::from(basic_name))
     }
 
-    pub fn never() -> Type { Type::new(TypeEnum::Never) }
+    pub fn never() -> Type { Type::new(TypeEnum::Unknown) }
 
-    pub fn void_ptr() -> Type { Type::new(TypeEnum::Never).get_ref() }
+    pub fn void() -> Type { Type::new(TypeEnum::Void) }
+    pub fn void_ptr() -> Type { Type::new(TypeEnum::Void).get_ref() }
 
     pub fn func_with_args(self, args: Vec<Type>) -> Type {
         Type::new(TypeEnum::Func(FuncType {
@@ -213,7 +204,12 @@ impl Type {
         Self(Arc::from(type_data))
     }
 
-    pub fn is_never(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Never) }
+    pub fn is_unknown(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Unknown) }
+    pub fn is_void(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Void) }
+}
+
+impl Into<TypeSpec> for Type {
+    fn into(self) -> TypeSpec { TypeSpec::Type(self) }
 }
 
 #[derive(Default, Hash, PartialEq, Eq)]
@@ -241,9 +237,7 @@ impl From<TypeEnum> for TypeData {
 }
 
 impl TypeData {
-    fn new(type_enum: TypeEnum, name: Option<TypeName>) -> Self {
-        Self { type_enum, name }
-    }
+    fn new(type_enum: TypeEnum, name: Option<TypeName>) -> Self { Self { type_enum, name } }
 
     pub fn is_named(&self) -> bool { self.name.is_some() }
 }
@@ -258,9 +252,10 @@ pub enum TypeEnum {
     Func(FuncType),
     Array(ArrayType),
     Bool(BoolType),
+    Void,
 
     #[default]
-    Never,
+    Unknown,
 }
 
 impl Debug for TypeEnum {
@@ -282,7 +277,8 @@ impl Deref for TypeEnum {
             TypeEnum::Array(t) => t,
             TypeEnum::Bool(t) => t,
             TypeEnum::Opaque(t) => t,
-            TypeEnum::Never => &NEVER_STATIC,
+            TypeEnum::Void => &VOID_STATIC,
+            TypeEnum::Unknown => &UNKNOWN_STATIC,
         }
     }
 }
@@ -357,9 +353,12 @@ impl Into<FloatType> for u32 {
 pub struct BoolType;
 
 #[derive(PartialEq, Eq, Hash)]
-pub struct NeverType();
+pub struct UnknownType();
+static UNKNOWN_STATIC: UnknownType = UnknownType();
 
-pub static NEVER_STATIC: NeverType = NeverType();
+#[derive(PartialEq, Eq, Hash)]
+pub struct VoidType();
+static VOID_STATIC: VoidType = VoidType();
 
 #[derive(PartialEq, Hash, Eq)]
 pub struct ArrayType {

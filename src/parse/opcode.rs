@@ -32,7 +32,7 @@ pub enum Opcode {
 use Opcode::*;
 
 impl Opcode {
-    pub const MAX_UNARY_PREC: u8 = 1;
+    pub const MAX_UNARY_PRECEDENT_LEVEL: u8 = 1;
     pub fn un_prec_level(&self) -> Option<u8> {
         use Opcode::*;
 
@@ -43,7 +43,7 @@ impl Opcode {
         }
     }
 
-    pub const MAX_BINARY_PREC: u8 = 10;
+    pub const MAX_BINARY_PRECEDENT_LEVEL: u8 = 10;
     pub fn bin_prec_level(&self) -> Option<u8> {
         // lower is more significant
         match self {

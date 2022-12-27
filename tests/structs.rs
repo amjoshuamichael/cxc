@@ -138,7 +138,7 @@ fn methods() {
             }
         }
         
-        main(): i32 {
+        main() {
             original: MyPoint = MyPoint { x = 4.0, y = 3.0 }
 
             out_hypotenuse: f32 = original.sqr_hypotenuse()
@@ -147,8 +147,6 @@ fn methods() {
             scaled_by_2: MyPoint = original.scaled(1.5)
             assert_eq<f32>(scaled_by_2.x, 6.0)
             assert_eq<f32>(scaled_by_2.y, 4.5)
-
-            ; 0
         }
         "
     )
@@ -158,7 +156,7 @@ fn methods() {
 fn arrays() {
     xc_test!(
         "
-        main(): i32 {
+        main() {
             original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
 
             assert_eq<i32>(original[3], 15)
@@ -176,8 +174,6 @@ fn arrays() {
             assert_eq<i32>(original[1], 2)
             assert_eq<i32>(original[3], 6)
             assert_eq<i32>(original[6], 12)
-
-            ; 0
         }
         "
     )
@@ -192,7 +188,7 @@ fn struct_arrays() {
             y: i32
         }
 
-        main(): i32 {
+        main() {
             points: Point2D[3] = [
                 Point2D { x = 43, y = 15 },
                 Point2D { x = 327, y = 413 },
@@ -211,8 +207,6 @@ fn struct_arrays() {
 
             assert_eq<i32>(points[1].x, 4)
             assert_eq<i32>(points[1].y, 6)
-
-            ; 0
         }
         "
     )

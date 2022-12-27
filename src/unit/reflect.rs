@@ -14,21 +14,14 @@ pub trait XcReflect {
         let parsed = match parse::file(lexer) {
             Ok(file) => file,
             Err(err) => {
-                println!(
-                    "found error in reflection of {}",
-                    std::any::type_name::<Self>()
-                );
+                println!("found error in reflection of {}", std::any::type_name::<Self>());
                 println!("{}", Self::alias_code());
                 dbg!(&err);
                 panic!();
             },
         };
 
-        assert_eq!(
-            parsed.decl_count(),
-            1,
-            "you can only create one type in the reflection!"
-        );
+        assert_eq!(parsed.decl_count(), 1, "you can only create one type in the reflection!");
 
         let type_decl = parsed
             .types_iter()

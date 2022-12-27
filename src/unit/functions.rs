@@ -31,11 +31,11 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("alloc"),
-            ret_type: TypeAlias::Ref(box TypeAlias::GenParam(0)).into(),
+            ret_type: TypeSpec::Ref(box TypeSpec::GenParam(0)),
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            relation: TypeOrAliasRelation::Unrelated,
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -43,11 +43,11 @@ impl<'a> CompData<'a> {
             ret_type: Type::i(32).into(),
             args: vec![VarDecl {
                 name: VarName::temp(),
-                typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
             }],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            relation: TypeOrAliasRelation::Unrelated,
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -56,20 +56,20 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(Type::i(64).into()),
+                    type_spec: Some(Type::i(64).into()),
                 },
             ],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            relation: TypeOrAliasRelation::Unrelated,
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -78,20 +78,20 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::Ref(box TypeAlias::GenParam(0)).into()),
+                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(Type::i(64).into()),
+                    type_spec: Some(Type::i(64).into()),
                 },
             ],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            relation: TypeOrAliasRelation::Unrelated,
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -100,7 +100,7 @@ impl<'a> CompData<'a> {
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            relation: TypeOrAliasRelation::Unrelated,
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -109,17 +109,17 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::GenParam(0).get_ref().get_ref().into()),
+                    type_spec: Some(TypeSpec::GenParam(0).get_ref().get_ref().into()),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    typ: Some(TypeAlias::GenParam(0).get_ref().into()),
+                    type_spec: Some(TypeSpec::GenParam(0).get_ref().into()),
                 },
             ],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
-            relation: TypeOrAliasRelation::MethodOf(
-                TypeAlias::GenParam(0).get_ref().get_ref().into(),
+            relation: TypeSpecRelation::MethodOf(
+                TypeSpec::GenParam(0).get_ref().get_ref().into(),
             ),
         });
 
@@ -150,7 +150,7 @@ impl<'a> CompData<'a> {
         let relation = decl_info
             .relation
             .clone()
-            .map(|toa| toa.into_type_with_generics(self, &generics).unwrap());
+            .map(|spec| self.get_spec(&spec, &generics).unwrap());
 
         let unique_func_info = UniqueFuncInfo {
             name: decl_info.name.clone(),
@@ -187,9 +187,7 @@ impl<'a> CompData<'a> {
         self.compiled.keys()
     }
 
-    pub fn func_exists(&self, info: &FuncDeclInfo) -> bool {
-        self.func_code.contains_key(info)
-    }
+    pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
 
     pub fn reflect_arg_types(&mut self, info: &UniqueFuncInfo, mask: Vec<bool>) {
         assert!({
@@ -224,9 +222,10 @@ impl<'a> CompData<'a> {
         let possible_decls = self.decl_names.get(&info.name)?;
 
         for decl in possible_decls {
-            let decl_method_of = decl.relation.clone().map(|toa| {
-                toa.into_type_with_generics(self, &info.generics).unwrap()
-            });
+            let decl_method_of = decl
+                .relation
+                .clone()
+                .map(|spec| self.get_spec(&spec, &info.generics).unwrap());
 
             if decl_method_of == info.relation {
                 return Some(decl.clone());
@@ -236,10 +235,7 @@ impl<'a> CompData<'a> {
         None
     }
 
-    pub fn get_func_value(
-        &'a self,
-        info: &UniqueFuncInfo,
-    ) -> Option<FunctionValue<'a>> {
+    pub fn get_func_value(&'a self, info: &UniqueFuncInfo) -> Option<FunctionValue<'a>> {
         self.compiled.get(info).cloned()
     }
 
@@ -261,10 +257,8 @@ impl<'a> CompData<'a> {
 
         self.compiled.insert(info.clone(), empty_function);
         self.func_types.insert(info.clone(), function_type.clone());
-        self.globals.insert(
-            info.name.clone(),
-            (function_type, empty_function.as_global_value()),
-        );
+        self.globals
+            .insert(info.name.clone(), (function_type, empty_function.as_global_value()));
     }
 
     pub fn get_type(&self, info: &UniqueFuncInfo) -> Option<Type> {
@@ -275,19 +269,13 @@ impl<'a> CompData<'a> {
 
         let code = self.get_code(info.clone())?;
 
-        let ret_type = &code
-            .ret_type
-            .into_type_with_generics(self, &info.generics)
-            .unwrap();
+        let ret_type = &self.get_spec(&code.ret_type, &info.generics)?;
 
         let arg_types = code
             .args
             .iter()
             .map(|d| {
-                d.typ
-                    .clone()
-                    .unwrap()
-                    .into_type_with_generics(self, &info.generics)
+                self.get_spec(d.type_spec.as_ref().unwrap(), &info.generics)
                     .unwrap()
             })
             .collect();
@@ -340,7 +328,7 @@ use super::*;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct FuncDeclInfo {
     pub name: VarName,
-    pub relation: TypeOrAliasRelation,
+    pub relation: TypeSpecRelation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -381,11 +369,7 @@ impl UniqueFuncInfo {
     }
 
     pub fn og_name(&self) -> VarName { self.name.clone() }
-    pub fn is_method(&self) -> bool {
-        matches!(self.relation, TypeRelation::MethodOf(_))
-    }
-    pub fn is_static(&self) -> bool {
-        matches!(self.relation, TypeRelation::Static(_))
-    }
+    pub fn is_method(&self) -> bool { matches!(self.relation, TypeRelation::MethodOf(_)) }
+    pub fn is_static(&self) -> bool { matches!(self.relation, TypeRelation::Static(_)) }
     pub fn has_generics(&self) -> bool { self.generics.len() > 0 }
 }

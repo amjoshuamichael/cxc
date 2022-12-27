@@ -34,8 +34,6 @@ impl FuncOutput {
     pub fn info_ref(&self) -> &UniqueFuncInfo { self.info.as_ref().unwrap() }
 
     pub fn take_tree(&mut self) -> ExprTree { self.tree.take().unwrap() }
-    pub fn take_arg_names(&mut self) -> Vec<VarName> {
-        self.arg_names.take().unwrap()
-    }
+    pub fn take_arg_names(&mut self) -> Vec<VarName> { self.arg_names.take().unwrap() }
     pub fn take_info(&mut self) -> UniqueFuncInfo { self.info.take().unwrap() }
 }

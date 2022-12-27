@@ -4,10 +4,10 @@ use crate::parse::FuncCode;
 use crate::Type;
 use crate::TypeEnum;
 
-use crate::parse::TypeOrAliasRelation;
+use crate::parse::TypeSpec;
+use crate::parse::TypeSpecRelation;
 use crate::parse::VarDecl;
 use crate::typ::StructType;
-use crate::typ::TypeOrAlias;
 use crate::unit::CompData;
 
 use super::Library;
@@ -31,10 +31,10 @@ fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
         ret_type: Type::i(32).into(),
         args: vec![VarDecl {
             name: VarName::temp(),
-            typ: Some(typ.clone().into()),
+            type_spec: Some(typ.clone().into()),
         }],
         generic_count: 0,
-        code: Expr::Number(field_count as u128),
-        relation: TypeOrAliasRelation::Static(TypeOrAlias::Type(typ.into())),
+        code: Expr::Number(field_count as u128).wrap_in_block(),
+        relation: TypeSpecRelation::Static(TypeSpec::Type(typ.into())),
     })
 }

@@ -51,8 +51,7 @@ fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<f64> {
     let coeff_str = &num_text[..e_pos];
     let exp_str = &num_text[e_pos + 1..];
 
-    let without_decimal =
-        coeff_str.chars().filter(|c| *c != '.').collect::<String>();
+    let without_decimal = coeff_str.chars().filter(|c| *c != '.').collect::<String>();
     let decimal_pos = coeff_str.chars().rev().position(|c| c == '.').unwrap();
 
     let coefficient: f64 = without_decimal.parse::<f64>().ok()?;

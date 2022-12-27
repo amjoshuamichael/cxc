@@ -1,25 +1,20 @@
 use super::*;
 
-pub fn parse_math_expr(
-    lexer: &mut ParseContext<VarName>,
-) -> Result<Expr, ParseError> {
+pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
     let mut atoms = Vec::new();
 
     let mut last_atom = Expr::Op(Opcode::Plus);
-    loop {
-        let next = match lexer.peek_tok() {
-            Ok(tok) => tok,
-            Err(ParseError::UnexpectedEndOfFile) => break,
-            Err(other_error) => return Err(other_error),
-        };
 
+    while let Ok(next) = lexer.peek_tok() {
         let atom = if matches!(last_atom, Expr::Op(_)) {
+            // if the last atom was an operator, we expect these
             let atom = match next {
                 Tok::Int(val) => Expr::Number(val),
                 Tok::Float(val) => Expr::Float(val),
                 Tok::Bool(val) => Expr::Bool(val),
                 Tok::Strin(val) => Expr::Strin(val),
                 Tok::VarName(val) => Expr::Ident(val.clone()),
+                opcode if opcode.is_unary_op() => Expr::Op(opcode.get_un_opcode().unwrap()),
                 Tok::LeftBrack => Expr::Array(parse_list(
                     (Tok::LeftBrack, Tok::RghtBrack),
                     Some(Tok::Comma),
@@ -28,43 +23,46 @@ pub fn parse_math_expr(
                 )?),
                 Tok::LeftParen => {
                     lexer.next_tok()?;
-                    Expr::Parens(box parse_math_expr(lexer)?)
+                    let enclosed = Expr::Enclosed(box parse_math_expr(lexer)?);
+                    lexer.next_tok()?;
+                    enclosed
                 },
                 Tok::TypeName(_) => {
-                    let type_alias = parse_type_alias(lexer)?;
+                    let type_spec = parse_type_spec(lexer)?;
 
-                    if matches!(lexer.peek_tok()?, Tok::Colon) {
+                    if lexer.peek_tok()? == Tok::Colon {
                         lexer.next_tok()?;
                         let func_name = lexer.next_tok()?.var_name()?;
-                        Expr::StaticMethodPath(type_alias.into(), func_name)
+                        Expr::StaticMethodPath(type_spec, func_name)
                     } else {
-                        parse_struct_literal(lexer, type_alias)?
+                        parse_struct_literal(lexer, type_spec)?
                     }
-                },
-                opcode if opcode.is_un_op() => {
-                    Expr::Op(opcode.get_un_opcode().unwrap())
                 },
                 _ => break,
             };
 
-            if !matches!(
+            // we've detected these, but we need to move the token pos forward by one.
+            if matches!(
                 atom,
-                Expr::Array(_) | Expr::Struct { .. } | Expr::StaticMethodPath(..)
+                Expr::Number(_)
+                    | Expr::Float(_)
+                    | Expr::Bool(_)
+                    | Expr::Strin(_)
+                    | Expr::Ident(_)
+                    | Expr::Op(_)
             ) {
                 lexer.next_tok()?;
             }
 
             atom
-        } else if matches!(
-            last_atom.clone(),
-            Expr::Ident(_) | Expr::StaticMethodPath(..)
-        ) && matches!(next, Tok::LeftAngle)
+        } else if matches!(last_atom.clone(), Expr::Ident(_) | Expr::StaticMethodPath(..))
+            && matches!(next, Tok::LeftAngle)
             && after_generics(lexer, Tok::LeftParen)?
         {
             let generics = parse_list(
                 (Tok::LeftAngle, Tok::RghtAngle),
                 Some(Tok::Comma),
-                parse_type_alias,
+                parse_type_spec,
                 lexer,
             )?;
 
@@ -85,8 +83,7 @@ pub fn parse_math_expr(
             )?;
 
             Expr::ArgList(Vec::new(), params)
-        } else if matches!(last_atom.clone(), Expr::Ident(_))
-            && matches!(next, Tok::LeftBrack)
+        } else if matches!(last_atom.clone(), Expr::Ident(_)) && matches!(next, Tok::LeftBrack)
         {
             lexer.next_tok()?;
             let index = parse_expr(lexer)?;
@@ -108,16 +105,16 @@ pub fn parse_math_expr(
         atoms.push(atom);
     }
 
-    members(&mut atoms);
-    calls(&mut atoms);
-    unary_ops(&mut atoms);
-    binary_ops(&mut atoms);
+    detect_member_statements(&mut atoms);
+    detect_calls(&mut atoms);
+    detect_unary_ops(&mut atoms);
+    detect_binary_ops(&mut atoms);
 
     assert_eq!(atoms.len(), 1);
     Ok(atoms[0].clone())
 }
 
-pub fn members(atoms: &mut Vec<Expr>) {
+pub fn detect_member_statements(atoms: &mut Vec<Expr>) {
     while let Some(dot_pos) = atoms
         .iter()
         .position(|atom| matches!(*atom, Expr::Op(Opcode::Dot)))
@@ -130,7 +127,7 @@ pub fn members(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn calls(atoms: &mut Vec<Expr>) {
+pub fn detect_calls(atoms: &mut Vec<Expr>) {
     while let Some(args_pos) = atoms
         .iter()
         .position(|atom| matches!(atom, Expr::ArgList(..)))
@@ -150,15 +147,12 @@ pub fn calls(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn unary_ops(atoms: &mut Vec<Expr>) {
-    for prec_level in 0..=Opcode::MAX_UNARY_PREC {
-        loop {
-            let opcode_pos = atoms.iter().rposition(|atom| match atom {
-                Expr::Op(opcode) => opcode.un_prec_level() == Some(prec_level),
-                _ => false,
-            });
-
-            let Some(opcode_pos) = opcode_pos else { break; };
+pub fn detect_unary_ops(atoms: &mut Vec<Expr>) {
+    for prec_level in 0..=Opcode::MAX_UNARY_PRECEDENT_LEVEL {
+        while let Some(opcode_pos) = atoms.iter().rposition(|atom| {
+            let Expr::Op(opcode) = atom else { return false };
+            opcode.un_prec_level() == Some(prec_level)
+        }) {
             let Expr::Op(opcode) = atoms[opcode_pos] else { unreachable!() };
 
             let rhs = Box::new(atoms.remove(opcode_pos + 1));
@@ -169,8 +163,8 @@ pub fn unary_ops(atoms: &mut Vec<Expr>) {
     }
 }
 
-pub fn binary_ops(atoms: &mut Vec<Expr>) {
-    for prec_level in 0..=Opcode::MAX_BINARY_PREC {
+pub fn detect_binary_ops(atoms: &mut Vec<Expr>) {
+    for prec_level in 0..=Opcode::MAX_BINARY_PRECEDENT_LEVEL {
         loop {
             let opcode_pos = atoms.iter().position(|atom| match atom {
                 Expr::Op(opcode) => opcode.bin_prec_level() == Some(prec_level),
@@ -191,7 +185,7 @@ pub fn binary_ops(atoms: &mut Vec<Expr>) {
 
 pub fn parse_struct_literal(
     lexer: &mut ParseContext<VarName>,
-    type_alias: TypeAlias,
+    type_spec: TypeSpec,
 ) -> Result<Expr, ParseError> {
     let mut fields = Vec::new();
 
@@ -226,13 +220,10 @@ pub fn parse_struct_literal(
         },
     };
 
-    Ok(Expr::Struct(type_alias.into(), fields, initialize))
+    Ok(Expr::Struct(type_spec, fields, initialize))
 }
 
-fn after_generics(
-    lexer: &mut ParseContext<VarName>,
-    tok: Tok,
-) -> Result<bool, ParseError> {
+fn after_generics(lexer: &mut ParseContext<VarName>, tok: Tok) -> Result<bool, ParseError> {
     if lexer.peek_tok()? != Tok::LeftAngle {
         return Ok(false);
     }

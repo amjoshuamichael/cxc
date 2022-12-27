@@ -239,7 +239,7 @@ impl Tok {
         }
     }
 
-    pub fn is_un_op(&self) -> bool { self.get_un_opcode().is_some() }
+    pub fn is_unary_op(&self) -> bool { self.get_un_opcode().is_some() }
 
     pub fn get_bin_opcode(&self) -> Result<Opcode, ParseError> {
         match self {

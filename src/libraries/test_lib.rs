@@ -84,11 +84,7 @@ impl Library for TestLib {
             },
         );
         unit.add_rust_func("sqrt", [f32::sqrt]);
-        unit.add_rust_func_explicit(
-            "panic",
-            panic as *const usize,
-            ExternalFuncAdd::empty(),
-        );
+        unit.add_rust_func_explicit("panic", panic as *const usize, ExternalFuncAdd::empty());
     }
 }
 

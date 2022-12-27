@@ -281,7 +281,6 @@ impl NodeData {
                 relation,
                 ..
             } => {
-                // TODO: support relation
                 let mut call = match relation {
                     TypeRelation::Static(typ) => format!("{typ:?}") + "::",
                     TypeRelation::MethodOf(typ) => format!("{typ:?}") + ".",

@@ -5,7 +5,7 @@ Vec<T> = {
 }
 
 <T> &Vec<T>. {
-    push(val: T): i32 {
+    push(val: T) {
         ? self.len >= self.capacity {
             # reallocate memory
             self.capacity = self.capacity * to_i64(2)
@@ -20,8 +20,6 @@ Vec<T> = {
         ptr.write<T>(val)
         
         self.len = self.len + to_i64(1)
-
-        ; 0 
     }
 
     get(index: i64): T {
