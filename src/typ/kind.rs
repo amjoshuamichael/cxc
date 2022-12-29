@@ -31,11 +31,11 @@ impl Kind for RefType {
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         if self.base.is_void() {
-            context.i32_type().ptr_type(AddressSpace::Generic).into()
+            context.i32_type().ptr_type(AddressSpace::default()).into()
         } else {
             self.base
                 .to_basic_type(context)
-                .ptr_type(AddressSpace::Generic)
+                .ptr_type(AddressSpace::default())
                 .into()
         }
     }
@@ -56,7 +56,7 @@ impl Kind for FuncType {
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         self.llvm_func_type(context)
-            .ptr_type(AddressSpace::Global)
+            .ptr_type(AddressSpace::default())
             .try_into()
             .unwrap()
     }

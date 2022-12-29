@@ -214,8 +214,8 @@ pub enum Tok {
     Int(u128),
 
     // could be a float (e.g. .1), but could also be a tuple member (e.g. the ".1" in x.1)
-    #[regex(r"[0-9]*\.[0-9]+", parse_dotted_int)]
-    DottedInt((u128, u128)),
+    #[regex(r"[0-9_]*\.[0-9_]+", parse_dotted_int)]
+    DottedNum((u128, u128)),
 
     // this is definitely a float, because it uses e for scientific notation
     #[regex(r"[0-9_]*\.[0-9_]+e[+-]?[0-9_]+", parse_float)]
@@ -356,7 +356,7 @@ impl ToString for Tok {
             VarName(name) => return ToString::to_string(name),
             TypeName(name) => return ToString::to_string(name),
             Int(value) => return value.to_string(),
-            DottedInt((left, right)) => return format!("{left}.{right}"),
+            DottedNum((left, right)) => return format!("{left}.{right}"),
             Float(value) => return value.to_string(),
             Bool(value) => return value.to_string(),
             Strin(value) => value,

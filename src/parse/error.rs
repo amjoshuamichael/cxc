@@ -121,7 +121,7 @@ impl From<Tok> for TokName {
             TypeName(_) => TokName::TypeName,
             Int(_) => TokName::Int,
             // Could also be a tuple member, but this is a safe bet.
-            DottedInt(_) => TokName::Float,
+            DottedNum(_) => TokName::Float,
             Float(_) => TokName::Float,
             Bool(_) => TokName::Bool,
             Strin(_) => TokName::Strin,

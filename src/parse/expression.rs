@@ -11,7 +11,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
             let atom = match next {
                 Tok::Int(val) => Expr::Number(val),
                 Tok::Float(val) => Expr::Float(val),
-                Tok::DottedInt(_) => {
+                Tok::DottedNum(_) => {
                     // convert dotted int back into float
                     Expr::Float(next.to_string().parse().unwrap())
                 },
@@ -99,11 +99,11 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
             let object = atoms.pop().unwrap();
 
             Expr::Index(box object, box index)
-        } else if matches!(next, Tok::DottedInt(..)) {
+        } else if matches!(next, Tok::DottedNum(..)) {
             lexer.next_tok()?;
             // parse tuple index
             let object = atoms.pop().unwrap();
-            let Tok::DottedInt((_, right)) = next else { unreachable!() };
+            let Tok::DottedNum((_, right)) = next else { unreachable!() };
 
             Expr::Member(box object, right.to_string().into())
         } else {
