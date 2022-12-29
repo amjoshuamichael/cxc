@@ -64,7 +64,6 @@ impl Kind for FuncType {
 
 impl FuncType {
     pub fn llvm_func_type<'t>(&self, context: &'t Context) -> FunctionType<'t> {
-        dbg!(&self.ret_type, &self.args);
         if self.ret_type.return_style() != ReturnStyle::Sret {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args

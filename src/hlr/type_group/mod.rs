@@ -42,6 +42,16 @@ impl<'a> CompData<'a> {
 
                 Type::new_struct(typed_fields)
             },
+            TypeSpec::Tuple(types) => {
+                let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
+
+                for (i, typ) in types.iter().enumerate() {
+                    let field_type = self.get_spec(typ, generics)?;
+                    typed_fields.push((VarName::from(i.to_string()), field_type));
+                }
+
+                Type::new_struct(typed_fields)
+            },
             TypeSpec::Function(args, ret_type) => {
                 let args = args
                     .iter()

@@ -20,6 +20,7 @@ pub enum Expr {
     Ident(VarName),
     StaticMethodPath(TypeSpec, VarName),
     Struct(TypeSpec, Vec<(VarName, Expr)>, bool),
+    Tuple(TypeSpec, Vec<Expr>, bool),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
     MakeVar(VarDecl, Box<Expr>),
@@ -50,6 +51,7 @@ impl Expr {
                 box once(self)
             },
             Struct(_, fields, _) => box fields.iter().map(|(_, expr)| expr),
+            Tuple(_, exprs, _) => box exprs.iter(),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
             MakeVar(_, rhs) => box once(&**rhs),
@@ -75,6 +77,40 @@ impl Expr {
         match self {
             Expr::Block(_) => self,
             _ => Expr::Block(vec![Expr::Return(box self)]),
+        }
+    }
+
+    // returns the token that starts this expression. for example, if the expression
+    // is IfThen, then this function outputs TokName::Question, because that's
+    // the token that starts an if. this is used for error reporting.
+    pub fn first_tok(&self) -> Tok {
+        use Expr::*;
+
+        match self {
+            Number(num) => Tok::Int(*num),
+            Float(float) => Tok::Float(*float),
+            Bool(b) => Tok::Bool(*b),
+            Strin(s) => Tok::Strin(s.clone()),
+            Ident(name) => Tok::VarName(name.clone()),
+            StaticMethodPath(..) => todo!(),
+            Struct(..) => Tok::LCurly,
+            Tuple(..) => Tok::LCurly,
+            Array(..) => Tok::LBrack,
+            Index(left, _) => left.first_tok(),
+            MakeVar(var_decl, _) => Tok::VarName(var_decl.name.clone()),
+            SetVar(left, _) => left.first_tok(),
+            Call(left, ..) => left.first_tok(),
+            UnarOp(..) => todo!(),
+            BinOp(_, left, _) => left.first_tok(),
+            Member(left, _) => left.first_tok(),
+            IfThen(..) => Tok::Question,
+            IfThenElse(..) => Tok::Question,
+            ForWhile(..) => Tok::At,
+            Block(..) => Tok::LCurly,
+            Return(..) => Tok::Semicolon,
+            ArgList(..) => todo!(),
+            Op(..) => todo!(),
+            Enclosed(..) => Tok::LParen,
         }
     }
 }
@@ -166,7 +202,7 @@ impl<T: Clone> TypeRelationGeneric<T> {
         }
     }
 
-    pub fn inner(&self) -> Option<T> {
+    pub fn inner_type(&self) -> Option<T> {
         match self {
             Self::Static(inner) | Self::MethodOf(inner) => Some(inner.clone()),
             Self::Unrelated => None,

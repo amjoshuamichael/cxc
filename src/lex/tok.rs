@@ -165,25 +165,25 @@ pub enum Tok {
     At,
 
     #[token("(")]
-    LeftParen,
+    LParen,
     #[token(")")]
-    RghtParen,
+    RParen,
     #[token("{")]
-    LeftCurly,
+    LCurly,
     #[token("}")]
-    RghtCurly,
+    RCurly,
     #[token("[")]
-    LeftBrack,
+    LBrack,
     #[token("]")]
-    RghtBrack,
+    RBrack,
     #[token("<")]
-    LeftAngle,
+    LAngle,
     #[token(">")]
-    RghtAngle,
+    RAngle,
     #[token("<-")]
-    LeftArrow,
+    LArrow,
     #[token("->")]
-    RghtArrow,
+    RArrow,
 
     #[token("=")]
     Assignment,
@@ -213,7 +213,12 @@ pub enum Tok {
     )]
     Int(u128),
 
-    #[regex(r"[0-9_]*\.[0-9_]+(e[+-]?[0-9_]+)?", parse_float)]
+    // could be a float (e.g. .1), but could also be a tuple member (e.g. the ".1" in x.1)
+    #[regex(r"[0-9]*\.[0-9]+", parse_dotted_int)]
+    DottedInt((u128, u128)),
+
+    // this is definitely a float, because it uses e for scientific notation
+    #[regex(r"[0-9_]*\.[0-9_]+e[+-]?[0-9_]+", parse_float)]
     Float(f64),
 
     #[regex("true|false", parse_bool)]
@@ -256,8 +261,8 @@ impl Tok {
             Tok::BitShiftL => Ok(Opcode::BitShiftL),
             Tok::AmpersandSet(2) => Ok(Opcode::BitAND),
             Tok::Or => Ok(Opcode::Or),
-            Tok::LeftAngle => Ok(Opcode::LessThan),
-            Tok::RghtAngle => Ok(Opcode::GrtrThan),
+            Tok::LAngle => Ok(Opcode::LessThan),
+            Tok::RAngle => Ok(Opcode::GrtrThan),
             Tok::LessOrEqual => Ok(Opcode::LessOrEqual),
             Tok::GreaterOrEqual => Ok(Opcode::GreaterOrEqual),
             Tok::Equal => Ok(Opcode::Equal),
@@ -302,10 +307,10 @@ impl Tok {
         }
     }
 
-    pub fn parens() -> (Self, Self) { (Tok::LeftParen, Tok::RghtParen) }
-    pub fn bracks() -> (Self, Self) { (Tok::LeftBrack, Tok::RghtBrack) }
-    pub fn curlys() -> (Self, Self) { (Tok::LeftCurly, Tok::RghtCurly) }
-    pub fn angles() -> (Self, Self) { (Tok::LeftAngle, Tok::RghtAngle) }
+    pub fn parens() -> (Self, Self) { (Tok::LParen, Tok::RParen) }
+    pub fn bracks() -> (Self, Self) { (Tok::LBrack, Tok::RBrack) }
+    pub fn curlys() -> (Self, Self) { (Tok::LCurly, Tok::RCurly) }
+    pub fn angles() -> (Self, Self) { (Tok::LAngle, Tok::RAngle) }
 }
 
 impl ToString for Tok {
@@ -337,20 +342,21 @@ impl ToString for Tok {
             Question => "? ",
             Colon => ": ",
             At => "@ ",
-            LeftParen => "( ",
-            RghtParen => " ) ",
-            LeftCurly => "{ ",
-            RghtCurly => " } ",
-            LeftBrack => "[ ",
-            RghtBrack => " ] ",
-            LeftAngle => "< ",
-            RghtAngle => " > ",
-            LeftArrow => "<- ",
-            RghtArrow => "-> ",
+            LParen => "( ",
+            RParen => " ) ",
+            LCurly => "{ ",
+            RCurly => " } ",
+            LBrack => "[ ",
+            RBrack => " ] ",
+            LAngle => "< ",
+            RAngle => " > ",
+            LArrow => "<- ",
+            RArrow => "-> ",
             Assignment => "= ",
             VarName(name) => return ToString::to_string(name),
             TypeName(name) => return ToString::to_string(name),
             Int(value) => return value.to_string(),
+            DottedInt((left, right)) => return format!("{left}.{right}"),
             Float(value) => return value.to_string(),
             Bool(value) => return value.to_string(),
             Strin(value) => value,

@@ -444,7 +444,6 @@ fn compile<'comp, 'a>(
                 if type_of_return == raw_type_of_return {
                     fcs.builder.build_return(Some(&ret_val));
                 } else {
-                    dbg!(&type_of_return);
                     let casted_value = fcs.builder.build_alloca(
                         raw_type_of_return.to_basic_type(&fcs.context),
                         "castedret",

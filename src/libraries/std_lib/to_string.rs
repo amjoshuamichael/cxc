@@ -78,7 +78,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             );
             statements.push(make_var);
 
-            for (field_index, (field_name, field_typ)) in fields.iter().enumerate() {
+            for (field_index, (field_name, _)) in fields.iter().enumerate() {
                 let field_prefix = if field_index > 0 {
                     String::from(", ") + &*field_name.to_string() + " = "
                 } else {

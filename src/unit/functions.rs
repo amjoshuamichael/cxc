@@ -288,7 +288,7 @@ impl<'a> CompData<'a> {
     pub fn get_derived_code(&self, info: &UniqueFuncInfo) -> Option<FuncCode> {
         let deriver_info = DeriverInfo::try_from(info.clone()).unwrap();
         let deriver = self.derivers.get(&deriver_info)?;
-        deriver(self, info.relation.inner()?)
+        deriver(self, info.relation.inner_type()?)
     }
 
     pub fn get_code(&self, info: UniqueFuncInfo) -> Option<FuncCode> {

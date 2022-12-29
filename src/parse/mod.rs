@@ -42,7 +42,7 @@ pub fn file(mut lexer: Lexer) -> ParseResult<Script> {
                 // Struct = { x: i32, y: i32 }
                 let generic_labels = parse_generics(&mut lexer)?;
 
-                if matches!(lexer.peek_by(1)?, Tok::LeftAngle | Tok::Assignment)
+                if matches!(lexer.peek_by(1)?, Tok::LAngle | Tok::Assignment)
                     && generic_labels.len() == 0
                 {
                     let type_name = lexer.next_tok()?.type_name()?;
@@ -111,7 +111,7 @@ pub fn file(mut lexer: Lexer) -> ParseResult<Script> {
 }
 
 pub fn parse_generics(lexer: &mut Lexer) -> ParseResult<GenericLabels> {
-    if lexer.peek_tok()? == Tok::LeftAngle {
+    if lexer.peek_tok()? == Tok::LAngle {
         let list = parse_list(Tok::angles(), Some(Tok::Comma), parse_generic_label, lexer)?
             .iter()
             .enumerate()
@@ -156,12 +156,8 @@ pub fn parse_func_code(
     mut lexer: ParseContext<VarName>,
     relation: TypeSpecRelation,
 ) -> ParseResult<FuncCode> {
-    let mut args = parse_list(
-        (Tok::LeftParen, Tok::RghtParen),
-        Some(Tok::Comma),
-        parse_var_decl,
-        &mut lexer,
-    )?;
+    let mut args =
+        parse_list((Tok::LParen, Tok::RParen), Some(Tok::Comma), parse_var_decl, &mut lexer)?;
 
     let ret_type = if lexer.peek_tok()? == Tok::Colon {
         lexer.next_tok()?;
@@ -247,7 +243,7 @@ fn parse_assignable(lexer: &mut ParseContext<VarName>) -> ParseResult<Assignable
 }
 
 fn parse_block(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
-    Ok(Expr::Block(parse_list((Tok::LeftCurly, Tok::RghtCurly), None, parse_stmt, lexer)?))
+    Ok(Expr::Block(parse_list((Tok::LCurly, Tok::RCurly), None, parse_stmt, lexer)?))
 }
 
 fn parse_stmt(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
@@ -297,8 +293,9 @@ pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
         | Tok::Float(_)
         | Tok::Bool(_)
         | Tok::Strin(_)
-        | Tok::LeftBrack
-        | Tok::LeftParen => parse_math_expr(lexer),
+        | Tok::LBrack
+        | Tok::LParen
+        | Tok::LCurly => parse_math_expr(lexer),
         tok if tok.is_unary_op() => parse_math_expr(lexer),
         Tok::At => parse_for(lexer),
         Tok::Question => parse_if(lexer),
@@ -313,11 +310,12 @@ pub fn parse_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
                 TokName::TypeName,
                 TokName::Int,
                 TokName::Float,
-                TokName::LeftBrack,
+                TokName::LBrack,
                 TokName::UnaryOperator,
                 TokName::At,
                 TokName::Question,
                 TokName::Semicolon,
+                TokName::LCurly,
             ],
         }),
     }

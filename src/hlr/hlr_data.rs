@@ -428,6 +428,24 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_struct);
                 space
             },
+            Expr::Tuple(type_spec, exprs, initialize) => {
+                let space = self.tree.make_one_space(parent);
+
+                let mut fields = Vec::new();
+
+                for (index, expr) in exprs.into_iter().enumerate() {
+                    fields.push((index.to_string().into(), self.add_expr(expr, space)));
+                }
+
+                let new_struct = NodeData::StructLit {
+                    var_type: self.comp_data.get_spec(&type_spec, &Vec::new()).unwrap(),
+                    fields,
+                    initialize,
+                };
+
+                self.tree.replace(space, new_struct);
+                space
+            },
             Expr::Return(to_return) => {
                 let space = self.tree.make_one_space(parent);
 

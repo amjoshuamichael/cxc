@@ -34,6 +34,23 @@ pub fn parse_string(token: &mut Lexer<Tok>) -> Option<String> {
     Some(token.slice()[1..string_len].chars().collect())
 }
 
+pub fn parse_dotted_int(token: &mut Lexer<Tok>) -> Option<(u128, u128)> {
+    let num_text = token
+        .slice()
+        .chars()
+        .filter(|c| *c != '_' && *c != '+')
+        .collect::<String>();
+
+    let (left, right) = if num_text.chars().next()? == '.' {
+        ("0", &num_text[1..])
+    } else {
+        let mut split = num_text.split('.');
+        (split.next()?, split.next()?)
+    };
+
+    Some((left.parse().ok()?, right.parse().ok()?))
+}
+
 pub fn parse_float(token: &mut Lexer<Tok>) -> Option<f64> {
     let num_text = token
         .slice()

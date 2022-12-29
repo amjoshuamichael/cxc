@@ -1,4 +1,4 @@
-use crate::{lex::VarName, typ::StructType, TypeEnum};
+use crate::{typ::StructType, TypeEnum};
 
 use super::{
     expr_tree::{MakeVarGen, MemberGen, NodeData, SetVarGen},
