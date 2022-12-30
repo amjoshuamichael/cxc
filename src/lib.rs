@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 #![feature(type_name_of_val)]
 #![feature(let_chains)]
 #![feature(type_alias_impl_trait)]

@@ -172,8 +172,3 @@ pub fn parse_struct(lexer: &mut ParseContext<TypeName>) -> Result<TypeSpec, Pars
 
     Ok(TypeSpec::Struct(fields))
 }
-
-enum StructPart {
-    Field { name: VarName, typ: TypeSpec },
-    Method { is_static: bool, decl: FuncCode },
-}

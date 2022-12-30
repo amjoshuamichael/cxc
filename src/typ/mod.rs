@@ -237,8 +237,6 @@ impl From<TypeEnum> for TypeData {
 }
 
 impl TypeData {
-    fn new(type_enum: TypeEnum, name: Option<TypeName>) -> Self { Self { type_enum, name } }
-
     pub fn is_named(&self) -> bool { self.name.is_some() }
 }
 

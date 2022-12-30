@@ -9,10 +9,6 @@ use crate::TypeEnum;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
-use inkwell::targets::CodeModel;
-use inkwell::targets::RelocMode;
-use inkwell::targets::Target;
-use inkwell::targets::TargetMachine;
 use inkwell::values::*;
 use inkwell::OptimizationLevel;
 use std::cell::RefCell;
@@ -57,7 +53,6 @@ pub struct Unit<'u> {
     pub comp_data: Rc<CompData<'u>>,
     pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'u>>>,
     pub(crate) module: Module<'u>,
-    pub(crate) machine: TargetMachine,
     pub(crate) context: &'u Context,
 }
 
@@ -88,24 +83,10 @@ impl<'u> Unit<'u> {
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .unwrap();
 
-        let triple = TargetMachine::get_default_triple();
-        let target = Target::from_triple(&triple).unwrap();
-        let machine = target
-            .create_target_machine(
-                &triple,
-                &*TargetMachine::get_host_cpu_name().to_string(),
-                &*TargetMachine::get_host_cpu_features().to_string(),
-                OptimizationLevel::Aggressive,
-                RelocMode::Default,
-                CodeModel::Default,
-            )
-            .unwrap();
-
         Self {
             comp_data: Rc::new(CompData::new()),
             execution_engine: Rc::new(RefCell::new(execution_engine)),
             module,
-            machine,
             context: &context.context,
         }
     }

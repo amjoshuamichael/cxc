@@ -8,10 +8,6 @@ pub struct Func<'u> {
     pub(super) name: String,
 }
 
-pub enum FuncRunError {
-    InvalidFunction,
-}
-
 impl<'u> Func<'u> {
     pub unsafe fn run<I, O>(&self, input: I) -> Result<O, FunctionLookupError> {
         let addr = self

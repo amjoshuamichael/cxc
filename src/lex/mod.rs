@@ -130,8 +130,6 @@ impl<N: Ident> ParseContext<N> {
 
     pub fn has_generics(&self) -> bool { !self.generic_labels.is_empty() }
 
-    pub fn name_of_this(&self) -> &N { &self.name }
-
     pub fn return_info(self) -> (N, HashSet<TypeName>) { (self.name, self.type_dependencies) }
 
     pub fn create_new_with_name<T: Ident>(&self, name: T) -> ParseContext<T> {

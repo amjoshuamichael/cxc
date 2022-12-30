@@ -125,8 +125,6 @@ impl ExprTree {
 
     pub fn return_type(&self) -> Type { self.get(self.root).ret_type() }
 
-    fn node_count(&self) -> usize { self.nodes.len() }
-
     pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
         let NodeData::Call { f, generics, relation, .. } = call.clone()
             else { panic!() };

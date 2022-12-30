@@ -91,18 +91,21 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
                 parse_list((Tok::LParen, Tok::RParen), Some(Tok::Comma), parse_expr, lexer)?;
 
             Expr::ArgList(Vec::new(), params)
-        } else if matches!(last_atom.clone(), Expr::Ident(_)) && matches!(next, Tok::LBrack) {
+        } else if matches!(last_atom, Expr::Ident(_)) && matches!(next, Tok::LBrack) {
             lexer.next_tok()?;
             let index = parse_expr(lexer)?;
             lexer.assert_next_tok_is(Tok::RBrack)?;
 
-            let object = atoms.pop().unwrap();
+            atoms.pop();
+
+            let object = last_atom.clone();
 
             Expr::Index(box object, box index)
         } else if matches!(next, Tok::DottedNum(..)) {
             lexer.next_tok()?;
             // parse tuple index
-            let object = atoms.pop().unwrap();
+            atoms.pop();
+            let object = last_atom.clone();
             let Tok::DottedNum((_, right)) = next else { unreachable!() };
 
             Expr::Member(box object, right.to_string().into())

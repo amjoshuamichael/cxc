@@ -134,28 +134,12 @@ impl VarDecl {
 pub struct Script(pub Vec<Decl>);
 
 impl Script {
-    pub fn get_type(&self, find_name: TypeName) -> Option<&TypeDecl> {
-        self.0
-            .iter()
-            .find(|d| match d {
-                Decl::Type(TypeDecl { name, .. }) => name == &find_name,
-                _ => false,
-            })?
-            .as_type()
-    }
-
     pub fn types_iter(&self) -> impl Iterator<Item = &TypeDecl> {
-        self.0
-            .iter()
-            .filter(|d| matches!(d, Decl::Type { .. }))
-            .map(|d| d.as_type().unwrap())
+        self.0.iter().filter_map(|decl| decl.as_type())
     }
 
     pub fn funcs_iter(&self) -> impl Iterator<Item = &FuncCode> {
-        self.0
-            .iter()
-            .filter(|d| matches!(d, Decl::Func { .. }))
-            .map(|d| d.as_func().unwrap())
+        self.0.iter().filter_map(|decl| decl.as_func())
     }
 
     pub fn decl_count(&self) -> usize { self.0.len() }

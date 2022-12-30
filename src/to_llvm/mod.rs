@@ -35,8 +35,6 @@ impl<'f> FunctionCompilationState<'f> {
         self.llvm_ir_uuid.replace(current_uuid + 1);
         String::from("t") + &*output
     }
-
-    pub fn delete(self) {}
 }
 
 pub fn compile_routine<'comp, 'a>(
@@ -655,15 +653,4 @@ fn internal_function<'comp, 'a>(
     };
 
     Some(output)
-}
-
-pub fn get_alignment<'ctx>(basic: &BasicTypeEnum<'ctx>) -> IntValue<'ctx> {
-    match basic {
-        BasicTypeEnum::ArrayType(t) => t.get_alignment(),
-        BasicTypeEnum::FloatType(t) => t.get_alignment(),
-        BasicTypeEnum::IntType(t) => t.get_alignment(),
-        BasicTypeEnum::PointerType(t) => t.get_alignment(),
-        BasicTypeEnum::StructType(t) => t.get_alignment(),
-        BasicTypeEnum::VectorType(t) => t.get_alignment(),
-    }
 }

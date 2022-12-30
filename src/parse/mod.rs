@@ -188,20 +188,6 @@ pub fn parse_func_code(
     })
 }
 
-enum Assignable {
-    Declare(VarDecl),
-    Get(Expr),
-}
-
-impl Assignable {
-    pub fn force_declare(&self) -> VarDecl {
-        match self {
-            Assignable::Declare(vd) => vd.clone(),
-            _ => panic!(),
-        }
-    }
-}
-
 fn parse_var_decl(lexer: &mut ParseContext<VarName>) -> ParseResult<VarDecl> {
     let var_name = lexer.next_tok()?.var_name()?;
 
@@ -218,28 +204,6 @@ fn parse_var_decl(lexer: &mut ParseContext<VarName>) -> ParseResult<VarDecl> {
         name: var_name,
         type_spec: type_spec.map(|s| s.into()),
     })
-}
-
-fn parse_assignable(lexer: &mut ParseContext<VarName>) -> ParseResult<Assignable> {
-    let lhs = parse_expr(lexer)?;
-
-    if let Expr::Ident(var_name) = lhs {
-        let type_spec = match lexer.peek_tok()? {
-            Tok::Colon => {
-                lexer.next_tok()?;
-
-                Some(parse_type_spec(lexer)?)
-            },
-            _ => None,
-        };
-
-        Ok(Assignable::Declare(VarDecl {
-            name: var_name,
-            type_spec: type_spec.map(|s| s.into()),
-        }))
-    } else {
-        Ok(Assignable::Get(lhs))
-    }
 }
 
 fn parse_block(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
@@ -269,19 +233,6 @@ fn parse_stmt(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
         Ok(Expr::MakeVar(var, box rhs))
     } else {
         Ok(lhs)
-    }
-}
-
-fn parse_setvar(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
-    let assignable = parse_assignable(lexer)?;
-
-    lexer.assert_next_tok_is(Tok::Assignment)?;
-
-    let rhs = parse_expr(lexer)?;
-
-    match assignable {
-        Assignable::Declare(d) => Ok(Expr::MakeVar(d, box rhs)),
-        Assignable::Get(lhs) => Ok(Expr::SetVar(box lhs, box rhs)),
     }
 }
 
