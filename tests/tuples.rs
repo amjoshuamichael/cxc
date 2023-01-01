@@ -32,7 +32,7 @@ fn nested_tuple() {
 fn tuple_method() {
     xc_test!(
         "
-            &{ i32, i32 }.add(): i32 {
+            &{ i32, i32 }:.add(): i32 {
                 ; self.0 + self.1
             }
 
@@ -45,10 +45,10 @@ fn tuple_method() {
 }
 
 #[test]
-fn nested_structural_type_method() {
+fn nested_tuple_method() {
     xc_test!(
         "
-            &{ i32, i32 }.add(): i32 {
+            &{ i32, i32 }:.add(): i32 {
                 ; self.0 + self.1
             }
 
@@ -98,7 +98,7 @@ fn named_tuple_method() {
         "
             Inner = { i32, i32 }
 
-            &Inner.add(): i32 {
+            &Inner:.add(): i32 {
                 ; self.0 + self.1
             }
 
@@ -116,7 +116,7 @@ fn named_nested_structural_type_method() {
         "
             Inner = { i32, i32 }
 
-            &Inner.add(): i32 {
+            &Inner:.add(): i32 {
                 ; self.0 + self.1
             }
 

@@ -61,7 +61,7 @@ pub fn file(mut lexer: Lexer) -> ParseResult<Script> {
                     let method_of = parse_type_spec(&mut method_of_parser)?;
 
                     let methods = match lexer.next_tok()? {
-                        Tok::Dot => parse_one_or_list(
+                        Tok::ColonDot => parse_one_or_list(
                             Tok::curlys(),
                             None,
                             move |lexer| {
@@ -73,7 +73,7 @@ pub fn file(mut lexer: Lexer) -> ParseResult<Script> {
                             },
                             &mut lexer,
                         )?,
-                        Tok::Colon => parse_one_or_list(
+                        Tok::DoubleColon => parse_one_or_list(
                             Tok::curlys(),
                             None,
                             move |lexer| {
@@ -88,7 +88,7 @@ pub fn file(mut lexer: Lexer) -> ParseResult<Script> {
                         got => {
                             return Err(ParseError::UnexpectedTok {
                                 got,
-                                expected: vec![TokName::Dot, TokName::Colon],
+                                expected: vec![TokName::ColonDot, TokName::DoubleColon],
                             })
                         },
                     };

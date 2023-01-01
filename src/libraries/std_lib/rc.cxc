@@ -8,7 +8,7 @@ Rc<T> = {
     inner: &RcBox<T>,
 }
 
-<T> Rc<T>: {
+<T> Rc<T>:: {
     new(value: T): Rc<T> {
         box: &RcBox<T> = alloc< RcBox<T> >(1)
         stack_box: RcBox<T> = 0 

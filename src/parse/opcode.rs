@@ -47,16 +47,17 @@ impl Opcode {
     pub fn bin_prec_level(&self) -> Option<u8> {
         // lower is more significant
         match self {
-            Or => Some(10),
-            And => Some(9),
-            Equal | Inequal => Some(8),
-            LessThan | GrtrThan | LessOrEqual | GreaterOrEqual => Some(7),
-            BitOR => Some(6),
-            BitXOR => Some(5),
-            BitAND => Some(4),
-            BitShiftL | BitShiftR => Some(3),
-            Plus | Minus => Some(2),
-            Multiplier | Divider => Some(1),
+            Or => Some(11),
+            And => Some(10),
+            Equal | Inequal => Some(9),
+            LessThan | GrtrThan | LessOrEqual | GreaterOrEqual => Some(8),
+            BitOR => Some(7),
+            BitXOR => Some(6),
+            BitAND => Some(5),
+            BitShiftL | BitShiftR => Some(4),
+            Plus | Minus => Some(3),
+            Multiplier | Divider => Some(2),
+            Modulus => Some(1),
             Exponential => Some(0),
             _ => None,
         }

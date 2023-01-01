@@ -49,7 +49,7 @@ impl From<String> for VarName {
     fn from(s: String) -> Self { Self(Arc::from(&*s)) }
 }
 
-#[derive(PartialEq, Eq, Clone, Hash)]
+#[derive(PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum TypeName {
     Other(Arc<str>),
     I(u32),
@@ -163,6 +163,11 @@ pub enum Tok {
     Colon,
     #[token("@")]
     At,
+
+    #[token(":.")]
+    ColonDot,
+    #[token("::")]
+    DoubleColon,
 
     #[token("(")]
     LParen,
@@ -342,6 +347,8 @@ impl ToString for Tok {
             Question => "? ",
             Colon => ": ",
             At => "@ ",
+            ColonDot => ":.",
+            DoubleColon => "::",
             LParen => "( ",
             RParen => " ) ",
             LCurly => "{ ",

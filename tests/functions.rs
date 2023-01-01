@@ -136,7 +136,7 @@ fn store_first_class() {
             func: (i32) -> i32,
         }
 
-        &Operation.run(input: i32): i32 {
+        &Operation:.run(input: i32): i32 {
             ; (self.func)(input)
         }
 

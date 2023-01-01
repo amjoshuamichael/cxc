@@ -57,20 +57,19 @@ impl Type {
             TypeEnum::Array(array_type) => {
                 total += array_type.count as usize * array_type.base.nested_field_count();
             },
-            _ => total += 1,
+            TypeEnum::Sum(_) => total = 2,
+            _ => total = 1,
         }
 
         total
     }
 
     pub fn return_style(&self) -> ReturnStyle {
+        use TypeEnum::*;
+
         match self.as_type_enum() {
-            TypeEnum::Int(_)
-            | TypeEnum::Ref(_)
-            | TypeEnum::Float(_)
-            | TypeEnum::Bool(_)
-            | TypeEnum::Func(_) => ReturnStyle::Direct,
-            TypeEnum::Struct(_) | TypeEnum::Array(_) | TypeEnum::Opaque(_) => {
+            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
+            Struct(_) | Array(_) | Opaque(_) | Sum(_) | Variant(_) => {
                 if self.size() > 16 {
                     ReturnStyle::Sret
                 } else if self.nested_field_count() == 1 {
@@ -87,7 +86,7 @@ impl Type {
                     todo!("cannot return style for this type: {:?}", self);
                 }
             },
-            TypeEnum::Unknown | TypeEnum::Void => ReturnStyle::Void,
+            Unknown | Void => ReturnStyle::Void,
         }
     }
 
@@ -164,6 +163,10 @@ impl Type {
 
     pub fn new_struct(fields: Vec<(VarName, Type)>) -> Type {
         Type::new(TypeEnum::Struct(StructType { fields }))
+    }
+
+    pub fn new_sum(variants: Vec<(TypeName, Type)>) -> Type {
+        Type::new(TypeEnum::Sum(SumType { variants }))
     }
 
     pub fn opaque_with_size(size: u32, name: &str) -> Type {
@@ -245,6 +248,8 @@ pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
     Struct(StructType),
+    Sum(SumType),
+    Variant(VariantType),
     Opaque(OpaqueType),
     Ref(RefType),
     Func(FuncType),
@@ -275,6 +280,8 @@ impl Deref for TypeEnum {
             TypeEnum::Array(t) => t,
             TypeEnum::Bool(t) => t,
             TypeEnum::Opaque(t) => t,
+            TypeEnum::Sum(t) => t,
+            TypeEnum::Variant(t) => t,
             TypeEnum::Void => &VOID_STATIC,
             TypeEnum::Unknown => &UNKNOWN_STATIC,
         }
@@ -321,6 +328,66 @@ impl StructType {
     }
 
     pub fn field_count(&self) -> usize { self.fields.len() }
+}
+
+#[derive(PartialEq, Clone, Eq, Hash, Debug)]
+pub struct SumType {
+    pub variants: Vec<(TypeName, Type)>,
+}
+
+impl SumType {
+    // parent arc contains the Type object which contains this SumType. it is
+    // required to fill in the parent field of the variant type.
+    pub fn get_variant_type(&self, parent_arc: &Type, field_name: &TypeName) -> Option<Type> {
+        let (variant_index, variant_type) = self
+            .variants
+            .iter()
+            .enumerate()
+            .find(|(_, (name, _))| name == field_name)
+            .map(|(index, (_, t))| (index, t.clone()))?;
+
+        Some(Type::new(TypeEnum::Variant(VariantType {
+            tag: variant_index as u32,
+            parent: parent_arc.clone(),
+            variant_type,
+        })))
+    }
+
+    pub fn get_variant_index(&self, field_name: &TypeName) -> usize {
+        self.variants
+            .iter()
+            .position(|field| &field.0 == field_name)
+            .unwrap()
+    }
+
+    pub fn largest_variant(&self) -> Type {
+        self.variants
+            .iter()
+            .map(|(_, typ)| typ)
+            .max_by_key(|typ| typ.size())
+            .unwrap()
+            .clone()
+    }
+
+    pub fn variant_count(&self) -> usize { self.variants.len() }
+}
+
+#[derive(PartialEq, Eq, Hash, Debug)]
+pub struct VariantType {
+    pub tag: u32,
+    pub parent: Type,
+    pub variant_type: Type,
+}
+
+impl VariantType {
+    pub fn parent(&self) -> Type { self.parent.clone() }
+
+    pub fn as_struct(&self) -> Type {
+        Type::new_struct(vec![
+            ("tag".into(), Type::i(32)),
+            ("data".into(), self.variant_type.clone()),
+        ])
+    }
 }
 
 #[derive(PartialEq, Eq, Hash)]

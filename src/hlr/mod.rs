@@ -3,6 +3,7 @@ pub mod expr_tree;
 mod handle_active_initialization;
 mod handle_arg_type_reflection;
 mod handle_struct_literals;
+mod handle_variant_literals;
 pub mod hlr_data;
 pub mod hlr_data_output;
 mod large_returns;
@@ -27,6 +28,7 @@ use prelude::*;
 use self::handle_active_initialization::handle_active_initialization;
 use self::handle_arg_type_reflection::handle_arg_type_reflection;
 use self::handle_struct_literals::handle_struct_literals;
+use self::handle_variant_literals::handle_variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::handle_large_returns;
 
@@ -41,6 +43,7 @@ pub fn hlr(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) -> Fun
     let mut output = FuncRep::from_code(code, comp_data.clone(), info);
 
     infer_types(&mut output);
+    handle_variant_literals(&mut output);
     handle_active_initialization(&mut output);
     handle_arg_type_reflection(&mut output);
     handle_struct_literals(&mut output);

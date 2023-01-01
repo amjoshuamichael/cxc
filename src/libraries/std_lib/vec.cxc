@@ -4,7 +4,7 @@ Vec<T> = {
     len: i64,
 }
 
-<T> &Vec<T>. {
+<T> &Vec<T>:. {
     push(val: T) {
         ? self.len >= self.capacity {
             # reallocate memory
@@ -28,7 +28,7 @@ Vec<T> = {
     }
 }
 
-<T> Vec<T>: {
+<T> Vec<T>:: {
     new(): Vec<T> {
         new_vec: Vec<T> = 0
         new_vec.len = to_i64(0)

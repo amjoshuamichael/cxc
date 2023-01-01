@@ -32,6 +32,20 @@ impl<'a> CompData<'a> {
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
+            TypeSpec::StructMember(struct_type, field_name) => {
+                let struct_type = self.get_spec(struct_type, generics)?;
+                let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
+
+                dbg!(struct_type.get_field_type(&field_name).unwrap())
+            },
+            TypeSpec::SumMember(sum_type, type_name) => {
+                let sum_type = self.get_spec(sum_type, generics)?;
+                let TypeEnum::Sum(sum_type_inner) = sum_type.as_type_enum() else { panic!() };
+
+                sum_type_inner
+                    .get_variant_type(&sum_type, &type_name)
+                    .unwrap()
+            },
             TypeSpec::Struct(fields) => {
                 let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
 
@@ -41,6 +55,16 @@ impl<'a> CompData<'a> {
                 }
 
                 Type::new_struct(typed_fields)
+            },
+            TypeSpec::Sum(variants) => {
+                let mut typed_variants: Vec<(TypeName, Type)> = Vec::new();
+
+                for (name, sub_type_spec) in variants {
+                    let sub_type = self.get_spec(&sub_type_spec, generics)?;
+                    typed_variants.push((name.clone(), sub_type));
+                }
+
+                Type::new_sum(typed_variants)
             },
             TypeSpec::Tuple(types) => {
                 let mut typed_fields: Vec<(VarName, Type)> = Vec::new();

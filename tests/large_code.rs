@@ -121,7 +121,7 @@ fn generic_methods() {
             val: T
         }
 
-        <T> &Roll<T>.come_on(): T {
+        <T> &Roll<T>:.come_on(): T {
             output: T = self.val
 
             counter: i32 = 1

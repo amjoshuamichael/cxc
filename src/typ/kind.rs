@@ -104,6 +104,35 @@ impl Kind for StructType {
     }
 }
 
+impl Kind for SumType {
+    fn name(&self) -> String { format!("/{:?}/", self.variants) }
+
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        // find the largest type in variants
+        let largest_variant = self.largest_variant().to_basic_type(context);
+
+        context
+            .struct_type(&[context.i32_type().as_basic_type_enum(), largest_variant], true)
+            .as_any_type_enum()
+    }
+}
+
+impl Kind for VariantType {
+    fn name(&self) -> String { format!("{:?}.{}", self.parent, self.tag) }
+
+    fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
+        context
+            .struct_type(
+                &[
+                    context.i32_type().as_basic_type_enum(),
+                    self.variant_type.to_basic_type(context),
+                ],
+                true,
+            )
+            .as_any_type_enum()
+    }
+}
+
 impl Kind for IntType {
     fn name(&self) -> String { format!("i{}", self.size) }
 

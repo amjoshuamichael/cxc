@@ -47,6 +47,9 @@ pub enum TokName {
     Colon,
     At,
 
+    ColonDot,
+    DoubleColon,
+
     LParen,
     RParen,
     LCurly,
@@ -106,6 +109,8 @@ impl From<Tok> for TokName {
             Question => TokName::Question,
             Colon => TokName::Colon,
             At => TokName::At,
+            ColonDot => TokName::ColonDot,
+            DoubleColon => TokName::DoubleColon,
             LParen => TokName::LParen,
             RParen => TokName::RParen,
             LCurly => TokName::LCurly,

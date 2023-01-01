@@ -129,11 +129,11 @@ fn methods() {
             y: f32
         }
 
-        &MyPoint.sqr_hypotenuse(): f32 {
+        &MyPoint:.sqr_hypotenuse(): f32 {
             ; self.x * self.x + self.y * self.y
         }
 
-        &MyPoint. {
+        &MyPoint:. {
             scaled(by: f32): MyPoint {
                 ; MyPoint { x = self.x * by, y = self.y * by }
             }

@@ -231,7 +231,9 @@ impl NodeData {
 
                 for field in fields.iter() {
                     lit += &*field.0.to_string();
+                    lit += " = ";
                     lit += &*tree.get(field.1).to_string(tree);
+                    lit += "\n";
                 }
 
                 if *initialize {

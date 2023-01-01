@@ -178,6 +178,36 @@ impl NodeDataGen for CallGen {
     }
 }
 
+#[derive(Default)]
+pub struct StructLitGen {
+    pub var_type: Type,
+    pub fields: Vec<(VarName, Box<dyn NodeDataGen>)>,
+    pub initialize: bool,
+}
+
+impl NodeDataGen for StructLitGen {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let added_fields = self
+            .fields
+            .iter()
+            .map(|(name, data)| (name.clone(), data.add_to_expr_tree(hlr, space)))
+            .collect();
+
+        hlr.tree.replace(
+            space,
+            NodeData::StructLit {
+                var_type: self.var_type.clone(),
+                fields: added_fields,
+                initialize: self.initialize,
+            },
+        );
+
+        space
+    }
+}
+
 pub struct MemberGen {
     pub object: Box<dyn NodeDataGen>,
     pub field: VarName,

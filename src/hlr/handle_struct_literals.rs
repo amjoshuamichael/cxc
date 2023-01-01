@@ -11,8 +11,6 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
         |structlit, struct_data, hlr| {
             let new_struct_name = hlr.uniqueify_varname("struct");
             let struct_type = struct_data.ret_type();
-            let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
-                else { unreachable!() };
 
             let mut current_statement = hlr
                 .insert_statement_before(
@@ -24,6 +22,9 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
                     },
                 )
                 .inserted_id();
+
+            let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
+                else { unreachable!() };
 
             let TypeEnum::Struct(StructType { fields: field_types }) = 
                 struct_type.as_type_enum() else { unreachable!() };
