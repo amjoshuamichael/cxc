@@ -80,9 +80,9 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {
-        Tok::LCurly => match lexer.peek_by(1)? {
-            Tok::VarName(_) => parse_struct(lexer)?,
-            Tok::TypeName(_) => parse_sum(lexer)?,
+        Tok::LCurly => match (lexer.peek_by(1)?, lexer.peek_by(2)?) {
+            (Tok::VarName(_), Tok::Colon) => parse_struct(lexer)?,
+            (Tok::TypeName(_), Tok::Colon) => parse_sum(lexer)?,
             _ => {
                 TypeSpec::Tuple(parse_list(Tok::curlys(), Some(Tok::Comma), parse_type, lexer)?)
             },
