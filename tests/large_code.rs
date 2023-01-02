@@ -291,3 +291,18 @@ fn default_generic() {
         OutputType2::default()
     )
 }
+
+#[test]
+fn option() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): Option<i32> {
+                output: Option<i32> = Option<i32>.Some { 10 }
+
+                ; output
+            }
+        ";
+        Some(10)
+    )
+}

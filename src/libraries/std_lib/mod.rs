@@ -10,9 +10,11 @@ use super::Library;
 
 pub struct StdLib;
 mod default;
+mod option;
 mod string;
 mod to_string;
 mod value_lib;
+use crate::libraries::std_lib::option::OptionLib;
 use default::DefaultLib;
 use string::StringLib;
 use to_string::ToStringLib;
@@ -27,6 +29,7 @@ impl Library for StdLib {
         unit.push_script(include_str!("rc.cxc"));
 
         unit.add_lib(StringLib);
+        unit.add_lib(OptionLib);
         unit.add_lib(ToStringLib);
         unit.add_lib(DefaultLib);
         unit.add_lib(ValueLib);
