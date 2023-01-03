@@ -124,7 +124,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 let func_info = UniqueFuncInfo {
                     name: f.clone(),
                     relation: relation.clone(),
-                    generics: generics.clone(),
+                    own_generics: generics.clone(),
                 };
 
                 let func_type = hlr.comp_data.get_type(&func_info).unwrap();

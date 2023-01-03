@@ -40,7 +40,9 @@ impl<'a> FuncRep<'a> {
     ) -> Self {
         let mut new = FuncRep {
             tree: ExprTree::default(),
-            ret_type: comp_data.get_spec(&code.ret_type, &info.generics).unwrap(),
+            ret_type: comp_data
+                .get_spec(&code.ret_type, &info.generics())
+                .unwrap(),
             comp_data,
             identifiers: Vec::new(),
             info,
@@ -53,7 +55,7 @@ impl<'a> FuncRep<'a> {
             let typ = match arg.type_spec {
                 Some(ref type_spec) => new
                     .comp_data
-                    .get_spec(type_spec, &new.info.generics)
+                    .get_spec(type_spec, &new.info.generics())
                     .unwrap(),
                 None => todo!(),
             };
@@ -106,7 +108,7 @@ impl<'a> FuncRep<'a> {
     pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
 
     pub fn get_type_spec(&self, alias: &TypeSpec) -> Option<Type> {
-        self.comp_data.get_spec(alias, &self.info.generics)
+        self.comp_data.get_spec(alias, &self.info.generics())
     }
 
     pub fn output(self) -> FuncOutput {
@@ -361,21 +363,20 @@ impl<'a> FuncRep<'a> {
                     .map(|spec| self.get_type_spec(spec).unwrap())
                     .collect();
 
-                let new_data = if let Expr::Ident(ref func_name) = *f && 
-                    !self.data_flow.contains_key(func_name) {
-                        let relation = if is_method {
-                            TypeRelation::MethodOf(Type::never())
-                        } else {
-                            TypeRelation::Unrelated
-                        };
+                let new_data = if let Expr::Ident(ref func_name) = *f {
+                    let relation = if is_method {
+                        TypeRelation::MethodOf(Type::never())
+                    } else {
+                        TypeRelation::Unrelated
+                    };
 
-                        NodeData::Call {
-                            ret_type: Type::never(),
-                            f: func_name.clone(),
-                            generics,
-                            a: arg_ids,
-                            relation,
-                        }
+                    NodeData::Call {
+                        ret_type: Type::never(),
+                        f: func_name.clone(),
+                        generics,
+                        a: arg_ids,
+                        relation,
+                    }
                 } else if let Expr::StaticMethodPath(ref type_or_alias, ref func_name) = *f {
                     let type_origin = self.get_type_spec(type_or_alias).unwrap();
 
@@ -420,7 +421,7 @@ impl<'a> FuncRep<'a> {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: self.comp_data.get_spec(&type_spec, &Vec::new()).unwrap(),
+                    var_type: self.get_type_spec(&type_spec).unwrap(),
                     fields,
                     initialize,
                 };
@@ -438,7 +439,7 @@ impl<'a> FuncRep<'a> {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: self.comp_data.get_spec(&type_spec, &Vec::new()).unwrap(),
+                    var_type: self.get_type_spec(&type_spec).unwrap(),
                     fields,
                     initialize,
                 };

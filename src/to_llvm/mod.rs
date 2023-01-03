@@ -1,9 +1,9 @@
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
-use crate::lex::VarName;
+use crate::lex::{TypeName, VarName};
 use crate::parse::Opcode::*;
 use crate::typ::{Kind, ReturnStyle};
-use crate::unit::*;
+use crate::{unit::*, TypeRelation};
 use crate::{Type, TypeEnum};
 use core::cell::RefCell;
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -597,7 +597,7 @@ fn internal_function<'comp, 'a>(
 ) -> Option<Option<AnyValueEnum<'a>>> {
     let output = match &*info.og_name().to_string() {
         "alloc" => {
-            let alloc_typ = info.generics[0].to_basic_type(&fcs.context);
+            let alloc_typ = info.generics()[0].to_basic_type(&fcs.context);
             let alloc_count = compile(fcs, args[0]).unwrap().try_into().unwrap();
 
             Some(
@@ -633,7 +633,7 @@ fn internal_function<'comp, 'a>(
             None
         },
         "size_of" => {
-            let typ = info.generics[0].to_basic_type(&fcs.context);
+            let typ = info.generics()[0].to_basic_type(&fcs.context);
             let size = typ.size_of().unwrap().as_any_value_enum();
 
             Some(size)

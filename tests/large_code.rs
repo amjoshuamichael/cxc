@@ -58,8 +58,8 @@ fn vec() {
         main() {
             number_of_checks: i32 = 128
 
-            num_vec: Vec<i32> = Vec<i32>:new<i32>()
-            two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new<TwoNums>()
+            num_vec: Vec<i32> = Vec<i32>:new()
+            two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new()
 
             current_index: i32 = 0
             @ current_index < number_of_checks + 0 {
@@ -104,7 +104,7 @@ fn rc() {
         "
         main(): Rc<i32> {
             x: i32 = 90
-            rcx: Rc<i32> = Rc<i32>:new<i32>(x)
+            rcx: Rc<i32> = Rc<i32>:new(x)
 
             ; rcx
         }
@@ -293,6 +293,37 @@ fn default_generic() {
 }
 
 #[test]
+fn default_vec() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): Vec<i32> {
+                output: Vec<i32> = Vec<i32>:default()                
+
+                ; output
+            }
+        ";
+        Vec::<i32>::new()
+    )
+}
+
+#[test]
+fn default_vec_with_push() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): Vec<i32> {
+                output: Vec<i32> = Vec<i32>:default()                
+                output.push<i32>(432)
+
+                ; output
+            }
+        ";
+        vec![432]
+    )
+}
+
+#[test]
 fn option() {
     xc_test!(
         use StdLib;
@@ -304,5 +335,35 @@ fn option() {
             }
         ";
         Some(10)
+    )
+}
+
+#[test]
+fn option_default() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): Option<i32> {
+                output: Option<i32> = Option<i32>:default()
+
+                ; output
+            }
+        ";
+        Option::<i32>::None
+    )
+}
+
+#[test]
+fn push_string() {
+    xc_test!(
+        use StdLib, TestLib;
+        r#"
+        main(): String {
+            x: String = "transformers was "
+            x.push_string(&"directed by michael bay")
+            ; x
+        }
+        "#;
+        String::from("transformers was directed by michael bay")
     )
 }

@@ -225,7 +225,7 @@ impl FuncCode {
         UniqueFuncInfo {
             name: self.name.clone(),
             relation,
-            generics: Vec::new(),
+            own_generics: Vec::new(),
         }
     }
 

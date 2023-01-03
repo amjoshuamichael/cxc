@@ -219,6 +219,20 @@ impl<'u> Unit<'u> {
             println!("compiled these: ");
             println!("{}", self.module.print_to_string().to_string());
         }
+
+        // let default_render_node_builder = UniqueFuncInfo {
+        //    name: VarName::from("default"),
+        //    relation: TypeRelation::Static(
+        //        self.comp_data
+        //            .get_by_name(&TypeName::Other("RenderNodeBuilder".into()))
+        //            .unwrap(),
+        //    ),
+        //    own_generics: Vec::new(),
+        //};
+        // if let Some(func) =
+        // self.comp_data.get_func_value(&default_render_node_builder) {
+        //    func.print_to_stderr()
+        //}
     }
 
     fn compile(&mut self, output: &mut FuncOutput) {

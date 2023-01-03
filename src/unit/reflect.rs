@@ -53,11 +53,16 @@ impl<'u> Unit<'u> {
 
         {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-            comp_data.add_type_alias(decl.name, decl.typ.clone());
+            comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
         }
 
         if !decl.contains_generics {
-            self.comp_data.get_spec(&decl.typ, &Vec::new())
+            Some(
+                self.comp_data
+                    .get_spec(&decl.typ, &Vec::new())
+                    .unwrap()
+                    .with_name(decl.name),
+            )
         } else {
             None
         }

@@ -35,7 +35,7 @@ impl Library for StringLib {
             "push_string",
             push_string as *const usize,
             ExternalFuncAdd {
-                arg_types: vec![string_type.clone(), string_type.get_ref()],
+                arg_types: vec![string_type.get_ref(), string_type.get_ref()],
                 relation: TypeRelation::MethodOf(string_type.get_ref()),
                 ..ExternalFuncAdd::empty()
             },

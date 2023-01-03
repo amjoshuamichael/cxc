@@ -167,7 +167,7 @@ impl NodeDataGen for CallGen {
             space,
             NodeData::Call {
                 f: self.info.name.clone(),
-                generics: self.info.generics.clone(),
+                generics: self.info.own_generics.clone(),
                 relation: self.info.relation.clone(),
                 ret_type: ret_type.clone(),
                 a: args,

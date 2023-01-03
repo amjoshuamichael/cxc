@@ -61,7 +61,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                     info: UniqueFuncInfo {
                         name: VarName::from("write"),
                         relation: TypeRelationGeneric::MethodOf(output_var_typ.get_ref()),
-                        generics: vec![hlr.ret_type.clone()],
+                        own_generics: vec![hlr.ret_type.clone()],
                     },
                     args: vec![
                         box hlr.tree.get(*to_return),
@@ -129,7 +129,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     .after_that(CallGen {
         info: UniqueFuncInfo {
             name: VarName::from("memcpy"),
-            generics: vec![raw_ret_var_type.clone()],
+            own_generics: vec![raw_ret_var_type.clone()],
             relation: TypeRelation::Unrelated,
         },
         args: vec![
@@ -202,7 +202,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         CallGen {
             info: UniqueFuncInfo {
                 name: f,
-                generics,
+                own_generics: generics,
                 relation,
             },
             args: new_args,

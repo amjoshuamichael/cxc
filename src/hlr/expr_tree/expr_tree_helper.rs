@@ -132,7 +132,7 @@ impl ExprTree {
         UniqueFuncInfo {
             name: f,
             relation,
-            generics,
+            own_generics: generics,
         }
     }
 }

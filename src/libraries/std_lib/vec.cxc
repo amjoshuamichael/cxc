@@ -37,4 +37,8 @@ Vec<T> = {
 
         ; new_vec
     }
+
+    default(): Vec<T> {
+        ; Vec<T>:new()
+    }
 }

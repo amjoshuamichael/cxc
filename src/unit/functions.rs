@@ -155,7 +155,7 @@ impl<'a> CompData<'a> {
         let unique_func_info = UniqueFuncInfo {
             name: decl_info.name.clone(),
             relation,
-            generics,
+            own_generics: generics,
         };
 
         unique_func_info
@@ -222,12 +222,11 @@ impl<'a> CompData<'a> {
         let possible_decls = self.decl_names.get(&info.name)?;
 
         for decl in possible_decls {
-            let decl_method_of = decl
-                .relation
-                .clone()
-                .map(|spec| self.get_spec(&spec, &info.generics).unwrap());
-
-            if decl_method_of == info.relation {
+            if let Some(method_of) = decl.relation.inner_type() {
+                if self.get_spec(&method_of, &info.generics()) == info.relation.inner_type() {
+                    return Some(decl.clone());
+                }
+            } else if info.relation.inner_type() == None {
                 return Some(decl.clone());
             }
         }
@@ -269,13 +268,13 @@ impl<'a> CompData<'a> {
 
         let code = self.get_code(info.clone())?;
 
-        let ret_type = &self.get_spec(&code.ret_type, &info.generics)?;
+        let ret_type = &self.get_spec(&code.ret_type, &info.generics())?;
 
         let arg_types = code
             .args
             .iter()
             .map(|d| {
-                self.get_spec(d.type_spec.as_ref().unwrap(), &info.generics)
+                self.get_spec(d.type_spec.as_ref().unwrap(), &info.generics())
                     .unwrap()
             })
             .collect();
@@ -335,19 +334,19 @@ pub struct FuncDeclInfo {
 pub struct UniqueFuncInfo {
     pub name: VarName,
     pub relation: TypeRelation,
-    pub generics: Vec<Type>,
+    pub own_generics: Vec<Type>,
 }
 
 impl ToString for UniqueFuncInfo {
     fn to_string(&self) -> String {
         match &self.relation {
             TypeRelation::Static(typ) => {
-                format!("{:?}::{:?}{:?}", typ, self.name, self.generics)
+                format!("{:?}::{:?}{:?}", typ, self.name, self.own_generics)
             },
             TypeRelation::MethodOf(typ) => {
-                format!("M_{:?}{:?}{:?}", typ, self.name, self.generics)
+                format!("M_{:?}{:?}{:?}", typ, self.name, self.own_generics)
             },
-            TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.generics),
+            TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.own_generics),
         }
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '_')
@@ -364,12 +363,23 @@ impl UniqueFuncInfo {
         UniqueFuncInfo {
             name: og_name.clone(),
             relation: relation.clone(),
-            generics,
+            own_generics: generics,
         }
+    }
+
+    pub fn generics(&self) -> Vec<Type> {
+        let mut some_generics = self.own_generics.clone();
+
+        if let Some(typ) = self.relation.inner_type() {
+            let typ_generics = typ.generics().clone();
+            some_generics.extend(typ_generics);
+        }
+
+        some_generics
     }
 
     pub fn og_name(&self) -> VarName { self.name.clone() }
     pub fn is_method(&self) -> bool { matches!(self.relation, TypeRelation::MethodOf(_)) }
     pub fn is_static(&self) -> bool { matches!(self.relation, TypeRelation::Static(_)) }
-    pub fn has_generics(&self) -> bool { self.generics.len() > 0 }
+    pub fn has_generics(&self) -> bool { self.generics().len() > 0 }
 }

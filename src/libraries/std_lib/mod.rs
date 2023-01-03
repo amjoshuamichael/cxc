@@ -33,6 +33,8 @@ impl Library for StdLib {
         unit.add_lib(ToStringLib);
         unit.add_lib(DefaultLib);
         unit.add_lib(ValueLib);
+
+        unit.add_external_default::<bool>(Type::bool());
     }
 }
 

@@ -199,11 +199,19 @@ impl Type {
     pub fn as_type_enum<'a>(&self) -> &TypeEnum { &self.0.type_enum }
 
     pub fn name(&self) -> &Option<TypeName> { &self.0.name }
+    pub fn generics(&self) -> &Vec<Type> { &self.0.generics }
 
     // panics if there is more than one reference to the inner TypeData
     pub fn with_name(self, name: TypeName) -> Self {
         let mut type_data = Arc::try_unwrap(self.0).unwrap();
         type_data.name = Some(name);
+        Self(Arc::from(type_data))
+    }
+
+    // panics if there is more than one reference to the inner TypeData
+    pub fn with_generics(self, generics: Vec<Type>) -> Self {
+        let mut type_data = Arc::try_unwrap(self.0).unwrap();
+        type_data.generics = generics;
         Self(Arc::from(type_data))
     }
 
@@ -219,12 +227,13 @@ impl Into<TypeSpec> for Type {
 pub struct TypeData {
     type_enum: TypeEnum,
     name: Option<TypeName>,
+    generics: Vec<Type>,
 }
 
 impl Debug for TypeData {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.name {
-            Some(name) => write!(fmt, "{}...{:?}", name, self.type_enum),
+            Some(name) => write!(fmt, "{}", name),
             None => write!(fmt, "{:?}", self.type_enum),
         }
     }
@@ -235,6 +244,7 @@ impl From<TypeEnum> for TypeData {
         Self {
             type_enum,
             name: None,
+            generics: Vec::new(),
         }
     }
 }

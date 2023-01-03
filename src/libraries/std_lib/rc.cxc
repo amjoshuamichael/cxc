@@ -22,4 +22,8 @@ Rc<T> = {
 
         ; rc
     }
+
+    default(): Rc<T> {
+        ; Rc<T>:new(T:default())
+    }
 }

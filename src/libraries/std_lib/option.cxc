@@ -1,1 +1,5 @@
 Option<T> = { None: {} / Some: T }
+
+<T> Option<T>::default(): Option<T> {
+    ; Option<T>.None { { i32 } { 0 } }
+}

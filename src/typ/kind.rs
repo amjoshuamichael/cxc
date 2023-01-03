@@ -72,7 +72,7 @@ impl FuncType {
                 .collect();
 
             if self.ret_type.is_void() {
-                context.void_type().fn_type(&*args, false)
+                context.void_type().fn_type(&args[..], false)
             } else {
                 let return_type = self.ret_type.raw_return_type().to_basic_type(context);
                 return_type.fn_type(&*args, false)
@@ -83,7 +83,7 @@ impl FuncType {
                 .map(|t| t.to_basic_type(context).into())
                 .collect();
 
-            context.void_type().fn_type(&args[..], true)
+            context.void_type().fn_type(&args[..], false)
         }
     }
 }

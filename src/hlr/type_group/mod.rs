@@ -36,7 +36,7 @@ impl<'a> CompData<'a> {
                 let struct_type = self.get_spec(struct_type, generics)?;
                 let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
 
-                dbg!(struct_type.get_field_type(&field_name).unwrap())
+                struct_type.get_field_type(field_name)?.clone()
             },
             TypeSpec::SumMember(sum_type, type_name) => {
                 let sum_type = self.get_spec(sum_type, generics)?;
@@ -87,17 +87,20 @@ impl<'a> CompData<'a> {
             TypeSpec::Generic(name, generic_aliases) => {
                 let generics = generic_aliases
                     .iter()
-                    .map(|ga| self.get_spec(ga, generics).unwrap())
-                    .collect();
+                    .map(|ga| self.get_spec(ga, generics))
+                    .collect::<Option<Vec<_>>>()?;
+
                 let cached_type = self.types.get(name);
+
                 if cached_type.is_some() {
-                    cached_type.unwrap().clone()
+                    cached_type?.clone()
                 } else {
                     self.get_spec(self.aliases.get(name)?, &generics)?
                         .with_name(name.clone())
+                        .with_generics(generics)
                 }
             },
-            TypeSpec::GenParam(index) => generics[*index as usize].clone(),
+            TypeSpec::GenParam(index) => generics.get(*index as usize)?.clone(),
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::Union(left, right) => {
                 let left = self.get_spec(left, generics)?;

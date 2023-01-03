@@ -6,6 +6,7 @@
 pub static DEBUG: bool = false;
 pub static BLOCK_LLVM: bool = true;
 
+pub use lex::{TypeName, VarName};
 pub use parse::TypeRelation;
 pub use typ::{
     ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType, StructType,

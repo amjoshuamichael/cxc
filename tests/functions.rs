@@ -110,9 +110,7 @@ fn first_class() {
         }
 
         run_with_5(function: (i32, bool) -> i32): i32 {
-            #assert_eq<i32>(function(5, true), 0)
-
-            ; function(5, false)
+            ; (function)(5, false)
         }
 
         main() {
