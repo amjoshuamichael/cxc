@@ -13,7 +13,7 @@ impl<'a> FuncRep<'a> {
     }
 }
 
-pub trait NodeDataGen {
+pub trait NodeDataGen: std::fmt::Debug {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID;
 }
 
@@ -27,7 +27,7 @@ impl Default for Box<dyn NodeDataGen> {
     fn default() -> Self { box NodeData::Number { value: 0, size: 32 } }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct MakeVarGen {
     pub set: VarName,
     pub arg_index: Option<u32>,
@@ -62,7 +62,7 @@ impl NodeDataGen for MakeVarGen {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SetVarGen {
     pub lhs: Box<dyn NodeDataGen>,
     pub rhs: Box<dyn NodeDataGen>,
@@ -88,7 +88,7 @@ impl NodeDataGen for SetVarGen {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct BinOpGen {
     pub lhs: Box<dyn NodeDataGen>,
     pub op: Opcode,
@@ -117,7 +117,7 @@ impl NodeDataGen for BinOpGen {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct UnarOpGen {
     pub op: Opcode,
     pub hs: Box<dyn NodeDataGen>,
@@ -143,7 +143,7 @@ impl NodeDataGen for UnarOpGen {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct CallGen {
     pub info: UniqueFuncInfo,
     pub args: Vec<Box<dyn NodeDataGen>>,
@@ -178,7 +178,7 @@ impl NodeDataGen for CallGen {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct StructLitGen {
     pub var_type: Type,
     pub fields: Vec<(VarName, Box<dyn NodeDataGen>)>,
@@ -208,6 +208,7 @@ impl NodeDataGen for StructLitGen {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct MemberGen {
     pub object: Box<dyn NodeDataGen>,
     pub field: VarName,

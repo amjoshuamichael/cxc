@@ -1,9 +1,9 @@
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::prelude::*;
-use crate::lex::{TypeName, VarName};
+use crate::lex::VarName;
 use crate::parse::Opcode::*;
 use crate::typ::{Kind, ReturnStyle};
-use crate::{unit::*, TypeRelation};
+use crate::unit::*;
 use crate::{Type, TypeEnum};
 use core::cell::RefCell;
 use inkwell::attributes::{Attribute, AttributeLoc};

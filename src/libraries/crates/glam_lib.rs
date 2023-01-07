@@ -7,7 +7,6 @@ pub struct GlamLib;
 impl Library for GlamLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         let vec3 = unit.add_reflect_type::<Vec3>().unwrap();
-        dbg!(&vec3.size());
         let mut vec = Vec3::default();
         unit.add_rust_func_explicit(
             "new",
@@ -37,14 +36,8 @@ impl Library for GlamLib {
     }
 }
 
-pub fn new_vec3(x: f32, y: f32, z: f32) -> Vec3 {
-    let mut vec = Vec3::default();
-    vec.x = x;
-    vec.y = y;
-    vec.z = z;
-    vec
-}
-pub fn new_vec2(x: f32, y: f32) -> Vec2 { Vec2::new(x, y) }
+extern "C" fn new_vec3(x: f32, y: f32, z: f32) -> Vec3 { Vec3::new(x, y, z) }
+extern "C" fn new_vec2(x: f32, y: f32) -> Vec2 { Vec2::new(x, y) }
 
 impl XcReflect for Vec3 {
     fn alias_code<'a>() -> &'a str {

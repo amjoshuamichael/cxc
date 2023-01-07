@@ -138,7 +138,7 @@ pub enum NodeData {
     Member {
         ret_type: Type,
         object: ExprID,
-        field: VarName,
+        field: VarName, // TODO: use an index instead of a name
     },
     Index {
         ret_type: Type,

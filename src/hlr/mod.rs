@@ -13,8 +13,8 @@ mod type_inference;
 use std::rc::Rc;
 
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
-use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
+use crate::{parse::*, Kind, Type};
 
 pub mod prelude {
     pub use super::{
@@ -42,8 +42,12 @@ pub fn hlr(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) -> Fun
 
     let mut output = FuncRep::from_code(code, comp_data.clone(), info);
 
+    let context = inkwell::context::Context::create();
+    dbg!(&Type::new_tuple(vec![Type::i(32), Type::i(32).get_ref()]).to_any_type(&context));
+
     infer_types(&mut output);
     handle_variant_literals(&mut output);
+    println!("{}", &output.tree.to_string());
     handle_active_initialization(&mut output);
     handle_arg_type_reflection(&mut output);
     handle_struct_literals(&mut output);

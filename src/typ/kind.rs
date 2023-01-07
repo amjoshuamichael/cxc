@@ -111,9 +111,15 @@ impl Kind for SumType {
         // find the largest type in variants
         let largest_variant = self.largest_variant().to_basic_type(context);
 
-        context
-            .struct_type(&[context.i32_type().as_basic_type_enum(), largest_variant], true)
-            .as_any_type_enum()
+        if self.is_discriminant_nullref() {
+            context
+                .struct_type(&[largest_variant], false)
+                .as_any_type_enum()
+        } else {
+            context
+                .struct_type(&[context.i32_type().as_basic_type_enum(), largest_variant], false)
+                .as_any_type_enum()
+        }
     }
 }
 

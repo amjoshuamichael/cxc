@@ -11,9 +11,12 @@ use std::sync::{Arc, Mutex};
 mod kind;
 mod nested_field_count;
 mod size;
+mod sum_type_optimization;
 
 use inkwell::types::FunctionType;
 pub use kind::Kind;
+
+use self::sum_type_optimization::FieldsIter;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Type(Arc<TypeData>);
@@ -67,26 +70,29 @@ impl Type {
     pub fn return_style(&self) -> ReturnStyle {
         use TypeEnum::*;
 
-        match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
-            Struct(_) | Array(_) | Opaque(_) | Sum(_) | Variant(_) => {
-                if self.size() > 16 {
-                    ReturnStyle::Sret
-                } else if self.nested_field_count() == 1 {
-                    ReturnStyle::Direct
-                } else if self.size() == 16 {
-                    ReturnStyle::ThroughI64I64
-                } else if self.size() == 12 {
-                    ReturnStyle::ThroughI64I32
-                } else if self.size() == 8 {
-                    ReturnStyle::ThroughI64
-                } else if self.size() == 4 {
-                    ReturnStyle::Direct
-                } else {
-                    todo!("cannot return style for this type: {:?}", self);
-                }
+        let (size, is_one_thing) = match self.as_type_enum() {
+            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => return ReturnStyle::Direct,
+            Struct(_) | Array(_) | Opaque(_) | Variant(_) => {
+                (self.size(), self.nested_field_count() == 1)
             },
-            Unknown | Void => ReturnStyle::Void,
+            Sum(sum_type) => (sum_type.largest_variant().size() + 4, false),
+            Unknown | Void => return ReturnStyle::Void,
+        };
+
+        if size > 16 {
+            ReturnStyle::Sret
+        } else if is_one_thing {
+            ReturnStyle::Direct
+        } else if size == 16 {
+            ReturnStyle::ThroughI64I64
+        } else if size == 12 {
+            ReturnStyle::ThroughI64I64
+        } else if size == 8 {
+            ReturnStyle::ThroughI64
+        } else if size == 4 {
+            ReturnStyle::Direct
+        } else {
+            todo!("cannot return style for this type: {:?}", self);
         }
     }
 
@@ -94,12 +100,12 @@ impl Type {
         match self.return_style() {
             ReturnStyle::ThroughI64 => Type::i(64),
             ReturnStyle::ThroughI64I32 => Type::new_struct(vec![
-                (VarName::from("ret_0"), Type::i(64)),
-                (VarName::from("ret_1"), Type::i(32)),
+                (VarName::from("0"), Type::i(64)),
+                (VarName::from("1"), Type::i(32)),
             ]),
             ReturnStyle::ThroughI64I64 => Type::new_struct(vec![
-                (VarName::from("ret_0"), Type::i(64)),
-                (VarName::from("ret_1"), Type::i(64)),
+                (VarName::from("0"), Type::i(64)),
+                (VarName::from("1"), Type::i(64)),
             ]),
             ReturnStyle::Sret | ReturnStyle::Void => Type::void(),
             ReturnStyle::Direct => self.clone(),
@@ -161,11 +167,32 @@ impl Type {
 
     pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
 
+    pub fn empty() -> Type { Type::new_struct(Vec::new()) }
+
     pub fn new_struct(fields: Vec<(VarName, Type)>) -> Type {
         Type::new(TypeEnum::Struct(StructType { fields }))
     }
 
-    pub fn new_sum(variants: Vec<(TypeName, Type)>) -> Type {
+    pub fn new_tuple(fields: Vec<Type>) -> Type {
+        let indexed_fields = fields
+            .into_iter()
+            .enumerate()
+            .map(|(i, field)| (VarName::from(i.to_string()), field))
+            .collect();
+
+        Type::new(TypeEnum::Struct(StructType {
+            fields: indexed_fields,
+        }))
+    }
+
+    pub fn new_sum(mut variants: Vec<(TypeName, Type)>) -> Type {
+        if variants.len() == 2
+            && variants[0].1 != Type::empty()
+            && variants[1].1 == Type::empty()
+        {
+            variants.swap(0, 1);
+        }
+
         Type::new(TypeEnum::Sum(SumType { variants }))
     }
 
@@ -379,7 +406,22 @@ impl SumType {
             .clone()
     }
 
-    pub fn variant_count(&self) -> usize { self.variants.len() }
+    pub fn is_discriminant_nullref(&self) -> bool {
+        if self.variants.len() == 2
+            && self.variants[0].1 == Type::empty()
+            && self.variants[1].1 != Type::empty()
+        {
+            let nonempty_variant = &self.variants[1].1;
+
+            let first_type_is_ref = matches!(nonempty_variant.as_type_enum(), TypeEnum::Ref(_));
+            let first_type_contains_ref: bool = FieldsIter::new(nonempty_variant.clone())
+                .any(|typ| matches!(typ.as_type_enum(), TypeEnum::Ref(_)));
+
+            first_type_is_ref || first_type_contains_ref
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]

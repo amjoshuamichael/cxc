@@ -28,6 +28,30 @@ fn change_ret_type(hlr: &mut FuncRep, typ: Type) {
         else { panic!() };
 
     *ret_type = typ;
+
+    // hlr.modify_many(
+    //    |node_data| matches!(node_data, NodeData::Return { .. }),
+    //    |return_id, mut data, hlr| {
+    //        let NodeData::Return {
+    //            ref mut ret_type,
+    //            ref mut to_return,
+    //        } = &mut data else { unreachable!() };
+
+    //        let output_var_name = VarName::from("casted_ret");
+
+    //        hlr.data_flow.insert(
+    //            output_var.clone(),
+    //            DataFlowInfo {
+    //                typ: typ.clone(),
+    //                arg_index: None,
+    //            },
+    //        );
+
+    //        if typ.nested_field_count() == ret_type.nested_field_count() {
+    //
+    //        }
+    //    },
+    //)
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
