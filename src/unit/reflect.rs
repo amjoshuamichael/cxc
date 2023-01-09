@@ -7,10 +7,10 @@ use crate::{
 };
 
 pub trait XcReflect {
-    fn alias_code<'a>() -> &'a str;
+    fn alias_code() -> String;
 
     fn type_decl() -> TypeDecl {
-        let lexer = lex(Self::alias_code());
+        let lexer = lex(&*Self::alias_code());
         let parsed = match parse::file(lexer) {
             Ok(file) => file,
             Err(err) => {

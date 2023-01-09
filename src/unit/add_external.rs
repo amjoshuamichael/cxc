@@ -157,12 +157,6 @@ impl<'u> Unit<'u> {
             comp_data.reflect_arg_types(&func_info, ext_add.type_mask.clone());
         }
 
-        if let Some(vec3) = self.comp_data.get_by_name(&"Vec3".into()) {
-            if ext_add.relation == TypeRelation::Static(vec3) {
-                function.print_to_stderr()
-            }
-        }
-
         self
     }
 }

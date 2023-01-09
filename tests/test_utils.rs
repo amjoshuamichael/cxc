@@ -69,6 +69,7 @@ macro_rules! xc_test {
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
         unit.push_script($code);
+
         unsafe { unit.get_fn_by_name::<(), ()>("main")(()) };
     }};
 
@@ -87,6 +88,7 @@ macro_rules! xc_test {
         let mut output = $expected_output;
 
         output = unsafe { unit.get_fn_by_name::<(), _>("main")(()) };
+
         assert_eq!(output, $expected_output);
     }};
 }
@@ -112,7 +114,7 @@ pub struct TwoOf<T> {
 }
 
 impl<T> XcReflect for TwoOf<T> {
-    fn alias_code<'a>() -> &'a str { "TwoOf<T> = { one: T, two: T }" }
+    fn alias_code() -> String { "TwoOf<T> = { one: T, two: T }".into() }
 }
 
 #[derive(Clone, Copy, Debug, XcReflect, PartialEq, Eq)]

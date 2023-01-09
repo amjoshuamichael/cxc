@@ -43,7 +43,7 @@ fn pointer() {
 #[test]
 fn one_el_array_out() {
     xc_test!(
-        "main(): i32[1] { ; [1] }";
+        "main(): [1]i32 { ; [1] }";
         [1]
     )
 }
@@ -51,7 +51,7 @@ fn one_el_array_out() {
 #[test]
 fn two_el_array_out() {
     xc_test!(
-        "main(): i32[2] { ; [1, 4] }";
+        "main(): [2]i32 { ; [1, 4] }";
         [1, 4]
     )
 }
@@ -59,7 +59,7 @@ fn two_el_array_out() {
 #[test]
 fn three_el_array_out() {
     xc_test!(
-        "main(): i32[3] { ; [1, 4, 9] }";
+        "main(): [3]i32 { ; [1, 4, 9] }";
         [1, 4, 9]
     )
 }
@@ -67,7 +67,7 @@ fn three_el_array_out() {
 #[test]
 fn four_el_array_out() {
     xc_test!(
-        "main(): i32[4] { ; [1, 4, 9, 90] }";
+        "main(): [4]i32 { ; [1, 4, 9, 90] }";
         [1, 4, 9, 90]
     )
 }
@@ -75,7 +75,7 @@ fn four_el_array_out() {
 #[test]
 fn five_el_array_out() {
     xc_test!(
-        "main(): i32[5] { ; [1, 4, 9, 90, 129] }";
+        "main(): [5]i32 { ; [1, 4, 9, 90, 129] }";
         [1, 4, 9, 90, 129]
     )
 }

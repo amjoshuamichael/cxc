@@ -98,6 +98,13 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
 
             output
         },
+        Tok::LBrack => {
+            lexer.next_tok()?;
+            let count = lexer.next_tok()?.int_value()?;
+            lexer.next_tok()?;
+
+            TypeSpec::Array(box parse_type(lexer)?, count.try_into().unwrap())
+        },
         Tok::TypeName(name) => {
             lexer.next_tok()?;
             match name {
@@ -151,13 +158,6 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
     };
 
     let final_output = match lexer.peek_tok().clone() {
-        Ok(Tok::LBrack) => {
-            lexer.next_tok()?;
-            let count = lexer.next_tok()?.int_value()?;
-            lexer.next_tok()?;
-
-            TypeSpec::Array(box type_alias, count.try_into().unwrap())
-        },
         Ok(Tok::Dot) => {
             lexer.next_tok()?;
 

@@ -1,11 +1,9 @@
 # cxc
+`cxc` is a high-performance scripting language designed for speed: both of writing code, and of running code. It is built to be used as a Rust-hosted scripting language and as such, it has full interoperability with rust. `cxc` syntax is concise and low-level intention is inferred, not explicitly stated by the programmer. Like Rust, `cxc` compiles down to [LLVM](llvm.org) and then to machine code. `cxc` has Rust-level performance, but can be compiled at runtime.
 
-`cxc` is a high-performance scripting language designed for speed: both of writing code, and of running code. It is built to be used as a Rust-hosted scripting language and as such, it has full interoperability with rust. `cxc` syntax is concise and low-level intention is inferred, not explicitly stated by the programmer. Like Rust, `cxc` compiles down to [LLVM](llvm.org) and then to machine code. This makes for code that reads simply, but runs quickly.
-
-This repository contians the compiler. The compiler uses [inkwell](https://github.com/TheDan64/inkwell), so if you wish to contribute, ensure you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path.
+This repository contains the compiler. The compiler uses [inkwell](https://github.com/TheDan64/inkwell), so if you wish to contribute, ensure you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path.
 
 ## Example
-
 `prime.cxc`
 ```ruby
 # function that takes a 32 bit integer and returns a 32 bit integer
@@ -38,4 +36,7 @@ fn main() {
 }
 ```
 
-One of the future goals of `cxc` is to implement [a large-scale type inference system](https://www.youtube.com/watch?v=fDTt_uo0F-g) so that neither variable types nor function parameter types have to be declared. This would allow the language to be written like a dynamic language, with concise syntax, but run with statically typed speed, without any type errors at runtime. 
+# ⚠️ WARNING ⚠️  ( USE AT YOUR OWN RISK )
+* The compiler is very young, and there are still many bugs. (If you are using the language, please feel free to throw any issue reports my way! Any feedback of any kind is greatly appreciated!!)
+* `cxc` is a low-level language, so it does a lot of low-level and unsafe operations at runtime. this means that the communication between `cxc` and rust code is unsafe and unstable. Because the compiler is not mature, many of the FFI and ABI bugs have not been ironed out.
+* This also isn't a quick and easy tool for scripting. [There are many (better) options for adding scripting to an application.](https://www.boringcactus.com/2020/09/16/survey-of-rust-embeddable-scripting-languages.html) `cxc` is designed for applications that are serious about scripting, or where the ability to script is a main feature.

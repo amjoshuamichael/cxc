@@ -39,7 +39,7 @@ fn backwards_struct_dependency() {
 }
 
 #[test]
-fn vec() {
+fn vec_push_and_check() {
     xc_test!(
         "     
         TwoNums = {
@@ -293,9 +293,9 @@ fn default_generic() {
 }
 
 #[test]
-fn default_vec() {
+fn default_vec_alone() {
     xc_test!(
-        use StdLib;
+        use StdLib, TestLib;
         "
             main(): Vec<i32> {
                 output: Vec<i32> = Vec<i32>:default()                
@@ -304,7 +304,9 @@ fn default_vec() {
             }
         ";
         Vec::<i32>::new()
-    )
+    );
+
+    println!("HERE2");
 }
 
 #[test]

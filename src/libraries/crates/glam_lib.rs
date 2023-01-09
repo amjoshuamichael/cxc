@@ -40,20 +40,22 @@ extern "C" fn new_vec3(x: f32, y: f32, z: f32) -> Vec3 { Vec3::new(x, y, z) }
 extern "C" fn new_vec2(x: f32, y: f32) -> Vec2 { Vec2::new(x, y) }
 
 impl XcReflect for Vec3 {
-    fn alias_code<'a>() -> &'a str {
+    fn alias_code() -> String {
         "Vec3 = {
             x: f32,
             y: f32,
             z: f32
         }"
+        .into()
     }
 }
 
 impl XcReflect for Vec2 {
-    fn alias_code<'a>() -> &'a str {
+    fn alias_code() -> String {
         "Vec2 = {
             x: f32,
             y: f32
         }"
+        .into()
     }
 }

@@ -118,7 +118,8 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Func<'u>> {
         let lexed = lex(script);
-        let script = match parse::file(lexed) {
+        dbg!(script.len());
+        let parsed = match parse::file(lexed) {
             Ok(file) => file,
             Err(err) => {
                 dbg!(&err);
@@ -126,16 +127,17 @@ impl<'u> Unit<'u> {
             },
         };
 
+        println!("{} 2", script.len());
         let funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
-            for decl in script.types_iter().cloned() {
+            for decl in parsed.types_iter().cloned() {
                 comp_data.add_type_alias(decl.name, decl.typ);
             }
 
             let mut declarations = Vec::new();
 
-            for code in script.funcs_iter() {
+            for code in parsed.funcs_iter() {
                 let is_generic = code.has_generics();
 
                 let decl = comp_data.insert_code(code.clone());
@@ -153,6 +155,7 @@ impl<'u> Unit<'u> {
             funcs_to_compile
         };
 
+        println!("{} 3", script.len());
         let top_level_functions = funcs_to_process.clone();
 
         self.compile_func_set(funcs_to_process);

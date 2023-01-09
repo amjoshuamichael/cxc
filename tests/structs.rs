@@ -158,7 +158,7 @@ fn arrays() {
     xc_test!(
         "
         main() {
-            original: i32[7] = [1, 4, 8, 15, 16, 23, 42]
+            original: [7]i32 = [1, 4, 8, 15, 16, 23, 42]
 
             assert_eq<i32>(original[3], 15)
             assert_eq<i32>(original[0], 1)
@@ -190,7 +190,7 @@ fn struct_arrays() {
         }
 
         main() {
-            points: Point2D[3] = [
+            points: [3]Point2D = [
                 Point2D { x = 43, y = 15 },
                 Point2D { x = 327, y = 413 },
                 Point2D { x = 1672, y = 2526 },
