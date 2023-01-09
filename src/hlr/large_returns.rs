@@ -1,3 +1,4 @@
+use super::handle_struct_literals::handle_struct_literals;
 use super::hlr_data::DataFlowInfo;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
@@ -15,43 +16,89 @@ pub fn handle_large_returns(hlr: &mut FuncRep) {
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
         ReturnStyle::ThroughI64 | ReturnStyle::ThroughI64I32 | ReturnStyle::ThroughI64I64 => {
-            change_ret_type(hlr, hlr.ret_type.raw_return_type())
+            return_by_through(hlr, hlr.ret_type.raw_return_type())
         },
+        ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
         ReturnStyle::Sret => return_by_pointer(hlr),
         ReturnStyle::Void | ReturnStyle::Direct => {},
     }
 }
 
-fn change_ret_type(hlr: &mut FuncRep, typ: Type) {
+fn return_by_through(hlr: &mut FuncRep, typ: Type) {
     hlr.ret_type = typ.clone();
     let NodeData::Block { ref mut ret_type, .. } = hlr.tree.get_mut(hlr.tree.root)
         else { panic!() };
 
     *ret_type = typ;
+}
 
-    // hlr.modify_many(
-    //    |node_data| matches!(node_data, NodeData::Return { .. }),
-    //    |return_id, mut data, hlr| {
-    //        let NodeData::Return {
-    //            ref mut ret_type,
-    //            ref mut to_return,
-    //        } = &mut data else { unreachable!() };
+fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
+    let i32i64 = Type::new_tuple(vec![Type::i(32), Type::i(64)]);
+    let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
-    //        let output_var_name = VarName::from("casted_ret");
+    let output_var_name = VarName::from("casted_ret");
+    let output_var_node_data = box NodeData::Ident {
+        var_type: i32i64.clone(),
+        name: output_var_name.clone(),
+    };
 
-    //        hlr.data_flow.insert(
-    //            output_var.clone(),
-    //            DataFlowInfo {
-    //                typ: typ.clone(),
-    //                arg_index: None,
-    //            },
-    //        );
+    hlr.data_flow.insert(
+        output_var_name.clone(),
+        DataFlowInfo {
+            typ: i64i64.clone(),
+            arg_index: None,
+        },
+    );
 
-    //        if typ.nested_field_count() == ret_type.nested_field_count() {
-    //
-    //        }
-    //    },
-    //)
+    hlr.modify_many(
+        |data| matches!(data, NodeData::Return { .. }),
+        |return_id, mut data, hlr| {
+            let NodeData::Return { to_return: Some(ref mut to_return), .. } = &mut data
+            else { unreachable!() };
+
+            let to_return_data = hlr.tree.get(*to_return);
+
+            hlr.insert_statement_before(
+                return_id,
+                MakeVarGen {
+                    var_type: i32i64.clone(),
+                    set: output_var_name.clone(),
+                    to: box to_return_data.clone(),
+                    ..Default::default()
+                },
+            );
+
+            let data_to_return = hlr.insert_quick(
+                return_id,
+                StructLitGen {
+                    var_type: i64i64.clone(),
+                    fields: vec![
+                        (
+                            VarName::from("0"),
+                            box MemberGen {
+                                object: output_var_node_data.clone(),
+                                field: VarName::from("0"),
+                                ret_type: Type::i(32),
+                            },
+                        ),
+                        (
+                            VarName::from("1"),
+                            box MemberGen {
+                                object: output_var_node_data.clone(),
+                                field: VarName::from("1"),
+                                ret_type: Type::i(64),
+                            },
+                        ),
+                    ],
+                    ..Default::default()
+                },
+            );
+
+            *to_return = data_to_return;
+        },
+    );
+
+    handle_struct_literals(hlr);
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
@@ -118,6 +165,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
         match data.ret_type().return_style() {
             ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
+            ReturnStyle::MoveIntoI64I64 => todo!(),
             ReturnStyle::ThroughI64
             | ReturnStyle::ThroughI64I32
             | ReturnStyle::ThroughI64I64 => {

@@ -66,7 +66,6 @@ impl ExprTree {
                         Vec::new()
                     }
                 },
-                err => todo!("cannot iterate over {err:?}"),
             };
 
             vec![id].drain(..).chain(rest.drain(..)).collect()
@@ -86,7 +85,7 @@ impl ExprTree {
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
         self.nodes.insert(ExprNode {
             parent,
-            data: NodeData::Empty,
+            data: NodeData::Number { value: 0, size: 32 },
         })
     }
 

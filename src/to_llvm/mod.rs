@@ -116,10 +116,7 @@ fn compile<'comp, 'a>(
                 .into(),
         ),
         MakeVar {
-            ref var_type,
-            ref name,
-            ref rhs,
-            ..
+            ref name, ref rhs, ..
         } => {
             let to_store = compile(fcs, *rhs).unwrap();
             let to_store_basic: BasicValueEnum = to_store.try_into().unwrap();
@@ -133,19 +130,7 @@ fn compile<'comp, 'a>(
 
             let val = fcs.variables.get(name).unwrap();
 
-            let rhs_type = fcs.tree.get(*rhs).ret_type().clone();
-
-            let val = if matches!(var_type.as_type_enum(), TypeEnum::Ref(_))
-                && !matches!(rhs_type.as_type_enum(), TypeEnum::Ref(_))
-            {
-                fcs.builder
-                    .build_load(*val, &*fcs.new_uuid())
-                    .into_pointer_value()
-            } else {
-                *val
-            };
-
-            fcs.builder.build_store(val, to_store_basic);
+            fcs.builder.build_store(*val, to_store_basic);
 
             return Some(to_store);
         },
@@ -497,7 +482,6 @@ fn compile<'comp, 'a>(
 
             Some(val.as_any_value_enum())
         },
-        Empty { .. } => todo!(),
     };
 
     if crate::DEBUG && !crate::BLOCK_LLVM {

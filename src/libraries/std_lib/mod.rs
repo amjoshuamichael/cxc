@@ -6,7 +6,7 @@ use crate::{
     Type, TypeEnum,
 };
 
-use super::Library;
+use super::{Library, TypeInterfaceLib};
 
 pub struct StdLib;
 mod default;
@@ -33,6 +33,7 @@ impl Library for StdLib {
         unit.add_lib(ToStringLib);
         unit.add_lib(DefaultLib);
         unit.add_lib(ValueLib);
+        unit.add_lib(TypeInterfaceLib);
 
         unit.add_external_default::<bool>(Type::bool());
     }

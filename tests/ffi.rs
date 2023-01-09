@@ -131,6 +131,28 @@ fn large_struct() {
 }
 
 #[test]
+fn i32_and_ref() {
+    let context: LLVMContext = cxc::LLVMContext::new();
+    let mut unit = Unit::new(&context);
+
+    unit.add_lib(StdLib);
+
+    unit.push_script(
+        "
+        main(pointer: &i32): {i32, &i32} {
+            output: {i32, &i32} = {i32, &i32} { 10, pointer }
+            ; output
+        }
+        ",
+    );
+
+    let mut thirty_two = 32;
+    let func = unsafe { unit.get_fn_by_name::<&i32, (i32, &i32)>("main") };
+    let output: (i32, &i32) = unsafe { func(&mut thirty_two) };
+    assert_eq!(output, (10, &thirty_two));
+}
+
+#[test]
 fn external_function() {
     pub fn print_num(input: i64) {
         println!("{input}");

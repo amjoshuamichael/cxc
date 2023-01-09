@@ -169,7 +169,9 @@ impl<'u> Unit<'u> {
                 let out: [u8; 8] = unsafe { transmute(new_func(())) };
                 XcValue::new_from_arr(ret_type.clone(), out)
             },
-            ReturnStyle::ThroughI64I32 | ReturnStyle::ThroughI64I64 => {
+            ReturnStyle::ThroughI64I32
+            | ReturnStyle::ThroughI64I64
+            | ReturnStyle::MoveIntoI64I64 => {
                 let new_func: XcFunc<(), (i64, i64)> = unsafe { transmute(func_addr) };
                 let out: [u8; 16] = unsafe { transmute(new_func(())) };
                 XcValue::new_from_arr(ret_type.clone(), out)

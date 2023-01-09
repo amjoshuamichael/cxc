@@ -1,12 +1,7 @@
 mod test_utils;
 
 use cxc::library::StdLib;
-use cxc::ExternalFuncAdd;
-use cxc::LLVMContext;
-use cxc::Type;
-use cxc::TypeRelation;
-use cxc::Unit;
-use test_utils::{xc_test, Numbers5, Point2D};
+use test_utils::{xc_test, Numbers5};
 
 #[test]
 fn basic_struct() {

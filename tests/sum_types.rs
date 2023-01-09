@@ -1,4 +1,9 @@
 mod test_utils;
+use cxc::{
+    library::{StdLib, TestLib},
+    LLVMContext, Unit,
+};
+use std::rc::Rc;
 
 use test_utils::{xc_test, Point2D};
 
@@ -76,4 +81,97 @@ fn sum_type_struct_2() {
         ";
         PointOrFloat::Float(245.93)
     );
+}
+
+#[test]
+fn ref_option_none() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): Option<&i32> {
+                output: Option<&i32> = Option<&i32>:default()
+
+                ; output
+            }
+        ";
+        Option::<&i32>::None
+    )
+}
+
+#[test]
+fn option_rc() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): Option< Rc<i32> > {
+                output: Option< Rc<i32> > = 
+                    Option< Rc<i32> >.Some { { Rc<i32> } { Rc<i32>:new(5) } }
+
+                ; output
+            }
+        ";
+        Option::<Rc<i32>>::Some(Rc::new(5))
+    )
+}
+
+#[test]
+fn ref_option_and_more() {
+    xc_test!(
+        use StdLib;
+        "
+            main(): {Option<&i32>, i32} {
+                output: {Option<&i32>, i32} =
+                    { Option<&i32>, i32 } { Option<&i32>:default(), 32 }
+                ; output
+            }
+        ";
+        (Option::<&i32>::None, 32)
+    )
+}
+
+#[test]
+fn ref_option_some() {
+    let context: LLVMContext = cxc::LLVMContext::new();
+    let mut unit = Unit::new(&context);
+
+    unit.add_lib(StdLib);
+    unit.add_lib(TestLib);
+
+    unit.push_script(
+        "
+        main(pointer: &i32): Option<&i32> {
+            output: Option<&i32> = Option<&i32>.Some{ { &i32 } { (pointer) } }
+
+            ; output
+        }
+        ",
+    );
+
+    let mut thirty_two = 32;
+    let func = unsafe { unit.get_fn_by_name::<&i32, Option<&i32>>("main") };
+    let output: Option<&i32> = unsafe { func(&mut thirty_two) };
+    assert_eq!(output, Option::Some(&thirty_two));
+}
+
+#[test]
+fn ref_and_more_option() {
+    let context: LLVMContext = cxc::LLVMContext::new();
+    let mut unit = Unit::new(&context);
+
+    unit.add_lib(StdLib);
+
+    unit.push_script(
+        "
+        main(pointer: &i32): Option<{i32, &i32}> {
+            output: Option<{i32, &i32}> =
+                Option<{i32, &i32}>.Some{ {i32, &i32} { 10, (pointer) }}
+            ; output
+        }
+        ",
+    );
+
+    let mut thirty_two = 32;
+    let func = unsafe { unit.get_fn_by_name::<&i32, Option<(i32, &i32)>>("main") };
+    let output: Option<(i32, &i32)> = unsafe { func(&mut thirty_two) };
+    assert_eq!(output, Option::Some((10, &32)));
 }

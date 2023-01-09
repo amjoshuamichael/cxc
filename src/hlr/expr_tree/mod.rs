@@ -46,7 +46,6 @@ struct ExprNode {
 impl Debug for ExprNode {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.data {
-            Empty => write!(fmt, "Empty"),
             Number { value, .. } => write!(fmt, "{value}"),
             Float { value, .. } => write!(fmt, "{value:?}"),
             Bool { value, .. } => write!(fmt, "{value:?}"),
@@ -88,7 +87,6 @@ impl Debug for ExprNode {
 // TODO: combine SetVar and MakeVar
 #[derive(Clone, Debug)]
 pub enum NodeData {
-    Empty,
     Number {
         value: u128,
         size: u32,
@@ -205,14 +203,12 @@ impl NodeData {
             | Block { ret_type, .. }
             | Index { ret_type, .. }
             | Member { ret_type, .. } => ret_type.clone(),
-            Empty => unreachable!(),
             While { .. } => Type::never(),
         }
     }
 
     pub fn to_string(&self, tree: &ExprTree) -> String {
         match self {
-            Empty => "".into(),
             Number { value, .. } => value.to_string(),
             Float { value, .. } => value.to_string(),
             Bool { value, .. } => value.to_string(),

@@ -1,5 +1,6 @@
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
+use crate::typ::fields_iter::PrimitiveFieldsIter;
 use lazy_static::lazy_static;
 
 use std::collections::HashSet;
@@ -8,15 +9,15 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
+pub mod fields_iter;
 mod kind;
 mod nested_field_count;
 mod size;
-mod sum_type_optimization;
 
 use inkwell::types::FunctionType;
 pub use kind::Kind;
 
-use self::sum_type_optimization::FieldsIter;
+use self::fields_iter::FieldsIter;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
 pub struct Type(Arc<TypeData>);
@@ -39,6 +40,7 @@ pub enum ReturnStyle {
     ThroughI64,
     ThroughI64I32,
     ThroughI64I64,
+    MoveIntoI64I64,
     Sret,
     Void,
 }
@@ -48,51 +50,56 @@ impl Type {
 
     pub fn size(&self) -> usize { size::size_of_type(self.clone()) }
 
-    pub fn nested_field_count(&self) -> usize {
-        let mut total = 0;
-
-        match self.as_type_enum() {
-            TypeEnum::Struct(struct_type) => {
-                for (_, field_type) in &struct_type.fields {
-                    total += field_type.nested_field_count()
-                }
-            },
-            TypeEnum::Array(array_type) => {
-                total += array_type.count as usize * array_type.base.nested_field_count();
-            },
-            TypeEnum::Sum(_) => total = 2,
-            _ => total = 1,
-        }
-
-        total
-    }
-
     pub fn return_style(&self) -> ReturnStyle {
         use TypeEnum::*;
 
-        let (size, is_one_thing) = match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => return ReturnStyle::Direct,
-            Struct(_) | Array(_) | Opaque(_) | Variant(_) => {
-                (self.size(), self.nested_field_count() == 1)
-            },
-            Sum(sum_type) => (sum_type.largest_variant().size() + 4, false),
-            Unknown | Void => return ReturnStyle::Void,
-        };
+        fn return_style_from_size(size: usize) -> ReturnStyle {
+            if size > 16 {
+                ReturnStyle::Sret
+            } else if size == 16 {
+                ReturnStyle::ThroughI64I64
+            } else if size == 12 {
+                ReturnStyle::ThroughI64I32
+            } else if size == 8 {
+                ReturnStyle::ThroughI64
+            } else if size == 4 {
+                ReturnStyle::Direct
+            } else {
+                todo!("cannot find return style for type of size {size}")
+            }
+        }
 
-        if size > 16 {
-            ReturnStyle::Sret
-        } else if is_one_thing {
-            ReturnStyle::Direct
-        } else if size == 16 {
-            ReturnStyle::ThroughI64I64
-        } else if size == 12 {
-            ReturnStyle::ThroughI64I64
-        } else if size == 8 {
-            ReturnStyle::ThroughI64
-        } else if size == 4 {
-            ReturnStyle::Direct
-        } else {
-            todo!("cannot return style for this type: {:?}", self);
+        match self.as_type_enum() {
+            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
+            Struct(_) | Array(_) | Opaque(_) | Variant(_) => {
+                if self.size() > 16 {
+                    return ReturnStyle::Sret;
+                }
+
+                let mut prim_iter = PrimitiveFieldsIter::new(self.clone());
+                if let Some(first_field) = prim_iter.next() && 
+                    let Some(second_field) = prim_iter.next() {
+                    if first_field.size() == 4 && second_field.size() == 8 {
+                        ReturnStyle::MoveIntoI64I64
+                    } else {
+                        return_style_from_size(self.size())
+                    }
+                } else {
+                    ReturnStyle::Direct
+                }
+            },
+            Sum(sum_type) => {
+                if self.size() > 16 {
+                    return ReturnStyle::Sret;
+                }
+
+                if sum_type.is_discriminant_nullref() {
+                    sum_type.largest_variant().return_style()
+                } else {
+                    return_style_from_size(self.size())
+                }
+            },
+            Unknown | Void => ReturnStyle::Void,
         }
     }
 
@@ -103,7 +110,7 @@ impl Type {
                 (VarName::from("0"), Type::i(64)),
                 (VarName::from("1"), Type::i(32)),
             ]),
-            ReturnStyle::ThroughI64I64 => Type::new_struct(vec![
+            ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => Type::new_struct(vec![
                 (VarName::from("0"), Type::i(64)),
                 (VarName::from("1"), Type::i(64)),
             ]),
@@ -150,6 +157,8 @@ impl Type {
     pub fn get_array(self, count: u32) -> Type {
         Type::new(TypeEnum::Array(ArrayType { base: self, count }))
     }
+
+    pub fn wrap(self) -> Type { Type::new_tuple(vec![self]) }
 
     pub fn as_u64(self) -> u64 { self.into_raw() as u64 }
     pub fn into_raw(self) -> *const TypeData { Arc::into_raw(self.0) }

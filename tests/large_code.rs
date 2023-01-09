@@ -2,7 +2,7 @@ mod test_utils;
 use std::rc::Rc;
 
 use cxc::library::{StdLib, TestLib, TypeInterfaceLib};
-use cxc::{Kind, LLVMContext, Type, Unit};
+use cxc::{LLVMContext, Unit};
 use test_utils::{xc_test, TwoOf};
 
 #[test]
@@ -368,63 +368,6 @@ fn bigger_option() {
         Option::<(i32, f32, i32)>::Some((10, 20.0, 30))
     )
 }
-
-// TODO: these rely on the way rust returns enums, which is not properly handled
-// yet
-//
-//#[test]
-// fn ref_option() {
-//    xc_test!(
-//        use StdLib;
-//        "
-//            main(): Option<&i32> {
-//                output: Option<&i32> = Option<&i32>:default()
-//
-//                ; output
-//            }
-//        ";
-//        Option::<&i32>::None
-//    )
-//}
-//
-//#[test]
-// fn ref_option_and_more() {
-//    xc_test!(
-//        use StdLib;
-//        "
-//            main(): {Option<&i32>, i32} {
-//                output: {Option<&i32>, i32} =
-//                    { Option<&i32>, i32 } { Option<&i32>:default(), 32 }
-//                ; output
-//            }
-//        ";
-//        (Option::<&i32>::None, 32)
-//    )
-//}
-//
-//#[test]
-// fn ref_and_more_option() {
-//    let context: LLVMContext = cxc::LLVMContext::new();
-//    let mut unit = Unit::new(&context);
-//
-//    unit.add_lib(StdLib);
-//
-//    unit.push_script(
-//        "
-//        main(pointer: &i32): Option<{&i32, i32}> {
-//            output: Option<{&i32, i32}> =
-//                Option<{&i32, i32}>.Some{ {&i32, i32} { (pointer), 10 }}
-//            ; output
-//        }
-//        ",
-//    );
-//
-//    let mut thirty_two = 32;
-//    let func = unsafe { unit.get_fn_by_name::<&i32, Option<(&i32,
-// i32)>>("main") };    let output: Option<(&i32, i32)> = unsafe { func(&mut
-// thirty_two) };    assert_eq!(output, Option::Some((&32, 10)));
-//    dbg!(&thirty_two);
-//}
 
 #[test]
 fn push_string() {

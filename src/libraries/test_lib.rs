@@ -31,7 +31,7 @@ impl Library for TestLib {
         );
         unit.add_rust_func_explicit(
             "print",
-            print_i64_as_bytes as *const usize,
+            print::<i64> as *const usize,
             ExternalFuncAdd {
                 arg_types: vec![Type::i(64)],
                 generics: vec![Type::i(64)],
@@ -90,8 +90,4 @@ impl Library for TestLib {
 
 fn panic(_: ()) { panic!() }
 fn print<T: Display>(val: T) { println!("{val}") }
-fn print_i64_as_bytes(val: u64) {
-    let slice: [u8; 8] = unsafe { std::mem::transmute(val) };
-    dbg!(&slice);
-}
 fn assert<T: PartialEq + Debug>(lhs: T, rhs: T) { assert_eq!(lhs, rhs) }

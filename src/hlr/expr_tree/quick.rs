@@ -23,6 +23,18 @@ impl NodeDataGen for NodeData {
     }
 }
 
+impl NodeDataGen for usize {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        hlr.tree.insert(
+            parent,
+            NodeData::Number {
+                value: *self as u128,
+                size: std::mem::size_of::<usize>() as u32,
+            },
+        )
+    }
+}
+
 impl Default for Box<dyn NodeDataGen> {
     fn default() -> Self { box NodeData::Number { value: 0, size: 32 } }
 }
@@ -226,6 +238,33 @@ impl NodeDataGen for MemberGen {
             NodeData::Member {
                 object,
                 field: self.field.clone(),
+                ret_type: self.ret_type.clone(),
+            },
+        );
+
+        space
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct IndexGen {
+    pub object: Box<dyn NodeDataGen>,
+    pub index: Box<dyn NodeDataGen>,
+    pub ret_type: Type,
+}
+
+impl NodeDataGen for IndexGen {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let object = self.object.add_to_expr_tree(hlr, space);
+        let index = self.index.add_to_expr_tree(hlr, space);
+
+        hlr.tree.replace(
+            space,
+            NodeData::Index {
+                object,
+                index,
                 ret_type: self.ret_type.clone(),
             },
         );
