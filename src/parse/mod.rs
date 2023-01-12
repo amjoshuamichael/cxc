@@ -18,6 +18,7 @@ pub use expression::*;
 pub use list::*;
 pub use opcode::*;
 pub use parsing_data::*;
+pub use structure::parse_type_spec;
 pub use structure::*;
 
 pub fn file(mut lexer: Lexer) -> ParseResult<Script> {

@@ -28,7 +28,7 @@ impl<'a> CompData<'a> {
     pub fn get_spec(&self, alias: &TypeSpec, generics: &Vec<Type>) -> Option<Type> {
         let typ = match alias {
             TypeSpec::Named(name) => self.get_by_name(name)?,
-            TypeSpec::Int(size) => Type::i(*size),
+            TypeSpec::Int(size) | TypeSpec::UInt(size) => Type::i(*size),
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),

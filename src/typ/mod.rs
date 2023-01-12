@@ -239,6 +239,10 @@ impl Type {
 
     // panics if there is more than one reference to the inner TypeData
     pub fn with_name(self, name: TypeName) -> Self {
+        if name == TypeName::Anonymous {
+            return self;
+        }
+
         let mut type_data = Arc::try_unwrap(self.0).unwrap();
         type_data.name = Some(name);
         Self(Arc::from(type_data))

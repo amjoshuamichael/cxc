@@ -7,7 +7,7 @@ use crate::{
     TypeEnum, Unit, XcReflect,
 };
 use inkwell::values::AnyValue;
-use std::{collections::HashMap, mem::transmute};
+use std::{collections::HashMap, iter::Copied, mem::transmute};
 
 use crate::Type;
 
@@ -47,7 +47,7 @@ impl XcValue {
         }
     }
 
-    pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(data: T, unit: &mut Unit) -> Self {
+    pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(data: T, unit: &Unit) -> Self {
         let typ = unit
             .get_reflect_type::<T>()
             .expect("type contains generics");
@@ -194,4 +194,18 @@ impl<'u> Unit<'u> {
 
         value
     }
+}
+
+impl<'a> IntoIterator for &'a XcValue {
+    type Item = &'a u8;
+    type IntoIter = std::slice::Iter<'a, u8>;
+
+    fn into_iter(self) -> Self::IntoIter { self.data.iter() }
+}
+
+impl IntoIterator for XcValue {
+    type Item = u8;
+    type IntoIter = std::vec::IntoIter<u8>;
+
+    fn into_iter(self) -> Self::IntoIter { self.data.into_iter() }
 }

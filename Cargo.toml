@@ -14,7 +14,8 @@ lazy_static = "1.4.0"
 bytemuck = "1.12.3"
 slotmap = "1.0.6"
 
-cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
+#cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
+cxc_derive = { path = "../cxc_derive", optional = true }
 
 # these libraries are re-exported into cxc
 

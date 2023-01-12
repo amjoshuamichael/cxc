@@ -3,6 +3,7 @@ use crate::parse::Opcode;
 use crate::parse::ParseError;
 use crate::parse::TokName;
 use logos::{Lexer, Logos};
+use std::ops::Deref;
 use std::{
     fmt::{Debug, Display},
     sync::Arc,
@@ -49,10 +50,16 @@ impl From<String> for VarName {
     fn from(s: String) -> Self { Self(Arc::from(&*s)) }
 }
 
+impl Deref for VarName {
+    type Target = str;
+    fn deref(&self) -> &Self::Target { &*self.0 }
+}
+
 #[derive(PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum TypeName {
     Other(Arc<str>),
     I(u32),
+    U(u32),
     F64,
     F32,
     F16,
@@ -62,9 +69,10 @@ pub enum TypeName {
 
 impl Ident for TypeName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self {
-        if t.slice().chars().nth(0) == Some('i') {
-            // TODO: return result from this function
-            return Self::I(t.slice()[1..].parse().expect("improper int type"));
+        match t.slice().chars().nth(0) {
+            Some('i') => return Self::I(t.slice()[1..].parse().expect("improper int type")),
+            Some('u') => return Self::U(t.slice()[1..].parse().expect("improper uint type")),
+            _ => {},
         }
 
         match t.slice() {
@@ -90,6 +98,7 @@ impl Debug for TypeName {
         let out = match self {
             Self::Other(name) => &*name,
             Self::I(size) => return write!(f, "i{size}"),
+            Self::U(size) => return write!(f, "u{size}"),
             Self::F64 => "f64",
             Self::F32 => "f32",
             Self::F16 => "f16",
@@ -203,7 +212,7 @@ pub enum Tok {
     #[regex(
         "[A-Z][A-Za-z0-9]+|\
         [A-Z]|\
-        i8|i16|i32|i64|f16|f32|f64|f128|bool",
+        u8|u16|u32|u64|i8|i16|i32|i64|f16|f32|f64|f128|bool",
         TypeName::from_tok,
         priority = 2
     )]

@@ -10,6 +10,7 @@ pub enum TypeSpec {
     Generic(TypeName, Vec<TypeSpec>),
     GenParam(u8),
     Int(u32),
+    UInt(u32),
     Float(FloatType),
     Bool,
     Ref(Box<TypeSpec>),
@@ -108,7 +109,9 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
         Tok::TypeName(name) => {
             lexer.next_tok()?;
             match name {
+                // TODO: unsigned integer types
                 TypeName::I(size) => TypeSpec::Int(size),
+                TypeName::U(size) => TypeSpec::UInt(size),
                 TypeName::Bool => TypeSpec::Bool,
                 TypeName::F64 => TypeSpec::Float(FloatType::F64),
                 TypeName::F32 => TypeSpec::Float(FloatType::F32),
