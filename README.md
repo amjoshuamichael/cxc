@@ -9,7 +9,7 @@ This repository contains the compiler. The compiler uses [inkwell](https://githu
 # function that takes a 32 bit integer and returns a 32 bit integer
 # Returns 1 if num is prime and 0 if num is composite.
 is_prime(num: i32): bool { 
-    divider: i32 = 2 # declare two variables
+    divider = 2 # declare two variables
 
     @ divider < num { # while divider is less than num
         ? num % divider == 0 { # if num is divisible by divider
