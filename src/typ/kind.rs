@@ -10,7 +10,7 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::AddressSpace;
 
 pub trait Kind {
-    fn name(&self) -> String;
+    fn to_string(&self) -> String;
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t>;
 
     fn to_basic_type<'t>(&self, context: &'t Context) -> BasicTypeEnum<'t> {
@@ -19,7 +19,7 @@ pub trait Kind {
 }
 
 impl Kind for Type {
-    fn name(&self) -> String { self.as_type_enum().name() }
+    fn to_string(&self) -> String { self.as_type_enum().to_string() }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         self.as_type_enum().to_any_type(context)
@@ -27,7 +27,7 @@ impl Kind for Type {
 }
 
 impl Kind for RefType {
-    fn name(&self) -> String { "&".to_string() + &*format!("{:?}", self.base) }
+    fn to_string(&self) -> String { "&".to_string() + &*format!("{:?}", self.base) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         if self.base.is_void() {
@@ -42,7 +42,7 @@ impl Kind for RefType {
 }
 
 impl Kind for FuncType {
-    fn name(&self) -> String {
+    fn to_string(&self) -> String {
         let args_names: String = self
             .args
             .iter()
@@ -89,7 +89,32 @@ impl FuncType {
 }
 
 impl Kind for StructType {
-    fn name(&self) -> String { format!("{:?}", self.fields) }
+    fn to_string(&self) -> String {
+        let mut name = String::new();
+        let mut fields_iter = self.fields.iter();
+
+        name += "{ ";
+
+        if self.is_tuple() {
+            if let Some((_, first_typ)) = fields_iter.next() {
+                name += &*first_typ.to_string();
+                for (_, typ) in fields_iter {
+                    name += &*format!(", {}", &*typ.to_string());
+                }
+            }
+        } else {
+            if let Some((first_name, first_typ)) = fields_iter.next() {
+                name += &*format!("{}: {}", &**first_name, first_typ.to_string());
+                for (field_name, typ) in fields_iter {
+                    name += &*format!(", {}: {}", &**field_name, typ.to_string());
+                }
+            }
+        }
+
+        name += " }";
+
+        name
+    }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         let field_types: Vec<BasicTypeEnum> = self
@@ -105,7 +130,7 @@ impl Kind for StructType {
 }
 
 impl Kind for SumType {
-    fn name(&self) -> String { format!("/{:?}/", self.variants) }
+    fn to_string(&self) -> String { format!("/{:?}/", self.variants) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         // find the largest type in variants
@@ -124,7 +149,7 @@ impl Kind for SumType {
 }
 
 impl Kind for VariantType {
-    fn name(&self) -> String { format!("{:?}.{}", self.parent, self.tag) }
+    fn to_string(&self) -> String { format!("{:?}.{}", self.parent, self.tag) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context
@@ -140,7 +165,7 @@ impl Kind for VariantType {
 }
 
 impl Kind for IntType {
-    fn name(&self) -> String { format!("i{}", self.size) }
+    fn to_string(&self) -> String { format!("i{}", self.size) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.custom_width_int_type(self.size).as_any_type_enum()
@@ -148,7 +173,7 @@ impl Kind for IntType {
 }
 
 impl Kind for FloatType {
-    fn name(&self) -> String {
+    fn to_string(&self) -> String {
         match self {
             FloatType::F16 => "f16",
             FloatType::F32 => "f32",
@@ -167,7 +192,7 @@ impl Kind for FloatType {
 }
 
 impl Kind for BoolType {
-    fn name(&self) -> String { "bool".into() }
+    fn to_string(&self) -> String { "bool".into() }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.bool_type().as_any_type_enum()
@@ -175,7 +200,7 @@ impl Kind for BoolType {
 }
 
 impl Kind for ArrayType {
-    fn name(&self) -> String { format!("[{:?}; {}]", self.base, self.count) }
+    fn to_string(&self) -> String { format!("[{:?}; {}]", self.base, self.count) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         self.base
@@ -186,7 +211,7 @@ impl Kind for ArrayType {
 }
 
 impl Kind for UnknownType {
-    fn name(&self) -> String { String::from("Unknown") }
+    fn to_string(&self) -> String { String::from("Unknown") }
 
     fn to_any_type<'t>(&self, _: &'t Context) -> AnyTypeEnum<'t> {
         panic!("Unknown type cannot be converted to LLVM type")
@@ -194,7 +219,7 @@ impl Kind for UnknownType {
 }
 
 impl Kind for VoidType {
-    fn name(&self) -> String { String::from("Void") }
+    fn to_string(&self) -> String { String::from("Void") }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context.void_type().as_any_type_enum()
@@ -202,7 +227,7 @@ impl Kind for VoidType {
 }
 
 impl Kind for OpaqueType {
-    fn name(&self) -> String { format!("Opaque with size {} bytes", self.size) }
+    fn to_string(&self) -> String { format!("Opaque with size {} bytes", self.size) }
 
     fn to_any_type<'t>(&self, context: &'t Context) -> AnyTypeEnum<'t> {
         context

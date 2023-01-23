@@ -1,10 +1,10 @@
 use super::*;
-use crate::lex::Tok;
+use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
 use crate::Type;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeSpec {
     Named(TypeName),
     Generic(TypeName, Vec<TypeSpec>),
@@ -14,13 +14,17 @@ pub enum TypeSpec {
     Float(FloatType),
     Bool,
     Ref(Box<TypeSpec>),
+    Deref(Box<TypeSpec>),
     StructMember(Box<TypeSpec>, VarName),
     SumMember(Box<TypeSpec>, TypeName),
     Struct(Vec<(VarName, TypeSpec)>),
     Sum(Vec<(TypeName, TypeSpec)>),
     Tuple(Vec<TypeSpec>),
     Function(Vec<TypeSpec>, Box<TypeSpec>),
+    FuncReturnType(Box<TypeSpec>),
+    TypeLevelFunc(TypeName, Vec<TypeSpec>),
     Array(Box<TypeSpec>, u32),
+    ArrayElem(Box<TypeSpec>),
     Union(Box<TypeSpec>, Box<TypeSpec>),
     Void,
     Type(Type),
@@ -28,11 +32,25 @@ pub enum TypeSpec {
 
 impl TypeSpec {
     pub fn get_ref(self) -> TypeSpec { TypeSpec::Ref(box self) }
+    pub fn unknown() -> TypeSpec { TypeSpec::Type(Type::unknown()) }
+}
+
+impl From<&str> for TypeSpec {
+    fn from(value: &str) -> Self {
+        let mut lexed = lex(value);
+        let generic_labels = ["T", "S", "U", "V", "W"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, label)| (TypeName::from(label), index as u8))
+            .collect::<GenericLabels>();
+        let mut context = lexed.split(TypeName::Anonymous, generic_labels);
+        parse_type(&mut context).unwrap()
+    }
 }
 
 #[derive(Default)]
 pub struct StructParsingContext {
-    pub name: String,
+    pub to_string: String,
     pub dependencies: HashSet<String>,
 }
 
@@ -81,9 +99,9 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {
-        Tok::LCurly => match (lexer.peek_by(1)?, lexer.peek_by(2)?) {
-            (Tok::VarName(_), Tok::Colon) => parse_struct(lexer)?,
-            (Tok::TypeName(_), Tok::Colon) => parse_sum(lexer)?,
+        Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2)) {
+            (Ok(Tok::VarName(_)), Ok(Tok::Colon)) => parse_struct(lexer)?,
+            (Ok(Tok::TypeName(_)), Ok(Tok::Colon)) => parse_sum(lexer)?,
             _ => {
                 TypeSpec::Tuple(parse_list(Tok::curlys(), Some(Tok::Comma), parse_type, lexer)?)
             },
@@ -99,6 +117,17 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
 
             output
         },
+        Tok::AsterickSet(count) => {
+            lexer.next_tok()?;
+
+            let mut output = parse_type(lexer)?;
+
+            for _ in 0..count {
+                output = TypeSpec::Deref(box output);
+            }
+
+            output
+        },
         Tok::LBrack => {
             lexer.next_tok()?;
             let count = lexer.next_tok()?.int_value()?;
@@ -108,8 +137,8 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
         },
         Tok::TypeName(name) => {
             lexer.next_tok()?;
+
             match name {
-                // TODO: unsigned integer types
                 TypeName::I(size) => TypeSpec::Int(size),
                 TypeName::U(size) => TypeSpec::UInt(size),
                 TypeName::Bool => TypeSpec::Bool,
@@ -117,7 +146,12 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
                 TypeName::F32 => TypeSpec::Float(FloatType::F32),
                 TypeName::F16 => TypeSpec::Float(FloatType::F16),
                 TypeName::Other(_) => {
-                    if let Some(generic_index) = lexer.get_generic_label(&name) {
+                    if lexer.peek_tok()? == Tok::LParen {
+                        let type_level_func_args =
+                            parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
+
+                        TypeSpec::TypeLevelFunc(name, type_level_func_args)
+                    } else if let Some(generic_index) = lexer.get_generic_label(&name) {
                         TypeSpec::GenParam(generic_index)
                     } else if let Tok::LAngle = lexer.peek_tok()? {
                         let generics =

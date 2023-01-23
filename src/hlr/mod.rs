@@ -15,11 +15,11 @@ use std::rc::Rc;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
+use type_inference::infer_types;
 
 pub mod prelude {
     pub use super::{
         expr_tree::ExprID, expr_tree::ExprTree, expr_tree::NodeData, hlr, hlr_data::FuncRep,
-        type_inference::*,
     };
 }
 

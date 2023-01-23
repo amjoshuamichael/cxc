@@ -88,7 +88,7 @@ fn return_large_struct() {
 }
 
 #[test]
-fn first_class() {
+fn basic_first_class() {
     xc_test!(
         "
         double(in: i32, i_want_zero: bool): i32 {

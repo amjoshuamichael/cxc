@@ -153,7 +153,7 @@ fn compile<'comp, 'a>(
 
             Some(loaded.into())
         },
-        SetVar {
+        Set {
             ref lhs, ref rhs, ..
         } => {
             let var_ptr = compile_as_ptr(fcs, *lhs);
@@ -325,8 +325,8 @@ fn compile<'comp, 'a>(
             None
         },
         UnarOp { op, hs, .. } => match op {
-            Ref(_) => Some(compile_as_ptr(fcs, hs).as_any_value_enum()),
-            Deref(_) => {
+            Ref => Some(compile_as_ptr(fcs, hs).as_any_value_enum()),
+            Deref => {
                 let var_ptr = compile(fcs, hs).unwrap();
                 let val = fcs
                     .builder

@@ -24,8 +24,8 @@ pub enum Opcode {
     TernaryQuestion,
     TernaryColon,
     Assignment,
-    Ref(u8),
-    Deref(u8),
+    Ref,
+    Deref,
     Dot,
 }
 
@@ -37,7 +37,7 @@ impl Opcode {
         use Opcode::*;
 
         match self {
-            Ref(_) | Deref(_) => Some(1),
+            Ref | Deref => Some(1),
             Not => Some(0),
             _ => None,
         }
@@ -90,8 +90,8 @@ impl ToString for Opcode {
             TernaryQuestion => "?",
             TernaryColon => ":",
             Assignment => "=",
-            Ref(count) => return String::from("&".repeat(*count as usize)),
-            Deref(count) => return String::from("*".repeat(*count as usize)),
+            Ref => "&",
+            Deref => "*",
             Dot => ".",
         }
         .into()

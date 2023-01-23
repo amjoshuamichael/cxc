@@ -1,7 +1,7 @@
 use crate::lex::{TypeName, VarName};
 use crate::unit::CompData;
-use crate::Type;
-use crate::{parse::*, TypeEnum};
+use crate::{parse::*, ArrayType, TypeEnum};
+use crate::{FuncType, Type};
 
 mod rust_type_name_conversion;
 
@@ -25,15 +25,24 @@ impl<'a> CompData<'a> {
         Some(realized_type.with_name(name.clone()))
     }
 
-    pub fn get_spec(&self, alias: &TypeSpec, generics: &Vec<Type>) -> Option<Type> {
-        let typ = match alias {
+    pub fn get_spec(&self, spec: &TypeSpec, generics: &Vec<Type>) -> Option<Type> {
+        let typ = match spec {
             TypeSpec::Named(name) => self.get_by_name(name)?,
+            TypeSpec::TypeLevelFunc(name, args) => {
+                let func = self.type_level_funcs.get(name)?;
+                let args = args
+                    .iter()
+                    .map(|arg| self.get_spec(arg, generics))
+                    .collect::<Option<Vec<_>>>()?;
+                func(args, self)
+            },
             TypeSpec::Int(size) | TypeSpec::UInt(size) => Type::i(*size),
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
+            TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_deref().unwrap(),
             TypeSpec::StructMember(struct_type, field_name) => {
-                let struct_type = self.get_spec(struct_type, generics)?;
+                let struct_type = self.get_spec(struct_type, generics)?.complete_deref();
                 let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
 
                 struct_type.get_field_type(field_name)?.clone()
@@ -84,6 +93,11 @@ impl<'a> CompData<'a> {
                 let ret_type = self.get_spec(ret_type, generics)?;
                 ret_type.func_with_args(args)
             },
+            TypeSpec::FuncReturnType(func_type) => {
+                let func_type = self.get_spec(func_type, generics)?;
+                let TypeEnum::Func(FuncType { ret_type, .. }) = func_type.as_type_enum() else { panic!() };
+                ret_type.clone()
+            },
             TypeSpec::Generic(name, generic_aliases) => {
                 let generics = generic_aliases
                     .iter()
@@ -97,11 +111,16 @@ impl<'a> CompData<'a> {
                 } else {
                     self.get_spec(self.aliases.get(name)?, &generics)?
                         .with_name(name.clone())
-                        .with_generics(generics)
+                        .with_generics(&generics)
                 }
             },
             TypeSpec::GenParam(index) => generics.get(*index as usize)?.clone(),
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
+            TypeSpec::ArrayElem(array) => {
+                let array = self.get_spec(array, &generics)?;
+                let TypeEnum::Array(ArrayType { base, .. }) = array.as_type_enum() else { panic!() };
+                base.clone()
+            },
             TypeSpec::Union(left, right) => {
                 let left = self.get_spec(left, generics)?;
                 let right = self.get_spec(right, generics)?;

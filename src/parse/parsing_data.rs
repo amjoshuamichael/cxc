@@ -18,13 +18,13 @@ pub enum Expr {
     Bool(bool),
     Strin(String),
     Ident(VarName),
-    StaticMethodPath(TypeSpec, VarName),
     Struct(TypeSpec, Vec<(VarName, Expr)>, bool),
+    StaticMethodPath(TypeSpec, VarName),
     Tuple(TypeSpec, Vec<Expr>, bool),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
-    MakeVar(VarDecl, Box<Expr>),
-    SetVar(Box<Expr>, Box<Expr>),
+    SetVar(VarDecl, Box<Expr>),
+    Set(Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<TypeSpec>, Vec<Expr>, bool),
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
@@ -46,6 +46,7 @@ impl Expr {
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expr> + 'a> {
         use Expr::*;
 
+        // TODO: don't use a pointer here
         match &self {
             Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_) | StaticMethodPath(..) => {
                 box once(self)
@@ -54,8 +55,8 @@ impl Expr {
             Tuple(_, exprs, _) => box exprs.iter(),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
-            MakeVar(_, rhs) => box once(&**rhs),
-            SetVar(lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
+            SetVar(_, rhs) => box once(&**rhs),
+            Set(lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
             Call(f, _, a, _) => box once(&**f).chain(a.iter()),
             UnarOp(_, hs) => box once(&**hs),
             BinOp(_, lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
@@ -71,7 +72,7 @@ impl Expr {
         }
     }
 
-    pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref(1), box self.clone()) }
+    pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, box self.clone()) }
 
     pub fn wrap_in_block(self) -> Expr {
         match self {
@@ -97,8 +98,8 @@ impl Expr {
             Tuple(..) => Tok::LCurly,
             Array(..) => Tok::LBrack,
             Index(left, _) => left.first_tok(),
-            MakeVar(var_decl, _) => Tok::VarName(var_decl.name.clone()),
-            SetVar(left, _) => left.first_tok(),
+            SetVar(var_decl, _) => Tok::VarName(var_decl.name.clone()),
+            Set(lhs, _) => lhs.first_tok(),
             Call(left, ..) => left.first_tok(),
             UnarOp(..) => todo!(),
             BinOp(_, left, _) => left.first_tok(),
@@ -118,14 +119,14 @@ impl Expr {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarDecl {
     pub name: VarName,
-    pub type_spec: Option<TypeSpec>,
+    pub type_spec: TypeSpec,
 }
 
 impl VarDecl {
-    pub fn no_name(typ: Option<TypeSpec>) -> Self {
+    pub fn no_name(type_spec: TypeSpec) -> Self {
         VarDecl {
             name: VarName::temp(),
-            type_spec: typ,
+            type_spec,
         }
     }
 }
@@ -141,8 +142,6 @@ impl Script {
     pub fn funcs_iter(&self) -> impl Iterator<Item = &FuncCode> {
         self.0.iter().filter_map(|decl| decl.as_func())
     }
-
-    pub fn decl_count(&self) -> usize { self.0.len() }
 }
 
 #[derive(Debug, Clone)]
@@ -192,6 +191,13 @@ impl<T: Clone> TypeRelationGeneric<T> {
             Self::Unrelated => None,
         }
     }
+
+    pub fn inner_type_mut(&mut self) -> Option<&mut T> {
+        match self {
+            Self::Static(ref mut inner) | Self::MethodOf(ref mut inner) => Some(inner),
+            Self::Unrelated => None,
+        }
+    }
 }
 
 impl<T> Default for TypeRelationGeneric<T> {
@@ -232,7 +238,7 @@ impl FuncCode {
     pub fn from_expr(code: Expr) -> Self {
         Self {
             name: VarName::temp(),
-            ret_type: Type::void().into(),
+            ret_type: Type::unknown().into(),
             args: Vec::new(),
             generic_count: 0,
             code,

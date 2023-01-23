@@ -18,7 +18,7 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
                 Tok::Bool(val) => Expr::Bool(val),
                 Tok::Strin(val) => Expr::Strin(val),
                 Tok::VarName(val) => Expr::Ident(val.clone()),
-                opcode if opcode.is_unary_op() => Expr::Op(opcode.get_un_opcode().unwrap()),
+                opcode if opcode.is_unary_op() => Expr::Op(opcode.get_un_opcode()?),
                 Tok::LBrack => Expr::Array(parse_list(
                     (Tok::LBrack, Tok::RBrack),
                     Some(Tok::Comma),
@@ -123,11 +123,14 @@ pub fn parse_math_expr(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
     }
 
     detect_member_statements(&mut atoms)?;
-    detect_calls(&mut atoms);
-    detect_unary_ops(&mut atoms);
-    detect_binary_ops(&mut atoms);
+    detect_calls(&mut atoms)?;
+    detect_unary_ops(&mut atoms)?;
+    detect_binary_ops(&mut atoms)?;
 
-    assert_eq!(atoms.len(), 1);
+    if atoms.len() != 1 {
+        return Err(ParseError::ImproperExpression);
+    }
+
     Ok(atoms[0].clone())
 }
 
@@ -155,32 +158,42 @@ pub fn detect_member_statements(atoms: &mut Vec<Expr>) -> ParseResult<()> {
     Ok(())
 }
 
-pub fn detect_calls(atoms: &mut Vec<Expr>) {
+pub fn detect_calls(atoms: &mut Vec<Expr>) -> ParseResult<()> {
     while let Some(args_pos) = atoms
         .iter()
         .position(|atom| matches!(atom, Expr::ArgList(..)))
     {
+        if args_pos == 0 {
+            return Err(ParseError::ImproperExpression);
+        }
+
         let Expr::ArgList(generics, mut args) = atoms.remove(args_pos) 
             else { unreachable!() };
 
         let being_called = atoms.remove(args_pos - 1);
 
         if let Expr::Member(object, field) = being_called {
-            args.push(Expr::UnarOp(Opcode::Ref(1), object));
+            args.push(Expr::UnarOp(Opcode::Ref, object));
 
             atoms.push(Expr::Call(box Expr::Ident(field), generics, args, true));
         } else {
             atoms.push(Expr::Call(box being_called, generics, args, false));
         }
     }
+
+    Ok(())
 }
 
-pub fn detect_unary_ops(atoms: &mut Vec<Expr>) {
+pub fn detect_unary_ops(atoms: &mut Vec<Expr>) -> ParseResult<()> {
     for prec_level in 0..=Opcode::MAX_UNARY_PRECEDENT_LEVEL {
         while let Some(opcode_pos) = atoms.iter().rposition(|atom| {
             let Expr::Op(opcode) = atom else { return false };
             opcode.un_prec_level() == Some(prec_level)
         }) {
+            if opcode_pos + 1 >= atoms.len() {
+                return Err(ParseError::ImproperExpression);
+            }
+
             let Expr::Op(opcode) = atoms[opcode_pos] else { unreachable!() };
 
             let rhs = Box::new(atoms.remove(opcode_pos + 1));
@@ -189,17 +202,19 @@ pub fn detect_unary_ops(atoms: &mut Vec<Expr>) {
             atoms[opcode_pos] = new_unop;
         }
     }
+
+    Ok(())
 }
 
-pub fn detect_binary_ops(atoms: &mut Vec<Expr>) {
+pub fn detect_binary_ops(atoms: &mut Vec<Expr>) -> ParseResult<()> {
     for prec_level in 0..=Opcode::MAX_BINARY_PRECEDENT_LEVEL {
-        loop {
-            let opcode_pos = atoms.iter().position(|atom| match atom {
-                Expr::Op(opcode) => opcode.bin_prec_level() == Some(prec_level),
-                _ => false,
-            });
+        while let Some(opcode_pos) = atoms.iter().position(
+            |atom| matches!(atom, Expr::Op(opcode) if opcode.bin_prec_level() == Some(prec_level)),
+        ) {
+            if opcode_pos + 1 >= atoms.len() || opcode_pos == 0 {
+                return Err(ParseError::ImproperExpression);
+            }
 
-            let Some(opcode_pos) = opcode_pos else { break; };
             let Expr::Op(opcode) = atoms[opcode_pos] else { unreachable!() };
 
             let rhs = Box::new(atoms.remove(opcode_pos + 1));
@@ -209,6 +224,8 @@ pub fn detect_binary_ops(atoms: &mut Vec<Expr>) {
             atoms[opcode_pos - 1] = new_binop;
         }
     }
+
+    Ok(())
 }
 
 pub fn parse_struct_literal(
@@ -243,7 +260,7 @@ pub fn parse_struct_literal(
         got => {
             return Err(ParseError::UnexpectedTok {
                 got,
-                expected: vec![TokName::DoublePlus, TokName::RCurly],
+                expected: vec![TokName::DoublePlus, TokName::RCurly, TokName::Comma],
             })
         },
     };

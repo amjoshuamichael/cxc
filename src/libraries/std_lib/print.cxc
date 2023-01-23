@@ -1,0 +1,15 @@
+print<T>(value: T) {
+    as_string: String = value.to_string()
+    external_print_string(&as_string)
+}
+
+assert_eq<T>(lhs: T, rhs: T) {
+    ? lhs != rhs {
+        failure = lhs.to_string()
+        failure.push_string("is not equal to")
+        failure.push_string(rhs.to_string())
+        failure.push_string("!")
+
+        external_print_string(failure)
+    }
+}

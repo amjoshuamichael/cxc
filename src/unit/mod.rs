@@ -31,6 +31,7 @@ pub use self::func_api::Func;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
+use self::functions::TypeLevelFunc;
 pub use self::value_api::XcValue;
 pub use add_external::ExternalFuncAdd;
 pub use reflect::XcReflect;
@@ -63,16 +64,17 @@ pub struct CompData<'u> {
     pub(crate) globals: HashMap<VarName, (Type, GlobalValue<'u>)>,
     compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
     func_types: HashMap<UniqueFuncInfo, Type>,
-    func_code: HashMap<FuncDeclInfo, FuncCode>,
+    pub(crate) func_code: HashMap<FuncDeclInfo, FuncCode>,
     decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
     derivers: HashMap<DeriverInfo, DeriverFunc>,
+    pub(super) type_level_funcs: HashMap<TypeName, TypeLevelFunc>,
     intrinsics: HashSet<FuncDeclInfo>,
     reflect_arg_types: HashMap<UniqueFuncInfo, Vec<bool>>,
 }
 
 impl<'u> Debug for CompData<'u> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "comp_data: working on it!")
+        write!(f, "compilation data holding {} types", self.types.len())
     }
 }
 
@@ -118,7 +120,6 @@ impl<'u> Unit<'u> {
 
     pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Func<'u>> {
         let lexed = lex(script);
-        dbg!(script.len());
         let parsed = match parse::file(lexed) {
             Ok(file) => file,
             Err(err) => {
@@ -127,7 +128,6 @@ impl<'u> Unit<'u> {
             },
         };
 
-        println!("{} 2", script.len());
         let funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
@@ -155,7 +155,6 @@ impl<'u> Unit<'u> {
             funcs_to_compile
         };
 
-        println!("{} 3", script.len());
         let top_level_functions = funcs_to_process.clone();
 
         self.compile_func_set(funcs_to_process);
@@ -337,15 +336,30 @@ impl<'u> Unit<'u> {
         self
     }
 
-    pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) -> &mut Self {
+    pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.add_method_deriver(func_name, func);
-        self
+        comp_data.derivers.insert(
+            DeriverInfo {
+                func_name,
+                is_static: false,
+            },
+            func,
+        );
     }
 
-    pub fn add_static_deriver(&mut self, func_name: VarName, func: DeriverFunc) -> &mut Self {
+    pub fn add_static_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.add_static_deriver(func_name, func);
-        self
+        comp_data.derivers.insert(
+            DeriverInfo {
+                func_name,
+                is_static: true,
+            },
+            func,
+        );
+    }
+
+    pub fn add_type_level_func(&mut self, func_name: TypeName, func: TypeLevelFunc) {
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+        comp_data.type_level_funcs.insert(func_name, func);
     }
 }

@@ -8,17 +8,15 @@ Rc<T> = {
     inner: &RcBox<T>,
 }
 
-<T> Rc<T>:: {
+<T> Rc<T>:: { 
     new(value: T): Rc<T> {
-        box: &RcBox<T> = alloc< RcBox<T> >(1)
-        stack_box: RcBox<T> = 0 
-        stack_box.strong = 1 
-        stack_box.weak = 1
-        stack_box.value = value
-        box.write< RcBox<T> >(stack_box)
+        box: &RcBox<T> = alloc< RcBox<T> >( 2 )
+
+        box.write< RcBox<T> > (
+            RcBox<T> { strong = 1, weak = 1, value = value }
+        )
         
-        rc: Rc<T> = 0
-        rc.inner = box
+        rc: Rc<T> = Rc<T> { inner = box }
 
         ; rc
     }

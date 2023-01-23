@@ -4,10 +4,10 @@ use crate::{
     parse::{self, Expr, FuncCode, TypeRelation},
     to_llvm::compile_routine,
     typ::{FuncType, ReturnStyle},
-    TypeEnum, Unit, XcReflect,
+    TypeEnum, Unit,
 };
 use inkwell::values::AnyValue;
-use std::{collections::HashMap, iter::Copied, mem::transmute};
+use std::{collections::HashMap, mem::transmute};
 
 use crate::Type;
 
@@ -38,6 +38,7 @@ impl XcValue {
         }
     }
 
+    #[cfg(feature = "bytemuck")]
     pub fn new_opaque<T: bytemuck::NoUninit>(data: T) -> Self {
         let typ = Type::opaque_type::<T>();
 
@@ -47,6 +48,7 @@ impl XcValue {
         }
     }
 
+    #[cfg(feature = "bytemuck")]
     pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(data: T, unit: &Unit) -> Self {
         let typ = unit
             .get_reflect_type::<T>()

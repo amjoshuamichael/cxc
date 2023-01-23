@@ -1,4 +1,4 @@
-use crate::lex::{indent_parens, VarName};
+use crate::lex::{indent_parens, TypeName, VarName};
 use crate::parse::*;
 use crate::typ::FloatType;
 use crate::Type;
@@ -66,7 +66,7 @@ impl Debug for ExprNode {
                 rhs,
                 ..
             } => write!(fmt, "{name}: {var_type:?} = {rhs:?}"),
-            SetVar { lhs, rhs, .. } => write!(fmt, "{lhs:?} = {rhs:?}"),
+            Set { lhs, rhs, .. } => write!(fmt, "{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => write!(fmt, "{object:?}.{field}"),
             Index { object, index, .. } => write!(fmt, "{object:?}[{index:?}]"),
             UnarOp { op, hs, .. } => write!(fmt, "{op:?} {hs:?}"),
@@ -116,7 +116,7 @@ pub enum NodeData {
         name: VarName,
         rhs: ExprID,
     },
-    SetVar {
+    Set {
         ret_type: Type,
         lhs: ExprID,
         rhs: ExprID,
@@ -188,6 +188,7 @@ impl NodeData {
             Number { size, .. } => Type::i(*size),
             Float { size, .. } => Type::f(*size),
             Bool { .. } => Type::bool(),
+            While { .. } => Type::void(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }
             | ArrayLit { var_type, .. }
@@ -197,13 +198,66 @@ impl NodeData {
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
-            | SetVar { ret_type, .. }
+            | Set { ret_type, .. }
             | Call { ret_type, .. }
             | FirstClassCall { ret_type, .. }
             | Block { ret_type, .. }
             | Index { ret_type, .. }
             | Member { ret_type, .. } => ret_type.clone(),
-            While { .. } => Type::never(),
+        }
+    }
+
+    pub fn ret_type_mut(&mut self) -> Option<&mut Type> {
+        match self {
+            Number { .. } => None,
+            Float { .. } => None,
+            Bool { .. } => None,
+            While { .. } => None,
+            Ident {
+                ref mut var_type, ..
+            }
+            | StructLit {
+                ref mut var_type, ..
+            }
+            | ArrayLit {
+                ref mut var_type, ..
+            }
+            | MakeVar {
+                ref mut var_type, ..
+            } => Some(var_type),
+            BinOp {
+                ref mut ret_type, ..
+            }
+            | Return {
+                ref mut ret_type, ..
+            }
+            | UnarOp {
+                ref mut ret_type, ..
+            }
+            | IfThen {
+                ref mut ret_type, ..
+            }
+            | IfThenElse {
+                ref mut ret_type, ..
+            }
+            | Set {
+                ref mut ret_type, ..
+            }
+            | Call {
+                ref mut ret_type, ..
+            }
+            | FirstClassCall {
+                ref mut ret_type, ..
+            }
+            | Block {
+                ref mut ret_type, ..
+            }
+            | Index {
+                ref mut ret_type, ..
+            }
+            | Member {
+                ref mut ret_type, ..
+            } => Some(ret_type),
         }
     }
 
@@ -219,8 +273,8 @@ impl NodeData {
                 initialize,
             } => {
                 let mut lit = match var_type.name() {
-                    Some(name) => name.to_string(),
-                    None => "".into(),
+                    TypeName::Anonymous => String::new(),
+                    other => other.to_string(),
                 } + " ";
 
                 lit += "{ \n";
@@ -254,7 +308,7 @@ impl NodeData {
 
                 lit
             },
-            SetVar { lhs, rhs, .. } => {
+            Set { lhs, rhs, .. } => {
                 let mut lit = tree.get(*lhs).to_string(tree);
                 lit += " = ";
                 lit += &*tree.get(*rhs).to_string(tree);

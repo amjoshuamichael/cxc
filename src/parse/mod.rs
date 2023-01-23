@@ -1,6 +1,7 @@
 pub use crate::lex::ParseContext;
 pub use crate::lex::TokenStream;
 use crate::lex::{Lexer, Tok, TypeName, VarName};
+use crate::Type;
 pub use opcode::Opcode;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -175,7 +176,7 @@ pub fn parse_func_code(
     if let TypeSpecRelation::MethodOf(relation) = &relation {
         args.push(VarDecl {
             name: VarName::from("self"),
-            type_spec: Some(relation.clone()),
+            type_spec: relation.clone(),
         });
     }
 
@@ -196,14 +197,14 @@ fn parse_var_decl(lexer: &mut ParseContext<VarName>) -> ParseResult<VarDecl> {
         Tok::Colon => {
             lexer.next_tok()?;
 
-            Some(parse_type_spec(lexer)?)
+            parse_type_spec(lexer)?
         },
-        _ => None,
+        _ => TypeSpec::unknown(),
     };
 
     Ok(VarDecl {
         name: var_name,
-        type_spec: type_spec.map(|s| s.into()),
+        type_spec,
     })
 }
 
@@ -214,24 +215,31 @@ fn parse_block(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
 fn parse_stmt(lexer: &mut ParseContext<VarName>) -> ParseResult<Expr> {
     let lhs = parse_expr(lexer)?;
 
-    if lexer.peek_tok()? == Tok::Assignment {
-        lexer.next_tok()?;
-
-        let rhs = parse_expr(lexer)?;
-        Ok(Expr::SetVar(box lhs, box rhs))
-    } else if lexer.peek_tok()? == Tok::Colon {
-        lexer.next_tok()?;
-
+    if matches!(lhs, Expr::Ident(_)) {
         let Expr::Ident(var_name) = lhs else { todo!("new err type") };
-        let var = VarDecl {
-            name: var_name,
-            type_spec: Some(parse_type_spec(lexer)?),
+
+        let var = if lexer.next_tok()? == Tok::Assignment {
+            VarDecl {
+                name: var_name,
+                type_spec: TypeSpec::Type(Type::unknown()),
+            }
+        } else {
+            let type_spec = parse_type_spec(lexer)?;
+            lexer.assert_next_tok_is(Tok::Assignment)?;
+            VarDecl {
+                name: var_name,
+                type_spec,
+            }
         };
 
+        let rhs = parse_expr(lexer)?;
+        Ok(Expr::SetVar(var, box rhs))
+    } else if lexer.peek_tok()? == Tok::Assignment {
         lexer.assert_next_tok_is(Tok::Assignment)?;
 
         let rhs = parse_expr(lexer)?;
-        Ok(Expr::MakeVar(var, box rhs))
+
+        Ok(Expr::Set(box lhs, box rhs))
     } else {
         Ok(lhs)
     }

@@ -25,6 +25,8 @@ pub struct FuncRep<'a> {
 #[derive(Default, Debug, Clone)]
 pub struct DataFlowInfo {
     pub typ: Type,
+    // pub declaration: ExprID,
+    // pub uses: Vec<ExprID>,
     pub arg_index: Option<u32>,
 }
 
@@ -52,13 +54,10 @@ impl<'a> FuncRep<'a> {
         for (a, arg) in code.args.iter().enumerate() {
             new.identifiers.push(arg.name.clone());
 
-            let typ = match arg.type_spec {
-                Some(ref type_spec) => new
-                    .comp_data
-                    .get_spec(type_spec, &new.info.generics())
-                    .unwrap(),
-                None => todo!(),
-            };
+            let typ = new
+                .comp_data
+                .get_spec(&arg.type_spec, &new.info.generics())
+                .unwrap();
 
             new.data_flow.insert(
                 arg.name.clone(),
@@ -110,6 +109,8 @@ impl<'a> FuncRep<'a> {
     pub fn get_type_spec(&self, alias: &TypeSpec) -> Option<Type> {
         self.comp_data.get_spec(alias, &self.info.generics())
     }
+
+    pub fn comp_data(&self) -> Rc<CompData> { self.comp_data.clone() }
 
     pub fn output(self) -> FuncOutput {
         let out = FuncOutput {
@@ -180,8 +181,8 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(
                     ref_space,
                     NodeData::UnarOp {
-                        ret_type: Type::void_ptr(),
-                        op: Opcode::Ref(1),
+                        ret_type: arr_type.get_ref(),
+                        op: Opcode::Ref,
                         hs: array_space,
                     },
                 );
@@ -206,37 +207,27 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(call_space, call_data);
                 call_space
             },
-            Expr::Ident(name) => match self.identifiers.iter().find(|i| i == &&name) {
-                Some(name) => {
-                    let space = self.tree.make_one_space(parent);
+            Expr::Ident(name) => {
+                let var_type = match self.data_flow.get(&name) {
+                    Some(data_flow) => data_flow.typ.clone(),
+                    None => self
+                        .comp_data
+                        .globals
+                        .get(&name.clone())
+                        .expect(&*format!("could not find identifier {name}"))
+                        .0
+                        .clone(),
+                };
 
-                    let name = name.clone();
-
-                    self.tree.replace(
-                        space,
-                        NodeData::Ident {
-                            var_type: Type::never(),
-                            name,
-                        },
-                    );
-
-                    space
-                },
-                None => self.tree.insert(
-                    parent,
-                    NodeData::Ident {
-                        var_type: Type::never(),
-                        name,
-                    },
-                ),
+                self.tree.insert(parent, NodeData::Ident { var_type, name })
             },
-            Expr::MakeVar(decl, e) => {
+            Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
                 let var_type = if self.data_flow.contains_key(&decl.name) {
                     self.data_flow.get(&decl.name).unwrap().typ.clone()
                 } else {
-                    let var_type = self.get_type_spec(&decl.type_spec.unwrap()).unwrap();
+                    let var_type = self.get_type_spec(&decl.type_spec).unwrap();
 
                     let new_data_flow_info = DataFlowInfo {
                         typ: var_type.clone(),
@@ -247,22 +238,37 @@ impl<'a> FuncRep<'a> {
                     var_type
                 };
 
-                self.identifiers.push(decl.name.clone());
-                let new_decl = NodeData::MakeVar {
-                    var_type,
-                    name: decl.name,
-                    rhs: self.add_expr(*e, space),
+                let statement = if !self.identifiers.contains(&decl.name) {
+                    NodeData::MakeVar {
+                        var_type,
+                        name: decl.name,
+                        rhs: self.add_expr(*e, space),
+                    }
+                } else {
+                    let lhs = self.tree.insert(
+                        space,
+                        NodeData::Ident {
+                            var_type: var_type.clone(),
+                            name: decl.name,
+                        },
+                    );
+
+                    NodeData::Set {
+                        ret_type: var_type,
+                        lhs,
+                        rhs: self.add_expr(*e, space),
+                    }
                 };
 
-                self.tree.replace(space, new_decl);
+                self.tree.replace(space, statement);
 
                 space
             },
-            Expr::SetVar(lhs, rhs) => {
+            Expr::Set(lhs, rhs) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_set = NodeData::SetVar {
-                    ret_type: Type::never(),
+                let new_set = NodeData::Set {
+                    ret_type: Type::unknown(),
                     lhs: self.add_expr(*lhs, space),
                     rhs: self.add_expr(*rhs, space),
                 };
@@ -275,7 +281,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::UnarOp {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     op,
                     hs: self.add_expr(*hs, space),
                 };
@@ -287,7 +293,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::BinOp {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     lhs: self.add_expr(*lhs, space),
                     op,
                     rhs: self.add_expr(*rhs, space),
@@ -300,7 +306,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThen {
-                    ret_type: Type::never(),
+                    ret_type: Type::void(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                 };
@@ -312,7 +318,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = NodeData::IfThenElse {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
                     e: self.add_expr(*e, space),
@@ -342,7 +348,7 @@ impl<'a> FuncRep<'a> {
                 }
 
                 let new_binop = NodeData::Block {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     stmts: statment_ids,
                 };
 
@@ -365,23 +371,23 @@ impl<'a> FuncRep<'a> {
 
                 let new_data = if let Expr::Ident(ref func_name) = *f {
                     let relation = if is_method {
-                        TypeRelation::MethodOf(Type::never())
+                        TypeRelation::MethodOf(Type::unknown())
                     } else {
                         TypeRelation::Unrelated
                     };
 
                     NodeData::Call {
-                        ret_type: Type::never(),
+                        ret_type: Type::unknown(),
                         f: func_name.clone(),
                         generics,
                         a: arg_ids,
                         relation,
                     }
-                } else if let Expr::StaticMethodPath(ref type_or_alias, ref func_name) = *f {
-                    let type_origin = self.get_type_spec(type_or_alias).unwrap();
+                } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *f {
+                    let type_origin = self.get_type_spec(type_spec).unwrap();
 
                     NodeData::Call {
-                        ret_type: Type::never(),
+                        ret_type: Type::unknown(),
                         f: func_name.clone(),
                         generics,
                         a: arg_ids,
@@ -390,7 +396,7 @@ impl<'a> FuncRep<'a> {
                 } else {
                     let f = self.add_expr(*f, space);
                     NodeData::FirstClassCall {
-                        ret_type: Type::never(),
+                        ret_type: Type::unknown(),
                         f,
                         a: arg_ids,
                     }
@@ -403,7 +409,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_member = NodeData::Member {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     object: self.add_expr(*object, space),
                     field,
                 };
@@ -451,7 +457,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_return = NodeData::Return {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     to_return: Some(self.add_expr(*to_return, space)),
                 };
 
@@ -468,7 +474,7 @@ impl<'a> FuncRep<'a> {
                 }
 
                 let new_array = NodeData::ArrayLit {
-                    var_type: Type::never(),
+                    var_type: Type::unknown(),
                     parts,
                 };
 
@@ -479,7 +485,7 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_index = NodeData::Index {
-                    ret_type: Type::never(),
+                    ret_type: Type::unknown(),
                     object: self.add_expr(*object, space),
                     index: self.add_expr(*index, space),
                 };

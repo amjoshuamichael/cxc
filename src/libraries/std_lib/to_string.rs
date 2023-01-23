@@ -26,6 +26,16 @@ impl Library for ToStringLib {
         );
         unit.add_rust_func_explicit(
             "to_string",
+            to_string::<i64> as *const usize,
+            ExternalFuncAdd {
+                ret_type: string_type.clone(),
+                arg_types: vec![Type::i(64).get_ref()],
+                relation: TypeRelation::MethodOf(Type::i(64).get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
+            "to_string",
             to_string::<f32> as *const usize,
             ExternalFuncAdd {
                 ret_type: string_type.clone(),
@@ -60,19 +70,18 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 .clone()
                 .complete_deref()
                 .name()
-                .clone()
-                .map(|n| n.to_string() + " {")
-                .unwrap_or(String::from("{"));
+                .to_string_zero_if_anonymous()
+                + " {";
 
             let output_var = VarName::from("output");
             let output_var_expr = Expr::Ident(output_var.clone());
             let output_var_ref = output_var_expr.get_ref();
 
             let mut statements = Vec::new();
-            let make_var = Expr::MakeVar(
+            let make_var = Expr::SetVar(
                 VarDecl {
                     name: output_var.clone(),
-                    type_spec: Some(string_type.into()),
+                    type_spec: string_type.into(),
                 },
                 box Expr::Strin(prefix),
             );
@@ -123,13 +132,13 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         TypeEnum::Array(ArrayType { count, .. }) => {
             let output_var = VarName::from("output");
             let output_var_expr = Expr::Ident(output_var.clone());
-            let output_var_ref = Expr::UnarOp(Opcode::Ref(1), box output_var_expr.clone());
+            let output_var_ref = Expr::UnarOp(Opcode::Ref, box output_var_expr.clone());
 
             let mut statements = Vec::new();
-            let make_var = Expr::MakeVar(
+            let make_var = Expr::SetVar(
                 VarDecl {
                     name: output_var.clone(),
-                    type_spec: Some(string_type.into()),
+                    type_spec: string_type.into(),
                 },
                 box Expr::Strin("[".into()),
             );
@@ -158,9 +167,9 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     to_string.clone(),
                     Vec::new(),
                     vec![Expr::UnarOp(
-                        Opcode::Ref(1),
+                        Opcode::Ref,
                         box Expr::Index(
-                            box Expr::UnarOp(Opcode::Deref(1), input_var.clone()),
+                            box Expr::UnarOp(Opcode::Deref, input_var.clone()),
                             box Expr::Number(index as u128),
                         ),
                     )],
@@ -196,7 +205,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         ret_type: TypeSpec::Named("String".into()).into(),
         args: vec![VarDecl {
             name: VarName::from("input"),
-            type_spec: Some(typ.clone().into()),
+            type_spec: typ.clone().into(),
         }],
         generic_count: 0,
         code: expr,

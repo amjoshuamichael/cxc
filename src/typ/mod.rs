@@ -1,14 +1,12 @@
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
 use crate::typ::fields_iter::PrimitiveFieldsIter;
-use lazy_static::lazy_static;
-
-use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+pub mod could_come_from;
 pub mod fields_iter;
 mod kind;
 mod nested_field_count;
@@ -19,7 +17,7 @@ pub use kind::Kind;
 
 use self::fields_iter::FieldsIter;
 
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Hash, Eq)]
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
@@ -27,11 +25,7 @@ impl Debug for Type {
 }
 
 impl Default for Type {
-    fn default() -> Self { Type::never() }
-}
-
-lazy_static! {
-    static ref SAVED_TYPES: Mutex<HashSet<Type>> = Mutex::new(HashSet::new());
+    fn default() -> Self { Type::unknown() }
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -99,7 +93,8 @@ impl Type {
                     return_style_from_size(self.size())
                 }
             },
-            Unknown | Void => ReturnStyle::Void,
+            Void => ReturnStyle::Void,
+            Unknown => panic!("cannot return unknown type"),
         }
     }
 
@@ -220,7 +215,7 @@ impl Type {
         .with_name(TypeName::from(basic_name))
     }
 
-    pub fn never() -> Type { Type::new(TypeEnum::Unknown) }
+    pub fn unknown() -> Type { Type::new(TypeEnum::Unknown) }
 
     pub fn void() -> Type { Type::new(TypeEnum::Void) }
     pub fn void_ptr() -> Type { Type::new(TypeEnum::Void).get_ref() }
@@ -232,30 +227,31 @@ impl Type {
         }))
     }
 
-    pub fn as_type_enum<'a>(&self) -> &TypeEnum { &self.0.type_enum }
+    pub fn as_type_enum(&self) -> &TypeEnum { &self.0.type_enum }
+    pub fn clone_type_enum(&self) -> TypeEnum { self.0.type_enum.clone() }
 
-    pub fn name(&self) -> &Option<TypeName> { &self.0.name }
+    pub fn name(&self) -> &TypeName { &self.0.name }
     pub fn generics(&self) -> &Vec<Type> { &self.0.generics }
 
     // panics if there is more than one reference to the inner TypeData
     pub fn with_name(self, name: TypeName) -> Self {
-        if name == TypeName::Anonymous {
-            return self;
-        }
-
-        let mut type_data = Arc::try_unwrap(self.0).unwrap();
-        type_data.name = Some(name);
-        Self(Arc::from(type_data))
+        self.modify_type_data(|data| data.name = name.clone())
     }
 
     // panics if there is more than one reference to the inner TypeData
-    pub fn with_generics(self, generics: Vec<Type>) -> Self {
+    pub fn with_generics(self, generics: &Vec<Type>) -> Self {
+        self.modify_type_data(|data| data.generics = generics.clone())
+    }
+
+    // panics if there is more than one reference to the inner TypeData
+    pub fn modify_type_data(self, mut function: impl FnMut(&mut TypeData)) -> Self {
         let mut type_data = Arc::try_unwrap(self.0).unwrap();
-        type_data.generics = generics;
+        function(&mut type_data);
         Self(Arc::from(type_data))
     }
 
     pub fn is_unknown(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Unknown) }
+    pub fn is_known(&self) -> bool { !self.is_unknown() }
     pub fn is_void(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Void) }
 }
 
@@ -265,16 +261,32 @@ impl Into<TypeSpec> for Type {
 
 #[derive(Default, Hash, PartialEq, Eq)]
 pub struct TypeData {
-    type_enum: TypeEnum,
-    name: Option<TypeName>,
-    generics: Vec<Type>,
+    pub type_enum: TypeEnum,
+    pub name: TypeName,
+    pub generics: Vec<Type>,
 }
 
 impl Debug for TypeData {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match &self.name {
-            Some(name) => write!(fmt, "{}", name),
-            None => write!(fmt, "{:?}", self.type_enum),
+            TypeName::Other(name) => {
+                write!(fmt, "{}", name)?;
+
+                let mut generics = self.generics.iter();
+
+                if let Some(generic) = generics.next() {
+                    write!(fmt, "<{:?}", generic)?;
+
+                    for generic in generics {
+                        write!(fmt, "{:?}, ", generic)?;
+                    }
+
+                    write!(fmt, ">")?;
+                }
+
+                Ok(())
+            },
+            _ => write!(fmt, "{:?}", self.type_enum),
         }
     }
 }
@@ -283,17 +295,16 @@ impl From<TypeEnum> for TypeData {
     fn from(type_enum: TypeEnum) -> Self {
         Self {
             type_enum,
-            name: None,
-            generics: Vec::new(),
+            ..Default::default()
         }
     }
 }
 
 impl TypeData {
-    pub fn is_named(&self) -> bool { self.name.is_some() }
+    pub fn is_named(&self) -> bool { self.name != TypeName::Anonymous }
 }
 
-#[derive(Default, Hash, PartialEq, Eq)]
+#[derive(Default, Hash, PartialEq, Eq, Clone)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -313,7 +324,7 @@ pub enum TypeEnum {
 
 impl Debug for TypeEnum {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "{}", self.name())
+        write!(fmt, "{}", self.to_string())
     }
 }
 
@@ -338,12 +349,12 @@ impl Deref for TypeEnum {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct RefType {
     base: Type,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct FuncType {
     pub ret_type: Type,
     pub args: Vec<Type>,
@@ -354,7 +365,7 @@ impl FuncType {
     pub fn args(&self) -> Vec<Type> { self.args.clone() }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct StructType {
     pub fields: Vec<(VarName, Type)>,
 }
@@ -378,6 +389,8 @@ impl StructType {
     }
 
     pub fn field_count(&self) -> usize { self.fields.len() }
+
+    pub fn is_tuple(&self) -> bool { self.fields.len() == 0 || &*self.fields[0].0 == "0" }
 }
 
 #[derive(PartialEq, Clone, Eq, Hash, Debug)]
@@ -437,7 +450,7 @@ impl SumType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct VariantType {
     pub tag: u32,
     pub parent: Type,
@@ -455,7 +468,7 @@ impl VariantType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
@@ -482,21 +495,21 @@ impl Into<FloatType> for u32 {
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct BoolType;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct UnknownType();
 static UNKNOWN_STATIC: UnknownType = UnknownType();
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct VoidType();
 static VOID_STATIC: VoidType = VoidType();
 
-#[derive(PartialEq, Hash, Eq)]
+#[derive(PartialEq, Hash, Eq, Clone)]
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
 }
 
-#[derive(PartialEq, Hash, Eq)]
+#[derive(PartialEq, Hash, Eq, Clone)]
 pub struct OpaqueType {
     pub size: u32,
 }

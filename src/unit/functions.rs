@@ -1,11 +1,12 @@
 use crate::{FuncType, Type, TypeRelation};
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
+pub type TypeLevelFunc = fn(Vec<Type>, &CompData) -> Type;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DeriverInfo {
-    func_name: VarName,
-    is_static: bool,
+    pub func_name: VarName,
+    pub is_static: bool,
 }
 
 impl TryFrom<UniqueFuncInfo> for DeriverInfo {
@@ -43,7 +44,7 @@ impl<'a> CompData<'a> {
             ret_type: Type::i(32).into(),
             args: vec![VarDecl {
                 name: VarName::temp(),
-                type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
+                type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
             }],
             generic_count: 1,
             code: Expr::Block(Vec::new()),
@@ -56,15 +57,15 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(Type::i(64).into()),
+                    type_spec: Type::i(64).into(),
                 },
             ],
             generic_count: 1,
@@ -78,15 +79,15 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(TypeSpec::Ref(box TypeSpec::GenParam(0)).into()),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(Type::i(64).into()),
+                    type_spec: Type::i(64).into(),
                 },
             ],
             generic_count: 1,
@@ -109,11 +110,11 @@ impl<'a> CompData<'a> {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(TypeSpec::GenParam(0).get_ref().get_ref().into()),
+                    type_spec: TypeSpec::GenParam(0).get_ref().get_ref().into(),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: Some(TypeSpec::GenParam(0).get_ref().into()),
+                    type_spec: TypeSpec::GenParam(0).get_ref().into(),
                 },
             ],
             generic_count: 1,
@@ -222,13 +223,15 @@ impl<'a> CompData<'a> {
         let possible_decls = self.decl_names.get(&info.name)?;
 
         for decl in possible_decls {
-            if let Some(method_of) = decl.relation.inner_type() {
-                if self.get_spec(&method_of, &info.generics()) == info.relation.inner_type() {
+            if let Some(found_relation) = decl.relation.inner_type() && 
+                let Some(looking_for_relation) = info.relation.inner_type() {
+                if looking_for_relation.could_come_from(found_relation, self) 
+                {
                     return Some(decl.clone());
                 }
-            } else if info.relation.inner_type() == None {
+            } else if decl.relation.inner_type().is_none() && info.relation.inner_type().is_none() {
                 return Some(decl.clone());
-            }
+            };
         }
 
         None
@@ -273,11 +276,8 @@ impl<'a> CompData<'a> {
         let arg_types = code
             .args
             .iter()
-            .map(|d| {
-                self.get_spec(d.type_spec.as_ref().unwrap(), &info.generics())
-                    .unwrap()
-            })
-            .collect();
+            .map(|d| self.get_spec(&d.type_spec, &info.generics()))
+            .collect::<Option<Vec<_>>>()?;
 
         let func_type = ret_type.clone().func_with_args(arg_types);
 

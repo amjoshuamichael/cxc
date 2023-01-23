@@ -1,5 +1,5 @@
 mod test_utils;
-use cxc::library::{StdLib, TestLib};
+use cxc::library::StdLib;
 use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, XcValue};
 use cxc::{LLVMContext, Type, Unit};
 use test_utils::{xc_test, Numbers5, Point2D, Point3D};
@@ -189,7 +189,7 @@ fn external_function() {
 #[test]
 fn strings() {
     xc_test!(
-        use TestLib, StdLib;
+        use StdLib;
         r#"
         main(): String {
             x: String = "that's cray"
@@ -235,7 +235,7 @@ fn reflected_type_masks() {
         }
         .reflect_variable_types(),
     );
-    unit.add_lib(cxc::library::TestLib);
+    unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
         main() {

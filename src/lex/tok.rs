@@ -1,6 +1,7 @@
 use super::parse_num::*;
 use crate::parse::Opcode;
 use crate::parse::ParseError;
+use crate::parse::ParseResult;
 use crate::parse::TokName;
 use logos::{Lexer, Logos};
 use std::ops::Deref;
@@ -9,12 +10,11 @@ use std::{
     sync::Arc,
 };
 
-pub trait Ident {
+pub trait Ident: ToString {
     fn from_tok(t: &mut Lexer<Tok>) -> Self;
-    fn to_string(&self) -> String;
 }
 
-#[derive(PartialEq, Eq, Clone, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct VarName(Arc<str>);
 
 impl VarName {
@@ -27,7 +27,6 @@ impl Default for VarName {
 
 impl Ident for VarName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self { Self(Arc::from(t.slice())) }
-    fn to_string(&self) -> String { String::from(&*self.0) }
 }
 
 impl Display for VarName {
@@ -55,7 +54,7 @@ impl Deref for VarName {
     fn deref(&self) -> &Self::Target { &*self.0 }
 }
 
-#[derive(PartialEq, Eq, Clone, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Default, Eq, Clone, Hash, PartialOrd, Ord)]
 pub enum TypeName {
     Other(Arc<str>),
     I(u32),
@@ -64,6 +63,7 @@ pub enum TypeName {
     F32,
     F16,
     Bool,
+    #[default]
     Anonymous,
 }
 
@@ -83,8 +83,6 @@ impl Ident for TypeName {
             _ => Self::Other(Arc::from(t.slice())),
         }
     }
-
-    fn to_string(&self) -> String { format!("{self:?}") }
 }
 
 impl Display for TypeName {
@@ -112,6 +110,15 @@ impl Debug for TypeName {
 
 impl From<&str> for TypeName {
     fn from(s: &str) -> Self { Self::Other(Arc::from(s)) }
+}
+
+impl TypeName {
+    pub fn to_string_zero_if_anonymous(&self) -> String {
+        match self {
+            TypeName::Anonymous => String::new(),
+            other => other.to_string(),
+        }
+    }
 }
 
 #[derive(Logos, Debug, PartialEq, Clone)]
@@ -249,16 +256,19 @@ pub enum Tok {
 }
 
 impl Tok {
-    pub fn get_un_opcode(&self) -> Option<Opcode> {
+    pub fn get_un_opcode(&self) -> ParseResult<Opcode> {
         match self {
-            Tok::AsterickSet(count) => Some(Opcode::Deref(*count)),
-            Tok::AmpersandSet(count) => Some(Opcode::Ref(*count)),
-            Tok::Bang => Some(Opcode::Not),
-            _ => None,
+            Tok::AsterickSet(_) => Ok(Opcode::Deref),
+            Tok::AmpersandSet(_) => Ok(Opcode::Ref),
+            Tok::Bang => Ok(Opcode::Not),
+            _ => Err(ParseError::UnexpectedTok {
+                got: self.clone(),
+                expected: vec![TokName::UnaryOperator],
+            }),
         }
     }
 
-    pub fn is_unary_op(&self) -> bool { self.get_un_opcode().is_some() }
+    pub fn is_unary_op(&self) -> bool { self.get_un_opcode().is_ok() }
 
     pub fn get_bin_opcode(&self) -> Result<Opcode, ParseError> {
         match self {

@@ -53,5 +53,5 @@ fn factorial_while() {
         "
         => i32;
         120
-    );
+    )
 }

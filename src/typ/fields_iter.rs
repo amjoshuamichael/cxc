@@ -87,7 +87,7 @@ impl FieldsIter {
             TypeEnum::Ref(RefType { base }) => {
                 if self.has_iterated_at_least_once {
                     box UnarOpGen {
-                        op: Opcode::Deref(1),
+                        op: Opcode::Deref,
                         hs: center,
                         ret_type: base.clone(),
                     }
@@ -121,6 +121,17 @@ impl FieldsIter {
 
         self.inner = None;
         self.index += 1;
+    }
+
+    pub fn skip_children_of_last(&mut self) {
+        if let Some(inner) = &mut self.inner {
+            if inner.has_iterated_at_least_once {
+                inner.skip_children_of_last();
+                return;
+            }
+        }
+
+        self.inner = None;
     }
 }
 
@@ -216,6 +227,28 @@ mod tests {
         assert_eq!(iter.next(), Some(Type::bool()));
         iter.skip_parent_of_last();
         assert_eq!(iter.next(), Some(Type::f32()));
+    }
+
+    #[test]
+    fn fields_iter_skip_children_of_last() {
+        let mut iter = FieldsIter::new(Type::new_tuple(vec![
+            Type::i(64),
+            Type::new_tuple(vec![Type::bool(), Type::i(32).get_ref()]),
+            Type::f32(),
+            Type::new_tuple(vec![Type::bool(), Type::i(16)]),
+        ]));
+
+        assert_eq!(iter.next(), Some(Type::i(64)));
+        assert_eq!(
+            iter.next(),
+            Some(Type::new_tuple(vec![Type::bool(), Type::i(32).get_ref()]))
+        );
+        iter.skip_children_of_last();
+        assert_eq!(iter.next(), Some(Type::f32()));
+        assert_eq!(iter.next(), Some(Type::new_tuple(vec![Type::bool(), Type::i(16)])));
+        assert_eq!(iter.next(), Some(Type::bool()));
+        iter.skip_children_of_last();
+        assert_eq!(iter.next(), Some(Type::i(16)));
     }
 
     #[test]

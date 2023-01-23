@@ -7,6 +7,7 @@ pub enum ParseError {
     IncorrectBeginningOfDeclaration,
     UnexpectedEndOfFile,
     UnexpectedTok { got: Tok, expected: Vec<TokName> },
+    ImproperExpression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

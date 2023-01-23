@@ -94,7 +94,7 @@ impl_reflect_tuple! { A B C D E F G H }
 impl_reflect_tuple! { A B C D E F G H I }
 impl_reflect_tuple! { A B C D E F G H I J }
 
-macro_rules! impl_reflect_tuple {
+macro_rules! impl_reflect_func {
     ( $( $arg:ident )+ ; $ret:ident ) => {
         impl<$($arg: XcReflect),+, $ret: XcReflect> XcReflect for fn($($arg),+) -> $ret {
             fn alias_code() -> String {
@@ -111,15 +111,15 @@ macro_rules! impl_reflect_tuple {
     };
 }
 
-impl_reflect_tuple! { A B; R }
-impl_reflect_tuple! { A B C; R }
-impl_reflect_tuple! { A B C D; R }
-impl_reflect_tuple! { A B C D E; R }
-impl_reflect_tuple! { A B C D E F; R }
-impl_reflect_tuple! { A B C D E F G; R }
-impl_reflect_tuple! { A B C D E F G H; R }
-impl_reflect_tuple! { A B C D E F G H I; R }
-impl_reflect_tuple! { A B C D E F G H I J; R }
+impl_reflect_func! { A B; R }
+impl_reflect_func! { A B C; R }
+impl_reflect_func! { A B C D; R }
+impl_reflect_func! { A B C D E; R }
+impl_reflect_func! { A B C D E F; R }
+impl_reflect_func! { A B C D E F G; R }
+impl_reflect_func! { A B C D E F G H; R }
+impl_reflect_func! { A B C D E F G H I; R }
+impl_reflect_func! { A B C D E F G H I J; R }
 
 impl<'u> Unit<'u> {
     pub fn get_reflect_type<T: XcReflect>(&self) -> Option<Type> {

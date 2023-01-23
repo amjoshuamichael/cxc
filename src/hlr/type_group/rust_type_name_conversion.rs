@@ -45,7 +45,7 @@ fn type_from_tok(lexer: &mut Lexer<RustTok>) -> Type {
                 lexer.next();
                 type_from_tok(lexer)
             } else {
-                Type::never()
+                Type::unknown()
             };
 
             ret.func_with_args(args)

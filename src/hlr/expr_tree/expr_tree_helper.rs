@@ -19,7 +19,7 @@ impl ExprTree {
         use NodeData::*;
 
         fn ids_of<'a>(tree: &'a ExprTree, id: ExprID) -> Vec<ExprID> {
-            let mut rest = match tree.get(id) {
+            let rest = match tree.get(id) {
                 Number { .. } | Float { .. } | Bool { .. } | Ident { .. } => Vec::new(),
                 StructLit { fields, .. } => fields
                     .iter()
@@ -40,7 +40,7 @@ impl ExprTree {
                     .chain(ids_of(tree, one).drain(..))
                     .collect(),
                 BinOp { lhs: l, rhs: r, .. }
-                | SetVar { lhs: l, rhs: r, .. }
+                | Set { lhs: l, rhs: r, .. }
                 | IfThen { i: l, t: r, .. }
                 | While { w: l, d: r, .. }
                 | Index {
@@ -68,7 +68,7 @@ impl ExprTree {
                 },
             };
 
-            vec![id].drain(..).chain(rest.drain(..)).collect()
+            [id].into_iter().chain(rest.into_iter()).collect()
         }
 
         ids_of(self, self.root)

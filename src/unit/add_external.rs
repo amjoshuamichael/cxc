@@ -128,20 +128,13 @@ impl<'u> Unit<'u> {
             CallableValue::try_from(function_pointer).unwrap()
         };
 
+        let arg_vals: Vec<BasicMetadataValueEnum> =
+            function.get_params().iter().map(|p| (*p).into()).collect();
+
         if ret_type.return_style() == ReturnStyle::Sret || ret_type.is_void() {
-            let arg_vals: Vec<BasicMetadataValueEnum> = function
-                .get_params()
-                .iter()
-                .map(|p| (*p).try_into().unwrap())
-                .collect();
             builder.build_call(callable, &*arg_vals, "call");
             builder.build_return(None);
         } else {
-            let arg_vals: Vec<BasicMetadataValueEnum> = function
-                .get_params()
-                .iter()
-                .map(|p| (*p).try_into().unwrap())
-                .collect();
             let out = builder.build_call(callable, &*arg_vals, "call");
             let out = out.try_as_basic_value().unwrap_left();
             builder.build_return(Some(&out));

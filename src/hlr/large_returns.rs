@@ -141,7 +141,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                                 var_type: output_var_typ.clone(),
                                 name: output_var.clone(),
                             },
-                            op: Opcode::Ref(1),
+                            op: Opcode::Ref,
                             ret_type: output_var_typ.get_ref(),
                         },
                     ],
@@ -207,7 +207,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
         args: vec![
             box UnarOpGen {
                 ret_type: raw_ret_var_type.get_ref(),
-                op: Opcode::Ref(1),
+                op: Opcode::Ref,
                 hs: box NodeData::Ident {
                     var_type: raw_ret_var_type.clone(),
                     name: raw_ret_var_name.clone(),
@@ -215,7 +215,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
             },
             box UnarOpGen {
                 ret_type: raw_ret_var_type.get_ref(),
-                op: Opcode::Ref(1),
+                op: Opcode::Ref,
                 hs: box NodeData::Ident {
                     var_type: casted_var_type.clone(),
                     name: casted_var_name.clone(),
@@ -257,7 +257,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let mut new_args: Vec<Box<dyn NodeDataGen>> = Vec::new();
 
     new_args.push(box UnarOpGen {
-        op: Opcode::Ref(1),
+        op: Opcode::Ref,
         hs: box NodeData::Ident {
             var_type: call_ret_type.clone(),
             name: call_var.clone(),

@@ -88,7 +88,6 @@ fn generics_f() {
 // fn opaque_types() {
 //    let context = LLVMContext::new();
 //    let mut unit = Unit::new(&context);
-//    unit.add_lib(cxc::library::TestLib);
 //
 //    let point_2d_opaque = unit.add_opaque_type::<Point2D>();
 //    unit.add_rust_func_explicit(
@@ -262,4 +261,23 @@ fn unions() {
             c: 32.7,
         }
     );
+}
+
+#[test]
+fn deref() {
+    xc_test!(
+        "
+        Num = i32
+        NumRef = &Num
+        NumAgain = *NumRef
+
+        main() {
+            x: Num = 5
+            y: NumRef = &x
+            z: NumAgain = *y
+            ; z
+        }
+        ";
+        5
+    )
 }

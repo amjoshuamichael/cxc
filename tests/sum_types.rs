@@ -1,8 +1,5 @@
 mod test_utils;
-use cxc::{
-    library::{StdLib, TestLib},
-    LLVMContext, Unit,
-};
+use cxc::{library::StdLib, LLVMContext, Unit};
 use std::rc::Rc;
 
 use test_utils::{xc_test, Point2D};
@@ -135,7 +132,6 @@ fn ref_option_some() {
     let mut unit = Unit::new(&context);
 
     unit.add_lib(StdLib);
-    unit.add_lib(TestLib);
 
     unit.push_script(
         "

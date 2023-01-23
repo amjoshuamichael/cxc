@@ -89,7 +89,7 @@ impl NodeDataGen for SetVarGen {
 
         hlr.tree.replace(
             space,
-            NodeData::SetVar {
+            NodeData::Set {
                 lhs: lhs.clone(),
                 rhs: rhs.clone(),
                 ret_type: hlr.tree.get_ref(lhs).ret_type(),

@@ -1,6 +1,4 @@
 ArrayRef<T> {
     first_element: &T,
     len: u64,
-
-    
 }

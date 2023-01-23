@@ -64,7 +64,6 @@ macro_rules! xc_test {
         let mut unit = cxc::Unit::new(&context);
 
         unit.add_lib(cxc::library::StdLib);
-        unit.add_lib(cxc::library::TestLib);
 
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 

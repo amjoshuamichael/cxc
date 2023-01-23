@@ -11,8 +11,9 @@ inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", feat
 
 memoize = "0.3.1"
 lazy_static = "1.4.0"
-bytemuck = "1.12.3"
+bytemuck = { version = "1.12.3", optional = true, default-features = false }
 slotmap = "1.0.6"
+indexmap = "1.9.2"
 
 #cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
 cxc_derive = { path = "../cxc_derive", optional = true }
