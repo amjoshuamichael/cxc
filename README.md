@@ -26,8 +26,7 @@ is_prime(num: i32): bool {
 `main.rs`
 ```rust
 fn main() {
-    let context = Context::create();
-    let mut unit = unit::Unit::new(&context);
+    let mut unit = unit::Unit::new();
 
     unit.push_script(include_str!("prime.cxc"));
 
