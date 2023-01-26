@@ -6,7 +6,6 @@ use crate::{
     typ::{FuncType, ReturnStyle},
     TypeEnum, Unit,
 };
-use inkwell::values::AnyValue;
 use std::{collections::HashMap, mem::transmute};
 
 use crate::Type;
@@ -100,7 +99,7 @@ impl XcValue {
     pub fn get_slice(&self) -> &[u8] { &*self.data }
 }
 
-impl<'u> Unit<'u> {
+impl Unit {
     pub fn get_value(&mut self, of: &str) -> XcValue {
         if of == "" {
             return XcValue::default();
@@ -134,7 +133,7 @@ impl<'u> Unit<'u> {
         let mut fcs = {
             let TypeEnum::Func(function_type) = func_rep.func_type.as_type_enum()
                 else { unreachable!() };
-            let ink_func_type = function_type.llvm_func_type(self.context);
+            let ink_func_type = function_type.llvm_func_type(&self.context);
 
             let function = self.module.add_function(temp_name, ink_func_type, None);
 
@@ -144,15 +143,11 @@ impl<'u> Unit<'u> {
         {
             let block = fcs.context.append_basic_block(fcs.function, "");
             fcs.builder.position_at_end(block);
-            compile_routine(&mut fcs);
+            compile_routine(&mut fcs, &self.module);
         };
 
         if crate::DEBUG {
-            let func = self
-                .module
-                .get_function(temp_name)
-                .unwrap()
-                .print_to_string();
+            let func = self.module.get_function(temp_name).unwrap();
             println!("{func}");
         }
 

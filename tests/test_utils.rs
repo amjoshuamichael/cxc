@@ -6,8 +6,7 @@ use cxc::XcReflect;
 
 macro_rules! xc_test {
     ($code:expr => $ret:ty; $result:expr) => {{
-        let context: cxc::LLVMContext = cxc::LLVMContext::new();
-        let mut unit = cxc::Unit::new(&context);
+        let mut unit = cxc::Unit::new();
 
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
@@ -24,8 +23,7 @@ macro_rules! xc_test {
         $code:expr;
         $($arg_val:expr),+ => $result:expr
     ) => {{
-        let context: cxc::LLVMContext = cxc::LLVMContext::new();
-        let mut unit = cxc::Unit::new(&context);
+        let mut unit = cxc::Unit::new();
 
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
@@ -60,8 +58,7 @@ macro_rules! xc_test {
     }};
 
     ($code:expr) => {{
-        let context: cxc::LLVMContext = cxc::LLVMContext::new();
-        let mut unit = cxc::Unit::new(&context);
+        let mut unit = cxc::Unit::new();
 
         unit.add_lib(cxc::library::StdLib);
 
@@ -73,8 +70,7 @@ macro_rules! xc_test {
     }};
 
     ($(use $($lib:ident),+;)? $code:expr; $expected_output:expr) => {{
-        let context: cxc::LLVMContext = cxc::LLVMContext::new();
-        let mut unit = cxc::Unit::new(&context);
+        let mut unit = cxc::Unit::new();
 
         $( $( unit.add_lib($lib); )* )?
 

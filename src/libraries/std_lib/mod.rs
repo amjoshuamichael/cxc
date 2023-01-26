@@ -9,6 +9,7 @@ use crate::{
 use super::{Library, TypeInterfaceLib};
 
 pub struct StdLib;
+mod alloc_lib;
 mod default;
 mod print_lib;
 mod string;
@@ -24,6 +25,8 @@ impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_rust_func("to_i64", [to_i64]);
         unit.add_static_deriver("len".into(), derive_array_len);
+
+        // unit.add_lib(AllocLib);
 
         unit.push_script(include_str!("vec.cxc"));
         unit.push_script(include_str!("rc.cxc"));

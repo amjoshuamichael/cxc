@@ -10,10 +10,9 @@ use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 
 /// The HLR Data Type.
-#[derive(Debug)]
-pub struct FuncRep<'a> {
+pub struct FuncRep {
     pub tree: ExprTree,
-    pub comp_data: Rc<CompData<'a>>,
+    pub comp_data: Rc<CompData>,
     pub identifiers: Vec<VarName>,
     pub info: UniqueFuncInfo,
     pub ret_type: Type,
@@ -34,12 +33,8 @@ impl DataFlowInfo {
     pub fn is_arg(&self) -> bool { self.arg_index.is_some() }
 }
 
-impl<'a> FuncRep<'a> {
-    pub fn from_code(
-        code: FuncCode,
-        comp_data: Rc<CompData<'a>>,
-        info: UniqueFuncInfo,
-    ) -> Self {
+impl FuncRep {
+    pub fn from_code(code: FuncCode, comp_data: Rc<CompData>, info: UniqueFuncInfo) -> Self {
         let mut new = FuncRep {
             tree: ExprTree::default(),
             ret_type: comp_data

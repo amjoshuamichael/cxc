@@ -1,0 +1,8 @@
+Layout:: {
+    array<T>(n: u64) {
+        element_size: u64 = size_of<T>();
+        alignment: u64 = alignment_of<T>();
+
+        ? element_size != 0 && L
+    }
+}

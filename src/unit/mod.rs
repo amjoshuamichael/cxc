@@ -19,7 +19,6 @@ use std::mem::transmute;
 use std::rc::Rc;
 
 mod add_external;
-mod func_api;
 mod functions;
 mod reflect;
 mod value_api;
@@ -27,7 +26,6 @@ mod value_api;
 use crate::to_llvm::*;
 pub use functions::UniqueFuncInfo;
 
-pub use self::func_api::Func;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
@@ -38,31 +36,38 @@ pub use reflect::XcReflect;
 
 pub type XcFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
-pub struct LLVMContext {
-    context: Context,
-}
+// static mut CONTEXT: *const Context = unsafe { std::mem::transmute(0i64) };
+//
+// fn get_context() -> &'static Context {
+//    println!("HERE");
+//    unsafe {
+//        dbg!(&CONTEXT);
+//    }
+//    unsafe {
+//        if CONTEXT != std::ptr::null() {
+//            panic!("only one compiler instance can be created at a time!");
+//        }
+//
+//        // leak the value, so it will never be dropped or freed
+//        CONTEXT =  as *const Context;
+//        dbg!(&CONTEXT);
+//        &*CONTEXT
+//    }
+//}
 
-impl LLVMContext {
-    pub fn new() -> Self {
-        LLVMContext {
-            context: Context::create(),
-        }
-    }
-}
-
-pub struct Unit<'u> {
-    pub comp_data: Rc<CompData<'u>>,
-    pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'u>>>,
-    pub(crate) module: Module<'u>,
-    pub(crate) context: &'u Context,
+pub struct Unit {
+    pub comp_data: Rc<CompData>,
+    pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'static>>>,
+    pub(crate) module: Module<'static>,
+    pub(crate) context: &'static Context,
 }
 
 #[derive(Clone, Default)]
-pub struct CompData<'u> {
+pub struct CompData {
     pub(crate) types: HashMap<TypeName, Type>,
     pub(crate) aliases: HashMap<TypeName, TypeSpec>,
-    pub(crate) globals: HashMap<VarName, (Type, GlobalValue<'u>)>,
-    compiled: HashMap<UniqueFuncInfo, FunctionValue<'u>>,
+    pub(crate) globals: HashMap<VarName, (Type, GlobalValue<'static>)>,
+    compiled: HashSet<UniqueFuncInfo>,
     func_types: HashMap<UniqueFuncInfo, Type>,
     pub(crate) func_code: HashMap<FuncDeclInfo, FuncCode>,
     decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
@@ -72,15 +77,17 @@ pub struct CompData<'u> {
     reflect_arg_types: HashMap<UniqueFuncInfo, Vec<bool>>,
 }
 
-impl<'u> Debug for CompData<'u> {
+impl Debug for CompData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "compilation data holding {} types", self.types.len())
     }
 }
 
-impl<'u> Unit<'u> {
-    pub fn new(context: &'u LLVMContext) -> Self {
-        let module = Context::create_module(&context.context, "new_module");
+impl Unit {
+    pub fn new() -> Self {
+        let context: &'static _ =
+            unsafe { std::mem::transmute(Box::leak(box Context::create())) };
+        let module = Context::create_module(&context, "new_module");
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .unwrap();
@@ -89,7 +96,7 @@ impl<'u> Unit<'u> {
             comp_data: Rc::new(CompData::new()),
             execution_engine: Rc::new(RefCell::new(execution_engine)),
             module,
-            context: &context.context,
+            context: &context,
         }
     }
 
@@ -118,7 +125,7 @@ impl<'u> Unit<'u> {
         self.comp_data = Rc::new(CompData::new());
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) -> Vec<Func<'u>> {
+    pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
         let parsed = match parse::file(lexed) {
             Ok(file) => file,
@@ -155,14 +162,11 @@ impl<'u> Unit<'u> {
             funcs_to_compile
         };
 
-        let top_level_functions = funcs_to_process.clone();
-
         self.compile_func_set(funcs_to_process);
+    }
 
-        top_level_functions
-            .iter()
-            .map(|info| self.get_func_ref_by_info(info))
-            .collect()
+    fn comp_data_mut<'a>(&'a mut self) -> &'a mut CompData {
+        Rc::get_mut(&mut self.comp_data).unwrap()
     }
 
     pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) {
@@ -238,7 +242,7 @@ impl<'u> Unit<'u> {
     }
 
     fn compile(&mut self, output: &mut FuncOutput) {
-        let function = self.comp_data.get_func_value(output.info_ref()).unwrap();
+        let function = self.get_func_value(output.info_ref()).unwrap();
 
         let mut fcs =
             self.new_func_comp_state(output.take_tree(), function, output.take_arg_names());
@@ -246,7 +250,11 @@ impl<'u> Unit<'u> {
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
 
-        compile_routine(&mut fcs);
+        compile_routine(&mut fcs, &self.module);
+    }
+
+    fn get_func_value(&self, func_info: &UniqueFuncInfo) -> Option<FunctionValue<'static>> {
+        self.module.get_function(&*func_info.to_string())
     }
 
     pub fn add_opaque_type<T>(&mut self) -> Type {
@@ -270,16 +278,17 @@ impl<'u> Unit<'u> {
         opaque_type
     }
 
-    fn new_func_comp_state<'s>(
-        &'s self,
+    fn new_func_comp_state<'f>(
+        &'f self,
         tree: ExprTree,
-        function: FunctionValue<'s>,
+        function: FunctionValue<'static>,
         arg_names: Vec<VarName>,
-    ) -> FunctionCompilationState<'s> {
+    ) -> FunctionCompilationState {
         FunctionCompilationState {
             ret_type: tree.return_type(),
             tree,
             variables: HashMap::new(),
+            used_functions: HashMap::new(),
             function,
             builder: self.context.create_builder(),
             context: self.context,
@@ -322,13 +331,6 @@ impl<'u> Unit<'u> {
             .unwrap();
 
         transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr)
-    }
-
-    pub fn get_func_ref_by_info(&self, info: &UniqueFuncInfo) -> Func<'u> {
-        Func {
-            execution_engine: self.execution_engine.clone(),
-            name: info.to_string(),
-        }
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

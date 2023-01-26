@@ -1,7 +1,7 @@
 mod test_utils;
 
 use cxc::library::{StdLib, TypeInterfaceLib};
-use cxc::{LLVMContext, Unit};
+use cxc::Unit;
 use test_utils::{xc_test, TwoOf};
 
 #[test]
@@ -107,8 +107,7 @@ fn hello_world() {
 
 #[test]
 fn derivations() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
     unit.add_lib(StdLib).add_lib(TypeInterfaceLib).push_script(
         "
         Point2D = {

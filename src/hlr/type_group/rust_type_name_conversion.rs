@@ -1,7 +1,7 @@
 use crate::{unit::CompData, Type};
 use logos::{Lexer, Logos};
 
-impl<'a> CompData<'a> {
+impl CompData {
     pub fn type_of<T>(&self, _: &T) -> Type { self.to_type::<T>() }
 
     pub fn to_type<T>(&self) -> Type {

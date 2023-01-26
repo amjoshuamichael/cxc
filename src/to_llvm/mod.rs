@@ -9,6 +9,7 @@ use core::cell::RefCell;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::module::Module;
 use inkwell::types::*;
 use inkwell::values::*;
 use inkwell::FloatPredicate;
@@ -16,19 +17,20 @@ use inkwell::IntPredicate;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub struct FunctionCompilationState<'f> {
+pub struct FunctionCompilationState {
     pub tree: ExprTree,
-    pub variables: HashMap<VarName, PointerValue<'f>>,
-    pub function: FunctionValue<'f>,
-    pub builder: Builder<'f>,
-    pub context: &'f Context,
-    pub comp_data: Rc<CompData<'f>>,
+    pub variables: HashMap<VarName, PointerValue<'static>>,
+    pub used_functions: HashMap<UniqueFuncInfo, FunctionValue<'static>>,
+    pub function: FunctionValue<'static>,
+    pub builder: Builder<'static>,
+    pub context: &'static Context,
+    pub comp_data: Rc<CompData>,
     pub arg_names: Vec<VarName>,
     pub llvm_ir_uuid: RefCell<u32>,
     pub ret_type: Type,
 }
 
-impl<'f> FunctionCompilationState<'f> {
+impl FunctionCompilationState {
     fn new_uuid<'a>(&self) -> String {
         let current_uuid = *self.llvm_ir_uuid.borrow();
         let output = current_uuid.to_string();
@@ -37,9 +39,10 @@ impl<'f> FunctionCompilationState<'f> {
     }
 }
 
-pub fn compile_routine<'comp, 'a>(
-    fcs: &'a mut FunctionCompilationState<'comp>,
-) -> Option<AnyValueEnum<'a>> {
+pub fn compile_routine(
+    fcs: &mut FunctionCompilationState,
+    module: &Module<'static>,
+) -> Option<AnyValueEnum<'static>> {
     if fcs.ret_type.return_style() == ReturnStyle::Sret {
         // informs llvm that we are returning via the first parameter in the
         // function, which is a pointer.
@@ -50,47 +53,66 @@ pub fn compile_routine<'comp, 'a>(
             .add_attribute(AttributeLoc::Param(0), sret_attribute);
     }
 
-    build_stack_allocas(fcs);
+    build_stack_allocas(&mut fcs.variables, &fcs.tree, &mut fcs.builder, &fcs.context);
+    get_used_functions(&mut fcs.used_functions, &fcs.tree, module);
     compile(fcs, fcs.tree.root)
 }
 
-fn build_stack_allocas<'comp, 'a>(fcs: &'a mut FunctionCompilationState<'comp>) {
-    for expr in fcs.tree.iter_mut() {
+fn build_stack_allocas(
+    variables: &mut HashMap<VarName, PointerValue<'static>>,
+    tree: &ExprTree,
+    builder: &mut Builder<'static>,
+    context: &'static Context,
+) {
+    for expr in tree.iter() {
         match expr.1 {
             MakeVar {
                 ref var_type,
                 ref name,
                 ..
             } => {
-                if fcs.variables.contains_key(name) {
+                if variables.contains_key(name) {
                     continue;
                 }
-                if fcs.arg_names.contains(name) {
-                    continue;
-                }
+                // if fcs.arg_names.contains(name) {
+                //    continue;
+                //}
 
-                let var_ptr = fcs
-                    .builder
-                    .build_alloca(var_type.to_basic_type(fcs.context), &*name.to_string());
+                let var_ptr: PointerValue<'static> =
+                    builder.build_alloca(var_type.to_basic_type(context), &*name.to_string());
 
-                fcs.variables.insert(name.clone(), var_ptr);
+                variables.insert(name.clone(), var_ptr);
             },
             _ => {},
         }
     }
 }
 
-fn compile<'comp, 'a>(
-    fcs: &'a FunctionCompilationState<'comp>,
-    expr_id: ExprID,
-) -> Option<AnyValueEnum<'a>> {
+fn get_used_functions(
+    used_functions: &mut HashMap<UniqueFuncInfo, FunctionValue<'static>>,
+    tree: &ExprTree,
+    module: &Module<'static>,
+) {
+    for (_, call) in tree.iter() {
+        if !matches!(call, NodeData::Call { .. }) {
+            continue;
+        }
+
+        let unique_info = tree.unique_func_info_of_call(call);
+        if let Some(function_value) = module.get_function(&*unique_info.to_string()) {
+            used_functions.insert(unique_info, function_value);
+        }
+    }
+}
+
+fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEnum<'static>> {
     let expr = fcs.tree.get(expr_id);
 
     if crate::DEBUG && !crate::BLOCK_LLVM {
         println!("compiling: {}", expr.to_string(&fcs.tree));
     }
 
-    let output: Option<AnyValueEnum> = match expr {
+    let output: Option<AnyValueEnum<'static>> = match expr {
         Number {
             ref value,
             ref size,
@@ -346,7 +368,7 @@ fn compile<'comp, 'a>(
             if internal_function_ouptut.is_some() {
                 internal_function_ouptut.unwrap()
             } else {
-                let function = fcs.comp_data.get_func_value(&info).unwrap();
+                let function = fcs.used_functions.get(&info).unwrap().clone();
                 let mut arg_vals = Vec::new();
 
                 for arg in a {
@@ -491,20 +513,17 @@ fn compile<'comp, 'a>(
     output
 }
 
-fn compile_as_ptr_unless_already_ptr<'comp, 'a>(
-    fcs: &'a FunctionCompilationState<'comp>,
+fn compile_as_ptr_unless_already_ptr(
+    fcs: &FunctionCompilationState,
     expr_id: ExprID,
-) -> PointerValue<'a> {
+) -> PointerValue<'static> {
     match fcs.tree.get(expr_id).ret_type().clone().as_type_enum() {
         TypeEnum::Ref(_) => compile(fcs, expr_id).unwrap().into_pointer_value(),
         _ => compile_as_ptr(fcs, expr_id),
     }
 }
 
-fn compile_as_ptr<'comp, 'a>(
-    fcs: &'a FunctionCompilationState<'comp>,
-    expr_id: ExprID,
-) -> PointerValue<'a> {
+fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerValue<'static> {
     match fcs.tree.get(expr_id) {
         Ident { name, .. } => match fcs.variables.get(&name) {
             Some(var) => var.clone(),
@@ -574,11 +593,11 @@ fn compile_as_ptr<'comp, 'a>(
     }
 }
 
-fn internal_function<'comp, 'a>(
-    fcs: &'a FunctionCompilationState<'comp>,
+fn internal_function<'comp>(
+    fcs: &FunctionCompilationState,
     info: &UniqueFuncInfo,
     args: &Vec<ExprID>,
-) -> Option<Option<AnyValueEnum<'a>>> {
+) -> Option<Option<AnyValueEnum<'static>>> {
     let output = match &*info.og_name().to_string() {
         "alloc" => {
             let alloc_typ = info.generics()[0].to_basic_type(&fcs.context);

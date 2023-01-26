@@ -65,12 +65,11 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse::TypeSpec, LLVMContext, Type, Unit};
+    use crate::{parse::TypeSpec, Type, Unit};
 
     #[test]
     fn type_could_come_from() {
-        let context = LLVMContext::new();
-        let mut unit = Unit::new(&context);
+        let mut unit = Unit::new();
 
         assert!(Type::i(32).could_come_from(TypeSpec::Int(32), &unit.comp_data));
         assert!(!Type::i(32).could_come_from(TypeSpec::Int(64), &unit.comp_data));

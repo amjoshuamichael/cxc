@@ -5,7 +5,7 @@ use crate::{FuncType, Type};
 
 mod rust_type_name_conversion;
 
-impl<'a> CompData<'a> {
+impl CompData {
     pub fn add_type_alias(&mut self, name: TypeName, a: TypeSpec) {
         self.aliases.insert(name, a);
     }
@@ -36,7 +36,8 @@ impl<'a> CompData<'a> {
                     .collect::<Option<Vec<_>>>()?;
                 func(args, self)
             },
-            TypeSpec::Int(size) | TypeSpec::UInt(size) => Type::i(*size),
+            TypeSpec::Int(size) => Type::i(*size),
+            TypeSpec::UInt(size) => Type::u(*size),
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),

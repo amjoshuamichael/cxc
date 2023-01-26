@@ -159,7 +159,13 @@ impl Type {
     pub fn into_raw(self) -> *const TypeData { Arc::into_raw(self.0) }
     pub unsafe fn from_raw(data: *const TypeData) -> Self { Self(Arc::from_raw(data)) }
 
-    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size })) }
+    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size, signed: true })) }
+    pub fn u(size: u32) -> Type {
+        Type::new(TypeEnum::Int(IntType {
+            size,
+            signed: false,
+        }))
+    }
 
     pub fn f16() -> Type { Type::new(TypeEnum::Float(FloatType::F16)) }
 
@@ -472,6 +478,7 @@ impl VariantType {
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
+    pub signed: bool,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]

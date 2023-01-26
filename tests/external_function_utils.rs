@@ -1,13 +1,11 @@
 mod test_utils;
 use cxc::{
-    library::StdLib, CompData, ExternalFuncAdd, LLVMContext, StructType, Type, TypeEnum, Unit,
-    VarName,
+    library::StdLib, CompData, ExternalFuncAdd, StructType, Type, TypeEnum, Unit, VarName,
 };
 
 #[test]
 fn default_util() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     let string_type = unit.add_opaque_type::<String>();
 
@@ -20,8 +18,7 @@ fn default_util() {
 
 #[test]
 fn clone_util() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     let string_type = unit.add_opaque_type::<String>();
 
@@ -59,8 +56,7 @@ fn add_an_i32(args: Vec<Type>, _: &CompData) -> Type {
 
 #[test]
 fn type_level_functions() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_lib(StdLib);
 

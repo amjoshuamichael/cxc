@@ -1,7 +1,7 @@
 mod test_utils;
 use cxc::library::StdLib;
 use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, XcValue};
-use cxc::{LLVMContext, Type, Unit};
+use cxc::{Type, Unit};
 use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 
 #[test]
@@ -24,8 +24,7 @@ fn multiple_args() {
 
 #[test]
 fn pointer() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.push_script(
         "
@@ -82,8 +81,7 @@ fn five_el_array_out() {
 
 #[test]
 fn struct_pointer() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.push_script(
         "
@@ -132,8 +130,7 @@ fn large_struct() {
 
 #[test]
 fn i32_and_ref() {
-    let context: LLVMContext = cxc::LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_lib(StdLib);
 
@@ -158,8 +155,7 @@ fn external_function() {
         println!("{input}");
     }
 
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_rust_func_explicit(
         "print_num",
@@ -168,8 +164,8 @@ fn external_function() {
             arg_types: vec![Type::i(64)],
             ..ExternalFuncAdd::empty()
         },
-    )
-    .push_script(
+    );
+    unit.push_script(
         "
         call(): i64 {
             x: i64 = 0
@@ -207,7 +203,7 @@ fn reflected_type_masks() {
         let val = unsafe { XcValue::new_from_ptr(the_type.clone(), input) };
 
         match the_type.as_type_enum() {
-            TypeEnum::Int(IntType { size: 32 }) => {
+            TypeEnum::Int(IntType { size: 32, .. }) => {
                 let five: i32 = unsafe { *val.get_data_as::<i32>() };
 
                 assert_eq!(val.get_size(), std::mem::size_of::<i32>());
@@ -223,8 +219,7 @@ fn reflected_type_masks() {
         }
     }
 
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_rust_func_explicit(
         "assert_is_five",
@@ -252,7 +247,7 @@ fn reflected_type_masks() {
 fn value_from_code() {
     pub fn assert_is_five(val: &XcValue) {
         match val.get_type().as_type_enum() {
-            TypeEnum::Int(IntType { size: 32 }) => {
+            TypeEnum::Int(IntType { size: 32, .. }) => {
                 let five: i32 = unsafe { *val.get_data_as::<i32>() };
 
                 assert_eq!(val.get_size(), std::mem::size_of::<i32>());
@@ -268,8 +263,7 @@ fn value_from_code() {
         }
     }
 
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_lib(StdLib);
 

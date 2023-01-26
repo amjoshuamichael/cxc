@@ -1,5 +1,5 @@
 mod test_utils;
-use cxc::{library::StdLib, LLVMContext, Unit};
+use cxc::{library::StdLib, Unit};
 use std::rc::Rc;
 
 use test_utils::{xc_test, Point2D};
@@ -128,8 +128,7 @@ fn ref_option_and_more() {
 
 #[test]
 fn ref_option_some() {
-    let context: LLVMContext = cxc::LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_lib(StdLib);
 
@@ -151,8 +150,7 @@ fn ref_option_some() {
 
 #[test]
 fn ref_and_more_option() {
-    let context: LLVMContext = cxc::LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
 
     unit.add_lib(StdLib);
 

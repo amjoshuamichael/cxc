@@ -26,7 +26,7 @@ impl TryFrom<UniqueFuncInfo> for DeriverInfo {
     }
 }
 
-impl<'a> CompData<'a> {
+impl CompData {
     pub fn new() -> Self {
         let mut out = Self::default();
 
@@ -97,6 +97,15 @@ impl<'a> CompData<'a> {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("size_of"),
+            ret_type: Type::i(64).into(),
+            args: Vec::new(),
+            generic_count: 1,
+            code: Expr::Block(Vec::new()),
+            relation: TypeSpecRelation::Unrelated,
+        });
+
+        out.insert_intrinsic(FuncCode {
+            name: VarName::from("alignment_of"),
             ret_type: Type::i(64).into(),
             args: Vec::new(),
             generic_count: 1,
@@ -184,10 +193,6 @@ impl<'a> CompData<'a> {
         self.func_code.remove(&decl_info);
     }
 
-    pub fn unique_func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
-        self.compiled.keys()
-    }
-
     pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
 
     pub fn reflect_arg_types(&mut self, info: &UniqueFuncInfo, mask: Vec<bool>) {
@@ -210,13 +215,17 @@ impl<'a> CompData<'a> {
             .unwrap_or_default()
     }
 
+    pub fn unique_func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
+        self.compiled.iter()
+    }
+
     pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
         let is_intrinsic = if let Some(decl) = self.get_declaration_of(info) {
             self.intrinsics.contains(&decl)
         } else {
             false
         };
-        is_intrinsic || self.compiled.contains_key(info)
+        is_intrinsic || self.compiled.contains(info)
     }
 
     pub fn get_declaration_of(&self, info: &UniqueFuncInfo) -> Option<FuncDeclInfo> {
@@ -237,15 +246,11 @@ impl<'a> CompData<'a> {
         None
     }
 
-    pub fn get_func_value(&'a self, info: &UniqueFuncInfo) -> Option<FunctionValue<'a>> {
-        self.compiled.get(info).cloned()
-    }
-
-    pub fn create_func_placeholder(
+    pub fn create_func_placeholder<'a>(
         &mut self,
         info: &UniqueFuncInfo,
-        context: &'a Context,
-        module: &Module<'a>,
+        context: &'static Context,
+        module: &Module<'static>,
     ) {
         let function_type = self.get_type(info).unwrap();
         let TypeEnum::Func(llvm_function_type) = function_type.as_type_enum()
@@ -253,11 +258,11 @@ impl<'a> CompData<'a> {
 
         let empty_function = module.add_function(
             &*info.to_string(),
-            llvm_function_type.llvm_func_type(context),
+            llvm_function_type.llvm_func_type(&context),
             None,
         );
 
-        self.compiled.insert(info.clone(), empty_function);
+        self.compiled.insert(info.clone());
         self.func_types.insert(info.clone(), function_type.clone());
         self.globals
             .insert(info.name.clone(), (function_type, empty_function.as_global_value()));

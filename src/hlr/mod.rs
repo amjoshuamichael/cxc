@@ -32,7 +32,7 @@ use self::handle_variant_literals::handle_variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::handle_large_returns;
 
-pub fn hlr(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) -> FuncOutput {
+pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) -> FuncOutput {
     if crate::DEBUG {
         println!();
         println!("====HLR of {}====", info.name.to_string());

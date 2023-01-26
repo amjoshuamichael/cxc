@@ -1,4 +1,4 @@
-use std::{mem::transmute, rc::Rc};
+use std::mem::transmute;
 
 use inkwell::values::{BasicMetadataValueEnum, CallableValue};
 
@@ -31,8 +31,8 @@ impl ExternalFuncAdd {
     }
 }
 
-impl<'u> Unit<'u> {
-    pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) -> &mut Self {
+impl Unit {
+    pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) {
         let func_type = self.comp_data.type_of(&function[0]);
         let TypeEnum::Func(FuncType { args, ret_type }) = 
             func_type.as_type_enum() else { panic!() };
@@ -78,7 +78,7 @@ impl<'u> Unit<'u> {
         name: &str,
         function_ptr: *const usize,
         mut ext_add: ExternalFuncAdd,
-    ) -> &mut Self {
+    ) {
         {
             let mut added_so_far = 0;
             for (index, should_reflect) in ext_add.type_mask.iter().enumerate() {
@@ -140,16 +140,13 @@ impl<'u> Unit<'u> {
             builder.build_return(Some(&out));
         }
 
-        let function = self.module.get_function(&*func_info.to_string()).unwrap();
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+        let comp_data = self.comp_data_mut();
 
-        comp_data.compiled.insert(func_info.clone(), function);
+        comp_data.compiled.insert(func_info.clone());
         comp_data.func_types.insert(func_info.clone(), func_type);
 
         if ext_add.type_mask.len() > 0 {
             comp_data.reflect_arg_types(&func_info, ext_add.type_mask.clone());
         }
-
-        self
     }
 }

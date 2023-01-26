@@ -1,11 +1,10 @@
 mod test_utils;
-use cxc::{LLVMContext, Unit};
+use cxc::Unit;
 use test_utils::{Numbers4, Numbers5, Point2D, Point3D, TestUtilsLib};
 
 #[test]
 fn small_value() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
     unit.push_script("double(x: i32): i32 { ; x * 2 }");
 
     let value = unit.get_value("double(4)");
@@ -15,8 +14,7 @@ fn small_value() {
 
 #[test]
 fn medium_value() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
     unit.add_lib(TestUtilsLib::new("Point2D"));
     unit.push_script("double(x: i32): i32 { ; x * 2 }");
 
@@ -27,8 +25,7 @@ fn medium_value() {
 
 #[test]
 fn large_value() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
     unit.add_lib(TestUtilsLib::new("Point3D"));
     unit.push_script("double(x: i32): i32 { ; x * 2 }");
 
@@ -39,8 +36,7 @@ fn large_value() {
 
 #[test]
 fn extra_large_value() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
     unit.add_lib(TestUtilsLib::new("Numbers4"));
     unit.push_script("double(x: i32): i32 { ; x * 2 }");
 
@@ -59,13 +55,11 @@ fn extra_large_value() {
 
 #[test]
 fn jumbo_value() {
-    let context = LLVMContext::new();
-    let mut unit = Unit::new(&context);
+    let mut unit = Unit::new();
     unit.add_lib(TestUtilsLib::new("Numbers5"));
     unit.push_script("double(x: i32): i32 { ; x * 2 }");
 
-    let value =
-        unit.get_value("Numbers5 { a = 1, b = 2, c = double(3), d = 4, e = 5 }");
+    let value = unit.get_value("Numbers5 { a = 1, b = 2, c = double(3), d = 4, e = 5 }");
     let out_point = unsafe { value.consume_as::<Numbers5>() };
     assert_eq!(
         out_point,

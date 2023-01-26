@@ -136,7 +136,7 @@ impl ExprTree {
     }
 }
 
-impl<'a> FuncRep<'a> {
+impl FuncRep {
     pub fn modify_many(
         &mut self,
         filter: impl Fn(&NodeData) -> bool,
@@ -172,20 +172,20 @@ impl<'a> FuncRep<'a> {
         }
     }
 
-    pub fn insert_statement_before<'b>(
-        &'b mut self,
+    pub fn insert_statement_before<'a>(
+        &'a mut self,
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
-    ) -> InsertionData<'b, 'a> {
+    ) -> InsertionData<'a> {
         let new_statement = self.insert_statement_inner(statement_origin, new_data, 0);
         InsertionData(self, new_statement)
     }
 
-    pub fn insert_statement_after<'b>(
-        &'b mut self,
+    pub fn insert_statement_after<'a>(
+        &'a mut self,
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
-    ) -> InsertionData<'b, 'a> {
+    ) -> InsertionData<'a> {
         let new_statement = self.insert_statement_inner(statement_origin, new_data, 1);
         InsertionData(self, new_statement)
     }
@@ -210,13 +210,10 @@ impl<'a> FuncRep<'a> {
     }
 }
 
-pub struct InsertionData<'a, 'b>(&'a mut FuncRep<'b>, ExprID);
+pub struct InsertionData<'a>(&'a mut FuncRep, ExprID);
 
-impl<'a, 'b> InsertionData<'a, 'b> {
-    pub fn after_that(self, new_data: impl NodeDataGen) -> InsertionData<'a, 'b>
-    where
-        'b: 'a,
-    {
+impl<'a> InsertionData<'a> {
+    pub fn after_that(self, new_data: impl NodeDataGen) -> InsertionData<'a> {
         self.0.insert_statement_after(self.1, new_data)
     }
 

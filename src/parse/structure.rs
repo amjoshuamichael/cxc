@@ -2,7 +2,6 @@ use super::*;
 use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
 use crate::Type;
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeSpec {
@@ -46,12 +45,6 @@ impl From<&str> for TypeSpec {
         let mut context = lexed.split(TypeName::Anonymous, generic_labels);
         parse_type(&mut context).unwrap()
     }
-}
-
-#[derive(Default)]
-pub struct StructParsingContext {
-    pub to_string: String,
-    pub dependencies: HashSet<String>,
 }
 
 #[derive(PartialEq, Eq, Debug)]

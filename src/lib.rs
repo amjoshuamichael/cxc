@@ -12,10 +12,7 @@ pub use typ::{
     ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType, StructType,
     Type, TypeData, TypeEnum,
 };
-pub use unit::{
-    CompData, ExternalFuncAdd, Func, LLVMContext, UniqueFuncInfo, Unit, XcFunc, XcReflect,
-    XcValue,
-};
+pub use unit::{CompData, ExternalFuncAdd, UniqueFuncInfo, Unit, XcFunc, XcReflect, XcValue};
 
 pub mod library {
     pub use crate::libraries::*;

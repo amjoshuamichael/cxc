@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     lex::lex,
     parse::{self, TypeDecl},
@@ -121,7 +119,7 @@ impl_reflect_func! { A B C D E F G H; R }
 impl_reflect_func! { A B C D E F G H I; R }
 impl_reflect_func! { A B C D E F G H I J; R }
 
-impl<'u> Unit<'u> {
+impl Unit {
     pub fn get_reflect_type<T: XcReflect>(&self) -> Option<Type> {
         let decl = T::type_decl();
 
@@ -141,7 +139,7 @@ impl<'u> Unit<'u> {
         let decl = T::type_decl();
 
         {
-            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+            let comp_data = self.comp_data_mut();
             comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
         }
 
@@ -161,12 +159,11 @@ impl<'u> Unit<'u> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LLVMContext, Unit};
+    use crate::Unit;
 
     #[test]
     fn reflect_basic() {
-        let context = LLVMContext::new();
-        let mut unit = Unit::new(&context);
+        let mut unit = Unit::new();
 
         let typ = unit.add_reflect_type::<i32>().unwrap();
         assert_eq!(typ, Type::i(32));
@@ -174,8 +171,7 @@ mod tests {
 
     #[test]
     fn reflect_tuple() {
-        let context = LLVMContext::new();
-        let mut unit = Unit::new(&context);
+        let mut unit = Unit::new();
 
         let typ = unit.add_reflect_type::<(i32, f32)>().unwrap();
         assert_eq!(typ, Type::new_tuple(vec![Type::i(32), Type::f(32)]));
@@ -183,8 +179,7 @@ mod tests {
 
     #[test]
     fn reflect_func() {
-        let context = LLVMContext::new();
-        let mut unit = Unit::new(&context);
+        let mut unit = Unit::new();
 
         let typ = unit.add_reflect_type::<fn(i32, f32) -> i32>().unwrap();
         assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)]));
