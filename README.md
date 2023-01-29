@@ -6,8 +6,7 @@ This repository contains the compiler. The compiler uses [inkwell](https://githu
 ## Example
 `prime.cxc`
 ```ruby
-# function that takes a 32 bit integer and returns a 32 bit integer
-# Returns 1 if num is prime and 0 if num is composite.
+# function that takes a 32 bit integer and returns a boolean
 is_prime(num: i32); bool { 
     divider = 2 # declare divider (type is inferred as i32)
 
@@ -30,8 +29,8 @@ fn main() {
 
     unit.push_script(include_str!("prime.cxc"));
 
-    let is_prime = unit.get_fn("is_prime");
-    assert_eq!(unsafe { is_prime(29) }, 1);
+    let is_prime = unit.get_fn_by_name::<(), bool>("is_prime");
+    assert_eq!(unsafe { is_prime(29) }, true);
 }
 ```
 
