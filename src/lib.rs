@@ -22,7 +22,6 @@ pub mod library {
 #[cfg(feature = "cxc_derive")]
 pub use cxc_derive::XcReflect;
 
-mod errors;
 mod hlr;
 mod lex;
 mod libraries;
