@@ -36,25 +36,6 @@ pub use reflect::XcReflect;
 
 pub type XcFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
-// static mut CONTEXT: *const Context = unsafe { std::mem::transmute(0i64) };
-//
-// fn get_context() -> &'static Context {
-//    println!("HERE");
-//    unsafe {
-//        dbg!(&CONTEXT);
-//    }
-//    unsafe {
-//        if CONTEXT != std::ptr::null() {
-//            panic!("only one compiler instance can be created at a time!");
-//        }
-//
-//        // leak the value, so it will never be dropped or freed
-//        CONTEXT =  as *const Context;
-//        dbg!(&CONTEXT);
-//        &*CONTEXT
-//    }
-//}
-
 pub struct Unit {
     pub comp_data: Rc<CompData>,
     pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'static>>>,
@@ -127,7 +108,7 @@ impl Unit {
 
     pub fn push_script<'s>(&'s mut self, script: &str) {
         let lexed = lex(script);
-        let parsed = match parse::file(lexed) {
+        let parsed = match parse::parse(lexed) {
             Ok(file) => file,
             Err(err) => {
                 dbg!(&err);

@@ -69,7 +69,7 @@ fn hello_world() {
 }
 
 #[test]
-fn infer_vec_push_1() {
+fn infer_vec_push() {
     xc_test!(
         r#"
         main() {
@@ -87,6 +87,21 @@ fn infer_alloc() {
         r#"
         main() {
             ptr: &i32 = alloc(1)
+        }
+        "#
+    )
+}
+
+#[test]
+fn infer_default() {
+    xc_test!(
+        r#"
+        Defaultable = { x: i32, y: i32 }
+
+        main() {
+            x = Defaultable { ++ } 
+            assert_eq(x.x, 0)
+            assert_eq(x.y, 0)
         }
         "#
     )

@@ -24,8 +24,6 @@ pub struct FuncRep {
 #[derive(Default, Debug, Clone)]
 pub struct DataFlowInfo {
     pub typ: Type,
-    // pub declaration: ExprID,
-    // pub uses: Vec<ExprID>,
     pub arg_index: Option<u32>,
 }
 
@@ -350,7 +348,12 @@ impl FuncRep {
                 self.tree.replace(space, new_binop);
                 space
             },
-            Expr::Call(f, generics, args, is_method) => {
+            Expr::Call {
+                func: name,
+                generics,
+                args,
+                is_method,
+            } => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut arg_ids = Vec::new();
@@ -364,7 +367,7 @@ impl FuncRep {
                     .map(|spec| self.get_type_spec(spec).unwrap())
                     .collect();
 
-                let new_data = if let Expr::Ident(ref func_name) = *f {
+                let new_data = if let Expr::Ident(ref func_name) = *name {
                     let relation = if is_method {
                         TypeRelation::MethodOf(Type::unknown())
                     } else {
@@ -378,7 +381,7 @@ impl FuncRep {
                         a: arg_ids,
                         relation,
                     }
-                } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *f {
+                } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *name {
                     let type_origin = self.get_type_spec(type_spec).unwrap();
 
                     NodeData::Call {
@@ -389,7 +392,7 @@ impl FuncRep {
                         relation: TypeRelation::Static(type_origin),
                     }
                 } else {
-                    let f = self.add_expr(*f, space);
+                    let f = self.add_expr(*name, space);
                     NodeData::FirstClassCall {
                         ret_type: Type::unknown(),
                         f,
@@ -489,7 +492,7 @@ impl FuncRep {
                 space
             },
             Expr::Enclosed(expr) => self.add_expr(*expr, parent),
-            Expr::Op(_) | Expr::ArgList(..) | Expr::StaticMethodPath(..) => {
+            Expr::StaticMethodPath(..) | Expr::Error { .. } => {
                 unreachable!()
             },
         }

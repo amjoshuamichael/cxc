@@ -40,12 +40,15 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
             let mut fields = Vec::<(VarName, Expr)>::new();
 
             for (field_name, field_type) in &struct_type.fields {
-                let other_default_call = Expr::Call(
-                    box Expr::StaticMethodPath(field_type.clone().into(), "default".into()),
-                    Vec::new(),
-                    Vec::new(),
-                    false,
-                );
+                let other_default_call = Expr::Call {
+                    func: box Expr::StaticMethodPath(
+                        field_type.clone().into(),
+                        "default".into(),
+                    ),
+                    generics: Vec::new(),
+                    args: Vec::new(),
+                    is_method: false,
+                };
 
                 fields.push((field_name.clone(), other_default_call));
             }

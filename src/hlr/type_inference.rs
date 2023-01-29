@@ -99,6 +99,7 @@ fn type_of_inferable_mut<'a>(inferable: &'a Inferable, hlr: &'a mut FuncRep) -> 
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut infer_map = InferMap::default();
 
+    // TODO: separate this out into its own function
     for id in hlr.tree.ids_in_order().into_iter().rev() {
         let node_data = hlr.tree.get(id);
 
@@ -168,7 +169,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 );
             },
             NodeData::Block { stmts, .. } => {
-                let last_stmt = stmts[stmts.len() - 1];
+                let last_stmt = stmts.last().unwrap().clone();
                 infer_map.insert(id, Constraint::SameAs(last_stmt.into()));
             },
             NodeData::Return { to_return, .. } => {
@@ -217,6 +218,10 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
 
         introduce_reverse_constraints(&mut infer_map, hlr);
+    }
+
+    if crate::DEBUG {
+        dbg!(&infer_map);
     }
 
     panic!("type inference failed");
@@ -278,7 +283,6 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
 
                         let reversed_spec =
                             type_spec_from_perspective_of_generic(&spec, param_index as u32);
-
                         if reversed_spec.is_none() {
                             continue;
                         }
@@ -361,8 +365,6 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                             let call_generic_inferables = (0..code.generic_count)
                                 .map(|index| Inferable::CallGeneric(*id, index as usize))
                                 .collect::<Vec<_>>();
-
-                            
 
                             for (arg_index, arg) in code.args.iter().enumerate() {
                                 infer_map.insert(

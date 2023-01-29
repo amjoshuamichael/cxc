@@ -45,7 +45,7 @@ fn generic_methods() {
             val: T
         }
 
-        <T> &Roll<T>:.come_on(): T {
+        <T> &Roll<T>:.come_on(); T {
             output: T = self.val
 
             counter: i32 = 1
@@ -75,18 +75,18 @@ fn generic_methods() {
 fn backwards_call() {
     xc_test!(
         "
-        courthouse_1955(): i32 {
+        courthouse_1955(); i32 {
             gigawatt_count: f32 = courthouse_1985()
             assert_eq<f32>(gigawatt_count, 1.21) # great scott!
 
             ; 1
         }
 
-        courthouse_1985(): f32 {
+        courthouse_1985(); f32 {
             ; 1.21
         }
 
-        main(): f32 {
+        main(); f32 {
             ; courthouse_1985()
         }
         "
@@ -144,7 +144,7 @@ fn to_string() {
                 floats: TwoOf<f32>
             }
 
-            main(): String {
+            main(); String {
                 output: OutputType = OutputType { 
                     ints = TwoOf<i32> {
                         one = 20,
@@ -179,7 +179,7 @@ fn default() {
                 two: f32
             }
 
-            main(): OutputType {
+            main(); OutputType {
                 output: OutputType = OutputType:default()                
 
                 ; output
@@ -205,7 +205,7 @@ fn default_generic() {
                 two: TwoOf<f32>
             }
 
-            main(): OutputType {
+            main(); OutputType {
                 output: OutputType = OutputType:default()                
 
                 ; output
@@ -220,7 +220,7 @@ fn push_string() {
     xc_test!(
         use StdLib;
         r#"
-        main(): String {
+        main(); String {
             x: String = "transformers was "
             x.push_string(&"directed by michael bay")
             ; x

@@ -10,10 +10,6 @@ use std::{
     sync::Arc,
 };
 
-pub trait Ident: ToString {
-    fn from_tok(t: &mut Lexer<Tok>) -> Self;
-}
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct VarName(Arc<str>);
 
@@ -23,10 +19,6 @@ impl VarName {
 
 impl Default for VarName {
     fn default() -> Self { Self::temp() }
-}
-
-impl Ident for VarName {
-    fn from_tok(t: &mut Lexer<Tok>) -> Self { Self(Arc::from(t.slice())) }
 }
 
 impl Display for VarName {
@@ -67,7 +59,7 @@ pub enum TypeName {
     Anonymous,
 }
 
-impl Ident for TypeName {
+impl TypeName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self {
         match t.slice().chars().nth(0) {
             Some('i') => return Self::I(t.slice()[1..].parse().expect("improper int type")),
@@ -212,7 +204,7 @@ pub enum Tok {
     #[regex(
         "[a-z_][A-Za-z0-9_]+|\
         [a-z_]",
-        VarName::from_tok
+        |t| VarName(Arc::from(t.slice()))
     )]
     VarName(VarName),
 
@@ -251,8 +243,14 @@ pub enum Tok {
     #[error]
     Error,
 
-    #[regex(r"(#.*\n)|[ \t\n\f]+", logos::skip)]
-    Whitespace,
+    #[regex(r"(#.*\n)+")]
+    Comment,
+
+    #[regex(r"\n+")]
+    Return,
+
+    #[regex(r"[ \t\f]+")]
+    Space,
 }
 
 impl Tok {
@@ -331,6 +329,11 @@ impl Tok {
         }
     }
 
+    pub fn is_whitespace(&self) -> bool {
+        use Tok::*;
+        matches!(self, Space | Comment | Return)
+    }
+
     pub fn parens() -> (Self, Self) { (Tok::LParen, Tok::RParen) }
     pub fn bracks() -> (Self, Self) { (Tok::LBrack, Tok::RBrack) }
     pub fn curlys() -> (Self, Self) { (Tok::LCurly, Tok::RCurly) }
@@ -387,7 +390,9 @@ impl ToString for Tok {
             Bool(value) => return value.to_string(),
             Strin(value) => value,
             Error => "!error!",
-            Whitespace => " ",
+            Comment => "#...\n",
+            Return => "\n",
+            Space => " ",
         }
         .into()
     }

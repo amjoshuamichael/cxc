@@ -22,14 +22,14 @@ Vec<T> = {
         self.len = self.len + to_i64(1)
     }
 
-    get(index: i64): T {
+    get(index: i64); T {
         ptr: &T = self.data_loc + index
         ; *ptr
     }
 }
 
 <T> Vec<T>:: {
-    new(): Vec<T> {
+    new(); Vec<T> {
         new_vec: Vec<T> = 0
         new_vec.len = to_i64(0)
         new_vec.capacity = to_i64(4)
@@ -38,7 +38,7 @@ Vec<T> = {
         ; new_vec
     }
 
-    default(): Vec<T> {
+    default(); Vec<T> {
         ; Vec<T>:new()
     }
 }

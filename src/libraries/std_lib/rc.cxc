@@ -9,7 +9,7 @@ Rc<T> = {
 }
 
 <T> Rc<T>:: { 
-    new(value: T): Rc<T> {
+    new(value: T); Rc<T> {
         box: &RcBox<T> = alloc< RcBox<T> >( 2 )
 
         box.write< RcBox<T> > (
@@ -21,7 +21,7 @@ Rc<T> = {
         ; rc
     }
 
-    default(): Rc<T> {
+    default(); Rc<T> {
         ; Rc<T>:new(T:default())
     }
 }

@@ -2,8 +2,9 @@
 #![feature(let_chains)]
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
+#![feature(type_changing_struct_update)]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 pub static BLOCK_LLVM: bool = true;
 
 pub use lex::{TypeName, VarName};
@@ -21,6 +22,7 @@ pub mod library {
 #[cfg(feature = "cxc_derive")]
 pub use cxc_derive::XcReflect;
 
+mod errors;
 mod hlr;
 mod lex;
 mod libraries;

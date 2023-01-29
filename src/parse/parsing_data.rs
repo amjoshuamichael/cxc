@@ -1,8 +1,4 @@
-use std::{
-    fmt::Debug,
-    hash::Hash,
-    iter::{empty, once},
-};
+use std::{fmt::Debug, hash::Hash, iter::once};
 
 use crate::{
     unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
@@ -25,7 +21,12 @@ pub enum Expr {
     Index(Box<Expr>, Box<Expr>),
     SetVar(VarDecl, Box<Expr>),
     Set(Box<Expr>, Box<Expr>),
-    Call(Box<Expr>, Vec<TypeSpec>, Vec<Expr>, bool),
+    Call {
+        func: Box<Expr>,
+        generics: Vec<TypeSpec>,
+        args: Vec<Expr>,
+        is_method: bool,
+    },
     UnarOp(Opcode, Box<Expr>),
     BinOp(Opcode, Box<Expr>, Box<Expr>),
     Member(Box<Expr>, VarName),
@@ -36,28 +37,30 @@ pub enum Expr {
     Return(Box<Expr>),
     Enclosed(Box<Expr>),
 
-    // These are used during to make parsing easier, but are not outputted after
-    // parsing.
-    ArgList(Vec<TypeSpec>, Vec<Expr>),
-    Op(Opcode),
+    Error,
 }
 
 impl Expr {
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expr> + 'a> {
         use Expr::*;
 
-        // TODO: don't use a pointer here
-        match &self {
-            Number(_) | Float(_) | Bool(_) | Strin(_) | Ident(_) | StaticMethodPath(..) => {
-                box once(self)
-            },
+        match self {
+            Number(_)
+            | Float(_)
+            | Bool(_)
+            | Strin(_)
+            | Ident(_)
+            | StaticMethodPath(..)
+            | Error { .. } => box once(self),
             Struct(_, fields, _) => box fields.iter().map(|(_, expr)| expr),
             Tuple(_, exprs, _) => box exprs.iter(),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
             SetVar(_, rhs) => box once(&**rhs),
             Set(lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
-            Call(f, _, a, _) => box once(&**f).chain(a.iter()),
+            Call {
+                func: name, args, ..
+            } => box once(&**name).chain(args.iter()),
             UnarOp(_, hs) => box once(&**hs),
             BinOp(_, lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
             Member(o, _) => box once(&**o),
@@ -66,8 +69,6 @@ impl Expr {
             ForWhile(f, w) => box [&**f, &**w].into_iter(),
             Block(stmts) => box stmts.iter(),
             Return(r) => box once(&**r),
-            ArgList(_, args) => box args.iter(),
-            Op(_) => box empty(),
             Enclosed(expr) => box once(&**expr),
         }
     }
@@ -100,7 +101,7 @@ impl Expr {
             Index(left, _) => left.first_tok(),
             SetVar(var_decl, _) => Tok::VarName(var_decl.name.clone()),
             Set(lhs, _) => lhs.first_tok(),
-            Call(left, ..) => left.first_tok(),
+            Call { func: name, .. } => name.first_tok(),
             UnarOp(..) => todo!(),
             BinOp(_, left, _) => left.first_tok(),
             Member(left, _) => left.first_tok(),
@@ -109,8 +110,7 @@ impl Expr {
             ForWhile(..) => Tok::At,
             Block(..) => Tok::LCurly,
             Return(..) => Tok::Semicolon,
-            ArgList(..) => todo!(),
-            Op(..) => todo!(),
+            Error { .. } => todo!(),
             Enclosed(..) => Tok::LParen,
         }
     }
@@ -254,7 +254,6 @@ pub struct TypeDecl {
     pub name: TypeName,
     pub typ: TypeSpec,
     pub contains_generics: bool,
-    pub dependencies: HashSet<TypeName>,
 }
 
 pub type GenericLabels = HashMap<TypeName, u8>;

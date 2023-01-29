@@ -1,15 +1,12 @@
 use super::*;
 use crate::lex::Tok;
 
-pub fn parse_list<E, F, T: TokenStream>(
+pub fn parse_list<T: Default, O>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
-    mut parser: F,
-    lexer: &mut T,
-) -> Result<Vec<E>, ParseError>
-where
-    F: FnMut(&mut T) -> Result<E, ParseError>,
-{
+    parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,
+    lexer: &mut ParseContext<T>,
+) -> Result<Vec<O>, ParseError> {
     let (opener, closer) = opener_and_closer;
 
     lexer.assert_next_tok_is(opener)?;
@@ -59,15 +56,12 @@ where
     Ok(list)
 }
 
-pub fn parse_one_or_list<E, F, T: TokenStream>(
+pub fn parse_one_or_list<T: Default, O>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
-    mut parser: F,
-    lexer: &mut T,
-) -> Result<Vec<E>, ParseError>
-where
-    F: FnMut(&mut T) -> Result<E, ParseError>,
-{
+    parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,
+    lexer: &mut ParseContext<T>,
+) -> Result<Vec<O>, ParseError> {
     if lexer.peek_tok()? == opener_and_closer.0 {
         parse_list(opener_and_closer, separator, parser, lexer)
     } else {

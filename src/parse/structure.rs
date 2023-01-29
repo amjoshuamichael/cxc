@@ -42,7 +42,9 @@ impl From<&str> for TypeSpec {
             .enumerate()
             .map(|(index, label)| (TypeName::from(label), index as u8))
             .collect::<GenericLabels>();
+
         let mut context = lexed.split(TypeName::Anonymous, generic_labels);
+
         parse_type(&mut context).unwrap()
     }
 }
@@ -52,12 +54,12 @@ enum TypeOps {
     Plus,
 }
 
-pub fn parse_type_spec(lexer: &mut ParseContext<VarName>) -> Result<TypeSpec, ParseError> {
-    let mut temp_lexer = lexer.create_new_with_name(TypeName::Anonymous);
+pub fn parse_type_spec(lexer: &mut FuncParseContext) -> Result<TypeSpec, ParseError> {
+    let mut temp_lexer = lexer.split(TypeName::Anonymous, lexer.generic_labels.clone());
     Ok(parse_type(&mut temp_lexer)?)
 }
 
-fn parse_type(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> {
+fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     let mut types_between_ops = Vec::<TypeSpec>::new();
     let mut ops = Vec::<TypeOps>::new();
 
@@ -88,7 +90,7 @@ fn parse_type(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> {
     Ok(types_between_ops.remove(0))
 }
 
-fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> {
+fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {
@@ -150,12 +152,8 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
                         let generics =
                             parse_list(Tok::angles(), Some(Tok::Comma), parse_type, lexer)?;
 
-                        lexer.push_type_dependency(name.clone());
-
                         TypeSpec::Generic(name, generics)
                     } else {
-                        lexer.push_type_dependency(name.clone());
-
                         TypeSpec::Named(name)
                     }
                 },
@@ -167,10 +165,10 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
 
             {
                 let probably_arrow = lexer.next_tok()?;
-                if probably_arrow != Tok::RArrow {
+                if probably_arrow != Tok::Semicolon {
                     return Err(ParseError::UnexpectedTok {
                         got: probably_arrow,
-                        expected: vec![TokName::RArrow],
+                        expected: vec![TokName::Semicolon],
                     });
                 }
             }
@@ -208,26 +206,23 @@ fn parse_type_atom(lexer: &mut ParseContext<TypeName>) -> ParseResult<TypeSpec> 
     Ok(final_output)
 }
 
-pub fn parse_type_decl(mut lexer: ParseContext<TypeName>) -> Result<TypeDecl, ParseError> {
+pub fn parse_type_decl(mut lexer: TypeParseContext) -> Result<TypeDecl, ParseError> {
     let alias = parse_type(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
-    let (name, dependencies) = lexer.return_info();
+    let name = lexer.name.clone();
 
     let type_decl = TypeDecl {
         name,
         typ: alias,
         contains_generics,
-        dependencies,
     };
 
     Ok(type_decl)
 }
 
-pub fn parse_struct(lexer: &mut ParseContext<TypeName>) -> Result<TypeSpec, ParseError> {
-    fn parse_field(
-        lexer: &mut ParseContext<TypeName>,
-    ) -> Result<(VarName, TypeSpec), ParseError> {
+pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
+    fn parse_field(lexer: &mut TypeParseContext) -> ParseResult<(VarName, TypeSpec)> {
         let field_name = lexer.next_tok()?.var_name()?;
 
         lexer.assert_next_tok_is(Tok::Colon)?;
@@ -237,15 +232,13 @@ pub fn parse_struct(lexer: &mut ParseContext<TypeName>) -> Result<TypeSpec, Pars
         Ok((field_name, typ))
     }
 
-    let fields = parse_list((Tok::LCurly, Tok::RCurly), Some(Tok::Comma), parse_field, lexer)?;
+    let fields = parse_list(Tok::curlys(), Some(Tok::Comma), parse_field, lexer)?;
 
     Ok(TypeSpec::Struct(fields))
 }
 
-pub fn parse_sum(lexer: &mut ParseContext<TypeName>) -> Result<TypeSpec, ParseError> {
-    fn parse_variant(
-        lexer: &mut ParseContext<TypeName>,
-    ) -> Result<(TypeName, TypeSpec), ParseError> {
+pub fn parse_sum(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
+    fn parse_variant(lexer: &mut TypeParseContext) -> ParseResult<(TypeName, TypeSpec)> {
         let variant_name = lexer.next_tok()?.type_name()?;
         // TODO: throw error if variant_name is not a regular type name, and is a
         // primitive instead, e.g. `i32` or `f64`
@@ -257,8 +250,7 @@ pub fn parse_sum(lexer: &mut ParseContext<TypeName>) -> Result<TypeSpec, ParseEr
         Ok((variant_name, typ))
     }
 
-    let fields =
-        parse_list((Tok::LCurly, Tok::RCurly), Some(Tok::Divider), parse_variant, lexer)?;
+    let fields = parse_list(Tok::curlys(), Some(Tok::Divider), parse_variant, lexer)?;
 
     Ok(TypeSpec::Sum(fields))
 }

@@ -42,7 +42,7 @@ fn pointer() {
 #[test]
 fn one_el_array_out() {
     xc_test!(
-        "main(): [1]i32 { ; [1] }";
+        "main(); [1]i32 { ; [1] }";
         [1]
     )
 }
@@ -50,7 +50,7 @@ fn one_el_array_out() {
 #[test]
 fn two_el_array_out() {
     xc_test!(
-        "main(): [2]i32 { ; [1, 4] }";
+        "main(); [2]i32 { ; [1, 4] }";
         [1, 4]
     )
 }
@@ -58,7 +58,7 @@ fn two_el_array_out() {
 #[test]
 fn three_el_array_out() {
     xc_test!(
-        "main(): [3]i32 { ; [1, 4, 9] }";
+        "main(); [3]i32 { ; [1, 4, 9] }";
         [1, 4, 9]
     )
 }
@@ -66,7 +66,7 @@ fn three_el_array_out() {
 #[test]
 fn four_el_array_out() {
     xc_test!(
-        "main(): [4]i32 { ; [1, 4, 9, 90] }";
+        "main(); [4]i32 { ; [1, 4, 9, 90] }";
         [1, 4, 9, 90]
     )
 }
@@ -74,7 +74,7 @@ fn four_el_array_out() {
 #[test]
 fn five_el_array_out() {
     xc_test!(
-        "main(): [5]i32 { ; [1, 4, 9, 90, 129] }";
+        "main(); [5]i32 { ; [1, 4, 9, 90, 129] }";
         [1, 4, 9, 90, 129]
     )
 }
@@ -90,7 +90,7 @@ fn struct_pointer() {
             y: i32
         }
 
-        sqr_magnitude_of(in_ptr: &Point2D): i32 {
+        sqr_magnitude_of(in_ptr: &Point2D); i32 {
             in: Point2D = *in_ptr
 
             ; in.x * in.x + in.y * in.y
@@ -136,7 +136,7 @@ fn i32_and_ref() {
 
     unit.push_script(
         "
-        main(pointer: &i32): {i32, &i32} {
+        main(pointer: &i32); {i32, &i32} {
             output: {i32, &i32} = {i32, &i32} { 10, pointer }
             ; output
         }
@@ -167,7 +167,7 @@ fn external_function() {
     );
     unit.push_script(
         "
-        call(): i64 {
+        call(); i64 {
             x: i64 = 0
             @ x < 100 {
                 print_num(x)
@@ -187,7 +187,7 @@ fn strings() {
     xc_test!(
         use StdLib;
         r#"
-        main(): String {
+        main(); String {
             x: String = "that's cray"
             ; x
         }

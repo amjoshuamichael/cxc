@@ -16,7 +16,7 @@ fn sum_type_basic_set() {
         "
             IntOrFloat = { Int: i32 / Float: f32 }
 
-            main(): IntOrFloat {
+            main(); IntOrFloat {
                 x: IntOrFloat = IntOrFloat.Int { 934 }
                 ; x
             }
@@ -31,7 +31,7 @@ fn sum_type_basic_set_2() {
         "
             IntOrFloat = { Int: i32 / Float: f32 }
 
-            main(): IntOrFloat {
+            main(); IntOrFloat {
                 x: IntOrFloat = IntOrFloat.Float { 490.24 }
                 ; x
             }
@@ -52,7 +52,7 @@ fn sum_type_struct() {
         "
             PointOrFloat = { Point: { x: i32, y: i32 } / Float: f32 }
 
-            main(): PointOrFloat {
+            main(); PointOrFloat {
                 x: PointOrFloat = PointOrFloat.Point { 
                     { x: i32, y: i32 } { x = 43, y = 54 }
                 }
@@ -69,7 +69,7 @@ fn sum_type_struct_2() {
         "
             PointOrFloat = { Point: { x: i32, y: i32 } / Float: f32 }
 
-            main(): PointOrFloat {
+            main(); PointOrFloat {
                 x: PointOrFloat = PointOrFloat.Float { 
                     245.93
                 }
@@ -85,7 +85,7 @@ fn ref_option_none() {
     xc_test!(
         use StdLib;
         "
-            main(): Option<&i32> {
+            main(); Option<&i32> {
                 output: Option<&i32> = Option<&i32>:default()
 
                 ; output
@@ -100,7 +100,7 @@ fn option_rc() {
     xc_test!(
         use StdLib;
         "
-            main(): Option< Rc<i32> > {
+            main(); Option< Rc<i32> > {
                 output: Option< Rc<i32> > = 
                     Option< Rc<i32> >.Some { { Rc<i32> } { Rc<i32>:new(5) } }
 
@@ -116,7 +116,7 @@ fn ref_option_and_more() {
     xc_test!(
         use StdLib;
         "
-            main(): {Option<&i32>, i32} {
+            main(); {Option<&i32>, i32} {
                 output: {Option<&i32>, i32} =
                     { Option<&i32>, i32 } { Option<&i32>:default(), 32 }
                 ; output
@@ -134,7 +134,7 @@ fn ref_option_some() {
 
     unit.push_script(
         "
-        main(pointer: &i32): Option<&i32> {
+        main(pointer: &i32); Option<&i32> {
             output: Option<&i32> = Option<&i32>.Some{ { &i32 } { (pointer) } }
 
             ; output
@@ -156,7 +156,7 @@ fn ref_and_more_option() {
 
     unit.push_script(
         "
-        main(pointer: &i32): Option<{i32, &i32}> {
+        main(pointer: &i32); Option<{i32, &i32}> {
             output: Option<{i32, &i32}> =
                 Option<{i32, &i32}>.Some{ {i32, &i32} { 10, (pointer) }}
             ; output

@@ -19,9 +19,9 @@ fn basic_struct() {
 fn set_to_with_function() {
     xc_test!(
         "
-            double(in: i32): i32 { ; in * 2 }
+            double(in: i32); i32 { ; in * 2 }
 
-            main(): i32 {
+            main(); i32 {
                 x: Point2D = Point2D { x = double(2), y = 9 }
                 ; x.x + x.y
             }
@@ -103,7 +103,7 @@ fn generics_f() {
 //
 //    unit.push_script(
 //        r#"
-//        hello_world(input: { i64, i64}): i32 {
+//        hello_world(input: { i64, i64}); i32 {
 //            printable: { i64, i64 } = input
 //            print<i32>(printable.1)
 //            #output: i32 = input.sqr_magnitude()
@@ -128,12 +128,12 @@ fn methods() {
             y: f32
         }
 
-        &MyPoint:.sqr_hypotenuse(): f32 {
+        &MyPoint:.sqr_hypotenuse(); f32 {
             ; self.x * self.x + self.y * self.y
         }
 
         &MyPoint:. {
-            scaled(by: f32): MyPoint {
+            scaled(by: f32); MyPoint {
                 ; MyPoint { x = self.x * by, y = self.y * by }
             }
         }
@@ -217,7 +217,7 @@ fn active_initialize() {
     xc_test!(
         use StdLib;
         "
-        main(): Numbers5 {
+        main(); Numbers5 {
             numbers: Numbers5 = Numbers5 { a = 10, b = 20, e = 90, ++ }
 
             ; numbers
@@ -249,7 +249,7 @@ fn unions() {
         Num3<T> = { c: T, d: i32, e: T }
         Union = Num2 + Num3<f32>
 
-        main(): Union {
+        main(); Union {
             ; Union { a = 10, b = 20, e = 90.9, d = 30, c = 32.7 }
         }
         ";

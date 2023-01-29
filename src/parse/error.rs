@@ -1,4 +1,18 @@
-use crate::lex::Tok;
+use crate::{lex::Tok, Type};
+
+use super::{Expr, TypeSpec};
+
+pub trait Errable {
+    fn err() -> Self;
+}
+
+impl Errable for Expr {
+    fn err() -> Self { Expr::Error }
+}
+
+impl Errable for TypeSpec {
+    fn err() -> Self { TypeSpec::Type(Type::unknown()) }
+}
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
@@ -132,7 +146,7 @@ impl From<Tok> for TokName {
             Bool(_) => TokName::Bool,
             Strin(_) => TokName::Strin,
             Error => TokName::Error,
-            Whitespace => TokName::Whitespace,
+            Space | Comment | Return => TokName::Whitespace,
         }
     }
 }

@@ -11,7 +11,7 @@ macro_rules! xc_test {
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
         unit.push_script(
-            concat!("test() : ", stringify!($ret), "{ ", $code, " }"),
+            concat!("test() ; ", stringify!($ret), "{ ", $code, " }"),
         );
 
         let output = unsafe { unit.get_fn_by_name::<(), $ret>("test")(()) };
@@ -46,7 +46,7 @@ macro_rules! xc_test {
             &*(
                 String::from("test(") +
                 &*args +
-                concat!(")", ": ", stringify!($ret), "{ ", $code, " }")
+                concat!(")", "; ", stringify!($ret), "{ ", $code, " }")
             )
         );
 

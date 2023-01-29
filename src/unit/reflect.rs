@@ -20,10 +20,9 @@ pub trait XcReflect {
                 name: TypeName::Anonymous,
                 typ: spec,
                 contains_generics: false,
-                dependencies: spec_lexer.return_info().1,
             }
         } else {
-            parse::file(lexer)
+            parse::file(&mut lexer)
                 .expect("error in type decl")
                 .types_iter()
                 .next()
@@ -101,7 +100,7 @@ macro_rules! impl_reflect_func {
                     code += &*$arg::alias_code();
                     code += ", ";
                 )+
-                code += ") -> ";
+                code += "); ";
                 code += &*$ret::alias_code();
                 code
             }

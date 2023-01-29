@@ -35,7 +35,7 @@ fn nested_structural_type() {
 fn structural_type_method() {
     xc_test!(
         "
-            &{ x: i32, y: i32 }:.add(): i32 {
+            &{ x: i32, y: i32 }:.add(); i32 {
                 ; self.x + self.y
             }
 
@@ -54,7 +54,7 @@ fn nested_structural_type_method() {
     // purely for testing purposes.
     xc_test!(
         "
-            &{ a: i32, b: i32 }:.add(): i32 {
+            &{ a: i32, b: i32 }:.add(); i32 {
                 ; self.a + self.b
             }
 
@@ -76,7 +76,7 @@ fn nested_structural_type_method() {
 fn structural_type_static() {
     xc_test!(
         "
-            { a: i32, b: i32 }::five(): i32 {
+            { a: i32, b: i32 }::five(); i32 {
                 ; 5
             }
 

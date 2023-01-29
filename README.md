@@ -8,7 +8,7 @@ This repository contains the compiler. The compiler uses [inkwell](https://githu
 ```ruby
 # function that takes a 32 bit integer and returns a 32 bit integer
 # Returns 1 if num is prime and 0 if num is composite.
-is_prime(num: i32): bool { 
+is_prime(num: i32); bool { 
     divider = 2 # declare divider (type is inferred as i32)
 
     @ divider < num { # while divider is less than num
@@ -26,12 +26,12 @@ is_prime(num: i32): bool {
 `main.rs`
 ```rust
 fn main() {
-    let mut unit = unit::Unit::new();
+    let mut unit = cxc::Unit::new();
 
     unit.push_script(include_str!("prime.cxc"));
 
     let is_prime = unit.get_fn("is_prime");
-    assert_eq!(is_prime(29), 1);
+    assert_eq!(unsafe { is_prime(29) }, 1);
 }
 ```
 

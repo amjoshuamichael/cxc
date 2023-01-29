@@ -42,6 +42,10 @@ pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) ->
 
     let mut output = FuncRep::from_code(code, comp_data.clone(), info);
 
+    if crate::DEBUG {
+        println!("{}", &output.tree.to_string());
+    }
+
     infer_types(&mut output);
     handle_variant_literals(&mut output);
     handle_active_initialization(&mut output);

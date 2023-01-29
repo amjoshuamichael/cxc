@@ -10,7 +10,7 @@ fn default_vec_alone() {
     xc_test!(
         use StdLib;
         "
-            main(): Vec<i32> {
+            main(); Vec<i32> {
                 output: Vec<i32> = Vec<i32>:default()                
 
                 ; output
@@ -25,7 +25,7 @@ fn default_vec_with_push() {
     xc_test!(
         use StdLib;
         "
-            main(): Vec<i32> {
+            main(); Vec<i32> {
                 output: Vec<i32> = Vec<i32>:default()                
                 output.push<i32>(432)
 
@@ -45,7 +45,7 @@ fn vec_push_and_check() {
             num_two: i64
         }
 
-        two_nums_from_one(in: i64): TwoNums {
+        two_nums_from_one(in: i64); TwoNums {
             two_nums: TwoNums = 0
             two_nums.num_one = in
             two_nums.num_two = in + 42
@@ -100,7 +100,7 @@ fn rc() {
     xc_test!(
         use StdLib;
         "
-        main(): Rc<i32> {
+        main(); Rc<i32> {
             x: i32 = 90
             rcx: Rc<i32> = Rc<i32>:new(x)
 
@@ -116,7 +116,7 @@ fn option() {
     xc_test!(
         use StdLib;
         "
-            main(): Option<i32> {
+            main(); Option<i32> {
                 output: Option<i32> = Option<i32>.Some { 10 }
 
                 ; output
@@ -131,7 +131,7 @@ fn option_default() {
     xc_test!(
         use StdLib;
         "
-            main(): Option<i32> {
+            main(); Option<i32> {
                 output: Option<i32> = Option<i32>:default()
 
                 ; output
@@ -146,7 +146,7 @@ fn bigger_option() {
     xc_test!(
         use StdLib;
         "
-            main(): Option<{i32, f32, i32}> {
+            main(); Option<{i32, f32, i32}> {
                 output: Option<{i32, f32, i32}> = 
                     Option<{i32, f32, i32}>.Some{ {i32, f32, i32} { 10, 20.0, 30 }}
 

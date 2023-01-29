@@ -10,7 +10,7 @@ fn default_util() {
     let string_type = unit.add_opaque_type::<String>();
 
     unit.add_external_default::<String>(string_type);
-    unit.push_script("main(): String { ; String:default() }");
+    unit.push_script("main(); String { ; String:default() }");
 
     let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")(()) };
     assert_eq!(default_string, String::default());
@@ -35,7 +35,7 @@ fn clone_util() {
 
     unit.push_script(
         "
-        main(): String { 
+        main(); String { 
             cool_string: String = a_cool_string()
             ; cool_string.clone()
         }
@@ -78,6 +78,8 @@ fn type_level_functions() {
                 ++
             }
 
+            print(42)
+            print(defaulted_with_i32.thei32)
             assert_eq<i32>(defaulted_with_i32.thei32, 0)
         }
         ",

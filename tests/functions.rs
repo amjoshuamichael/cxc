@@ -5,12 +5,12 @@ use test_utils::xc_test;
 fn call_test() {
     xc_test!(
         "
-        mul_by_two(num: i32): i32 {
+        mul_by_two(num: i32); i32 {
             output: i32 = num * 2
             ; output
         }
 
-        main(): i32 {
+        main(); i32 {
             ; mul_by_two(6)
         }
         ";
@@ -22,12 +22,12 @@ fn call_test() {
 fn call_test_2() {
     xc_test!(
         "
-        divide_by_two(num: f32): f32 {
+        divide_by_two(num: f32); f32 {
             output: f32 = num / 2.0
             ; output
         }
 
-        main(): f32 {
+        main(); f32 {
             x: f32 = divide_by_two(6.0)
             ; x
         }
@@ -40,11 +40,11 @@ fn call_test_2() {
 fn return_small_struct() {
     xc_test!(
         "
-        somewhere(): Point2D {
+        somewhere(); Point2D {
             ; Point2D { x = 1, y = 10 }
         }
 
-        main(): i32 {
+        main(); i32 {
             x: Point2D = somewhere()
             ; x.x + x.y
         }
@@ -57,11 +57,11 @@ fn return_small_struct() {
 fn return_medium_struct() {
     xc_test!(
         "
-        somewhere(): Point3D {
+        somewhere(); Point3D {
             ; Point3D { x = 1, y = 10, z = 100 }
         }
 
-        main(): i32 {
+        main(); i32 {
             x: Point3D = somewhere()
             ; x.x + x.y + x.z
         }
@@ -74,11 +74,11 @@ fn return_medium_struct() {
 fn return_large_struct() {
     xc_test!(
         "
-        some_numbers(): Numbers5 {
+        some_numbers(); Numbers5 {
             ; Numbers5 { a = 1, b = 10, c = 100, d = 2000, e = 10000 }
         }
 
-        main(): i32 {
+        main(); i32 {
             x: Numbers5 = some_numbers()
             ; x.a + x.b + x.c + x.d + x.e
         }
@@ -91,34 +91,34 @@ fn return_large_struct() {
 fn basic_first_class() {
     xc_test!(
         "
-        double(in: i32, i_want_zero: bool): i32 {
+        double(in: i32, i_want_zero: bool); i32 {
             ? i_want_zero { ; 0 }
 
             ; in * 2
         }
 
-        triple(in: i32, i_want_zero: bool): i32 {
+        triple(in: i32, i_want_zero: bool); i32 {
             ? i_want_zero { ; 0 }
 
             ; in * 3
         }
 
-        get_a_function(multiply_amount: i32): (i32, bool) -> i32 {
+        get_a_function(multiply_amount: i32); (i32, bool); i32 {
             ? multiply_amount == 2 { ; double }
 
             ; triple
         }
 
-        run_with_5(function: (i32, bool) -> i32): i32 {
+        run_with_5(function: (i32, bool); i32); i32 {
             ; (function)(5, false)
         }
 
         main() {
-            double: (i32, bool) -> i32 = get_a_function(2)
+            double: (i32, bool); i32 = get_a_function(2)
             ten: i32 = run_with_5(double)
             assert_eq<i32>(ten, 10)
 
-            triple: (i32, bool) -> i32 = get_a_function(3)
+            triple: (i32, bool); i32 = get_a_function(3)
             fifteen: i32 = run_with_5(triple)
             assert_eq<i32>(fifteen, 15)
         }
@@ -131,18 +131,18 @@ fn store_first_class() {
     xc_test!(
         "
         Operation = {
-            func: (i32) -> i32,
+            func: (i32); i32,
         }
 
-        &Operation:.run(input: i32): i32 {
+        &Operation:.run(input: i32); i32 {
             ; (self.func)(input)
         }
 
-        double(in: i32): i32 { ; in * 2 }
+        double(in: i32); i32 { ; in * 2 }
 
-        triple(in: i32): i32 { ; in * 3 }
+        triple(in: i32); i32 { ; in * 3 }
 
-        get_operation(multiply_amount: i32): Operation {
+        get_operation(multiply_amount: i32); Operation {
             ? multiply_amount == 2 { 
                 ; Operation { func = double } 
             }

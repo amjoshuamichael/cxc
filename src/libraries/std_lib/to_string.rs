@@ -96,33 +96,37 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
                 let field_prefix_expr = Expr::Strin(field_prefix);
 
-                let push_prefix_call = Expr::Call(
-                    push_string.clone(),
-                    Vec::new(),
-                    vec![field_prefix_expr.get_ref(), output_var_ref.clone()],
-                    true,
-                );
+                let push_prefix_call = Expr::Call {
+                    func: push_string.clone(),
+                    generics: Vec::new(),
+                    args: vec![field_prefix_expr.get_ref(), output_var_ref.clone()],
+                    is_method: true,
+                };
                 statements.push(push_prefix_call);
 
                 let field = Expr::Member(input_var.clone(), field_name.clone());
 
-                let field_to_string =
-                    Expr::Call(to_string.clone(), Vec::new(), vec![field.get_ref()], true);
-                let push_string_call = Expr::Call(
-                    push_string.clone(),
-                    Vec::new(),
-                    vec![field_to_string.get_ref(), output_var_ref.clone()],
-                    true,
-                );
+                let field_to_string = Expr::Call {
+                    func: to_string.clone(),
+                    generics: Vec::new(),
+                    args: vec![field.get_ref()],
+                    is_method: true,
+                };
+                let push_string_call = Expr::Call {
+                    func: push_string.clone(),
+                    generics: Vec::new(),
+                    args: vec![field_to_string.get_ref(), output_var_ref.clone()],
+                    is_method: true,
+                };
                 statements.push(push_string_call);
             }
 
-            let push_closer_call = Expr::Call(
-                push_string.clone(),
-                Vec::new(),
-                vec![Expr::Strin("}".into()).get_ref(), output_var_ref.clone()],
-                true,
-            );
+            let push_closer_call = Expr::Call {
+                func: push_string.clone(),
+                generics: Vec::new(),
+                args: vec![Expr::Strin("}".into()).get_ref(), output_var_ref.clone()],
+                is_method: true,
+            };
             statements.push(push_closer_call);
 
             let ret = Expr::Return(box output_var_expr.clone());
@@ -155,42 +159,42 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
                 let comma_expr = Expr::Strin(comma);
 
-                let push_comma_call = Expr::Call(
-                    push_string.clone(),
-                    Vec::new(),
-                    vec![comma_expr, output_var_ref.clone()],
-                    true,
-                );
+                let push_comma_call = Expr::Call {
+                    func: push_string.clone(),
+                    generics: Vec::new(),
+                    args: vec![comma_expr, output_var_ref.clone()],
+                    is_method: true,
+                };
                 statements.push(push_comma_call);
 
-                let index_to_string = Expr::Call(
-                    to_string.clone(),
-                    Vec::new(),
-                    vec![Expr::UnarOp(
+                let index_to_string = Expr::Call {
+                    func: to_string.clone(),
+                    generics: Vec::new(),
+                    args: vec![Expr::UnarOp(
                         Opcode::Ref,
                         box Expr::Index(
                             box Expr::UnarOp(Opcode::Deref, input_var.clone()),
                             box Expr::Number(index as u128),
                         ),
                     )],
-                    true,
-                );
+                    is_method: true,
+                };
 
-                let push_string_call = Expr::Call(
-                    push_string.clone(),
-                    Vec::new(),
-                    vec![index_to_string, output_var_ref.clone()],
-                    true,
-                );
+                let push_string_call = Expr::Call {
+                    func: push_string.clone(),
+                    generics: Vec::new(),
+                    args: vec![index_to_string, output_var_ref.clone()],
+                    is_method: true,
+                };
                 statements.push(push_string_call);
             }
 
-            let push_closer_call = Expr::Call(
-                push_string.clone(),
-                Vec::new(),
-                vec![Expr::Strin("]".into()), output_var_ref.clone()],
-                true,
-            );
+            let push_closer_call = Expr::Call {
+                func: push_string.clone(),
+                generics: Vec::new(),
+                args: vec![Expr::Strin("]".into()), output_var_ref.clone()],
+                is_method: true,
+            };
             statements.push(push_closer_call);
 
             let ret = Expr::Return(box output_var_expr.clone());
