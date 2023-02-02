@@ -134,6 +134,8 @@ impl ExprTree {
             own_generics: generics,
         }
     }
+
+    pub fn print_id(&self, id: ExprID) { println!("{}", self.get(id).to_string(self)) }
 }
 
 impl FuncRep {

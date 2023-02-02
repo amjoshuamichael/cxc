@@ -32,9 +32,11 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("alloc"),
+            args: vec![VarDecl {
+                name: VarName::temp(),
+                type_spec: TypeSpec::Int(32),
+            }],
             ret_type: TypeSpec::Ref(box TypeSpec::GenParam(0)),
-            args: Vec::new(),
-
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -42,7 +44,7 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("free"),
-            ret_type: Type::i(32).into(),
+            ret_type: TypeSpec::Void,
             args: vec![VarDecl {
                 name: VarName::temp(),
                 type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
@@ -55,7 +57,7 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("memmove"),
-            ret_type: Type::i(32).into(),
+            ret_type: TypeSpec::Void,
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
@@ -78,7 +80,7 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("memcpy"),
-            ret_type: Type::i(32).into(),
+            ret_type: TypeSpec::Void,
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
@@ -121,7 +123,7 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("write"),
-            ret_type: Type::i(32).into(),
+            ret_type: TypeSpec::Void,
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
@@ -132,7 +134,6 @@ impl CompData {
                     type_spec: TypeSpec::GenParam(0).get_ref().into(),
                 },
             ],
-
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::MethodOf(
@@ -211,6 +212,8 @@ impl CompData {
             let arg_count = mask.iter().filter(|refl| **refl).count() + mask.len();
             args.len() == arg_count
         });
+
+        self.reflect_arg_types.insert(info.clone(), mask);
     }
 
     pub fn get_reflect_type_masks(&self, info: &UniqueFuncInfo) -> Vec<bool> {

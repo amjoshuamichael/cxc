@@ -18,8 +18,10 @@ pub struct FuncRep {
     pub ret_type: Type,
 
     // used to find where variables are declared.
-    pub data_flow: HashMap<VarName, DataFlowInfo>,
+    pub data_flow: DataFlow,
 }
+
+pub type DataFlow = HashMap<VarName, DataFlowInfo>;
 
 #[derive(Default, Debug, Clone)]
 pub struct DataFlowInfo {
@@ -33,10 +35,6 @@ impl DataFlowInfo {
 
 impl FuncRep {
     pub fn from_code(code: FuncCode, comp_data: Rc<CompData>, info: UniqueFuncInfo) -> Self {
-        if code.name == "get".into() {
-            dbg!(&code.args);
-        }
-
         let mut new = FuncRep {
             tree: ExprTree::default(),
             ret_type: comp_data
@@ -52,7 +50,6 @@ impl FuncRep {
             new.identifiers.push(arg.name.clone());
 
             let typ = new.comp_data.get_spec(&arg.type_spec, &new.info).unwrap();
-            dbg!(&arg);
 
             new.data_flow.insert(
                 arg.name.clone(),
@@ -112,6 +109,7 @@ impl FuncRep {
             func_type: self.ret_type.clone().func_with_args(self.arg_types()),
             arg_names: Some(self.arg_names()),
             tree: Some(self.tree),
+            data_flow: Some(self.data_flow),
             info: Some(self.info),
         };
 

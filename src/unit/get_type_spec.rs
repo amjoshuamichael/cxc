@@ -42,7 +42,6 @@ impl GenericTable for UniqueFuncInfo {
 
 impl CompData {
     pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> Option<Type> {
-        dbg!(&spec);
         let typ = match spec {
             TypeSpec::Named(name) => self.get_by_name(name)?,
             TypeSpec::TypeLevelFunc(name, args) => {

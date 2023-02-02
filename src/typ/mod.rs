@@ -98,7 +98,16 @@ impl Type {
         }
     }
 
-    pub fn is_subtype_of(&self, of: &Type) -> bool { self.as_type_enum() == of.as_type_enum() }
+    pub fn is_subtype_of(&self, of: &Type) -> bool {
+        match self.as_type_enum() {
+            TypeEnum::Variant(VariantType { parent, .. }) => parent == of,
+            other => other == of.as_type_enum(),
+        }
+    }
+
+    pub fn are_subtypes(lhs: &Self, rhs: &Self) -> bool {
+        lhs.is_subtype_of(rhs) || rhs.is_subtype_of(lhs)
+    }
 
     pub fn raw_return_type(&self) -> Type {
         match self.return_style() {

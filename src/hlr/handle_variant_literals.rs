@@ -15,6 +15,7 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
             let NodeData::StructLit { ref mut var_type, ref mut fields, ref mut initialize } = 
                 &mut struct_data else { unreachable!() };
 
+            dbg!(&var_type);
             let TypeEnum::Variant(variant_type) = var_type.as_type_enum() else { return };
             let TypeEnum::Sum(sum_type) = variant_type.parent.as_type_enum() else { panic!() };
             let struct_parent = hlr.tree.parent(struct_id);

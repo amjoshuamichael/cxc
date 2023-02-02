@@ -1,5 +1,6 @@
 use crate::errors::CompError;
 use crate::errors::CompResultMany;
+use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
 use crate::lex::*;
@@ -217,8 +218,12 @@ impl Unit {
     fn compile(&mut self, output: &mut FuncOutput) {
         let function = self.get_func_value(output.info_ref()).unwrap();
 
-        let mut fcs =
-            self.new_func_comp_state(output.take_tree(), function, output.take_arg_names());
+        let mut fcs = self.new_func_comp_state(
+            output.take_tree(),
+            output.take_data_flow(),
+            function,
+            output.take_arg_names(),
+        );
 
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
@@ -254,12 +259,14 @@ impl Unit {
     fn new_func_comp_state<'f>(
         &'f self,
         tree: ExprTree,
+        data_flow: DataFlow,
         function: FunctionValue<'static>,
         arg_names: Vec<VarName>,
     ) -> FunctionCompilationState {
         FunctionCompilationState {
             ret_type: tree.return_type(),
             tree,
+            data_flow,
             variables: HashMap::new(),
             used_functions: HashMap::new(),
             function,

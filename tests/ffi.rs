@@ -24,12 +24,15 @@ fn multiple_args() {
 }
 
 #[test]
-fn pointer() {
+fn basic_pointer() {
     let mut unit = Unit::new();
 
+    unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
             square(num: &i32) {
+                print(40)
+                print(*num)
                 num.write<i32>(*num * *num)
             }
         ",
@@ -238,8 +241,11 @@ fn reflected_type_masks() {
     unit.push_script(
         "
         main() {
+            print(2)
             assert_is_five(&5)
+            print(3)
             assert_is_five(&5.0)
+            ; 0 
         }
         ",
     );

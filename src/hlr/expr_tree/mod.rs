@@ -25,8 +25,9 @@ impl ToString for ExprTree {
 
 impl Debug for ExprTree {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        for (e, expr) in self.nodes.iter().enumerate() {
-            writeln!(fmt, "{e}: {expr:?}")?
+        writeln!(fmt)?;
+        for expr in &self.nodes {
+            writeln!(fmt, "{}", expr.1.to_string())?
         }
 
         Ok(())
@@ -43,44 +44,39 @@ struct ExprNode {
     data: NodeData,
 }
 
-impl Debug for ExprNode {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        match &self.data {
-            Number { value, .. } => write!(fmt, "{value}"),
-            Float { value, .. } => write!(fmt, "{value:?}"),
-            Bool { value, .. } => write!(fmt, "{value:?}"),
+impl ToString for ExprNode {
+    fn to_string(&self) -> String {
+        let code = match &self.data {
+            Number { value, .. } => format!("{value}"),
+            Float { value, .. } => format!("{value:?}"),
+            Bool { value, .. } => format!("{value:?}"),
             StructLit {
                 var_type, fields, ..
             } => {
-                write!(fmt, "{var_type:?} {{ {fields:?} }}")
+                format!("{var_type:?} {{ {fields:?} }}")
             },
             ArrayLit { parts, .. } => {
-                write!(fmt, "{parts:?}")
+                format!("{parts:?}")
             },
-            Call { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
-            FirstClassCall { f, a, .. } => write!(fmt, "{f:?}({a:?})"),
-            Ident { name, .. } => write!(fmt, "{name}"),
-            MakeVar {
-                var_type,
-                name,
-                rhs,
-                ..
-            } => write!(fmt, "{name}: {var_type:?} = {rhs:?}"),
-            Set { lhs, rhs, .. } => write!(fmt, "{lhs:?} = {rhs:?}"),
-            Member { object, field, .. } => write!(fmt, "{object:?}.{field}"),
-            Index { object, index, .. } => write!(fmt, "{object:?}[{index:?}]"),
-            UnarOp { op, hs, .. } => write!(fmt, "{op:?} {hs:?}"),
-            BinOp { lhs, op, rhs, .. } => write!(fmt, "{lhs:?} {op:?} {rhs:?}"),
-            IfThen { i, t, .. } => write!(fmt, "? {i:?} {t:?}"),
+            Call { f, a, .. } => format!("{f:?}({a:?})"),
+            FirstClassCall { f, a, .. } => format!("{f:?}({a:?})"),
+            Ident { name, .. } => format!("{name}"),
+            MakeVar { name, rhs, .. } => format!("{name} = {rhs:?}"),
+            Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
+            Member { object, field, .. } => format!("{object:?}.{field}"),
+            Index { object, index, .. } => format!("{object:?}[{index:?}]"),
+            UnarOp { op, hs, .. } => format!("{op:?} {hs:?}"),
+            BinOp { lhs, op, rhs, .. } => format!("{lhs:?} {op:?} {rhs:?}"),
+            IfThen { i, t, .. } => format!("? {i:?} {t:?}"),
             IfThenElse { i, t, e, .. } => {
-                write!(fmt, "? {i:?} {t:?} : {e:?}")
+                format!("? {i:?} {t:?} : {e:?}")
             },
-            While { w, d, .. } => write!(fmt, "@ {w:?} {d:?}"),
-            Block { stmts, .. } => write!(fmt, "{{{stmts:?}}}"),
-            Return { to_return, .. } => write!(fmt, "! {to_return:?}"),
-        }?;
+            While { w, d, .. } => format!("@ {w:?} {d:?}"),
+            Block { stmts, .. } => format!("{{{stmts:?}}}"),
+            Return { to_return, .. } => format!("! {to_return:?}"),
+        };
 
-        write!(fmt, " :: {:?}", self.data.ret_type())
+        format!("{code} :: {:?}", self.data.ret_type())
     }
 }
 

@@ -5,7 +5,7 @@
 #![feature(box_syntax)]
 #![feature(type_changing_struct_update)]
 
-pub static DEBUG: bool = false;
+pub static DEBUG: bool = true;
 pub static BLOCK_LLVM: bool = true;
 
 pub use lex::{TypeName, VarName};

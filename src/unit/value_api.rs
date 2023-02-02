@@ -137,7 +137,12 @@ impl Unit {
 
             let function = self.module.add_function(temp_name, ink_func_type, None);
 
-            self.new_func_comp_state(func_rep.take_tree(), function, func_rep.take_arg_names())
+            self.new_func_comp_state(
+                func_rep.take_tree(),
+                func_rep.take_data_flow(),
+                function,
+                func_rep.take_arg_names(),
+            )
         };
 
         {

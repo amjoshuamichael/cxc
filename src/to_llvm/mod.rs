@@ -1,4 +1,5 @@
 use crate::hlr::expr_tree::{ExprID, NodeData::*};
+use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::prelude::*;
 use crate::lex::VarName;
 use crate::parse::Opcode::*;
@@ -19,6 +20,7 @@ use std::rc::Rc;
 
 pub struct FunctionCompilationState {
     pub tree: ExprTree,
+    pub data_flow: DataFlow,
     pub variables: HashMap<VarName, PointerValue<'static>>,
     pub used_functions: HashMap<UniqueFuncInfo, FunctionValue<'static>>,
     pub function: FunctionValue<'static>,
@@ -53,7 +55,13 @@ pub fn compile_routine(
             .add_attribute(AttributeLoc::Param(0), sret_attribute);
     }
 
-    build_stack_allocas(&mut fcs.variables, &fcs.tree, &mut fcs.builder, &fcs.context);
+    build_stack_allocas(
+        &mut fcs.variables,
+        &fcs.tree,
+        &fcs.data_flow,
+        &mut fcs.builder,
+        &fcs.context,
+    );
     get_used_functions(&mut fcs.used_functions, &fcs.tree, module);
     compile(fcs, fcs.tree.root)
 }
@@ -61,22 +69,18 @@ pub fn compile_routine(
 fn build_stack_allocas(
     variables: &mut HashMap<VarName, PointerValue<'static>>,
     tree: &ExprTree,
+    data_flow: &DataFlow,
     builder: &mut Builder<'static>,
     context: &'static Context,
 ) {
     for expr in tree.iter() {
         match expr.1 {
-            MakeVar {
-                ref var_type,
-                ref name,
-                ..
-            } => {
+            MakeVar { ref name, .. } => {
                 if variables.contains_key(name) {
                     continue;
                 }
-                // if fcs.arg_names.contains(name) {
-                //    continue;
-                //}
+
+                let var_type = &data_flow.get(&name).unwrap().typ;
 
                 let var_ptr: PointerValue<'static> =
                     builder.build_alloca(var_type.to_basic_type(context), &*name.to_string());
@@ -553,9 +557,10 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
             let field_index = struct_type.get_field_index(&field);
 
             let object = compile_as_ptr_unless_already_ptr(fcs, object);
+            fcs.tree.print_id(expr_id);
 
             fcs.builder
-                .build_struct_gep(object, field_index as u32, &*(field.to_string() + "access"))
+                .build_struct_gep(object, field_index as u32, &*format!("{field}access"))
                 .unwrap()
         },
         Index {

@@ -151,13 +151,12 @@ pub fn parse_func(
     }
 
     let func_context = lexer.split(func_name, all_generics);
-    parse_func_code(func_context, relation, outer_generics.len() as u32)
+    parse_func_code(func_context, relation)
 }
 
 pub fn parse_func_code(
     mut lexer: FuncParseContext,
     relation: TypeSpecRelation,
-    method_generic_count: u32,
 ) -> ParseResult<FuncCode> {
     let mut args =
         parse_list((Tok::LParen, Tok::RParen), Some(Tok::Comma), parse_var_decl, &mut lexer)?;

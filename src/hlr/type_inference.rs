@@ -70,7 +70,6 @@ fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
         Var(name) => hlr.data_flow.get(name).unwrap().typ.clone(),
         Relation(id) => {
             let NodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
-            println!("{}", hlr.tree.get(*id).to_string(&hlr.tree));
             relation.inner_type().unwrap()
         },
         CallGeneric(id, index) => {
@@ -211,9 +210,19 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     method_of: None,
                 },
             ),
-            NodeData::MakeVar { ref name, rhs, .. } => {
-                infer_map.insert(name, Constraint::SameAs(rhs.into()));
-                infer_map.insert(id, Constraint::SameAs(name.into()));
+            NodeData::MakeVar {
+                ref name,
+                rhs,
+                var_type,
+            } => {
+                if var_type.is_known() {
+                    infer_map.insert(name, Constraint::IsType(var_type.clone()));
+                    infer_map.insert(rhs, Constraint::IsType(var_type.clone()));
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                } else {
+                    infer_map.insert(name, Constraint::SameAs(rhs.into()));
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                }
             },
             NodeData::Set { lhs, rhs, .. } => {
                 infer_map.insert(id, Constraint::IsType(Type::void()));
@@ -228,11 +237,13 @@ pub fn infer_types(hlr: &mut FuncRep) {
     for _ in 0..9 {
         type_solving_round(&mut infer_map, hlr);
 
+        introduce_reverse_constraints(&mut infer_map, hlr);
+
         if all_types_known(&infer_map, hlr) {
+            println!("{}", indent_parens(format!("{infer_map:?}").replace("\n", "")));
+            println!("{:?}", &hlr.tree);
             return;
         }
-
-        introduce_reverse_constraints(&mut infer_map, hlr);
     }
 
     if crate::DEBUG {
@@ -246,8 +257,13 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
 fn all_types_known(infer_map: &InferMap, hlr: &FuncRep) -> bool {
     infer_map
-        .iter()
-        .all(|(inferable, _)| !type_of_inferable(inferable, hlr).is_unknown())
+        .0
+        .keys()
+        .all(|inferable| type_of_inferable(inferable, hlr).is_known())
+        && infer_map
+            .0
+            .values()
+            .all(|constraints| !constraints.contains(&Constraint::Call))
 }
 
 pub fn spec_from_perspective_of_generic(
@@ -306,10 +322,6 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
             match constraint {
                 Constraint::IsType(_) | Constraint::Call { .. } => {},
                 Constraint::SameAs(other) => {
-                    if !type_of_inferable(other, hlr).is_unknown() {
-                        continue;
-                    }
-
                     infer_map.insert(other.clone(), Constraint::SameAs(original.clone()));
                 },
                 Constraint::RelatedTo {
@@ -348,13 +360,11 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
 fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
     for (unknown, constraints) in infer_map.clone().iter() {
         for constraint in constraints {
-            // if !type_of_inferable(unknown, hlr).is_unknown() {
-            //    break;
-            //}
-
             match constraint {
                 Constraint::IsType(typ) => {
-                    set_inferable(unknown, typ, hlr);
+                    if !Type::are_subtypes(typ, &type_of_inferable(&unknown, hlr)) {
+                        set_inferable(unknown, typ, hlr);
+                    }
                 },
                 Constraint::SameAs(inferable) => {
                     let to = type_of_inferable(&inferable, hlr);
@@ -403,10 +413,21 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                         let TypeEnum::Func(FuncType { ret_type, .. }) = 
                             func_type.as_type_enum() else { panic!() };
 
+                        infer_map
+                            .0
+                            .get_mut(unknown)
+                            .unwrap()
+                            .remove(&Constraint::Call);
+
                         set_inferable(unknown, ret_type, hlr);
                     } else if let Some(decl_info) = hlr.comp_data.get_declaration_of(&func_info)
                     {
-                        let code = hlr.comp_data.func_code.get(&decl_info);
+                        infer_map
+                            .0
+                            .get_mut(unknown)
+                            .unwrap()
+                            .remove(&Constraint::Call);
+                            let code = hlr.comp_data.func_code.get(&decl_info);
 
                         if let Some(code) = code && code.has_generics() {
                             {
