@@ -1,0 +1,24 @@
+BitArray<T> = {
+    inner: BoolArrayToNum(T)
+}
+
+
+<T> &BitArray<T>:. {
+    get(index: Me.inner); bool {
+        ; (self.inner & (1 << index)) > 0
+    }
+
+    set(index: Me.inner, to: bool) {
+        ? to {
+            self.inner = self.inner | (1 << index)
+        } : {
+            self.inner  = self.inner | (0 << index)
+        }
+    }
+}
+
+<T> BitArray<T>:: {
+    new(); BitArray<T> {
+        ; 0
+    }
+}

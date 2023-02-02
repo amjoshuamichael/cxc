@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::lex::VarName;
 use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDecl};
 use crate::typ::{ArrayType, StructType};
@@ -46,6 +48,16 @@ impl Library for ToStringLib {
         );
         unit.add_rust_func_explicit(
             "to_string",
+            to_string::<bool> as *const usize,
+            ExternalFuncAdd {
+                ret_type: string_type.clone(),
+                arg_types: vec![Type::bool().get_ref()],
+                relation: TypeRelation::MethodOf(Type::bool().get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
+        );
+        unit.add_rust_func_explicit(
+            "to_string",
             string_to_string as *const usize,
             ExternalFuncAdd {
                 ret_type: string_type.clone(),
@@ -83,7 +95,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     name: output_var.clone(),
                     type_spec: string_type.into(),
                 },
-                box Expr::Strin(prefix),
+                box Expr::Strin(Arc::from(&*prefix)),
             );
             statements.push(make_var);
 
@@ -94,7 +106,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     field_name.to_string() + " = "
                 };
 
-                let field_prefix_expr = Expr::Strin(field_prefix);
+                let field_prefix_expr = Expr::Strin(Arc::from(&*field_prefix));
 
                 let push_prefix_call = Expr::Call {
                     func: push_string.clone(),
@@ -152,9 +164,9 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
             for index in 0..*count {
                 let comma = if index > 0 {
-                    String::from(", ")
+                    Arc::from(", ")
                 } else {
-                    String::new()
+                    Arc::from("")
                 };
 
                 let comma_expr = Expr::Strin(comma);
@@ -174,7 +186,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                         Opcode::Ref,
                         box Expr::Index(
                             box Expr::UnarOp(Opcode::Deref, input_var.clone()),
-                            box Expr::Number(index as u128),
+                            box Expr::Number(index as u64),
                         ),
                     )],
                     is_method: true,

@@ -156,3 +156,17 @@ fn bigger_option() {
         Option::<(i32, f32, i32)>::Some((10, 20.0, 30))
     )
 }
+
+#[test]
+fn bit_array() {
+    xc_test!(
+        "
+        main() {
+            arr8 = BitArray<[32]bool>:new()
+            arr8.set(4, true)
+            assert_eq(arr8.get(4), true)
+            assert_eq(arr8.get(5), false)
+        }
+        "
+    )
+}

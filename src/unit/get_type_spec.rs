@@ -1,31 +1,48 @@
-use crate::lex::{TypeName, VarName};
-use crate::unit::CompData;
-use crate::{parse::*, ArrayType, TypeEnum};
-use crate::{FuncType, Type};
+use crate::{
+    parse::TypeSpec, ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation,
+    UniqueFuncInfo, VarName,
+};
 
-mod rust_type_name_conversion;
+pub trait GenericTable {
+    fn get_at_index(&self, index: u8) -> Option<Type>;
+    fn get_self(&self) -> Option<Type>;
+}
+
+impl GenericTable for Vec<Type> {
+    fn get_at_index(&self, index: u8) -> Option<Type> { self.get(index as usize).cloned() }
+    fn get_self(&self) -> Option<Type> { None }
+}
+
+impl GenericTable for () {
+    fn get_at_index(&self, _: u8) -> Option<Type> { None }
+    fn get_self(&self) -> Option<Type> { None }
+}
+
+impl<T: GenericTable> GenericTable for (T, Type) {
+    fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
+    fn get_self(&self) -> Option<Type> { Some(self.1.clone()) }
+}
+
+impl<T: GenericTable> GenericTable for (T, TypeRelation) {
+    fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
+    fn get_self(&self) -> Option<Type> { self.1.inner_type() }
+}
+
+impl<T: GenericTable> GenericTable for (T, Option<Type>) {
+    fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
+    fn get_self(&self) -> Option<Type> { self.1.clone() }
+}
+
+impl GenericTable for UniqueFuncInfo {
+    fn get_at_index(&self, index: u8) -> Option<Type> {
+        self.own_generics.get(index as usize).cloned()
+    }
+    fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
+}
 
 impl CompData {
-    pub fn add_type_alias(&mut self, name: TypeName, a: TypeSpec) {
-        self.aliases.insert(name, a);
-    }
-
-    pub fn contains(&self, key: &TypeName) -> bool { self.aliases.contains_key(key) }
-
-    pub fn get_by_name(&self, name: &TypeName) -> Option<Type> {
-        {
-            let cached_type = self.types.get(name);
-            if cached_type.is_some() {
-                return cached_type.cloned();
-            }
-        }
-
-        let alias = self.aliases.get(name)?;
-        let realized_type = self.get_spec(alias, &vec![])?;
-        Some(realized_type.with_name(name.clone()))
-    }
-
-    pub fn get_spec(&self, spec: &TypeSpec, generics: &Vec<Type>) -> Option<Type> {
+    pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> Option<Type> {
+        dbg!(&spec);
         let typ = match spec {
             TypeSpec::Named(name) => self.get_by_name(name)?,
             TypeSpec::TypeLevelFunc(name, args) => {
@@ -34,7 +51,9 @@ impl CompData {
                     .iter()
                     .map(|arg| self.get_spec(arg, generics))
                     .collect::<Option<Vec<_>>>()?;
-                func(args, self)
+                func(args.clone(), self)
+                    .with_from_function(name.clone())
+                    .with_parameters(&args)
             },
             TypeSpec::Int(size) => Type::i(*size),
             TypeSpec::UInt(size) => Type::u(*size),
@@ -115,10 +134,14 @@ impl CompData {
                         .with_generics(&generics)
                 }
             },
-            TypeSpec::GenParam(index) => generics.get(*index as usize)?.clone(),
+            TypeSpec::GetGeneric(on, index) => {
+                let on = self.get_spec(on, generics)?;
+                on.generics().get(*index as usize)?.clone()
+            },
+            TypeSpec::GenParam(index) => generics.get_at_index(*index)?,
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {
-                let array = self.get_spec(array, &generics)?;
+                let array = self.get_spec(array, generics)?;
                 let TypeEnum::Array(ArrayType { base, .. }) = array.as_type_enum() else { panic!() };
                 base.clone()
             },
@@ -142,6 +165,13 @@ impl CompData {
             },
             TypeSpec::Void => Type::void(),
             TypeSpec::Type(typ) => typ.clone(),
+            TypeSpec::Me => {
+                if let Some(se) = generics.get_self() {
+                    se
+                } else {
+                    panic!()
+                }
+            },
         };
 
         Some(typ)

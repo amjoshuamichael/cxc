@@ -33,6 +33,10 @@ impl DataFlowInfo {
 
 impl FuncRep {
     pub fn from_code(code: FuncCode, comp_data: Rc<CompData>, info: UniqueFuncInfo) -> Self {
+        if code.name == "get".into() {
+            dbg!(&code.args);
+        }
+
         let mut new = FuncRep {
             tree: ExprTree::default(),
             ret_type: comp_data
@@ -47,10 +51,8 @@ impl FuncRep {
         for (a, arg) in code.args.iter().enumerate() {
             new.identifiers.push(arg.name.clone());
 
-            let typ = new
-                .comp_data
-                .get_spec(&arg.type_spec, &new.info.generics())
-                .unwrap();
+            let typ = new.comp_data.get_spec(&arg.type_spec, &new.info).unwrap();
+            dbg!(&arg);
 
             new.data_flow.insert(
                 arg.name.clone(),
@@ -100,7 +102,7 @@ impl FuncRep {
     pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
 
     pub fn get_type_spec(&self, alias: &TypeSpec) -> Option<Type> {
-        self.comp_data.get_spec(alias, &self.info.generics())
+        self.comp_data.get_spec(alias, &self.info)
     }
 
     pub fn comp_data(&self) -> Rc<CompData> { self.comp_data.clone() }
@@ -155,7 +157,7 @@ impl FuncRep {
                         array_space,
                         NodeData::Number {
                             size: 8,
-                            value: b as u128,
+                            value: b as u64,
                         },
                     );
 
@@ -183,7 +185,7 @@ impl FuncRep {
                 let len_arg = self.tree.insert(
                     call_space,
                     NodeData::Number {
-                        value: byte_ids.len() as u128,
+                        value: byte_ids.len() as u64,
                         size: 64,
                     },
                 );

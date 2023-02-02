@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 mod test_utils;
 use cxc::{
     library::StdLib, CompData, ExternalFuncAdd, StructType, Type, TypeEnum, Unit, VarName,

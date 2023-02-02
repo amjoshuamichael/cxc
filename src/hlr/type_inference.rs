@@ -1,4 +1,5 @@
 use crate::{
+    lex::indent_parens,
     parse::{Opcode, TypeSpec},
     FuncType, Type, TypeEnum, TypeRelation, VarName,
 };
@@ -51,6 +52,7 @@ enum Constraint {
     RelatedTo {
         spec: TypeSpec,
         gen_params: Vec<Inferable>,
+        method_of: Option<Inferable>,
     },
     SameAs(Inferable),
     Call,
@@ -68,6 +70,7 @@ fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
         Var(name) => hlr.data_flow.get(name).unwrap().typ.clone(),
         Relation(id) => {
             let NodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
+            println!("{}", hlr.tree.get(*id).to_string(&hlr.tree));
             relation.inner_type().unwrap()
         },
         CallGeneric(id, index) => {
@@ -78,21 +81,27 @@ fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
     }
 }
 
-fn type_of_inferable_mut<'a>(inferable: &'a Inferable, hlr: &'a mut FuncRep) -> &'a mut Type {
+fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
     use Inferable::*;
 
+    let to = to.clone();
+
     match inferable {
-        Expr(id) => hlr.tree.get_mut(*id).ret_type_mut().unwrap(),
-        Var(name) => &mut hlr.data_flow.get_mut(name).unwrap().typ,
+        Expr(id) => {
+            if let Some(typ) = hlr.tree.get_mut(*id).ret_type_mut() {
+                *typ = to
+            }
+        },
+        Var(name) => hlr.data_flow.get_mut(name).unwrap().typ = to,
         Relation(id) => {
             let NodeData::Call { ref mut relation, .. } = hlr.tree.get_mut(*id) else { panic!() };
-            relation.inner_type_mut().unwrap()
+            *relation.inner_type_mut().unwrap() = to
         },
         CallGeneric(id, index) => {
             let NodeData::Call { ref mut generics, .. } = hlr.tree.get_mut(*id) else { panic!() };
-            &mut generics[*index as usize]
+            generics[*index as usize] = to
         },
-        ReturnType => &mut hlr.ret_type,
+        ReturnType => hlr.ret_type = to,
     }
 }
 
@@ -121,10 +130,12 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     Opcode::Ref => Constraint::RelatedTo {
                         spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                         gen_params: vec![hs.into()],
+                        method_of: None,
                     },
                     Opcode::Deref => Constraint::RelatedTo {
                         spec: TypeSpec::Deref(box TypeSpec::GenParam(0)),
                         gen_params: vec![hs.into()],
+                        method_of: None,
                     },
                     _ => continue,
                 };
@@ -156,6 +167,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     Constraint::RelatedTo {
                         spec: TypeSpec::StructMember(box TypeSpec::GenParam(0), field.clone()),
                         gen_params: vec![object.into()],
+                        method_of: None,
                     },
                 );
             },
@@ -165,6 +177,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     Constraint::RelatedTo {
                         spec: TypeSpec::FuncReturnType(box TypeSpec::GenParam(0)),
                         gen_params: vec![f.into()],
+                        method_of: None,
                     },
                 );
             },
@@ -186,6 +199,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     Constraint::RelatedTo {
                         spec: TypeSpec::Array(box TypeSpec::GenParam(0), parts.len() as u32),
                         gen_params: vec![first_element.into()],
+                        method_of: None,
                     },
                 );
             },
@@ -194,6 +208,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 Constraint::RelatedTo {
                     spec: TypeSpec::ArrayElem(box TypeSpec::GenParam(0)),
                     gen_params: vec![object.into()],
+                    method_of: None,
                 },
             ),
             NodeData::MakeVar { ref name, rhs, .. } => {
@@ -210,7 +225,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
     infer_map.insert(Inferable::ReturnType, Constraint::SameAs(hlr.tree.root.into()));
 
-    for _ in 0..5 {
+    for _ in 0..9 {
         type_solving_round(&mut infer_map, hlr);
 
         if all_types_known(&infer_map, hlr) {
@@ -221,7 +236,9 @@ pub fn infer_types(hlr: &mut FuncRep) {
     }
 
     if crate::DEBUG {
-        dbg!(&infer_map);
+        println!("{}", indent_parens(format!("{infer_map:?}").replace("\n", "")));
+        println!("{:?}", &hlr.tree);
+        println!("{}", &hlr.tree.to_string());
     }
 
     panic!("type inference failed");
@@ -233,34 +250,54 @@ fn all_types_known(infer_map: &InferMap, hlr: &FuncRep) -> bool {
         .all(|(inferable, _)| !type_of_inferable(inferable, hlr).is_unknown())
 }
 
-pub fn type_spec_from_perspective_of_generic(
+pub fn spec_from_perspective_of_generic(
     spec: &TypeSpec,
     generic_index: u32,
 ) -> Option<TypeSpec> {
+    // this algorithm works like an algebraic math problem.
     use TypeSpec::*;
 
-    match spec {
-        GenParam(index) => {
-            if *index as u32 == generic_index {
-                Some(spec.clone())
-            } else {
-                None
-            }
-        },
-        Ref(inner) | Deref(inner) | Array(inner, _) => {
-            let from_perspective =
-                box type_spec_from_perspective_of_generic(inner, generic_index)?;
-            let output = match spec {
-                Ref(_) => Deref(from_perspective),
-                Deref(_) => Ref(from_perspective),
-                Array(..) => ArrayElem(from_perspective),
-                _ => unreachable!(),
-            };
+    let gen_param_spec = GenParam(generic_index as u8);
 
-            Some(output)
-        },
-        _ => None,
+    let mut lhs = gen_param_spec.clone();
+    let mut rhs = spec.clone();
+
+    while &rhs != &gen_param_spec {
+        match &rhs {
+            GenParam(_) => return None, // gen param is not equal to the one we're looking for
+            Ref(elem) | Deref(elem) | Array(elem, _) => {
+                lhs = match rhs {
+                    Ref(_) => Deref(box lhs),
+                    Deref(_) => Ref(box lhs),
+                    Array(..) => ArrayElem(box lhs),
+                    _ => unreachable!(),
+                };
+
+                rhs = *elem.clone();
+            },
+            Generic(_, generics) => {
+                let mut found_generic = false;
+
+                for (index, generic) in generics.iter().enumerate() {
+                    if spec_from_perspective_of_generic(generic, generic_index).is_some() {
+                        lhs = GetGeneric(box lhs, index as u32);
+                        rhs = generic.clone();
+
+                        found_generic = true;
+
+                        break;
+                    }
+                }
+
+                if !found_generic {
+                    return None;
+                }
+            },
+            _ => return None,
+        }
     }
+
+    Some(lhs)
 }
 
 fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
@@ -275,14 +312,20 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
 
                     infer_map.insert(other.clone(), Constraint::SameAs(original.clone()));
                 },
-                Constraint::RelatedTo { spec, gen_params } => {
+                Constraint::RelatedTo {
+                    spec,
+                    gen_params,
+                    method_of,
+                } => {
+                    // TODO: do something with method_of
                     for (param_index, param) in gen_params.iter().enumerate() {
                         if !type_of_inferable(param, hlr).is_unknown() {
                             continue;
                         }
 
                         let reversed_spec =
-                            type_spec_from_perspective_of_generic(&spec, param_index as u32);
+                            spec_from_perspective_of_generic(&spec, param_index as u32);
+
                         if reversed_spec.is_none() {
                             continue;
                         }
@@ -292,6 +335,7 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
                             Constraint::RelatedTo {
                                 spec: reversed_spec.unwrap(),
                                 gen_params: vec![original.clone()],
+                                method_of: method_of.clone(),
                             },
                         );
                     }
@@ -304,14 +348,13 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
 fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
     for (unknown, constraints) in infer_map.clone().iter() {
         for constraint in constraints {
-            if !type_of_inferable(unknown, hlr).is_unknown() {
-                break;
-            }
+            // if !type_of_inferable(unknown, hlr).is_unknown() {
+            //    break;
+            //}
 
             match constraint {
                 Constraint::IsType(typ) => {
-                    let set_type = type_of_inferable_mut(unknown, hlr);
-                    *set_type = typ.clone();
+                    set_inferable(unknown, typ, hlr);
                 },
                 Constraint::SameAs(inferable) => {
                     let to = type_of_inferable(&inferable, hlr);
@@ -320,20 +363,31 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                         continue;
                     }
 
-                    let set_type = type_of_inferable_mut(unknown, hlr);
-                    *set_type = to;
+                    set_inferable(unknown, &to, hlr);
                 },
-                Constraint::RelatedTo { spec, gen_params } => {
+                Constraint::RelatedTo {
+                    spec,
+                    gen_params,
+                    method_of,
+                } => {
                     let gen_params = gen_params
                         .into_iter()
                         .map(|inferable| type_of_inferable(&inferable, hlr))
                         .collect::<Vec<_>>();
 
-                    if gen_params.iter().all(|typ| !typ.is_unknown()) {
-                        let to = hlr.comp_data.get_spec(&spec, &gen_params).unwrap();
+                    let method_of = method_of
+                        .as_ref()
+                        .map(|inferable| type_of_inferable(&inferable, hlr));
 
-                        let set_type = type_of_inferable_mut(unknown, hlr);
-                        *set_type = to;
+                    if gen_params.iter().all(Type::is_known)
+                        && (method_of.is_none() || method_of.as_ref().unwrap().is_known())
+                    {
+                        let to = hlr
+                            .comp_data
+                            .get_spec(&spec, &(gen_params, method_of))
+                            .unwrap();
+
+                        set_inferable(unknown, &to, hlr);
                     };
                 },
                 Constraint::Call => {
@@ -341,15 +395,15 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     let node_data = hlr.tree.get(*id);
                     let func_info = hlr.tree.unique_func_info_of_call(&node_data);
 
-                    let NodeData::Call { a, generics, .. } = hlr.tree.get(*id) else { unreachable!() };
+                    let NodeData::Call { a, generics, .. } = 
+                        hlr.tree.get(*id) else { unreachable!() };
 
                     if let Some(func_type) = hlr.comp_data.get_type(&func_info) && 
                         generics.iter().all(Type::is_known) {
                         let TypeEnum::Func(FuncType { ret_type, .. }) = 
                             func_type.as_type_enum() else { panic!() };
 
-                        let set_type = type_of_inferable_mut(unknown, hlr);
-                        *set_type = ret_type.clone();
+                        set_inferable(unknown, ret_type, hlr);
                     } else if let Some(decl_info) = hlr.comp_data.get_declaration_of(&func_info)
                     {
                         let code = hlr.comp_data.func_code.get(&decl_info);
@@ -366,12 +420,19 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                                 .map(|index| Inferable::CallGeneric(*id, index as usize))
                                 .collect::<Vec<_>>();
 
+                            let relation_inferable = if code.relation.inner_type().is_some() {
+                                Some(Inferable::Relation(*id))
+                            } else {
+                                None
+                            };
+
                             for (arg_index, arg) in code.args.iter().enumerate() {
                                 infer_map.insert(
                                     a[arg_index],
                                     Constraint::RelatedTo {
                                         spec: arg.type_spec.clone(),
                                         gen_params: call_generic_inferables.clone(),
+                                        method_of: relation_inferable.clone(),
                                     },
                                 );
                             }
@@ -380,9 +441,21 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                                 *id,
                                 Constraint::RelatedTo {
                                     spec: code.ret_type.clone(),
-                                    gen_params: call_generic_inferables,
+                                    gen_params: call_generic_inferables.clone(),
+                                    method_of: relation_inferable.clone(),
                                 },
-                            )
+                            );
+
+                            if let Some(relation) = code.relation.inner_type() {
+                                infer_map.insert(
+                                    Inferable::Relation(*id),
+                                    Constraint::RelatedTo {
+                                        spec: relation,
+                                        gen_params: call_generic_inferables,
+                                        method_of: relation_inferable,
+                                    },
+                                );   
+                            }
                         }
                     }
                 },

@@ -4,7 +4,7 @@ pub struct PrintLib;
 
 impl Library for PrintLib {
     fn add_to_unit(&self, unit: &mut Unit) {
-        unit.push_script(include_str!("print.cxc"));
+        unit.push_script(include_str!("print.cxc")).unwrap();
         unit.add_rust_func_explicit(
             "external_print_string",
             external_print_string as *const usize,

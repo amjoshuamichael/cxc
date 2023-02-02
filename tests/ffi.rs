@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 mod test_utils;
 use cxc::library::StdLib;
 use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, XcValue};
@@ -96,7 +97,8 @@ fn struct_pointer() {
             ; in.x * in.x + in.y * in.y
         }
         ",
-    );
+    )
+    .unwrap();
 
     let point = Point2D { x: 2, y: 3 };
 
@@ -141,10 +143,11 @@ fn i32_and_ref() {
             ; output
         }
         ",
-    );
+    )
+    .unwrap();
 
     let mut thirty_two = 32;
-    let func = unsafe { unit.get_fn_by_name::<&i32, (i32, &i32)>("main") };
+    let func = unit.get_fn_by_name::<&i32, (i32, &i32)>("main");
     let output: (i32, &i32) = unsafe { func(&mut thirty_two) };
     assert_eq!(output, (10, &thirty_two));
 }
@@ -177,7 +180,8 @@ fn external_function() {
             ; x
         }
         ",
-    );
+    )
+    .unwrap();
 
     unsafe { unit.get_fn_by_name::<(), i64>("call")(()) };
 }

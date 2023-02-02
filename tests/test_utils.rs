@@ -12,7 +12,7 @@ macro_rules! xc_test {
 
         unit.push_script(
             concat!("test() ; ", stringify!($ret), "{ ", $code, " }"),
-        );
+        ).unwrap();
 
         let output = unsafe { unit.get_fn_by_name::<(), $ret>("test")(()) };
         assert_eq!(output, $result);
@@ -48,7 +48,7 @@ macro_rules! xc_test {
                 &*args +
                 concat!(")", "; ", stringify!($ret), "{ ", $code, " }")
             )
-        );
+        ).unwrap();
 
         #[allow(unused_parens)]
         let output: $ret = unsafe {
@@ -64,7 +64,7 @@ macro_rules! xc_test {
 
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
-        unit.push_script($code);
+        unit.push_script($code).unwrap();
 
         unsafe { unit.get_fn_by_name::<(), ()>("main")(()) };
     }};
@@ -76,7 +76,7 @@ macro_rules! xc_test {
 
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
-        unit.push_script($code);
+        unit.push_script($code).unwrap();
 
         #[allow(unused_assignments)]
         // this is just so output uses the expected output's type

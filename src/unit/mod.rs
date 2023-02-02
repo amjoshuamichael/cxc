@@ -1,3 +1,5 @@
+use crate::errors::CompError;
+use crate::errors::CompResultMany;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
 use crate::lex::*;
@@ -20,7 +22,9 @@ use std::rc::Rc;
 
 mod add_external;
 mod functions;
+pub mod get_type_spec;
 mod reflect;
+mod rust_type_name_conversion;
 mod value_api;
 
 use crate::to_llvm::*;
@@ -70,7 +74,7 @@ impl Unit {
             unsafe { std::mem::transmute(Box::leak(box Context::create())) };
         let module = Context::create_module(&context, "new_module");
         let execution_engine = module
-            .create_jit_execution_engine(OptimizationLevel::Aggressive)
+            .create_jit_execution_engine(OptimizationLevel::None)
             .unwrap();
 
         Self {
@@ -88,7 +92,7 @@ impl Unit {
             .unwrap();
         self.execution_engine.replace(
             self.module
-                .create_jit_execution_engine(OptimizationLevel::Aggressive)
+                .create_jit_execution_engine(OptimizationLevel::None)
                 .unwrap(),
         );
     }
@@ -106,13 +110,13 @@ impl Unit {
         self.comp_data = Rc::new(CompData::new());
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) {
+    pub fn push_script<'s>(&'s mut self, script: &str) -> CompResultMany<()> {
         let lexed = lex(script);
         let parsed = match parse::parse(lexed) {
             Ok(file) => file,
-            Err(err) => {
-                dbg!(&err);
-                panic!();
+            Err(mut err) => {
+                let comp_errors = err.drain(..).map(CompError::Parse).collect();
+                return Err(comp_errors);
             },
         };
 
@@ -144,6 +148,8 @@ impl Unit {
         };
 
         self.compile_func_set(funcs_to_process);
+
+        Ok(())
     }
 
     fn comp_data_mut<'a>(&'a mut self) -> &'a mut CompData {
@@ -206,20 +212,6 @@ impl Unit {
             println!("compiled these: ");
             println!("{}", self.module.print_to_string().to_string());
         }
-
-        // let default_render_node_builder = UniqueFuncInfo {
-        //    name: VarName::from("default"),
-        //    relation: TypeRelation::Static(
-        //        self.comp_data
-        //            .get_by_name(&TypeName::Other("RenderNodeBuilder".into()))
-        //            .unwrap(),
-        //    ),
-        //    own_generics: Vec::new(),
-        //};
-        // if let Some(func) =
-        // self.comp_data.get_func_value(&default_render_node_builder) {
-        //    func.print_to_stderr()
-        //}
     }
 
     fn compile(&mut self, output: &mut FuncOutput) {
@@ -279,10 +271,7 @@ impl Unit {
         }
     }
 
-    pub unsafe fn get_fn_by_name<I, O>(
-        &self,
-        name: &str,
-    ) -> unsafe extern "C" fn(_: I, ...) -> O {
+    pub fn get_fn_by_name<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
         let func_info = UniqueFuncInfo {
             name: name.into(),
             ..Default::default()
@@ -291,7 +280,7 @@ impl Unit {
         self.get_fn_by_info::<I, O>(&func_info)
     }
 
-    pub unsafe fn get_fn_by_info<I, O>(
+    pub fn get_fn_by_info<I, O>(
         &self,
         info: &UniqueFuncInfo,
     ) -> unsafe extern "C" fn(_: I, ...) -> O {
@@ -311,7 +300,9 @@ impl Unit {
             .get_function_address(&*info.to_string())
             .unwrap();
 
-        transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr)
+        // SAFETY: the function has been received from LLVM, and therefore is safe
+        // because their api guarantees it is.
+        unsafe { transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr) }
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

@@ -198,7 +198,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             let rhs = compile(fcs, *rhs).unwrap();
 
             match lhs_type.as_type_enum() {
-                TypeEnum::Int(_) => {
+                TypeEnum::Int(_) | TypeEnum::Bool(_) => {
                     use IntPredicate::*;
 
                     let lhs = lhs.try_into().expect("incorrect type for expression");
@@ -216,6 +216,11 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                         GrtrThan => fcs.builder.build_int_compare(UGT, lhs, rhs, "gt"),
                         LessOrEqual => fcs.builder.build_int_compare(ULE, lhs, rhs, "gt"),
                         GreaterOrEqual => fcs.builder.build_int_compare(UGE, lhs, rhs, "gt"),
+                        BitShiftL => fcs.builder.build_left_shift(lhs, rhs, "bsl"),
+                        BitShiftR => fcs.builder.build_right_shift(lhs, rhs, false, "bsr"),
+                        BitAND => fcs.builder.build_and(lhs, rhs, "and"),
+                        BitOR => fcs.builder.build_or(lhs, rhs, "or"),
+                        BitXOR => fcs.builder.build_xor(lhs, rhs, "xor"),
                         _ => todo!(),
                     };
 

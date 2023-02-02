@@ -7,7 +7,6 @@ mod handle_variant_literals;
 pub mod hlr_data;
 pub mod hlr_data_output;
 mod large_returns;
-pub mod type_group;
 mod type_inference;
 
 use std::rc::Rc;

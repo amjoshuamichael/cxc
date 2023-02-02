@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 mod test_utils;
 use cxc::Unit;
 use test_utils::{Numbers4, Numbers5, Point2D, Point3D, TestUtilsLib};

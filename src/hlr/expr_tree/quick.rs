@@ -1,7 +1,7 @@
 use crate::{
     hlr::hlr_data::{DataFlowInfo, FuncRep},
     lex::VarName,
-    parse::Opcode,
+    parse::{Opcode, StructFill},
     FuncType, Type, TypeEnum, UniqueFuncInfo,
 };
 
@@ -28,7 +28,7 @@ impl NodeDataGen for usize {
         hlr.tree.insert(
             parent,
             NodeData::Number {
-                value: *self as u128,
+                value: *self as u64,
                 size: std::mem::size_of::<usize>() as u32,
             },
         )
@@ -194,7 +194,7 @@ impl NodeDataGen for CallGen {
 pub struct StructLitGen {
     pub var_type: Type,
     pub fields: Vec<(VarName, Box<dyn NodeDataGen>)>,
-    pub initialize: bool,
+    pub initialize: StructFill,
 }
 
 impl NodeDataGen for StructLitGen {

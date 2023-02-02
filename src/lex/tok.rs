@@ -55,6 +55,7 @@ pub enum TypeName {
     F32,
     F16,
     Bool,
+    Me,
     #[default]
     Anonymous,
 }
@@ -72,6 +73,7 @@ impl TypeName {
             "f32" => Self::F32,
             "f64" => Self::F64,
             "bool" => Self::Bool,
+            "Me" => Self::Me,
             _ => Self::Other(Arc::from(t.slice())),
         }
     }
@@ -93,6 +95,7 @@ impl Debug for TypeName {
             Self::F32 => "f32",
             Self::F16 => "f16",
             Self::Bool => "bool",
+            Self::Me => "Me",
             Self::Anonymous => "unnamed",
         };
 
@@ -224,11 +227,11 @@ pub enum Tok {
         [0-9][0-9_]*",
         parse_int
     )]
-    Int(u128),
+    Int(u64),
 
     // could be a float (e.g. .1), but could also be a tuple member (e.g. the ".1" in x.1)
     #[regex(r"[0-9_]*\.[0-9_]+", parse_dotted_int)]
-    DottedNum((u128, u128)),
+    DottedNum((u32, u32)),
 
     // this is definitely a float, because it uses e for scientific notation
     #[regex(r"[0-9_]*\.[0-9_]+e[+-]?[0-9_]+", parse_float)]
@@ -238,7 +241,7 @@ pub enum Tok {
     Bool(bool),
 
     #[regex(r#""[^"]*""#, parse_string)]
-    Strin(String),
+    Strin(Arc<str>),
 
     #[error]
     Error,
@@ -248,6 +251,9 @@ pub enum Tok {
 
     #[regex(r"\n+")]
     Return,
+
+    #[regex(r"\t")]
+    Tab,
 
     #[regex(r"[ \t\f]+")]
     Space,
@@ -319,7 +325,7 @@ impl Tok {
         }
     }
 
-    pub fn int_value(self) -> Result<u128, ParseError> {
+    pub fn int_value(self) -> Result<u64, ParseError> {
         match self {
             Tok::Int(val) => Ok(val),
             err => Err(ParseError::UnexpectedTok {
@@ -331,7 +337,7 @@ impl Tok {
 
     pub fn is_whitespace(&self) -> bool {
         use Tok::*;
-        matches!(self, Space | Comment | Return)
+        matches!(self, Space | Comment | Return | Tab)
     }
 
     pub fn parens() -> (Self, Self) { (Tok::LParen, Tok::RParen) }
@@ -345,45 +351,45 @@ impl ToString for Tok {
         use Tok::*;
 
         match self {
-            Comma => ", ",
-            Semicolon => "; ",
-            Bang => "! ",
-            Plus => "+ ",
-            Minus => "- ",
-            AsterickSet(count) => return "*".repeat(*count as _) + " ",
-            Divider => "/ ",
-            Modulus => "% ",
-            BitOR => "| ",
-            BitXOR => "^ ",
-            BitShiftR => ">> ",
-            BitShiftL => "<< ",
-            Dot => ". ",
+            Comma => ",",
+            Semicolon => ";",
+            Bang => "!",
+            Plus => "+",
+            Minus => "-",
+            AsterickSet(count) => return "*".repeat(*count as _),
+            Divider => "/",
+            Modulus => "%",
+            BitOR => "|",
+            BitXOR => "^",
+            BitShiftR => ">>",
+            BitShiftL => "<<",
+            Dot => ".",
             DoublePlus => "++",
             DoubleMinus => "--",
-            AmpersandSet(count) => return "&".repeat(*count as _) + " ",
-            Or => "|| ",
-            LessOrEqual => "<= ",
-            GreaterOrEqual => ">= ",
-            Equal => "== ",
-            Inequal => "!= ",
-            Question => "? ",
-            Colon => ": ",
-            At => "@ ",
+            AmpersandSet(count) => return "&".repeat(*count as _),
+            Or => "||",
+            LessOrEqual => "<=",
+            GreaterOrEqual => ">=",
+            Equal => "==",
+            Inequal => "!=",
+            Question => "?",
+            Colon => ":",
+            At => "@",
             ColonDot => ":.",
             DoubleColon => "::",
-            LParen => "( ",
-            RParen => " ) ",
-            LCurly => "{ ",
-            RCurly => " } ",
-            LBrack => "[ ",
-            RBrack => " ] ",
-            LAngle => "< ",
-            RAngle => " > ",
-            LArrow => "<- ",
-            RArrow => "-> ",
-            Assignment => "= ",
-            VarName(name) => return ToString::to_string(name),
-            TypeName(name) => return ToString::to_string(name),
+            LParen => "(",
+            RParen => ")",
+            LCurly => "{",
+            RCurly => "}",
+            LBrack => "[",
+            RBrack => "]",
+            LAngle => "<",
+            RAngle => ">",
+            LArrow => "<-",
+            RArrow => "->",
+            Assignment => "=",
+            VarName(name) => return name.to_string(),
+            TypeName(name) => return name.to_string(),
             Int(value) => return value.to_string(),
             DottedNum((left, right)) => return format!("{left}.{right}"),
             Float(value) => return value.to_string(),
@@ -393,6 +399,7 @@ impl ToString for Tok {
             Comment => "#...\n",
             Return => "\n",
             Space => " ",
+            Tab => "\t",
         }
         .into()
     }

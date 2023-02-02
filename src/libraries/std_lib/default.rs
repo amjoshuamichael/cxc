@@ -1,7 +1,7 @@
 use crate::{
     lex::VarName,
     libraries::Library,
-    parse::{Expr, FuncCode, TypeSpec, TypeSpecRelation},
+    parse::{Expr, FuncCode, StructFill, TypeSpec, TypeSpecRelation},
     unit::CompData,
     ExternalFuncAdd, Type, TypeEnum, TypeRelation,
 };
@@ -53,7 +53,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 fields.push((field_name.clone(), other_default_call));
             }
 
-            let struct_lit = Expr::Struct(typ.clone().into(), fields, false);
+            let struct_lit = Expr::Struct(typ.clone().into(), fields, StructFill::NoFill);
 
             let relation = TypeSpecRelation::Static(TypeSpec::Type(typ.clone()));
 

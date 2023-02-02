@@ -1,3 +1,4 @@
+#![allow(unused_must_use)]
 mod test_utils;
 use cxc::{library::StdLib, Unit};
 use std::rc::Rc;
@@ -143,7 +144,7 @@ fn ref_option_some() {
     );
 
     let mut thirty_two = 32;
-    let func = unsafe { unit.get_fn_by_name::<&i32, Option<&i32>>("main") };
+    let func = unit.get_fn_by_name::<&i32, Option<&i32>>("main");
     let output: Option<&i32> = unsafe { func(&mut thirty_two) };
     assert_eq!(output, Option::Some(&thirty_two));
 }
@@ -165,7 +166,7 @@ fn ref_and_more_option() {
     );
 
     let mut thirty_two = 32;
-    let func = unsafe { unit.get_fn_by_name::<&i32, Option<(i32, &i32)>>("main") };
+    let func = unit.get_fn_by_name::<&i32, Option<(i32, &i32)>>("main");
     let output: Option<(i32, &i32)> = unsafe { func(&mut thirty_two) };
     assert_eq!(output, Option::Some((10, &32)));
 }

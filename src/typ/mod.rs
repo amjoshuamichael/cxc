@@ -42,7 +42,7 @@ pub enum ReturnStyle {
 impl Type {
     fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
-    pub fn size(&self) -> usize { size::size_of_type(self.clone()) }
+    pub fn size(&self) -> usize { size::size_of_type(self.clone()) as usize }
 
     pub fn return_style(&self) -> ReturnStyle {
         use TypeEnum::*;
@@ -97,6 +97,8 @@ impl Type {
             Unknown => panic!("cannot return unknown type"),
         }
     }
+
+    pub fn is_subtype_of(&self, of: &Type) -> bool { self.as_type_enum() == of.as_type_enum() }
 
     pub fn raw_return_type(&self) -> Type {
         match self.return_style() {
@@ -238,22 +240,37 @@ impl Type {
 
     pub fn name(&self) -> &TypeName { &self.0.name }
     pub fn generics(&self) -> &Vec<Type> { &self.0.generics }
+    pub fn from_function(&self) -> &TypeName { &self.0.from_function }
+    pub fn parameters(&self) -> &Vec<Type> { &self.0.parameters }
 
-    // panics if there is more than one reference to the inner TypeData
     pub fn with_name(self, name: TypeName) -> Self {
         self.modify_type_data(|data| data.name = name.clone())
     }
 
-    // panics if there is more than one reference to the inner TypeData
     pub fn with_generics(self, generics: &Vec<Type>) -> Self {
         self.modify_type_data(|data| data.generics = generics.clone())
     }
 
-    // panics if there is more than one reference to the inner TypeData
-    pub fn modify_type_data(self, mut function: impl FnMut(&mut TypeData)) -> Self {
-        let mut type_data = Arc::try_unwrap(self.0).unwrap();
-        function(&mut type_data);
-        Self(Arc::from(type_data))
+    pub fn with_from_function(self, name: TypeName) -> Self {
+        self.modify_type_data(|data| data.from_function = name.clone())
+    }
+
+    pub fn with_parameters(self, parameters: &Vec<Type>) -> Self {
+        self.modify_type_data(|data| data.parameters = parameters.clone())
+    }
+
+    pub fn modify_type_data(self, function: impl FnOnce(&mut TypeData)) -> Self {
+        match Arc::try_unwrap(self.0) {
+            Ok(mut type_data) => {
+                function(&mut type_data);
+                Self(Arc::from(type_data))
+            },
+            Err(arc) => {
+                let mut type_data = (*arc).clone();
+                function(&mut type_data);
+                Self(Arc::from(type_data))
+            },
+        }
     }
 
     pub fn is_unknown(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Unknown) }
@@ -265,11 +282,13 @@ impl Into<TypeSpec> for Type {
     fn into(self) -> TypeSpec { TypeSpec::Type(self) }
 }
 
-#[derive(Default, Hash, PartialEq, Eq)]
+#[derive(Default, Hash, PartialEq, Eq, Clone)]
 pub struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
     pub generics: Vec<Type>,
+    pub from_function: TypeName,
+    pub parameters: Vec<Type>,
 }
 
 impl Debug for TypeData {

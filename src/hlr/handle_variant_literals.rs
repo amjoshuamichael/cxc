@@ -98,13 +98,13 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                             (
                                 "tag".into(),
                                 box NodeData::Number {
-                                    value: variant_type.tag as u128,
+                                    value: variant_type.tag as u64,
                                     size: 32,
                                 },
                             ),
                             ("data".into(), box variant_data),
                         ],
-                        initialize: false,
+                        ..Default::default()
                     },
                 );
 

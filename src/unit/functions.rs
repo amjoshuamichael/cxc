@@ -34,6 +34,7 @@ impl CompData {
             name: VarName::from("alloc"),
             ret_type: TypeSpec::Ref(box TypeSpec::GenParam(0)),
             args: Vec::new(),
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -46,6 +47,7 @@ impl CompData {
                 name: VarName::temp(),
                 type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
             }],
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -68,6 +70,7 @@ impl CompData {
                     type_spec: Type::i(64).into(),
                 },
             ],
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -90,6 +93,7 @@ impl CompData {
                     type_spec: Type::i(64).into(),
                 },
             ],
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -99,6 +103,7 @@ impl CompData {
             name: VarName::from("size_of"),
             ret_type: Type::i(64).into(),
             args: Vec::new(),
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -108,6 +113,7 @@ impl CompData {
             name: VarName::from("alignment_of"),
             ret_type: Type::i(64).into(),
             args: Vec::new(),
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -126,6 +132,7 @@ impl CompData {
                     type_spec: TypeSpec::GenParam(0).get_ref().into(),
                 },
             ],
+
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::MethodOf(
@@ -204,8 +211,6 @@ impl CompData {
             let arg_count = mask.iter().filter(|refl| **refl).count() + mask.len();
             args.len() == arg_count
         });
-
-        self.reflect_arg_types.insert(info.clone(), mask);
     }
 
     pub fn get_reflect_type_masks(&self, info: &UniqueFuncInfo) -> Vec<bool> {
@@ -276,12 +281,12 @@ impl CompData {
 
         let code = self.get_code(info.clone())?;
 
-        let ret_type = &self.get_spec(&code.ret_type, &info.generics())?;
+        let ret_type = &self.get_spec(&code.ret_type, info)?;
 
         let arg_types = code
             .args
             .iter()
-            .map(|d| self.get_spec(&d.type_spec, &info.generics()))
+            .map(|d| self.get_spec(&d.type_spec, info))
             .collect::<Option<Vec<_>>>()?;
 
         let func_type = ret_type.clone().func_with_args(arg_types);
@@ -322,6 +327,25 @@ impl CompData {
             },
             func,
         );
+    }
+
+    pub fn add_type_alias(&mut self, name: TypeName, a: TypeSpec) {
+        self.aliases.insert(name, a);
+    }
+
+    pub fn contains(&self, key: &TypeName) -> bool { self.aliases.contains_key(key) }
+
+    pub fn get_by_name(&self, name: &TypeName) -> Option<Type> {
+        {
+            let cached_type = self.types.get(name);
+            if cached_type.is_some() {
+                return cached_type.cloned();
+            }
+        }
+
+        let alias = self.aliases.get(name)?;
+        let realized_type = self.get_spec(alias, &vec![])?;
+        Some(realized_type.with_name(name.clone()))
     }
 }
 

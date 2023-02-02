@@ -1,4 +1,5 @@
 use crate::{lex::Tok, Type};
+use std::fmt::{Debug, Display};
 
 use super::{Expr, TypeSpec};
 
@@ -22,6 +23,35 @@ pub enum ParseError {
     UnexpectedEndOfFile,
     UnexpectedTok { got: Tok, expected: Vec<TokName> },
     ImproperExpression,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseErrorSpanned {
+    pub error: ParseError,
+    pub start: usize,
+    pub end: usize,
+    pub tokens_between: TokenSpan,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenSpan(Vec<Tok>);
+
+impl TokenSpan {
+    pub fn new(all: &Vec<Tok>, start: usize, end: usize) -> Self {
+        Self(all[start..=end].to_vec())
+    }
+}
+
+impl Display for ParseErrorSpanned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.error)?;
+
+        for tok in &self.tokens_between.0 {
+            write!(f, "{}", &*tok.to_string())?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,7 +176,7 @@ impl From<Tok> for TokName {
             Bool(_) => TokName::Bool,
             Strin(_) => TokName::Strin,
             Error => TokName::Error,
-            Space | Comment | Return => TokName::Whitespace,
+            Space | Comment | Return | Tab => TokName::Whitespace,
         }
     }
 }

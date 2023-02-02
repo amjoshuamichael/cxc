@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use crate::lex::Tok;
 use logos::Lexer;
 
-pub fn parse_int(token: &mut Lexer<Tok>) -> Option<u128> {
+pub fn parse_int(token: &mut Lexer<Tok>) -> Option<u64> {
     let plain_number = token
         .slice()
         .chars()
@@ -29,12 +31,12 @@ pub fn parse_bool(token: &mut Lexer<Tok>) -> Option<bool> {
     }
 }
 
-pub fn parse_string(token: &mut Lexer<Tok>) -> Option<String> {
+pub fn parse_string(token: &mut Lexer<Tok>) -> Option<Arc<str>> {
     let string_len = token.slice().len() - 1;
-    Some(token.slice()[1..string_len].chars().collect())
+    Some(Arc::from(&token.slice()[1..string_len]))
 }
 
-pub fn parse_dotted_int(token: &mut Lexer<Tok>) -> Option<(u128, u128)> {
+pub fn parse_dotted_int(token: &mut Lexer<Tok>) -> Option<(u32, u32)> {
     let num_text = token
         .slice()
         .chars()
@@ -80,16 +82,16 @@ fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<f64> {
     Some(output)
 }
 
-fn convert_base(input: &str, base: u32) -> Option<u128> {
-    let mut output: u128 = 0;
+fn convert_base(input: &str, base: u32) -> Option<u64> {
+    let mut output: u64 = 0;
 
     for (digit_index, digit) in input.chars().rev().enumerate() {
         let digit_index: u32 = digit_index.try_into().unwrap();
-        let base_multiplier: u128 = base.pow(digit_index).try_into().ok()?;
+        let base_multiplier: u64 = base.pow(digit_index).try_into().ok()?;
         output += match_base16(digit)? * base_multiplier;
     }
 
     Some(output)
 }
 
-fn match_base16(digit: char) -> Option<u128> { Some(digit.to_digit(16)?.into()) }
+fn match_base16(digit: char) -> Option<u64> { Some(digit.to_digit(16)?.into()) }

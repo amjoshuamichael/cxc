@@ -71,7 +71,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                                 lexer,
                             )?;
 
-                            Expr::Tuple(type_spec, exprs, false).into()
+                            Expr::Tuple(type_spec, exprs, StructFill::NoFill).into()
                         }
                     } else {
                         break;
@@ -254,9 +254,9 @@ fn parse_struct_literal(
     let initialize = match lexer.next_tok()? {
         Tok::DoublePlus => {
             lexer.assert_next_tok_is(Tok::RCurly)?;
-            true
+            StructFill::Default
         },
-        Tok::RCurly => false,
+        Tok::RCurly => StructFill::NoFill,
         got => {
             return Err(ParseError::UnexpectedTok {
                 got,

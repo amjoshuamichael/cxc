@@ -4,6 +4,8 @@ use std::{cell::RefCell, rc::Rc};
 use crate::lex::{Tok, TypeName, VarName};
 use passable::Pass;
 
+use super::{ParseErrorSpanned, TokenSpan};
+
 #[derive(Debug, Clone, Default)]
 struct TokPos(Rc<RefCell<usize>>);
 
@@ -19,17 +21,17 @@ pub type TypeParseContext = ParseContext<TypeName>;
 
 #[derive(Default)]
 pub struct ParseContext<N> {
-    inner: Vec<Tok>,
+    inner: Rc<Vec<Tok>>,
     tok_pos: TokPos,
     pub name: N,
     pub generic_labels: GenericLabels,
-    pub errors: Pass<Vec<ParseError>>,
+    pub errors: Pass<Vec<ParseErrorSpanned>>,
 }
 
 impl<N: Default> ParseContext<N> {
     pub fn new(tokens: Vec<Tok>) -> Self {
         Self {
-            inner: tokens,
+            inner: Rc::new(tokens),
             ..Default::default()
         }
     }
@@ -56,49 +58,42 @@ impl<N: Default> ParseContext<N> {
 
     pub fn generic_count(&self) -> usize { self.generic_labels.len() }
 
-    fn move_ahead(&mut self) -> usize {
-        self.tok_pos.inc();
-        self.tok_pos.val()
-    }
-
     pub fn peek_by(&self, offset: usize) -> ParseResult<Tok> {
         let mut current = self.tok_pos.val();
-        let mut token = Tok::Space;
+        let mut token = &Tok::Space;
 
         for _ in 0..=offset {
-            token = Tok::Space;
+            token = &Tok::Space;
             while token.is_whitespace() {
                 token = self
                     .inner
                     .get(current)
-                    .ok_or(ParseError::UnexpectedEndOfFile)?
-                    .clone();
+                    .ok_or(ParseError::UnexpectedEndOfFile)?;
                 current += 1;
             }
         }
 
-        Ok(token)
+        Ok(token.clone())
     }
 
     pub fn peek_tok(&mut self) -> ParseResult<Tok> { self.peek_by(0) }
 
     pub fn next_tok(&mut self) -> ParseResult<Tok> {
-        let mut next = Tok::Space;
+        let mut next = &Tok::Space;
 
         while next.is_whitespace() {
             next = self
                 .inner
                 .get(self.tok_pos.val())
-                .ok_or(ParseError::UnexpectedEndOfFile)?
-                .clone();
-            self.move_ahead();
+                .ok_or(ParseError::UnexpectedEndOfFile)?;
+            self.tok_pos.inc();
         }
 
         if crate::DEBUG {
             print!("{}", next.to_string());
         }
 
-        Ok(next)
+        Ok(next.clone())
     }
 
     pub fn assert_next_tok_is(&mut self, tok: Tok) -> Result<(), ParseError> {
@@ -119,19 +114,18 @@ impl<N: Default> ParseContext<N> {
         parser: impl Fn(&mut Self) -> ParseResult<O>,
         skip_until: Vec<Tok>,
     ) -> ParseResult<O> {
-        // let start = self.tok_pos();
+        let start = self.tok_pos.val();
 
         match parser(self) {
             Ok(expr) => Ok(expr),
-            Err(err) => {
-                self.errors.deref_mut().unwrap().push(err);
+            Err(error) => {
+                println!("...recovering...");
 
                 loop {
                     let next_token = self
                         .inner
                         .get(self.tok_pos.val())
                         .ok_or(ParseError::UnexpectedEndOfFile)?;
-                    dbg!(&next_token);
 
                     if next_token == &skip_until[0] {
                         break;
@@ -139,6 +133,16 @@ impl<N: Default> ParseContext<N> {
 
                     self.tok_pos.inc();
                 }
+
+                let end = self.tok_pos.val();
+                let spanned = ParseErrorSpanned {
+                    error,
+                    start,
+                    end,
+                    tokens_between: TokenSpan::new(&self.inner, start, end),
+                };
+
+                self.errors.deref_mut().unwrap().push(spanned);
 
                 Ok(O::err())
             },

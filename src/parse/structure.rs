@@ -7,6 +7,7 @@ use crate::Type;
 pub enum TypeSpec {
     Named(TypeName),
     Generic(TypeName, Vec<TypeSpec>),
+    GetGeneric(Box<TypeSpec>, u32),
     GenParam(u8),
     Int(u32),
     UInt(u32),
@@ -27,6 +28,7 @@ pub enum TypeSpec {
     Union(Box<TypeSpec>, Box<TypeSpec>),
     Void,
     Type(Type),
+    Me,
 }
 
 impl TypeSpec {
@@ -140,15 +142,16 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                 TypeName::F64 => TypeSpec::Float(FloatType::F64),
                 TypeName::F32 => TypeSpec::Float(FloatType::F32),
                 TypeName::F16 => TypeSpec::Float(FloatType::F16),
+                TypeName::Me => TypeSpec::Me,
                 TypeName::Other(_) => {
-                    if lexer.peek_tok()? == Tok::LParen {
+                    if lexer.peek_tok() == Ok(Tok::LParen) {
                         let type_level_func_args =
                             parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
 
                         TypeSpec::TypeLevelFunc(name, type_level_func_args)
                     } else if let Some(generic_index) = lexer.get_generic_label(&name) {
                         TypeSpec::GenParam(generic_index)
-                    } else if let Tok::LAngle = lexer.peek_tok()? {
+                    } else if lexer.peek_tok() == Ok(Tok::LAngle) {
                         let generics =
                             parse_list(Tok::angles(), Some(Tok::Comma), parse_type, lexer)?;
 

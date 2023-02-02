@@ -1,4 +1,4 @@
-use crate::{lex::VarName, TypeEnum, TypeRelation, UniqueFuncInfo};
+use crate::{lex::VarName, parse::StructFill, TypeEnum, TypeRelation, UniqueFuncInfo};
 
 use super::{
     expr_tree::{CallGen, MakeVarGen, MemberGen, NodeData},
@@ -12,7 +12,7 @@ pub fn handle_active_initialization(hlr: &mut FuncRep) {
             let NodeData::StructLit { var_type, fields: field_ids, initialize } = 
                 structlit_data else { panic!() };
 
-            if !*initialize {
+            if *initialize != StructFill::Default {
                 return;
             }
 

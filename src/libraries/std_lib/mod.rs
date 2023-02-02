@@ -9,12 +9,14 @@ use crate::{
 use super::{Library, TypeInterfaceLib};
 
 pub struct StdLib;
-mod alloc_lib;
+
+mod bit_array;
 mod default;
 mod print_lib;
 mod string;
 mod to_string;
 mod value_lib;
+use bit_array::BitArrayLib;
 use default::DefaultLib;
 use print_lib::PrintLib;
 use string::StringLib;
@@ -26,12 +28,10 @@ impl Library for StdLib {
         unit.add_rust_func("to_i64", [to_i64]);
         unit.add_static_deriver("len".into(), derive_array_len);
 
-        // unit.add_lib(AllocLib);
-
-        unit.push_script(include_str!("vec.cxc"));
-        unit.push_script(include_str!("rc.cxc"));
-        unit.push_script(include_str!("lucid.cxc"));
-        unit.push_script(include_str!("option.cxc"));
+        unit.push_script(include_str!("vec.cxc")).unwrap();
+        unit.push_script(include_str!("rc.cxc")).unwrap();
+        unit.push_script(include_str!("lucid.cxc")).unwrap();
+        unit.push_script(include_str!("option.cxc")).unwrap();
 
         unit.add_lib(StringLib);
         unit.add_lib(ToStringLib);
@@ -39,6 +39,7 @@ impl Library for StdLib {
         unit.add_lib(ValueLib);
         unit.add_lib(TypeInterfaceLib);
         unit.add_lib(PrintLib);
+        unit.add_lib(BitArrayLib);
 
         unit.add_external_default::<bool>(Type::bool());
     }
@@ -57,7 +58,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
             type_spec: typ.clone().into(),
         }],
         generic_count: 0,
-        code: Expr::Number(*count as u128),
+        code: Expr::Number(*count as u64),
         relation: TypeSpecRelation::Static(typ.into()),
     })
 }

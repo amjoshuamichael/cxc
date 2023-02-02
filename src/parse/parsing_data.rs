@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, iter::once};
+use std::{fmt::Debug, hash::Hash, iter::once, sync::Arc};
 
 use crate::{
     unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
@@ -7,16 +7,25 @@ use crate::{
 
 use super::*;
 
+#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+pub enum StructFill {
+    Default,
+    Uninit,
+
+    #[default]
+    NoFill,
+}
+
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Number(u128),
+    Number(u64),
     Float(f64),
     Bool(bool),
-    Strin(String),
+    Strin(Arc<str>),
     Ident(VarName),
-    Struct(TypeSpec, Vec<(VarName, Expr)>, bool),
+    Struct(TypeSpec, Vec<(VarName, Expr)>, StructFill),
     StaticMethodPath(TypeSpec, VarName),
-    Tuple(TypeSpec, Vec<Expr>, bool),
+    Tuple(TypeSpec, Vec<Expr>, StructFill),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
     SetVar(VarDecl, Box<Expr>),
@@ -240,6 +249,7 @@ impl FuncCode {
             name: VarName::temp(),
             ret_type: Type::unknown().into(),
             args: Vec::new(),
+
             generic_count: 0,
             code,
             relation: TypeSpecRelation::Unrelated,

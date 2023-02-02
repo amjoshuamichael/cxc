@@ -88,7 +88,7 @@ impl Debug for ExprNode {
 #[derive(Clone, Debug)]
 pub enum NodeData {
     Number {
-        value: u128,
+        value: u64,
         size: u32,
     },
     Float {
@@ -101,7 +101,7 @@ pub enum NodeData {
     StructLit {
         var_type: Type,
         fields: Vec<(VarName, ExprID)>,
-        initialize: bool,
+        initialize: StructFill,
     },
     ArrayLit {
         var_type: Type,
@@ -286,8 +286,10 @@ impl NodeData {
                     lit += "\n";
                 }
 
-                if *initialize {
-                    lit += "++\n";
+                match initialize {
+                    StructFill::Default => lit += "++ \n",
+                    StructFill::Uninit => lit += "-- \n",
+                    StructFill::NoFill => {},
                 }
 
                 lit += "} \n";

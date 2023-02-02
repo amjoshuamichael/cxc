@@ -22,7 +22,7 @@ pub fn handle_arg_type_reflection(hlr: &mut FuncRep) {
                 let reflected_type_id = hlr.tree.insert(
                     call_id,
                     NodeData::Number {
-                        value: arg_type.get_deref().unwrap().as_u64() as u128,
+                        value: arg_type.get_deref().unwrap().as_u64(),
                         size: 64,
                     },
                 );

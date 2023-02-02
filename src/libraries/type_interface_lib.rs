@@ -35,7 +35,7 @@ fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
             type_spec: typ.clone().into(),
         }],
         generic_count: 0,
-        code: Expr::Number(field_count as u128).wrap_in_block(),
+        code: Expr::Number(field_count as u64).wrap_in_block(),
         relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ.into())),
     })
 }
@@ -46,7 +46,7 @@ fn size_in_bytes(_: &CompData, typ: Type) -> Option<FuncCode> {
         ret_type: Type::i(32).into(),
         args: Vec::new(),
         generic_count: 0,
-        code: Expr::Number(typ.size() as u128).wrap_in_block(),
+        code: Expr::Number(typ.size() as u64).wrap_in_block(),
         relation: TypeSpecRelation::Static(TypeSpec::Type(typ.into())),
     })
 }

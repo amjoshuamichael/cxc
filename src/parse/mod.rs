@@ -13,6 +13,7 @@ mod opcode;
 mod parsing_data;
 mod structure;
 
+pub use error::ParseError;
 pub(super) use error::*;
 pub(super) use expression::*;
 pub(super) use list::*;
@@ -20,7 +21,7 @@ pub use opcode::*;
 pub use parsing_data::*;
 pub(super) use structure::*;
 
-pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseError>> {
+pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpanned>> {
     let script = file(&mut lexer);
 
     let errors = lexer.errors.deref().unwrap();
@@ -74,31 +75,9 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                         parse_type_spec(&mut method_of_parser)?
                     };
 
-                    let methods = match lexer.next_tok()? {
-                        Tok::ColonDot => parse_one_or_list(
-                            Tok::curlys(),
-                            None,
-                            move |lexer| {
-                                parse_func(
-                                    lexer,
-                                    TypeRelationGeneric::MethodOf(method_of.clone()),
-                                    generic_labels.clone(),
-                                )
-                            },
-                            lexer,
-                        )?,
-                        Tok::DoubleColon => parse_one_or_list(
-                            Tok::curlys(),
-                            None,
-                            move |lexer| {
-                                parse_func(
-                                    lexer,
-                                    TypeRelationGeneric::Static(method_of.clone()),
-                                    generic_labels.clone(),
-                                )
-                            },
-                            lexer,
-                        )?,
+                    let relation = match lexer.next_tok()? {
+                        Tok::ColonDot => TypeRelationGeneric::MethodOf(method_of.clone()),
+                        Tok::DoubleColon => TypeRelationGeneric::Static(method_of.clone()),
                         got => {
                             return Err(ParseError::UnexpectedTok {
                                 got,
@@ -106,6 +85,15 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                             })
                         },
                     };
+
+                    let methods = parse_one_or_list(
+                        Tok::curlys(),
+                        None,
+                        move |lexer| {
+                            parse_func(lexer, relation.clone(), generic_labels.clone())
+                        },
+                        lexer,
+                    )?;
 
                     for method in methods {
                         declarations.push(Decl::Func(method));
@@ -163,12 +151,13 @@ pub fn parse_func(
     }
 
     let func_context = lexer.split(func_name, all_generics);
-    parse_func_code(func_context, relation)
+    parse_func_code(func_context, relation, outer_generics.len() as u32)
 }
 
 pub fn parse_func_code(
     mut lexer: FuncParseContext,
     relation: TypeSpecRelation,
+    method_generic_count: u32,
 ) -> ParseResult<FuncCode> {
     let mut args =
         parse_list((Tok::LParen, Tok::RParen), Some(Tok::Comma), parse_var_decl, &mut lexer)?;
@@ -257,7 +246,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         }
     }
 
-    dbg!(lexer.recover(inner, vec![Tok::Return]))
+    lexer.recover(inner, vec![Tok::Return])
 }
 
 pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
