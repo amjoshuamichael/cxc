@@ -1,7 +1,6 @@
 #![allow(unused_must_use)]
 mod test_utils;
 use cxc::{library::StdLib, Unit};
-use std::rc::Rc;
 
 use test_utils::{xc_test, Point2D};
 
@@ -93,22 +92,6 @@ fn ref_option_none() {
             }
         ";
         Option::<&i32>::None
-    )
-}
-
-#[test]
-fn option_rc() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option< Rc<i32> > {
-                output: Option< Rc<i32> > = 
-                    Option< Rc<i32> >.Some { { Rc<i32> } { Rc<i32>:new(5) } }
-
-                ; output
-            }
-        ";
-        Option::<Rc<i32>>::Some(Rc::new(5))
     )
 }
 

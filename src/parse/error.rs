@@ -15,6 +15,10 @@ impl Errable for TypeSpec {
     fn err() -> Self { TypeSpec::Type(Type::unknown()) }
 }
 
+impl<T: Errable> Errable for Option<T> {
+    fn err() -> Self { Some(T::err()) }
+}
+
 pub type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Debug, Clone, PartialEq)]

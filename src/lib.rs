@@ -4,6 +4,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(box_syntax)]
 #![feature(type_changing_struct_update)]
+#![feature(if_let_guard)]
 
 pub static XC_DEBUG: bool = cfg!(feature = "xc-debug");
 pub static LLVM_DEBUG: bool = cfg!(feature = "llvm-debug");

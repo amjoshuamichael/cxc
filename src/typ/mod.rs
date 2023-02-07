@@ -248,10 +248,7 @@ impl Type {
     pub fn void_ptr() -> Type { Type::new(TypeEnum::Void).get_ref() }
 
     pub fn func_with_args(self, args: Vec<Type>) -> Type {
-        Type::new(TypeEnum::Func(FuncType {
-            ret_type: self,
-            args,
-        }))
+        Type::new(TypeEnum::Func(FuncType { ret: self, args }))
     }
 
     pub fn as_type_enum(&self) -> &TypeEnum { &self.0.type_enum }
@@ -400,12 +397,12 @@ pub struct RefType {
 
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct FuncType {
-    pub ret_type: Type,
+    pub ret: Type,
     pub args: Vec<Type>,
 }
 
 impl FuncType {
-    pub fn ret_type(&self) -> Type { self.ret_type.clone() }
+    pub fn ret_type(&self) -> Type { self.ret.clone() }
     pub fn args(&self) -> Vec<Type> { self.args.clone() }
 }
 

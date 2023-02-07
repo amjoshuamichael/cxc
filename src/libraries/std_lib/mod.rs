@@ -29,6 +29,7 @@ impl Library for StdLib {
         unit.add_static_deriver("len".into(), derive_array_len);
 
         unit.push_script(include_str!("vec.cxc")).unwrap();
+        unit.push_script(include_str!("hashmap.cxc")).unwrap();
         unit.push_script(include_str!("rc.cxc")).unwrap();
         unit.push_script(include_str!("lucid.cxc")).unwrap();
         unit.push_script(include_str!("option.cxc")).unwrap();

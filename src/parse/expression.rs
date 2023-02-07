@@ -10,6 +10,10 @@ impl Into<Atom> for Expr {
     fn into(self) -> Atom { Atom::Expr(self) }
 }
 
+impl Errable for Atom {
+    fn err() -> Self { Atom::Expr(Expr::err()) }
+}
+
 impl Atom {
     fn unwrap_expr(self) -> ParseResult<Expr> {
         let Atom::Expr(expr) = self else { return Err(ParseError::ImproperExpression) };
@@ -30,69 +34,12 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     while let Ok(next) = lexer.peek_tok() {
         let atom = if matches!(last_atom, Atom::Op(_)) {
             // if the last atom was an operator, we expect these
-            let atom = match next {
-                Tok::Int(val) => Expr::Number(val).into(),
-                Tok::Float(val) => Expr::Float(val).into(),
-                Tok::DottedNum(_) => {
-                    // convert dotted int back into float
-                    Expr::Float(next.to_string().parse().unwrap()).into()
-                },
-                Tok::Bool(val) => Expr::Bool(val).into(),
-                Tok::Strin(val) => Expr::Strin(val).into(),
-                Tok::VarName(val) => Expr::Ident(val.clone()).into(),
-                opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
-                Tok::LBrack => Expr::Array(parse_list(
-                    (Tok::LBrack, Tok::RBrack),
-                    Some(Tok::Comma),
-                    parse_expr,
-                    lexer,
-                )?)
-                .into(),
-                Tok::LParen => {
-                    lexer.assert_next_tok_is(Tok::LParen)?;
-                    let enclosed = Expr::Enclosed(box parse_math_expr(lexer)?).into();
-                    lexer.assert_next_tok_is(Tok::RParen)?;
-                    enclosed
-                },
-                _ => {
-                    if let Ok(type_spec) = parse_type_spec(lexer) {
-                        if lexer.peek_tok()? == Tok::Colon {
-                            lexer.next_tok()?;
-                            let func_name = lexer.next_tok()?.var_name()?;
-                            Expr::StaticMethodPath(type_spec, func_name).into()
-                        } else if matches!(
-                            lexer.peek_by(1)?,
-                            Tok::VarName(_) | Tok::DoublePlus | Tok::DoubleMinus
-                        ) {
-                            parse_struct_literal(lexer, type_spec)?.into()
-                        } else {
-                            let exprs = parse_list(
-                                Tok::curlys(),
-                                Some(Tok::Comma),
-                                parse_math_expr,
-                                lexer,
-                            )?;
-
-                            Expr::Tuple(type_spec, exprs, StructFill::NoFill).into()
-                        }
-                    } else {
-                        break;
-                    }
-                },
+            let atom = match parse_atom_after_op(lexer)? {
+                Some(atom) => atom,
+                _ => break,
             };
 
             // we've detected these, but we need to move the token pos forward by one.
-            if matches!(
-                atom,
-                Atom::Expr(Expr::Number(_))
-                    | Atom::Expr(Expr::Float(_))
-                    | Atom::Expr(Expr::Bool(_))
-                    | Atom::Expr(Expr::Strin(_))
-                    | Atom::Expr(Expr::Ident(_))
-                    | Atom::Op(_)
-            ) {
-                lexer.next_tok()?;
-            }
 
             atom
         } else if matches!(next, Tok::LAngle) && after_generics(lexer, Tok::LParen)? {
@@ -152,6 +99,86 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     }
 
     Ok(atoms.pop().unwrap().unwrap_expr()?)
+}
+
+// parses atoms that go in between operators. Like the 1, 2, and "Hello" in 1 *
+// 2 + "hello"
+fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>> {
+    let atom = match lexer.peek_tok()? {
+        Tok::Int(val) => Expr::Number(val).into(),
+        Tok::Float(val) => Expr::Float(val).into(),
+        Tok::DottedNum((l, r)) => {
+            // convert dotted int back into float
+            Expr::Float(format!("{l}.{r}").parse().unwrap()).into()
+        },
+        Tok::Bool(val) => Expr::Bool(val).into(),
+        Tok::Strin(val) => Expr::Strin(val).into(),
+        Tok::VarName(val) => Expr::Ident(val.clone()).into(),
+        opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
+        Tok::LBrack => Expr::Array(parse_list(
+            (Tok::LBrack, Tok::RBrack),
+            Some(Tok::Comma),
+            parse_expr,
+            lexer,
+        )?)
+        .into(),
+        Tok::LParen => {
+            lexer.assert_next_tok_is(Tok::LParen)?;
+            let enclosed = Expr::Enclosed(box parse_math_expr(lexer)?).into();
+            lexer.assert_next_tok_is(Tok::RParen)?;
+            enclosed
+        },
+        Tok::LCurly if lexer.peek_by(1)? == Tok::RCurly => {
+            lexer.next_tok()?;
+            lexer.next_tok()?;
+
+            Expr::Tuple(Vec::new(), StructFill::NoFill).into()
+        },
+        _ if let Ok(type_spec) = parse_type_spec(&mut lexer.detach()) => {
+            parse_type_spec(lexer)?;
+
+            if lexer.peek_tok()? == Tok::Colon {
+                lexer.next_tok()?;
+                let func_name = lexer.next_tok()?.var_name()?;
+                Expr::StaticMethodPath(type_spec, func_name).into()
+            } else {
+                let value = lexer
+                    .recover(parse_atom_after_op, vec![Tok::Return])?
+                    .ok_or(ParseError::ImproperExpression)?;
+                let Atom::Expr(expr) = value 
+                    else { return Err(ParseError::ImproperExpression) };
+                Expr::TypedValue(type_spec, box expr).into()
+            }
+        },
+        Tok::LCurly
+            if matches!(
+                lexer.peek_by(1)?,
+                Tok::VarName(_) | Tok::DoublePlus | Tok::DoubleMinus
+            ) =>
+        {
+            parse_struct_literal(lexer)?.into()
+        },
+        Tok::LCurly => {
+            let exprs = parse_list(Tok::curlys(), Some(Tok::Comma), parse_math_expr, lexer)?;
+
+            Expr::Tuple(exprs, StructFill::NoFill).into()
+        },
+        _ => return Ok(None)
+    };
+
+    if matches!(
+        atom,
+        Atom::Expr(Expr::Number(_))
+            | Atom::Expr(Expr::Float(_))
+            | Atom::Expr(Expr::Bool(_))
+            | Atom::Expr(Expr::Strin(_))
+            | Atom::Expr(Expr::Ident(_))
+            | Atom::Op(_)
+    ) {
+        lexer.next_tok()?;
+    }
+
+    Ok(Some(atom))
 }
 
 fn parse_call(
@@ -229,10 +256,7 @@ fn detect_binary_ops(atoms: &mut Vec<Atom>) -> ParseResult<()> {
     Ok(())
 }
 
-fn parse_struct_literal(
-    lexer: &mut FuncParseContext,
-    type_spec: TypeSpec,
-) -> Result<Expr, ParseError> {
+fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError> {
     let mut fields = Vec::new();
 
     lexer.assert_next_tok_is(Tok::LCurly)?;
@@ -271,7 +295,7 @@ fn parse_struct_literal(
         },
     };
 
-    Ok(Expr::Struct(type_spec, fields, initialize))
+    Ok(Expr::Struct(fields, initialize))
 }
 
 fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> Result<bool, ParseError> {

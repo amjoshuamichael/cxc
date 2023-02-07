@@ -38,6 +38,19 @@ fn infer_b() {
 }
 
 #[test]
+fn infer_struct() {
+    xc_test!(
+        "
+            main(); i32 {
+                twonums = { x = 43, y = 94 }
+                ; twonums.y
+            }
+        ";
+        94
+    )
+}
+
+#[test]
 fn factorial_while() {
     xc_test!(
         "

@@ -1,7 +1,7 @@
 use super::prelude::*;
 use crate::{
     lex::indent_parens,
-    parse::{Opcode, TypeSpec},
+    parse::{Opcode, StructFill, TypeSpec},
     FuncType, Type, TypeEnum, TypeRelation, VarName,
 };
 use indexmap::IndexMap;
@@ -207,6 +207,30 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     infer_map.insert(id, Constraint::SameAs(to_return.into()));
                 } else {
                     infer_map.insert(id, Constraint::IsType(Type::void()));
+                }
+            },
+            NodeData::StructLit {
+                var_type,
+                fields,
+                initialize,
+            } => {
+                if var_type.is_unknown() && initialize == StructFill::NoFill {
+                    let infer_fields = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (field_name, _))| {
+                            (field_name.clone(), TypeSpec::GenParam(index as u8))
+                        })
+                        .collect();
+                    let spec = TypeSpec::Struct(infer_fields);
+                    infer_map.insert(
+                        id,
+                        Constraint::RelatedTo {
+                            spec,
+                            gen_params: fields.iter().map(|(_, id)| (*id).into()).collect(),
+                            method_of: None,
+                        },
+                    );
                 }
             },
             NodeData::ArrayLit { parts, .. } => {
@@ -419,7 +443,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
 
         if let Ok(func_type) = hlr.comp_data.get_type(&func_info) && 
             generics.iter().all(Type::is_known) {
-            let TypeEnum::Func(FuncType { ret_type, .. }) = 
+            let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 
                 func_type.as_type_enum() else { panic!() };
 
             infer_map

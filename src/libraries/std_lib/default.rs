@@ -53,7 +53,10 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 fields.push((field_name.clone(), other_default_call));
             }
 
-            let struct_lit = Expr::Struct(typ.clone().into(), fields, StructFill::NoFill);
+            let struct_lit = Expr::TypedValue(
+                typ.clone().into(),
+                box Expr::Struct(fields, StructFill::NoFill),
+            );
 
             let relation = TypeSpecRelation::Static(TypeSpec::Type(typ.clone()));
 

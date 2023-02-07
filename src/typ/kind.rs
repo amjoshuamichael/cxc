@@ -49,7 +49,7 @@ impl Kind for FuncType {
             .map(|t| format!("{:?}", t))
             .collect::<Vec<String>>()
             .join(", ");
-        let ret_name = &self.ret_type;
+        let ret_name = &self.ret;
 
         format!("({args_names}) -> {ret_name:?}")
     }
@@ -64,21 +64,21 @@ impl Kind for FuncType {
 
 impl FuncType {
     pub fn llvm_func_type<'f>(&self, context: &'f Context) -> FunctionType<'f> {
-        if self.ret_type.return_style() != ReturnStyle::Sret {
+        if self.ret.return_style() != ReturnStyle::Sret {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
                 .map(|t| t.to_basic_type(context).into())
                 .collect();
 
-            if self.ret_type.is_void() {
+            if self.ret.is_void() {
                 context.void_type().fn_type(&args[..], false)
             } else {
-                let return_type = self.ret_type.raw_return_type().to_basic_type(context);
+                let return_type = self.ret.raw_return_type().to_basic_type(context);
                 return_type.fn_type(&*args, false)
             }
         } else {
-            let args: Vec<BasicMetadataTypeEnum> = once(&self.ret_type.clone().get_ref())
+            let args: Vec<BasicMetadataTypeEnum> = once(&self.ret.clone().get_ref())
                 .chain(self.args.iter())
                 .map(|t| t.to_basic_type(context).into())
                 .collect();

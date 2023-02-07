@@ -172,7 +172,7 @@ impl NodeDataGen for CallGen {
             .collect();
 
         let func_type = hlr.comp_data.get_type(&self.info).unwrap();
-        let TypeEnum::Func(FuncType { ret_type, .. } ) = func_type.as_type_enum()
+        let TypeEnum::Func(FuncType { ret: ret_type, .. } ) = func_type.as_type_enum()
             else { panic!() };
 
         hlr.tree.replace(

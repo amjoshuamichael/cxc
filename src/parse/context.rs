@@ -13,6 +13,10 @@ impl SharedNum {
     pub fn inc(&self) { *self.0.borrow_mut() += 1 }
     pub fn dec(&self) { *self.0.borrow_mut() -= 1 }
     pub fn val(&self) -> usize { *self.0.borrow() }
+    pub fn detach(&self) -> Self {
+        let num = (*self.0).clone();
+        Self(Rc::new(num))
+    }
 }
 
 pub type GlobalParseContext = ParseContext<()>;
@@ -29,7 +33,7 @@ pub struct ParseContext<N> {
     pub errors: Pass<Vec<ParseErrorSpanned>>,
 }
 
-impl<N: Default> ParseContext<N> {
+impl<N: Default + Clone> ParseContext<N> {
     pub fn new(tokens: Vec<Tok>) -> Self {
         Self {
             inner: Rc::new(tokens),
@@ -55,6 +59,17 @@ impl<N: Default> ParseContext<N> {
             tok_pos: self.tok_pos.clone(),
             scope: self.scope.clone(),
             errors: self.errors.pass().unwrap(),
+        }
+    }
+
+    pub fn detach(&mut self) -> Self {
+        Self {
+            name: self.name.clone(),
+            generic_labels: self.generic_labels.clone(),
+            inner: self.inner.clone(),
+            tok_pos: self.tok_pos.detach(),
+            scope: self.scope.clone(),
+            errors: Pass::default(),
         }
     }
 

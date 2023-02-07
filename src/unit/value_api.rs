@@ -162,7 +162,7 @@ impl Unit {
             .get_function_address(temp_name)
             .unwrap();
 
-        let TypeEnum::Func(FuncType { ret_type, .. }) = 
+        let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 
             func_rep.func_type.as_type_enum() else { panic!() };
 
         let value = match ret_type.return_style() {

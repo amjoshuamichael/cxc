@@ -44,6 +44,11 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpan
 pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
     let mut declarations: Vec<Decl> = Vec::new();
 
+    if lexer.peek_tok().is_err() {
+        // file is empty
+        return Ok(Script::default());
+    }
+
     loop {
         match lexer.peek_tok()? {
             Tok::VarName(_) => {
@@ -240,12 +245,12 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 }
             };
 
-            let rhs = parse_expr(lexer)?;
+            let rhs = lexer.recover(parse_expr, vec![Tok::Return])?;
             Ok(Expr::SetVar(var, box rhs))
         } else if lexer.peek_tok()? == Tok::Assignment {
             lexer.assert_next_tok_is(Tok::Assignment)?;
 
-            let rhs = parse_expr(lexer)?;
+            let rhs = lexer.recover(parse_expr, vec![Tok::Return])?;
 
             Ok(Expr::Set(box lhs, box rhs))
         } else {

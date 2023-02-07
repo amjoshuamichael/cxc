@@ -312,14 +312,10 @@ impl NodeData {
                 lit += &*tree.get(*rhs).to_string(tree);
                 lit
             },
-            MakeVar {
-                var_type,
-                name,
-                rhs,
-            } => {
+            MakeVar { name, rhs, .. } => {
                 let mut lit = name.to_string();
                 lit += ": ";
-                lit += &*format!("{:?}", var_type);
+                lit += &*format!("{:?}", tree.get(*rhs).ret_type());
                 lit += " = ";
                 lit += &*tree.get(*rhs).to_string(tree);
                 lit

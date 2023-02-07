@@ -416,7 +416,7 @@ impl FuncRep {
                 self.tree.replace(space, new_member);
                 space
             },
-            Expr::Struct(type_spec, expr_fields, initialize) => {
+            Expr::Struct(expr_fields, initialize) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut fields = Vec::new();
@@ -426,7 +426,7 @@ impl FuncRep {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: self.get_type_spec(&type_spec).unwrap(),
+                    var_type: Type::unknown(),
                     fields,
                     initialize,
                 };
@@ -434,7 +434,7 @@ impl FuncRep {
                 self.tree.replace(space, new_struct);
                 space
             },
-            Expr::Tuple(type_spec, exprs, initialize) => {
+            Expr::Tuple(exprs, initialize) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut fields = Vec::new();
@@ -444,7 +444,7 @@ impl FuncRep {
                 }
 
                 let new_struct = NodeData::StructLit {
-                    var_type: self.get_type_spec(&type_spec).unwrap(),
+                    var_type: Type::unknown(),
                     fields,
                     initialize,
                 };
@@ -493,6 +493,15 @@ impl FuncRep {
                 space
             },
             Expr::Enclosed(expr) => self.add_expr(*expr, parent),
+            Expr::TypedValue(type_spec, expr) => {
+                let typ = self.get_type_spec(&type_spec).unwrap();
+                let expr_id = self.add_expr(*expr, parent);
+
+                let node = self.tree.get_mut(expr_id);
+                *node.ret_type_mut().unwrap() = typ;
+
+                expr_id
+            },
             Expr::StaticMethodPath(..) | Expr::Error { .. } => {
                 unreachable!()
             },

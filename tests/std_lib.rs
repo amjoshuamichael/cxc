@@ -170,3 +170,31 @@ fn bit_array() {
         "
     )
 }
+
+//#[test]
+// fn bit_array() {
+//    xc_test!(
+//        "
+//        main() {
+//            arr8 = HashMap<i32, i32>:new()
+//            arr8.set(4, true)
+//            assert_eq(arr8.get(4), true)
+//            assert_eq(arr8.get(5), false)
+//        }
+//        "
+//    )
+//}
+//
+//#[test]
+// fn bit_array() {
+//    xc_test!(
+//        "
+//        main() {
+//            arr8 = BitArray<[32]bool>:new()
+//            arr8.set(4, true)
+//            assert_eq(arr8.get(4), true)
+//            assert_eq(arr8.get(5), false)
+//        }
+//        "
+//    )
+//}

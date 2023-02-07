@@ -23,9 +23,10 @@ pub enum Expr {
     Bool(bool),
     Strin(Arc<str>),
     Ident(VarName),
-    Struct(TypeSpec, Vec<(VarName, Expr)>, StructFill),
+    TypedValue(TypeSpec, Box<Expr>),
+    Struct(Vec<(VarName, Expr)>, StructFill),
     StaticMethodPath(TypeSpec, VarName),
-    Tuple(TypeSpec, Vec<Expr>, StructFill),
+    Tuple(Vec<Expr>, StructFill),
     Array(Vec<Expr>),
     Index(Box<Expr>, Box<Expr>),
     SetVar(VarDecl, Box<Expr>),
@@ -61,8 +62,8 @@ impl Expr {
             | Ident(_)
             | StaticMethodPath(..)
             | Error { .. } => box once(self),
-            Struct(_, fields, _) => box fields.iter().map(|(_, expr)| expr),
-            Tuple(_, exprs, _) => box exprs.iter(),
+            Struct(fields, _) => box fields.iter().map(|(_, expr)| expr),
+            Tuple(exprs, _) => box exprs.iter(),
             Array(exprs) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
             SetVar(_, rhs) => box once(&**rhs),
@@ -79,6 +80,7 @@ impl Expr {
             Block(stmts) => box stmts.iter(),
             Return(r) => box once(&**r),
             Enclosed(expr) => box once(&**expr),
+            TypedValue(_, expr) => box once(&**expr),
         }
     }
 
@@ -88,39 +90,6 @@ impl Expr {
         match self {
             Expr::Block(_) => self,
             _ => Expr::Block(vec![Expr::Return(box self)]),
-        }
-    }
-
-    // returns the token that starts this expression. for example, if the expression
-    // is IfThen, then this function outputs TokName::Question, because that's
-    // the token that starts an if. this is used for error reporting.
-    pub fn first_tok(&self) -> Tok {
-        use Expr::*;
-
-        match self {
-            Number(num) => Tok::Int(*num),
-            Float(float) => Tok::Float(*float),
-            Bool(b) => Tok::Bool(*b),
-            Strin(s) => Tok::Strin(s.clone()),
-            Ident(name) => Tok::VarName(name.clone()),
-            StaticMethodPath(..) => todo!(),
-            Struct(..) => Tok::LCurly,
-            Tuple(..) => Tok::LCurly,
-            Array(..) => Tok::LBrack,
-            Index(left, _) => left.first_tok(),
-            SetVar(var_decl, _) => Tok::VarName(var_decl.name.clone()),
-            Set(lhs, _) => lhs.first_tok(),
-            Call { func: name, .. } => name.first_tok(),
-            UnarOp(..) => todo!(),
-            BinOp(_, left, _) => left.first_tok(),
-            Member(left, _) => left.first_tok(),
-            IfThen(..) => Tok::Question,
-            IfThenElse(..) => Tok::Question,
-            ForWhile(..) => Tok::At,
-            Block(..) => Tok::LCurly,
-            Return(..) => Tok::Semicolon,
-            Error { .. } => todo!(),
-            Enclosed(..) => Tok::LParen,
         }
     }
 }
@@ -140,7 +109,7 @@ impl VarDecl {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Script(pub Vec<Decl>);
 
 impl Script {

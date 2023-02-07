@@ -134,7 +134,7 @@ impl CompData {
             },
             TypeSpec::FuncReturnType(func_type) => {
                 let func_type = self.get_spec(func_type, generics)?;
-                let TypeEnum::Func(FuncType { ret_type, .. }) = func_type.as_type_enum() else { panic!() };
+                let TypeEnum::Func(FuncType { ret: ret_type, .. }) = func_type.as_type_enum() else { panic!() };
                 ret_type.clone()
             },
             TypeSpec::Generic(name, generic_aliases) => {

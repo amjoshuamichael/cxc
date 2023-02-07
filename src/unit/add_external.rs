@@ -34,7 +34,7 @@ impl ExternalFuncAdd {
 impl Unit {
     pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) {
         let func_type = self.comp_data.type_of(&function[0]);
-        let TypeEnum::Func(FuncType { args, ret_type }) = 
+        let TypeEnum::Func(FuncType { args, ret: ret_type }) = 
             func_type.as_type_enum() else { panic!() };
 
         let ext_add = ExternalFuncAdd {

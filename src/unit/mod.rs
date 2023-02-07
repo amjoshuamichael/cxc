@@ -162,7 +162,7 @@ impl Unit {
 
     pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) {
         set = set
-            .drain(..)
+            .into_iter()
             .filter(|info| !self.comp_data.has_been_compiled(info))
             .collect();
 
@@ -178,23 +178,20 @@ impl Unit {
         while !set.is_empty() {
             all_func_infos.extend(set.clone().drain(..));
 
-            {
-                let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-                for func in &set {
-                    comp_data.create_func_placeholder(
-                        func,
-                        &mut self.context,
-                        &mut self.module,
-                    );
-                }
-            }
-
-            let func_reps: Vec<FuncOutput> = set
+            let func_reps: Vec<FuncOutput> = { set }
                 .drain(..)
                 .map(|info| {
                     let code = self.comp_data.get_code(info.clone()).unwrap();
-                    hlr(info, self.comp_data.clone(), code)
+                    let hlr = hlr(info.clone(), self.comp_data.clone(), code);
+
+                    let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+                    comp_data.create_func_placeholder(
+                        &info,
+                        &mut self.context,
+                        &mut self.module,
+                    );
+
+                    hlr
                 })
                 .collect();
 
