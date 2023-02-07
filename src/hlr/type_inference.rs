@@ -1,3 +1,4 @@
+use super::prelude::*;
 use crate::{
     lex::indent_parens,
     parse::{Opcode, TypeSpec},
@@ -5,8 +6,6 @@ use crate::{
 };
 use indexmap::IndexMap;
 use indexmap::IndexSet;
-
-use super::prelude::*;
 use std::hash::Hash;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
@@ -197,8 +196,11 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 );
             },
             NodeData::Block { stmts, .. } => {
-                let last_stmt = stmts.last().unwrap().clone();
-                infer_map.insert(id, Constraint::SameAs(last_stmt.into()));
+                if let Some(&last_stmt) = stmts.last() {
+                    infer_map.insert(id, Constraint::SameAs(last_stmt.into()));
+                } else {
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                }
             },
             NodeData::Return { to_return, .. } => {
                 if let Some(to_return) = to_return {
@@ -261,7 +263,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
     }
 
-    if crate::DEBUG {
+    if crate::XC_DEBUG {
         println!("{}", indent_parens(format!("{infer_map:?}").replace("\n", "")));
         println!("{:?}", &hlr.tree);
         println!("{}", &hlr.tree.to_string());
@@ -415,7 +417,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
         let NodeData::Call { a, generics, .. } = 
                         hlr.tree.get(*id) else { unreachable!() };
 
-        if let Some(func_type) = hlr.comp_data.get_type(&func_info) && 
+        if let Ok(func_type) = hlr.comp_data.get_type(&func_info) && 
             generics.iter().all(Type::is_known) {
             let TypeEnum::Func(FuncType { ret_type, .. }) = 
                 func_type.as_type_enum() else { panic!() };

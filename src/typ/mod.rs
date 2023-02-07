@@ -1,8 +1,10 @@
+use crate::errors::{TErr, TResult};
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
 use crate::typ::fields_iter::PrimitiveFieldsIter;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -17,7 +19,7 @@ pub use kind::Kind;
 
 use self::fields_iter::FieldsIter;
 
-#[derive(Clone, PartialEq, Hash, Eq)]
+#[derive(Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
@@ -123,6 +125,14 @@ impl Type {
             ReturnStyle::Sret | ReturnStyle::Void => Type::void(),
             ReturnStyle::Direct => self.clone(),
         }
+    }
+
+    pub fn id(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.as_type_enum().hash(&mut hasher);
+        self.name().hash(&mut hasher);
+        self.generics().hash(&mut hasher);
+        hasher.finish()
     }
 
     pub fn ref_x_times(mut self, count: u8) -> Type {
@@ -291,7 +301,7 @@ impl Into<TypeSpec> for Type {
     fn into(self) -> TypeSpec { TypeSpec::Type(self) }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone)]
+#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
@@ -338,7 +348,7 @@ impl TypeData {
     pub fn is_named(&self) -> bool { self.name != TypeName::Anonymous }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone)]
+#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -383,12 +393,12 @@ impl Deref for TypeEnum {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct RefType {
     base: Type,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct FuncType {
     pub ret_type: Type,
     pub args: Vec<Type>,
@@ -399,20 +409,20 @@ impl FuncType {
     pub fn args(&self) -> Vec<Type> { self.args.clone() }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord)]
 pub struct StructType {
     pub fields: Vec<(VarName, Type)>,
 }
 
 impl StructType {
-    pub fn get_field_type(&self, field_name: &VarName) -> Option<Type> {
+    pub fn get_field_type(&self, field_name: &VarName) -> TResult<Type> {
         for field in &self.fields {
             if field.0 == *field_name {
-                return Some(field.1.clone());
+                return Ok(field.1.clone());
             }
         }
 
-        return None;
+        return Err(TErr::FieldNotFound(self.clone(), field_name.clone()));
     }
 
     pub fn get_field_index(&self, field_name: &VarName) -> usize {
@@ -427,7 +437,7 @@ impl StructType {
     pub fn is_tuple(&self) -> bool { self.fields.len() == 0 || &*self.fields[0].0 == "0" }
 }
 
-#[derive(PartialEq, Clone, Eq, Hash, Debug)]
+#[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct SumType {
     pub variants: Vec<(TypeName, Type)>,
 }
@@ -435,15 +445,20 @@ pub struct SumType {
 impl SumType {
     // parent arc contains the Type object which contains this SumType. it is
     // required to fill in the parent field of the variant type.
-    pub fn get_variant_type(&self, parent_arc: &Type, field_name: &TypeName) -> Option<Type> {
+    pub fn get_variant_type(
+        &self,
+        parent_arc: &Type,
+        variant_name: &TypeName,
+    ) -> TResult<Type> {
         let (variant_index, variant_type) = self
             .variants
             .iter()
             .enumerate()
-            .find(|(_, (name, _))| name == field_name)
+            .find(|(_, (name, _))| name == variant_name)
+            .ok_or(TErr::VariantNotFound(self.clone(), variant_name.clone()))
             .map(|(index, (_, t))| (index, t.clone()))?;
 
-        Some(Type::new(TypeEnum::Variant(VariantType {
+        Ok(Type::new(TypeEnum::Variant(VariantType {
             tag: variant_index as u32,
             parent: parent_arc.clone(),
             variant_type,
@@ -484,7 +499,7 @@ impl SumType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord)]
 pub struct VariantType {
     pub tag: u32,
     pub parent: Type,
@@ -502,14 +517,14 @@ impl VariantType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
     pub signed: bool,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord)]
 pub enum FloatType {
     F16,
     F32,
@@ -527,24 +542,24 @@ impl Into<FloatType> for u32 {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
 pub struct BoolType;
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct UnknownType();
 static UNKNOWN_STATIC: UnknownType = UnknownType();
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct VoidType();
 static VOID_STATIC: VoidType = VoidType();
 
-#[derive(PartialEq, Hash, Eq, Clone)]
+#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
 }
 
-#[derive(PartialEq, Hash, Eq, Clone)]
+#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 pub struct OpaqueType {
     pub size: u32,
 }

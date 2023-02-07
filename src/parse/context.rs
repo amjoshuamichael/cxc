@@ -7,22 +7,23 @@ use passable::Pass;
 use super::{ParseErrorSpanned, TokenSpan};
 
 #[derive(Debug, Clone, Default)]
-struct TokPos(Rc<RefCell<usize>>);
+struct SharedNum(Rc<RefCell<usize>>);
 
-impl TokPos {
+impl SharedNum {
     pub fn inc(&self) { *self.0.borrow_mut() += 1 }
+    pub fn dec(&self) { *self.0.borrow_mut() -= 1 }
     pub fn val(&self) -> usize { *self.0.borrow() }
 }
 
 pub type GlobalParseContext = ParseContext<()>;
-// TODO: use these
 pub type FuncParseContext = ParseContext<VarName>;
 pub type TypeParseContext = ParseContext<TypeName>;
 
 #[derive(Default)]
 pub struct ParseContext<N> {
-    inner: Rc<Vec<Tok>>,
-    tok_pos: TokPos,
+    pub inner: Rc<Vec<Tok>>,
+    tok_pos: SharedNum,
+    scope: SharedNum,
     pub name: N,
     pub generic_labels: GenericLabels,
     pub errors: Pass<Vec<ParseErrorSpanned>>,
@@ -52,6 +53,7 @@ impl<N: Default> ParseContext<N> {
             generic_labels,
             inner: self.inner.clone(),
             tok_pos: self.tok_pos.clone(),
+            scope: self.scope.clone(),
             errors: self.errors.pass().unwrap(),
         }
     }
@@ -86,10 +88,12 @@ impl<N: Default> ParseContext<N> {
                 .inner
                 .get(self.tok_pos.val())
                 .ok_or(ParseError::UnexpectedEndOfFile)?;
+
+            Self::check_scope(&self.scope, &next);
             self.tok_pos.inc();
         }
 
-        if crate::DEBUG {
+        if crate::XC_DEBUG {
             print!("{}", next.to_string());
         }
 
@@ -115,11 +119,14 @@ impl<N: Default> ParseContext<N> {
         skip_until: Vec<Tok>,
     ) -> ParseResult<O> {
         let start = self.tok_pos.val();
+        let beginning_scope = self.scope.val();
 
         match parser(self) {
             Ok(expr) => Ok(expr),
             Err(error) => {
-                println!("...recovering...");
+                if crate::XC_DEBUG {
+                    println!("...recovering...");
+                }
 
                 loop {
                     let next_token = self
@@ -127,10 +134,11 @@ impl<N: Default> ParseContext<N> {
                         .get(self.tok_pos.val())
                         .ok_or(ParseError::UnexpectedEndOfFile)?;
 
-                    if next_token == &skip_until[0] {
+                    if next_token == &skip_until[0] && self.scope.val() == beginning_scope {
                         break;
                     }
 
+                    Self::check_scope(&self.scope, &next_token);
                     self.tok_pos.inc();
                 }
 
@@ -146,6 +154,15 @@ impl<N: Default> ParseContext<N> {
 
                 Ok(O::err())
             },
+        }
+    }
+
+    // increase the scope number if tok is < ( [ { and decrease if tok is > ) ] }
+    fn check_scope(scope: &SharedNum, tok: &Tok) {
+        match tok {
+            Tok::LParen | Tok::LBrack | Tok::LCurly => scope.inc(),
+            Tok::RParen | Tok::RBrack | Tok::RCurly => scope.dec(),
+            _ => {},
         }
     }
 }

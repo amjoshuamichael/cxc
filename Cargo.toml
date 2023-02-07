@@ -23,6 +23,8 @@ glam = { version = "0.22.0", optional = true }
 
 [features]
 default = ["cxc_derive"]
+xc-debug = []
+llvm-debug = []
 
 [profile.bench]
 debug = true

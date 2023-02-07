@@ -175,7 +175,7 @@ impl Decl {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TypeRelationGeneric<T> {
     Static(T),
     MethodOf(T),
@@ -186,7 +186,7 @@ pub type TypeSpecRelation = TypeRelationGeneric<TypeSpec>;
 pub type TypeRelation = TypeRelationGeneric<Type>;
 
 impl<T: Clone> TypeRelationGeneric<T> {
-    pub fn map<U>(self, closure: impl FnOnce(T) -> U) -> TypeRelationGeneric<U> {
+    pub fn map_inner_type<U>(self, closure: impl FnOnce(T) -> U) -> TypeRelationGeneric<U> {
         match self {
             Self::Static(inner) => TypeRelationGeneric::<U>::Static(closure(inner)),
             Self::MethodOf(inner) => TypeRelationGeneric::<U>::MethodOf(closure(inner)),
@@ -235,7 +235,7 @@ impl FuncCode {
         let relation = self
             .relation
             .clone()
-            .map(|spec| comp_data.get_spec(&spec, &Vec::new()).unwrap());
+            .map_inner_type(|spec| comp_data.get_spec(&spec, &Vec::new()).unwrap());
 
         UniqueFuncInfo {
             name: self.name.clone(),

@@ -151,7 +151,7 @@ impl Unit {
             compile_routine(&mut fcs, &self.module);
         };
 
-        if crate::DEBUG {
+        if crate::XC_DEBUG {
             let func = self.module.get_function(temp_name).unwrap();
             println!("{func}");
         }

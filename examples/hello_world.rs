@@ -5,13 +5,13 @@ pub fn main() {
 
     unit.push_script(
         r#"
-        hello_world() {
-            print("hello_world")
+        main() {
+            print("Hello, World!")
         }
         "#,
     )
     .unwrap();
 
-    let hello_world = unit.get_fn_by_name::<(), ()>("hello_world");
+    let hello_world = unit.get_fn_by_name("main");
     unsafe { hello_world(()) }
 }

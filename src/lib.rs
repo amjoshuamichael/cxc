@@ -5,8 +5,8 @@
 #![feature(box_syntax)]
 #![feature(type_changing_struct_update)]
 
-pub static DEBUG: bool = false;
-pub static BLOCK_LLVM: bool = true;
+pub static XC_DEBUG: bool = cfg!(feature = "xc-debug");
+pub static LLVM_DEBUG: bool = cfg!(feature = "llvm-debug");
 
 pub use lex::{TypeName, VarName};
 pub use parse::TypeRelation;
@@ -18,10 +18,13 @@ pub use unit::{CompData, ExternalFuncAdd, UniqueFuncInfo, Unit, XcFunc, XcReflec
 
 pub mod library {
     pub use crate::libraries::*;
+    pub mod bit_array {
+        pub use crate::libraries::std_lib::bit_array::BitArray;
+    }
 }
 
 pub mod error {
-    pub use crate::errors::CompError;
+    pub use crate::errors::CErr;
     pub use crate::parse::ParseError;
 }
 

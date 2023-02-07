@@ -34,7 +34,7 @@ pub struct ParseErrorSpanned {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct TokenSpan(Vec<Tok>);
+pub struct TokenSpan(pub Vec<Tok>);
 
 impl TokenSpan {
     pub fn new(all: &Vec<Tok>, start: usize, end: usize) -> Self {

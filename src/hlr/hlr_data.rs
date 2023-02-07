@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
+use crate::errors::TResult;
 use crate::lex::VarName;
 use crate::parse::*;
 use crate::typ::FloatType;
@@ -98,7 +99,7 @@ impl FuncRep {
 
     pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
 
-    pub fn get_type_spec(&self, alias: &TypeSpec) -> Option<Type> {
+    pub fn get_type_spec(&self, alias: &TypeSpec) -> TResult<Type> {
         self.comp_data.get_spec(alias, &self.info)
     }
 
@@ -382,7 +383,7 @@ impl FuncRep {
                         relation,
                     }
                 } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *name {
-                    let type_origin = self.get_type_spec(type_spec).unwrap();
+                    let type_origin = self.get_type_spec(type_spec).unwrap_or(Type::unknown());
 
                     NodeData::Call {
                         ret_type: Type::unknown(),

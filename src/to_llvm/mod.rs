@@ -112,7 +112,7 @@ fn get_used_functions(
 fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEnum<'static>> {
     let expr = fcs.tree.get(expr_id);
 
-    if crate::DEBUG && !crate::BLOCK_LLVM {
+    if crate::LLVM_DEBUG {
         println!("compiling: {}", expr.to_string(&fcs.tree));
     }
 
@@ -515,7 +515,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
         },
     };
 
-    if crate::DEBUG && !crate::BLOCK_LLVM {
+    if crate::LLVM_DEBUG {
         println!("done compiling: {}", fcs.tree.get(expr_id).to_string(&fcs.tree));
     }
 
@@ -557,7 +557,6 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
             let field_index = struct_type.get_field_index(&field);
 
             let object = compile_as_ptr_unless_already_ptr(fcs, object);
-            fcs.tree.print_id(expr_id);
 
             fcs.builder
                 .build_struct_gep(object, field_index as u32, &*format!("{field}access"))

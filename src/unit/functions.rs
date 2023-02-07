@@ -1,9 +1,12 @@
-use crate::{FuncType, Type, TypeRelation};
+use crate::{
+    errors::{CResult, FErr, TErr, TResult},
+    FuncType, Type, TypeRelation,
+};
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
 pub type TypeLevelFunc = fn(Vec<Type>, &CompData) -> Type;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DeriverInfo {
     pub func_name: VarName,
     pub is_static: bool,
@@ -141,6 +144,8 @@ impl CompData {
             ),
         });
 
+        out.types.insert("Type".into(), Type::i(64));
+
         out
     }
 
@@ -160,25 +165,6 @@ impl CompData {
         decl_info
     }
 
-    pub fn to_unique_func_info(
-        &mut self,
-        decl_info: FuncDeclInfo,
-        generics: Vec<Type>,
-    ) -> UniqueFuncInfo {
-        let relation = decl_info
-            .relation
-            .clone()
-            .map(|spec| self.get_spec(&spec, &generics).unwrap());
-
-        let unique_func_info = UniqueFuncInfo {
-            name: decl_info.name.clone(),
-            relation,
-            own_generics: generics,
-        };
-
-        unique_func_info
-    }
-
     pub fn insert_temp_function(&mut self, code: FuncCode) -> UniqueFuncInfo {
         let name = VarName::from("T_temp");
         let decl_info = FuncDeclInfo {
@@ -192,13 +178,6 @@ impl CompData {
             name,
             ..Default::default()
         }
-    }
-
-    pub fn remove_function(&mut self, unique_func_info: UniqueFuncInfo) {
-        self.compiled.remove(&unique_func_info);
-        self.func_types.remove(&unique_func_info);
-        let decl_info = self.get_declaration_of(&unique_func_info).unwrap();
-        self.func_code.remove(&decl_info);
     }
 
     pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
@@ -276,40 +255,44 @@ impl CompData {
             .insert(info.name.clone(), (function_type, empty_function.as_global_value()));
     }
 
-    pub fn get_type(&self, info: &UniqueFuncInfo) -> Option<Type> {
-        let cached_type = self.func_types.get(info);
-        if cached_type.is_some() {
-            return cached_type.cloned();
+    pub fn get_type(&self, info: &UniqueFuncInfo) -> CResult<Type> {
+        if let Some(cached_type) = self.func_types.get(info) {
+            return Ok(cached_type.clone());
         }
 
-        let code = self.get_code(info.clone())?;
+        let code = self.get_code(info.clone())?; // TODO: return CResult
 
         let ret_type = &self.get_spec(&code.ret_type, info)?;
 
         let arg_types = code
             .args
             .iter()
-            .map(|d| self.get_spec(&d.type_spec, info))
-            .collect::<Option<Vec<_>>>()?;
+            .map(|arg| self.get_spec(&arg.type_spec, info))
+            .collect::<TResult<Vec<_>>>()?;
 
         let func_type = ret_type.clone().func_with_args(arg_types);
 
-        Some(func_type)
+        Ok(func_type)
     }
 
     pub fn get_derived_code(&self, info: &UniqueFuncInfo) -> Option<FuncCode> {
-        let deriver_info = DeriverInfo::try_from(info.clone()).unwrap();
-        let deriver = self.derivers.get(&deriver_info)?;
-        deriver(self, info.relation.inner_type()?)
+        if let Ok(deriver_info) = DeriverInfo::try_from(info.clone()) {
+            let deriver = self.derivers.get(&deriver_info)?;
+            deriver(self, info.relation.inner_type()?)
+        } else {
+            None
+        }
     }
 
-    pub fn get_code(&self, info: UniqueFuncInfo) -> Option<FuncCode> {
+    // TODO: don't return pointer from this function
+    pub fn get_code(&self, info: UniqueFuncInfo) -> CResult<FuncCode> {
         let decl_info = self.get_declaration_of(&info);
         if let Some(decl_info) = decl_info {
-            return self.func_code.get(&decl_info).cloned();
+            return Ok(self.func_code.get(&decl_info).unwrap().clone());
         };
 
         self.get_derived_code(&info)
+            .ok_or(FErr::NotFound(info.clone()).into())
     }
 
     pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
@@ -338,17 +321,21 @@ impl CompData {
 
     pub fn contains(&self, key: &TypeName) -> bool { self.aliases.contains_key(key) }
 
-    pub fn get_by_name(&self, name: &TypeName) -> Option<Type> {
+    pub fn get_by_name(&self, name: &TypeName) -> TResult<Type> {
         {
             let cached_type = self.types.get(name);
-            if cached_type.is_some() {
-                return cached_type.cloned();
+            if let Some(cached_type) = cached_type {
+                return Ok(cached_type.clone());
             }
         }
 
-        let alias = self.aliases.get(name)?;
+        let alias = self.get_alias_for(name)?;
         let realized_type = self.get_spec(alias, &vec![])?;
-        Some(realized_type.with_name(name.clone()))
+        Ok(realized_type.with_name(name.clone()))
+    }
+
+    pub fn get_alias_for(&self, name: &TypeName) -> TResult<&TypeSpec> {
+        self.aliases.get(name).ok_or(TErr::Unknown(name.clone()))
     }
 }
 
@@ -356,13 +343,13 @@ use std::hash::Hash;
 
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub struct FuncDeclInfo {
     pub name: VarName,
     pub relation: TypeSpecRelation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub struct UniqueFuncInfo {
     pub name: VarName,
     pub relation: TypeRelation,

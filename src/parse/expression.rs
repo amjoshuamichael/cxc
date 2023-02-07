@@ -60,8 +60,10 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                             lexer.next_tok()?;
                             let func_name = lexer.next_tok()?.var_name()?;
                             Expr::StaticMethodPath(type_spec, func_name).into()
-                        } else if matches!(lexer.peek_by(1)?, Tok::VarName(_) | Tok::DoublePlus)
-                        {
+                        } else if matches!(
+                            lexer.peek_by(1)?,
+                            Tok::VarName(_) | Tok::DoublePlus | Tok::DoubleMinus
+                        ) {
                             parse_struct_literal(lexer, type_spec)?.into()
                         } else {
                             let exprs = parse_list(
@@ -240,7 +242,7 @@ fn parse_struct_literal(
 
         lexer.assert_next_tok_is(Tok::Assignment)?;
 
-        let rhs = parse_expr(lexer)?;
+        let rhs = lexer.recover(parse_expr, vec![Tok::Return])?;
 
         fields.push((field_name, rhs));
 
@@ -255,6 +257,10 @@ fn parse_struct_literal(
         Tok::DoublePlus => {
             lexer.assert_next_tok_is(Tok::RCurly)?;
             StructFill::Default
+        },
+        Tok::DoubleMinus => {
+            lexer.assert_next_tok_is(Tok::RCurly)?;
+            StructFill::Uninit
         },
         Tok::RCurly => StructFill::NoFill,
         got => {

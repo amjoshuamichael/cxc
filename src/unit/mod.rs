@@ -1,5 +1,10 @@
-use crate::errors::CompError;
-use crate::errors::CompResultMany;
+use self::functions::DeriverFunc;
+use self::functions::DeriverInfo;
+pub use self::functions::FuncDeclInfo;
+use self::functions::TypeLevelFunc;
+pub use self::value_api::XcValue;
+use crate::errors::CErr;
+use crate::errors::CResultMany;
 use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
@@ -7,16 +12,21 @@ use crate::lex::*;
 use crate::libraries::Library;
 use crate::parse;
 use crate::parse::*;
+use crate::to_llvm::*;
 use crate::Type;
 use crate::TypeEnum;
+pub use add_external::ExternalFuncAdd;
+pub use functions::UniqueFuncInfo;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
 use inkwell::values::*;
 use inkwell::OptimizationLevel;
+pub use reflect::XcReflect;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::mem::transmute;
 use std::rc::Rc;
@@ -27,17 +37,6 @@ pub mod get_type_spec;
 mod reflect;
 mod rust_type_name_conversion;
 mod value_api;
-
-use crate::to_llvm::*;
-pub use functions::UniqueFuncInfo;
-
-use self::functions::DeriverFunc;
-use self::functions::DeriverInfo;
-pub use self::functions::FuncDeclInfo;
-use self::functions::TypeLevelFunc;
-pub use self::value_api::XcValue;
-pub use add_external::ExternalFuncAdd;
-pub use reflect::XcReflect;
 
 pub type XcFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
@@ -50,17 +49,17 @@ pub struct Unit {
 
 #[derive(Clone, Default)]
 pub struct CompData {
-    pub(crate) types: HashMap<TypeName, Type>,
-    pub(crate) aliases: HashMap<TypeName, TypeSpec>,
-    pub(crate) globals: HashMap<VarName, (Type, GlobalValue<'static>)>,
-    compiled: HashSet<UniqueFuncInfo>,
-    func_types: HashMap<UniqueFuncInfo, Type>,
-    pub(crate) func_code: HashMap<FuncDeclInfo, FuncCode>,
-    decl_names: HashMap<VarName, Vec<FuncDeclInfo>>,
-    derivers: HashMap<DeriverInfo, DeriverFunc>,
-    pub(super) type_level_funcs: HashMap<TypeName, TypeLevelFunc>,
-    intrinsics: HashSet<FuncDeclInfo>,
-    reflect_arg_types: HashMap<UniqueFuncInfo, Vec<bool>>,
+    pub(crate) types: BTreeMap<TypeName, Type>,
+    aliases: BTreeMap<TypeName, TypeSpec>,
+    pub(crate) globals: BTreeMap<VarName, (Type, GlobalValue<'static>)>,
+    compiled: BTreeSet<UniqueFuncInfo>,
+    func_types: BTreeMap<UniqueFuncInfo, Type>,
+    pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
+    decl_names: BTreeMap<VarName, Vec<FuncDeclInfo>>,
+    derivers: BTreeMap<DeriverInfo, DeriverFunc>,
+    pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
+    intrinsics: BTreeSet<FuncDeclInfo>,
+    reflect_arg_types: BTreeMap<UniqueFuncInfo, Vec<bool>>,
 }
 
 impl Debug for CompData {
@@ -76,7 +75,7 @@ impl Unit {
         let module = Context::create_module(&context, "new_module");
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::None)
-            .unwrap();
+            .expect("unable to create execution engine");
 
         Self {
             comp_data: Rc::new(CompData::new()),
@@ -90,33 +89,26 @@ impl Unit {
         self.execution_engine
             .borrow()
             .remove_module(&self.module)
-            .unwrap();
+            .expect("unable to remove execution engine");
         self.execution_engine.replace(
             self.module
                 .create_jit_execution_engine(OptimizationLevel::None)
-                .unwrap(),
+                .expect("unable to recreate execution engine"),
         );
     }
 
-    pub fn clear(&mut self) {
-        for func in self.comp_data.unique_func_info_iter() {
-            let llvm_func = self.module.get_function(&*func.to_string()).unwrap();
-            self.execution_engine
-                .borrow()
-                .free_fn_machine_code(llvm_func);
-            unsafe { llvm_func.delete() }
-        }
-
-        self.reset_execution_engine();
-        self.comp_data = Rc::new(CompData::new());
-    }
-
-    pub fn push_script<'s>(&'s mut self, script: &str) -> CompResultMany<()> {
+    pub fn push_script<'s>(&'s mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
         let lexed = lex(script);
         let parsed = match parse::parse(lexed) {
             Ok(file) => file,
-            Err(mut err) => {
-                let comp_errors = err.drain(..).map(CompError::Parse).collect();
+            Err(errs) => {
+                if crate::XC_DEBUG {
+                    for err in &errs {
+                        println!("{err}");
+                    }
+                }
+
+                let comp_errors = { errs }.drain(..).map(CErr::Parse).collect();
                 return Err(comp_errors);
             },
         };
@@ -142,15 +134,26 @@ impl Unit {
 
             let funcs_to_compile: Vec<UniqueFuncInfo> = { declarations }
                 .drain(..)
-                .map(|decl| comp_data.to_unique_func_info(decl, Vec::new()))
+                .map(|decl| {
+                    let relation = decl
+                        .relation
+                        .clone()
+                        .map_inner_type(|spec| comp_data.get_spec(&spec, &()).unwrap());
+
+                    UniqueFuncInfo {
+                        name: decl.name.clone(),
+                        relation,
+                        own_generics: Vec::new(),
+                    }
+                })
                 .collect();
 
             funcs_to_compile
         };
 
-        self.compile_func_set(funcs_to_process);
+        self.compile_func_set(funcs_to_process.clone());
 
-        Ok(())
+        Ok(funcs_to_process)
     }
 
     fn comp_data_mut<'a>(&'a mut self) -> &'a mut CompData {
@@ -209,7 +212,7 @@ impl Unit {
             self.compile(func_output);
         }
 
-        if crate::DEBUG && !crate::BLOCK_LLVM {
+        if crate::LLVM_DEBUG {
             println!("compiled these: ");
             println!("{}", self.module.print_to_string().to_string());
         }

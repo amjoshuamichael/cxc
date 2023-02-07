@@ -1,5 +1,5 @@
 BitArray<T> = {
-    inner: BoolArrayToNum(T)
+    inner: NumOfSize(T)
 }
 
 

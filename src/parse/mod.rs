@@ -27,7 +27,15 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpan
     let errors = lexer.errors.deref().unwrap();
 
     if errors.len() == 0 {
-        Ok(script.unwrap())
+        match script {
+            Ok(script) => Ok(script),
+            Err(error) => Err(vec![ParseErrorSpanned {
+                start: 0,
+                end: lexer.inner.len(),
+                tokens_between: TokenSpan((*lexer.inner).clone()),
+                error,
+            }]),
+        }
     } else {
         Err(errors.clone())
     }
@@ -106,7 +114,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
             return Ok(Script(declarations));
         }
 
-        if crate::DEBUG {
+        if crate::XC_DEBUG {
             println!("moving to the next declaration!");
         }
     }

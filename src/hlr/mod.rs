@@ -32,7 +32,7 @@ use self::hlr_data_output::FuncOutput;
 use self::large_returns::handle_large_returns;
 
 pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) -> FuncOutput {
-    if crate::DEBUG {
+    if crate::XC_DEBUG {
         println!();
         println!("====HLR of {}====", info.name.to_string());
     }
@@ -41,7 +41,7 @@ pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) ->
 
     let mut output = FuncRep::from_code(code, comp_data.clone(), info);
 
-    if crate::DEBUG {
+    if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());
     }
 
@@ -53,7 +53,7 @@ pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) ->
     handle_large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output);
 
-    if crate::DEBUG {
+    if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());
     }
 

@@ -10,7 +10,7 @@ use super::{Library, TypeInterfaceLib};
 
 pub struct StdLib;
 
-mod bit_array;
+pub mod bit_array;
 mod default;
 mod print_lib;
 mod string;

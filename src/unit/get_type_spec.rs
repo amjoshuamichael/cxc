@@ -1,11 +1,27 @@
 use crate::{
-    parse::TypeSpec, ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation,
-    UniqueFuncInfo, VarName,
+    errors::{TErr, TResult},
+    parse::TypeSpec,
+    ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation, UniqueFuncInfo,
+    VarName,
 };
 
 pub trait GenericTable {
     fn get_at_index(&self, index: u8) -> Option<Type>;
     fn get_self(&self) -> Option<Type>;
+
+    fn all_generics(&self) -> Vec<Type> {
+        let mut all = Vec::new();
+
+        for n in 0.. {
+            if let Some(generic) = self.get_at_index(n) {
+                all.push(generic);
+            } else {
+                break;
+            }
+        }
+
+        all
+    }
 }
 
 impl GenericTable for Vec<Type> {
@@ -41,15 +57,19 @@ impl GenericTable for UniqueFuncInfo {
 }
 
 impl CompData {
-    pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> Option<Type> {
+    pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> TResult<Type> {
         let typ = match spec {
             TypeSpec::Named(name) => self.get_by_name(name)?,
             TypeSpec::TypeLevelFunc(name, args) => {
-                let func = self.type_level_funcs.get(name)?;
+                let func = self
+                    .type_level_funcs
+                    .get(name)
+                    .ok_or(TErr::UnknownFunc(name.clone()))?;
                 let args = args
                     .iter()
                     .map(|arg| self.get_spec(arg, generics))
-                    .collect::<Option<Vec<_>>>()?;
+                    .collect::<TResult<Vec<_>>>()?;
+                // TODO: type level function errors
                 func(args.clone(), self)
                     .with_from_function(name.clone())
                     .with_parameters(&args)
@@ -108,7 +128,7 @@ impl CompData {
                 let args = args
                     .iter()
                     .map(|arg| self.get_spec(arg, generics))
-                    .collect::<Option<Vec<Type>>>()?;
+                    .collect::<TResult<Vec<Type>>>()?;
                 let ret_type = self.get_spec(ret_type, generics)?;
                 ret_type.func_with_args(args)
             },
@@ -121,23 +141,28 @@ impl CompData {
                 let generics = generic_aliases
                     .iter()
                     .map(|ga| self.get_spec(ga, generics))
-                    .collect::<Option<Vec<_>>>()?;
+                    .collect::<TResult<Vec<_>>>()?;
 
                 let cached_type = self.types.get(name);
 
-                if cached_type.is_some() {
-                    cached_type?.clone()
+                if let Some(cached_type) = cached_type {
+                    cached_type.clone()
                 } else {
-                    self.get_spec(self.aliases.get(name)?, &generics)?
+                    self.get_spec(self.get_alias_for(name)?, &generics)?
                         .with_name(name.clone())
                         .with_generics(&generics)
                 }
             },
             TypeSpec::GetGeneric(on, index) => {
                 let on = self.get_spec(on, generics)?;
-                on.generics().get(*index as usize)?.clone()
+                on.generics()
+                    .get(*index as usize)
+                    .ok_or(TErr::CantGetGeneric(on.clone(), on.generics().clone(), *index))?
+                    .clone()
             },
-            TypeSpec::GenParam(index) => generics.get_at_index(*index)?,
+            TypeSpec::GenParam(index) => generics
+                .get_at_index(*index)
+                .ok_or(TErr::TooFewGenerics(generics.all_generics(), *index))?,
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {
                 let array = self.get_spec(array, generics)?;
@@ -173,6 +198,6 @@ impl CompData {
             },
         };
 
-        Some(typ)
+        Ok(typ)
     }
 }
