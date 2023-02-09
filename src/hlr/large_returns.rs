@@ -222,8 +222,8 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
                 },
             },
             box NodeData::Number {
+                lit_type: Type::i(32),
                 value: raw_ret_var_type.size() as u64,
-                size: 32,
             },
         ],
     });

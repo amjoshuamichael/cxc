@@ -184,7 +184,7 @@ impl CompData {
 
     pub fn reflect_arg_types(&mut self, info: &UniqueFuncInfo, mask: Vec<bool>) {
         assert!({
-            let func_type = self.get_type(info).unwrap();
+            let func_type = self.get_func_type(info).unwrap();
             let TypeEnum::Func(FuncType { args, .. }) = 
                 func_type.as_type_enum() else { panic!() };
 
@@ -239,7 +239,7 @@ impl CompData {
         context: &'static Context,
         module: &Module<'static>,
     ) {
-        let function_type = self.get_type(info).unwrap();
+        let function_type = self.get_func_type(info).unwrap();
         let TypeEnum::Func(llvm_function_type) = function_type.as_type_enum()
             else { panic!() };
 
@@ -255,7 +255,7 @@ impl CompData {
             .insert(info.name.clone(), (function_type, empty_function.as_global_value()));
     }
 
-    pub fn get_type(&self, info: &UniqueFuncInfo) -> CResult<Type> {
+    pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<Type> {
         if let Some(cached_type) = self.func_types.get(info) {
             return Ok(cached_type.clone());
         }
@@ -284,7 +284,7 @@ impl CompData {
         }
     }
 
-    // TODO: don't return pointer from this function
+    // TODO: return pointer from this function
     pub fn get_code(&self, info: UniqueFuncInfo) -> CResult<FuncCode> {
         let decl_info = self.get_declaration_of(&info);
         if let Some(decl_info) = decl_info {

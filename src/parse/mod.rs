@@ -31,8 +31,8 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpan
             Ok(script) => Ok(script),
             Err(error) => Err(vec![ParseErrorSpanned {
                 start: 0,
-                end: lexer.inner.len(),
-                tokens_between: TokenSpan((*lexer.inner).clone()),
+                end: lexer.inner.last().unwrap().2,
+                tokens_between: TokenSpan::new(&*lexer.inner, 0, lexer.inner.len()),
                 error,
             }]),
         }
@@ -71,16 +71,20 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 if matches!(lexer.peek_by(1)?, Tok::LAngle | Tok::Assignment)
                     && generic_labels.len() == 0
                 {
-                    let type_name = lexer.next_tok()?.type_name()?;
-                    let generic_labels = parse_generics(lexer)?;
+                    lexer.recover(|lexer| {
+                        let type_name = lexer.next_tok()?.type_name()?;
+                        let generic_labels = parse_generics(lexer)?;
 
-                    lexer.assert_next_tok_is(Tok::Assignment)?;
+                        lexer.assert_next_tok_is(Tok::Assignment)?;
 
-                    let context = lexer.split(type_name, generic_labels);
+                        let context = lexer.split(type_name, generic_labels);
 
-                    let type_decl = parse_type_decl(context)?;
+                        let type_decl = parse_type_decl(context)?;
 
-                    declarations.push(Decl::Type(type_decl));
+                        declarations.push(Decl::Type(type_decl));
+
+                        Ok(())
+                    })?;
                 } else {
                     let method_of = {
                         let mut method_of_parser = lexer
@@ -237,7 +241,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                     type_spec: TypeSpec::Type(Type::unknown()),
                 }
             } else {
-                let type_spec = parse_type_spec(lexer)?;
+                let type_spec = lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
                 lexer.assert_next_tok_is(Tok::Assignment)?;
                 VarDecl {
                     name: var_name,
@@ -245,12 +249,12 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 }
             };
 
-            let rhs = lexer.recover(parse_expr, vec![Tok::Return])?;
+            let rhs = lexer.recover(parse_expr)?;
             Ok(Expr::SetVar(var, box rhs))
         } else if lexer.peek_tok()? == Tok::Assignment {
             lexer.assert_next_tok_is(Tok::Assignment)?;
 
-            let rhs = lexer.recover(parse_expr, vec![Tok::Return])?;
+            let rhs = lexer.recover(parse_expr)?;
 
             Ok(Expr::Set(box lhs, box rhs))
         } else {
@@ -258,7 +262,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         }
     }
 
-    lexer.recover(inner, vec![Tok::Return])
+    lexer.recover(inner)
 }
 
 pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {

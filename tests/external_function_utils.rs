@@ -68,7 +68,7 @@ fn type_level_functions() {
         Point = { x: f32, y: f32 }
 
         main() { 
-            point_with_i32: AddAnI32(Point) = 0
+            point_with_i32: AddAnI32(Point) = { -- }
             point_with_i32.x = 1.0
             point_with_i32.thei32 = 90
 

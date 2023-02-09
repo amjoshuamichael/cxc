@@ -15,6 +15,7 @@ pub struct VarName(Arc<str>);
 
 impl VarName {
     pub fn temp() -> Self { VarName(Arc::from("temp")) }
+    pub fn error() -> Self { VarName(Arc::from("error")) }
 }
 
 impl Default for VarName {
@@ -77,6 +78,8 @@ impl TypeName {
             _ => Self::Other(Arc::from(t.slice())),
         }
     }
+
+    pub fn error() -> Self { Self::from("Error") }
 }
 
 impl Display for TypeName {

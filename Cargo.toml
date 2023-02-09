@@ -22,9 +22,10 @@ cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional =
 glam = { version = "0.22.0", optional = true }
 
 [features]
-default = ["cxc_derive"]
+default = ["cxc_derive", "compiler"]
 xc-debug = []
 llvm-debug = []
+compiler = []
 
 [profile.bench]
 debug = true

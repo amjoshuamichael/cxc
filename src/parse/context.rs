@@ -25,7 +25,7 @@ pub type TypeParseContext = ParseContext<TypeName>;
 
 #[derive(Default)]
 pub struct ParseContext<N> {
-    pub inner: Rc<Vec<Tok>>,
+    pub inner: Rc<Vec<(usize, Tok, usize)>>,
     tok_pos: SharedNum,
     scope: SharedNum,
     pub name: N,
@@ -34,7 +34,7 @@ pub struct ParseContext<N> {
 }
 
 impl<N: Default + Clone> ParseContext<N> {
-    pub fn new(tokens: Vec<Tok>) -> Self {
+    pub fn new(tokens: Vec<(usize, Tok, usize)>) -> Self {
         Self {
             inner: Rc::new(tokens),
             ..Default::default()
@@ -82,10 +82,11 @@ impl<N: Default + Clone> ParseContext<N> {
         for _ in 0..=offset {
             token = &Tok::Space;
             while token.is_whitespace() {
-                token = self
+                token = &self
                     .inner
                     .get(current)
-                    .ok_or(ParseError::UnexpectedEndOfFile)?;
+                    .ok_or(ParseError::UnexpectedEndOfFile)?
+                    .1;
                 current += 1;
             }
         }
@@ -99,10 +100,11 @@ impl<N: Default + Clone> ParseContext<N> {
         let mut next = &Tok::Space;
 
         while next.is_whitespace() {
-            next = self
+            next = &self
                 .inner
                 .get(self.tok_pos.val())
-                .ok_or(ParseError::UnexpectedEndOfFile)?;
+                .ok_or(ParseError::UnexpectedEndOfFile)?
+                .1;
 
             Self::check_scope(&self.scope, &next);
             self.tok_pos.inc();
@@ -130,10 +132,26 @@ impl<N: Default + Clone> ParseContext<N> {
 
     pub fn recover<O: Errable>(
         &mut self,
-        parser: impl Fn(&mut Self) -> ParseResult<O>,
-        skip_until: Vec<Tok>,
+        parser: impl FnMut(&mut Self) -> ParseResult<O>,
     ) -> ParseResult<O> {
-        let start = self.tok_pos.val();
+        self.recover_with(parser, vec![&Tok::Return])
+    }
+
+    pub fn recover_with<O: Errable>(
+        &mut self,
+        mut parser: impl FnMut(&mut Self) -> ParseResult<O>,
+        skip_until: Vec<&Tok>,
+    ) -> ParseResult<O> {
+        let next_non_whitespace_index = self
+            .inner
+            .iter()
+            .skip(self.tok_pos.val())
+            .position(|(_, tok, _)| !tok.is_whitespace())
+            .unwrap_or_default()
+            + self.tok_pos.val();
+        let tok_start = next_non_whitespace_index;
+        let char_start = self.inner[next_non_whitespace_index].0;
+
         let beginning_scope = self.scope.val();
 
         match parser(self) {
@@ -143,26 +161,52 @@ impl<N: Default + Clone> ParseContext<N> {
                     println!("...recovering...");
                 }
 
+                let mut has_increased_once = false;
+
+                // move backwards, in case the "skip until" token was the one that caused the
+                // error
+                self.tok_pos.dec();
+
                 loop {
-                    let next_token = self
+                    let next_token = &self
                         .inner
                         .get(self.tok_pos.val())
-                        .ok_or(ParseError::UnexpectedEndOfFile)?;
+                        .ok_or(ParseError::UnexpectedEndOfFile)?
+                        .1;
 
-                    if next_token == &skip_until[0] && self.scope.val() == beginning_scope {
+                    if skip_until.contains(&next_token) && self.scope.val() == beginning_scope {
                         break;
                     }
 
-                    Self::check_scope(&self.scope, &next_token);
+                    if has_increased_once {
+                        Self::check_scope(&self.scope, &next_token);
+                    }
+                    has_increased_once = true;
                     self.tok_pos.inc();
                 }
 
-                let end = self.tok_pos.val();
+                // helps break out of infinite loops.
+                if !has_increased_once {
+                    self.tok_pos.inc();
+                }
+
+                let tok_end = self.tok_pos.val();
+                let char_end = self.inner[tok_end].2 - 1;
+
+                // sometimes, the parser can get stuck with whitespace tokens, causing
+                // char_end to be less than char_start. this is a hacky fix, but it keeps
+                // an invalid range from indexing into the token list.
+                let tok_start = if tok_start > tok_end {
+                    tok_end
+                } else {
+                    tok_start
+                };
+
                 let spanned = ParseErrorSpanned {
                     error,
-                    start,
-                    end,
-                    tokens_between: TokenSpan::new(&self.inner, start, end),
+                    start: char_start,
+                    end: char_end,
+                    tokens_between: TokenSpan::new(&self.inner, tok_start, tok_end),
                 };
 
                 self.errors.deref_mut().unwrap().push(spanned);

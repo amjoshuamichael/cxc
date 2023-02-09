@@ -441,8 +441,9 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
         let NodeData::Call { a, generics, .. } = 
                         hlr.tree.get(*id) else { unreachable!() };
 
-        if let Ok(func_type) = hlr.comp_data.get_type(&func_info) && 
+        if let Ok(func_type) = hlr.comp_data.get_func_type(&func_info) && 
             generics.iter().all(Type::is_known) {
+
             let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 
                 func_type.as_type_enum() else { panic!() };
 

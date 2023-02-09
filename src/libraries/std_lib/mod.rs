@@ -12,6 +12,7 @@ pub struct StdLib;
 
 pub mod bit_array;
 mod default;
+pub mod hash;
 mod print_lib;
 mod string;
 mod to_string;
@@ -33,6 +34,7 @@ impl Library for StdLib {
         unit.push_script(include_str!("rc.cxc")).unwrap();
         unit.push_script(include_str!("lucid.cxc")).unwrap();
         unit.push_script(include_str!("option.cxc")).unwrap();
+        unit.push_script(include_str!("../array_ref.cxc")).unwrap();
 
         unit.add_lib(StringLib);
         unit.add_lib(ToStringLib);

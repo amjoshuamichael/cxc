@@ -1,7 +1,7 @@
 use super::*;
 use crate::lex::Tok;
 
-pub fn parse_list<T: Default + Clone, O>(
+pub fn parse_list<T: Default + Clone, O: Errable>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
     parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,
@@ -29,7 +29,7 @@ pub fn parse_list<T: Default + Clone, O>(
                         break;
                     }
 
-                    list.push(parser(lexer)?)
+                    list.push(lexer.recover_with(&parser, vec![&separator, &closer])?)
                 },
                 s if s == closer => break,
                 err => {
@@ -48,7 +48,7 @@ pub fn parse_list<T: Default + Clone, O>(
                     lexer.next_tok()?;
                     break;
                 },
-                _ => list.push(parser(lexer)?),
+                _ => list.push(lexer.recover(&parser)?),
             }
         }
     }
@@ -56,7 +56,7 @@ pub fn parse_list<T: Default + Clone, O>(
     Ok(list)
 }
 
-pub fn parse_one_or_list<T: Default + Clone, O>(
+pub fn parse_one_or_list<T: Default + Clone, O: Errable>(
     opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
     separator: Option<Tok>,
     parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,

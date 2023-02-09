@@ -62,7 +62,10 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                         struct_id,
                         SetVarGen {
                             lhs: nullref_access,
-                            rhs: box NodeData::Number { value: 0, size: 64 },
+                            rhs: box NodeData::Number {
+                                value: 0,
+                                lit_type: Type::i(64),
+                            },
                             ..Default::default()
                         },
                     );
@@ -99,7 +102,7 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                                 "tag".into(),
                                 box NodeData::Number {
                                     value: variant_type.tag as u64,
-                                    size: 32,
+                                    lit_type: Type::i(32),
                                 },
                             ),
                             ("data".into(), box variant_data),

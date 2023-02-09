@@ -29,14 +29,19 @@ impl NodeDataGen for usize {
             parent,
             NodeData::Number {
                 value: *self as u64,
-                size: std::mem::size_of::<usize>() as u32,
+                lit_type: Type::i(std::mem::size_of::<usize>() as u32),
             },
         )
     }
 }
 
 impl Default for Box<dyn NodeDataGen> {
-    fn default() -> Self { box NodeData::Number { value: 0, size: 32 } }
+    fn default() -> Self {
+        box NodeData::Number {
+            value: 0,
+            lit_type: Type::i(32),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -171,7 +176,7 @@ impl NodeDataGen for CallGen {
             .map(|gen| gen.add_to_expr_tree(hlr, space))
             .collect();
 
-        let func_type = hlr.comp_data.get_type(&self.info).unwrap();
+        let func_type = hlr.comp_data.get_func_type(&self.info).unwrap();
         let TypeEnum::Func(FuncType { ret: ret_type, .. } ) = func_type.as_type_enum()
             else { panic!() };
 

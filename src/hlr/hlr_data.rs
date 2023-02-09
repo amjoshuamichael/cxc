@@ -6,7 +6,6 @@ use super::hlr_data_output::FuncOutput;
 use crate::errors::TResult;
 use crate::lex::VarName;
 use crate::parse::*;
-use crate::typ::FloatType;
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 
@@ -134,14 +133,18 @@ impl FuncRep {
 
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
-            Expr::Number(value) => self
-                .tree
-                .insert(parent, NodeData::Number { value, size: 32 }),
+            Expr::Number(value) => self.tree.insert(
+                parent,
+                NodeData::Number {
+                    value,
+                    lit_type: Type::i(32),
+                },
+            ),
             Expr::Float(value) => self.tree.insert(
                 parent,
                 NodeData::Float {
+                    lit_type: Type::f32(),
                     value,
-                    size: FloatType::F32,
                 },
             ),
             Expr::Bool(value) => self.tree.insert(parent, NodeData::Bool { value }),
@@ -155,7 +158,7 @@ impl FuncRep {
                     let byte_id = self.tree.insert(
                         array_space,
                         NodeData::Number {
-                            size: 8,
+                            lit_type: Type::i(8),
                             value: b as u64,
                         },
                     );
@@ -184,8 +187,8 @@ impl FuncRep {
                 let len_arg = self.tree.insert(
                     call_space,
                     NodeData::Number {
+                        lit_type: Type::i(64),
                         value: byte_ids.len() as u64,
-                        size: 64,
                     },
                 );
 

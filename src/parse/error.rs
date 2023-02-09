@@ -1,10 +1,14 @@
-use crate::{lex::Tok, Type};
+use crate::{lex::Tok, Type, TypeName, VarName};
 use std::fmt::{Debug, Display};
 
-use super::{Expr, TypeSpec};
+use super::{Expr, FuncCode, TypeSpec, TypeSpecRelation, VarDecl};
 
 pub trait Errable {
     fn err() -> Self;
+}
+
+impl Errable for () {
+    fn err() -> Self { () }
 }
 
 impl Errable for Expr {
@@ -15,8 +19,41 @@ impl Errable for TypeSpec {
     fn err() -> Self { TypeSpec::Type(Type::unknown()) }
 }
 
+impl Errable for VarDecl {
+    fn err() -> Self {
+        VarDecl {
+            name: VarName::error(),
+            type_spec: TypeSpec::err(),
+        }
+    }
+}
+
+impl Errable for VarName {
+    fn err() -> Self { Self::error() }
+}
+impl Errable for TypeName {
+    fn err() -> Self { Self::error() }
+}
+
+impl Errable for FuncCode {
+    fn err() -> Self {
+        Self {
+            name: VarName::error(),
+            ret_type: TypeSpec::err(),
+            args: Vec::new(),
+            generic_count: 0,
+            code: Expr::err(),
+            relation: TypeSpecRelation::Unrelated,
+        }
+    }
+}
+
 impl<T: Errable> Errable for Option<T> {
     fn err() -> Self { Some(T::err()) }
+}
+
+impl<T: Errable, U: Errable> Errable for (T, U) {
+    fn err() -> Self { (T::err(), U::err()) }
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
@@ -41,8 +78,13 @@ pub struct ParseErrorSpanned {
 pub struct TokenSpan(pub Vec<Tok>);
 
 impl TokenSpan {
-    pub fn new(all: &Vec<Tok>, start: usize, end: usize) -> Self {
-        Self(all[start..=end].to_vec())
+    pub fn new(all: &Vec<(usize, Tok, usize)>, start: usize, end: usize) -> Self {
+        Self(
+            all[start..end.min(all.len())]
+                .iter()
+                .map(|(_, tok, _)| tok.clone())
+                .collect(),
+        )
     }
 }
 

@@ -85,7 +85,10 @@ impl ExprTree {
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
         self.nodes.insert(ExprNode {
             parent,
-            data: NodeData::Number { value: 0, size: 32 },
+            data: NodeData::Number {
+                value: 0,
+                lit_type: Type::i(32),
+            },
         })
     }
 

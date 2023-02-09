@@ -46,9 +46,10 @@ fn vec_push_and_check() {
         }
 
         two_nums_from_one(in: i64); TwoNums {
-            two_nums: TwoNums = 0
-            two_nums.num_one = in
-            two_nums.num_two = in + 42
+            two_nums: TwoNums = TwoNums { 
+                num_one = in,
+                num_two = in + 42,
+            }
 
             ; two_nums
         }
@@ -123,6 +124,41 @@ fn option() {
             }
         ";
         Some(10)
+    )
+}
+
+#[test]
+fn option_rc() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< Rc<i32> > {
+                x: i32 = 90
+                rc: Rc<i32> = Rc<i32>:new(x)
+                output: Option< Rc<u32> > = Option< Rc<i32> >.Some rc
+
+                ; output
+            }
+        ";
+        Some(Rc::new(90))
+    )
+}
+
+#[test]
+fn option_vec() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< Vec<i32> > {
+                x: i32 = 90
+                vec: Vec<i32> = Vec<i32>:new()
+                vec.push(x)
+                output: Option< Vec<u32> > = Option< Rc<i32> >.Some vec
+
+                ; output
+            }
+        ";
+        Some(vec![90])
     )
 }
 

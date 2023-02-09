@@ -1,6 +1,5 @@
 use crate::lex::{indent_parens, TypeName, VarName};
 use crate::parse::*;
-use crate::typ::FloatType;
 use crate::Type;
 use std::fmt::{Debug, Formatter};
 
@@ -84,12 +83,12 @@ impl ToString for ExprNode {
 #[derive(Clone, Debug)]
 pub enum NodeData {
     Number {
+        lit_type: Type,
         value: u64,
-        size: u32,
     },
     Float {
+        lit_type: Type,
         value: f64,
-        size: FloatType,
     },
     Bool {
         value: bool,
@@ -181,8 +180,7 @@ use NodeData::*;
 impl NodeData {
     pub fn ret_type(&self) -> Type {
         match self {
-            Number { size, .. } => Type::i(*size),
-            Float { size, .. } => Type::f(*size),
+            Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
             Bool { .. } => Type::bool(),
             While { .. } => Type::void(),
             Ident { var_type, .. }
@@ -205,8 +203,12 @@ impl NodeData {
 
     pub fn ret_type_mut(&mut self) -> Option<&mut Type> {
         match self {
-            Number { .. } => None,
-            Float { .. } => None,
+            Number {
+                ref mut lit_type, ..
+            }
+            | Float {
+                ref mut lit_type, ..
+            } => Some(lit_type),
             Bool { .. } => None,
             While { .. } => None,
             Ident {

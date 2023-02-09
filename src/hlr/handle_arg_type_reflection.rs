@@ -1,3 +1,5 @@
+use crate::Type;
+
 use super::{expr_tree::NodeData, hlr_data::FuncRep};
 
 pub fn handle_arg_type_reflection(hlr: &mut FuncRep) {
@@ -22,8 +24,8 @@ pub fn handle_arg_type_reflection(hlr: &mut FuncRep) {
                 let reflected_type_id = hlr.tree.insert(
                     call_id,
                     NodeData::Number {
+                        lit_type: Type::i(64),
                         value: arg_type.get_deref().unwrap().as_u64(),
-                        size: 64,
                     },
                 );
 

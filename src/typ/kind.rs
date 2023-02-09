@@ -158,7 +158,7 @@ impl Kind for VariantType {
                     context.i32_type().as_basic_type_enum(),
                     self.variant_type.to_basic_type(context),
                 ],
-                true,
+                false,
             )
             .as_any_type_enum()
     }

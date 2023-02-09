@@ -51,6 +51,19 @@ fn infer_struct() {
 }
 
 #[test]
+fn infer_tuple() {
+    xc_test!(
+        "
+            main(); i32 {
+                twonums = { 43, 94 }
+                ; twonums.1
+            }
+        ";
+        94
+    )
+}
+
+#[test]
 fn factorial_while() {
     xc_test!(
         "

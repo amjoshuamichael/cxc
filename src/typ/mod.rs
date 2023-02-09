@@ -434,6 +434,7 @@ impl StructType {
     pub fn is_tuple(&self) -> bool { self.fields.len() == 0 || &*self.fields[0].0 == "0" }
 }
 
+// TODO: is not interroperable with a rust sum type with 0 variants.
 #[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct SumType {
     pub variants: Vec<(TypeName, Type)>,

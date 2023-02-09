@@ -34,7 +34,7 @@ fn set_to_with_function() {
 fn anonymous() {
     xc_test!(
         "
-            x: { x: i32, y: i32 } = 0
+            x: { x: i32, y: i32 } = {--}
             x.x = 30
             x.y = 90
             ; x.x + x.y
@@ -48,7 +48,7 @@ fn anonymous() {
 fn anonymous_extra() {
     xc_test!(
         "
-            x: { x: i32, y: { x: i32, y: i32 } } = 0
+            x: { x: i32, y: { x: i32, y: i32 } } = {--}
             x.x = 30
             x.y.x = 40
             x.y.y = 50

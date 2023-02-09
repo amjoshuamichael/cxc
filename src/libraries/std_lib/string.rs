@@ -4,9 +4,13 @@ use crate::libraries::Library;
 
 pub(super) struct StringLib;
 
+impl crate::XcReflect for String {
+    fn alias_code() -> String { "String = Vec<u8>".to_string() }
+}
+
 impl Library for StringLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        let string_type = unit.add_opaque_type::<String>();
+        let string_type = unit.add_reflect_type::<String>().unwrap();
 
         unit.add_external_default::<String>(string_type.clone());
         unit.add_external_clone::<String>(string_type.clone());

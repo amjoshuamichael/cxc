@@ -46,7 +46,6 @@ pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) ->
     }
 
     infer_types(&mut output);
-    println!("{}", &output.tree.to_string());
     handle_variant_literals(&mut output);
     handle_active_initialization(&mut output);
     handle_arg_type_reflection(&mut output);

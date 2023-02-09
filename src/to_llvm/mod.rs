@@ -118,10 +118,10 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
     let output: Option<AnyValueEnum<'static>> = match expr {
         Number {
+            ref lit_type,
             ref value,
-            ref size,
         } => Some(
-            Type::i(*size)
+            lit_type
                 .to_any_type(&fcs.context)
                 .into_int_type()
                 .const_int(*value as u64, false)
