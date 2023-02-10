@@ -17,7 +17,5 @@ pub fn hash<T>(t: *const T) -> usize {
 #[cfg(test)]
 mod tests {
     #[test]
-    pub fn hash_numbers() {
-        dbg!(&super::hash(&(490234, 2039805)));
-    }
+    pub fn hash_numbers() {}
 }

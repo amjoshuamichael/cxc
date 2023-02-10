@@ -291,6 +291,17 @@ pub fn infer_types(hlr: &mut FuncRep) {
         println!("{}", indent_parens(format!("{infer_map:?}").replace("\n", "")));
         println!("{:?}", &hlr.tree);
         println!("{}", &hlr.tree.to_string());
+
+        println!("---UNKNOWNS---");
+        for inferable in infer_map
+            .inferables
+            .iter()
+            .filter(|(inferable, _)| type_of_inferable(inferable, hlr).is_unknown())
+        {
+            println!("{:?}", inferable);
+        }
+
+        println!("{:?}", &infer_map.calls);
     }
 
     panic!("type inference failed");
@@ -302,7 +313,7 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
 
     let gen_param_spec = GenParam(generic_index as u8);
 
-    let mut lhs = gen_param_spec.clone();
+    let mut lhs = GenParam(0);
     let mut rhs = spec.clone();
 
     while &rhs != &gen_param_spec {

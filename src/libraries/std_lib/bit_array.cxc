@@ -5,14 +5,17 @@ BitArray<T> = {
 
 <T> &BitArray<T>:. {
     get(index: Me.inner); bool {
-        ; (self.inner & (1 << index)) > 0
+        ; (self.inner & (Me.inner 1 << index)) > Me.inner 0
     }
 
-    set(index: Me.inner, to: bool) {
-        ? to {
-            self.inner = self.inner | (1 << index)
-        } : {
-            self.inner  = self.inner | (0 << index)
+    toggle(index: Me.inner) {
+        self.inner = self.inner ^ (Me.inner 1 << index)
+    }
+
+    iter(); BitArrayIterator {
+        ; BitArrayIterator {
+            array = self,
+            ++
         }
     }
 }
@@ -20,5 +23,17 @@ BitArray<T> = {
 <T> BitArray<T>:: {
     new(); BitArray<T> {
         ; 0
+    }
+}
+
+BitArrayIterator<T> = {
+    bitarray: &BitArray<T>,
+    index: NumOfSize(T),
+}
+
+<T> &BitArrayIterator<T>:. {
+    next(); Option<bool> {
+        self.index = self.index + 1
+        ; self.bitarray.get(self.index)
     }
 }

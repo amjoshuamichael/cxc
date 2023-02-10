@@ -194,42 +194,101 @@ fn bigger_option() {
 }
 
 #[test]
-fn bit_array() {
+fn bit_array_16() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<[32]bool>:new()
-            arr8.set(4, true)
+            arr8 = BitArray<[16]bool>:new()
+
+            arr8.toggle(0)
+            arr8.toggle(4)
+            arr8.toggle(15)
+
+            assert_eq(arr8.get(0), true)
+            assert_eq(arr8.get(1), false)
+            assert_eq(arr8.get(3), false)
             assert_eq(arr8.get(4), true)
             assert_eq(arr8.get(5), false)
+            assert_eq(arr8.get(14), false)
+            assert_eq(arr8.get(15), true)
         }
         "
     )
 }
 
+#[test]
+fn bit_array_32() {
+    xc_test!(
+        "
+        main() {
+            arr8 = BitArray<[32]bool>:new()
+
+            arr8.toggle(0)
+            arr8.toggle(4)
+            arr8.toggle(31)
+
+            assert_eq(arr8.get(0), true)
+            assert_eq(arr8.get(1), false)
+            assert_eq(arr8.get(3), false)
+            assert_eq(arr8.get(4), true)
+            assert_eq(arr8.get(5), false)
+            assert_eq(arr8.get(30), false)
+            assert_eq(arr8.get(31), true)
+        }
+        "
+    )
+}
+
+#[test]
+fn bit_array_8() {
+    xc_test!(
+        "
+        main() {
+            arr8 = BitArray<[8]bool>:new()
+
+            arr8.toggle(0)
+            arr8.toggle(4)
+            arr8.toggle(7)
+            arr8.toggle(7)
+            arr8.toggle(7)
+
+            assert_eq(arr8.get(0), true)
+            assert_eq(arr8.get(1), false)
+            assert_eq(arr8.get(3), false)
+            assert_eq(arr8.get(4), true)
+            assert_eq(arr8.get(5), false)
+            assert_eq(arr8.get(6), false)
+            assert_eq(arr8.get(7), true)
+        }
+        "
+    )
+}
+
+#[test]
+fn cast() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); i64 {
+            ; cast<{i32, i32}, i64>( { 32, 32 } )
+        }
+        ";
+        unsafe { std::mem::transmute::<(i32, i32), i64>((32, 32)) }
+    )
+}
+
 //#[test]
-// fn bit_array() {
+// fn option_is_some_is_none() {
 //    xc_test!(
 //        "
 //        main() {
-//            arr8 = HashMap<i32, i32>:new()
-//            arr8.set(4, true)
-//            assert_eq(arr8.get(4), true)
-//            assert_eq(arr8.get(5), false)
-//        }
-//        "
-//    )
-//}
+//            some: Option<i32> = Option<i32>.Some { 10 }
+//            assert_eq(some.is_some(), true)
+//            assert_eq(some.is_none(), false)
 //
-//#[test]
-// fn bit_array() {
-//    xc_test!(
-//        "
-//        main() {
-//            arr8 = BitArray<[32]bool>:new()
-//            arr8.set(4, true)
-//            assert_eq(arr8.get(4), true)
-//            assert_eq(arr8.get(5), false)
+//            none: Option<i32> = Option<i32>.None { }
+//            assert_eq(none.is_none(), true)
+//            assert_eq(none.is_some(), false)
 //        }
 //        "
 //    )

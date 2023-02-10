@@ -39,8 +39,6 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 _ => break,
             };
 
-            // we've detected these, but we need to move the token pos forward by one.
-
             atom
         } else if matches!(next, Tok::LAngle) && after_generics(lexer, Tok::LParen)? {
             let generics = parse_list(
@@ -166,6 +164,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         _ => return Ok(None)
     };
 
+    // we've detected these, but we need to move the token pos forward by one.
     if matches!(
         atom,
         Atom::Expr(Expr::Number(_))
@@ -188,7 +187,9 @@ fn parse_call(
 ) -> ParseResult<Atom> {
     let mut args = parse_list(Tok::parens(), Some(Tok::Comma), parse_expr, lexer)?;
 
-    let func = atoms.pop().ok_or(ParseError::ImproperExpression)?;
+    let func = atoms
+        .pop()
+        .ok_or(ParseError::ArgListWithImproperPredecessor)?;
 
     let call_expr = match func {
         Atom::Expr(Expr::Member(object, method_name)) => {
@@ -207,7 +208,7 @@ fn parse_call(
             args,
             is_method: false,
         },
-        _ => return Err(ParseError::ImproperExpression),
+        _ => return Err(ParseError::ArgListWithImproperPredecessor),
     };
 
     Ok(call_expr.into())
@@ -298,29 +299,16 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
     Ok(Expr::Struct(fields, initialize))
 }
 
-fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> Result<bool, ParseError> {
+fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> ParseResult<bool> {
     if lexer.peek_tok()? != Tok::LAngle {
         return Ok(false);
     }
 
-    let mut scope = 0;
+    let mut detached = lexer.detach();
 
-    for index in 0.. {
-        match lexer.peek_by(index)? {
-            Tok::LAngle => {
-                scope += 1;
-            },
-            Tok::RAngle => {
-                scope -= 1;
+    let list = parse_list(Tok::angles(), Some(Tok::Comma), parse_type_spec, &mut detached);
 
-                if scope == 0 {
-                    return Ok(lexer.peek_by(index + 1)? == tok);
-                }
-            },
-            Tok::LCurly => return Ok(false),
-            _ => {},
-        }
-    }
-
-    unreachable!()
+    Ok(detached.errors.deref().unwrap().len() == 0
+        && list.is_ok()
+        && detached.peek_tok()? == tok)
 }

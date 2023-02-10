@@ -64,6 +64,7 @@ pub enum ParseError {
     UnexpectedEndOfFile,
     UnexpectedTok { got: Tok, expected: Vec<TokName> },
     ImproperExpression,
+    ArgListWithImproperPredecessor,
 }
 
 #[derive(Debug, Clone, PartialEq)]

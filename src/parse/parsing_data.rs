@@ -50,6 +50,10 @@ pub enum Expr {
     Error,
 }
 
+impl Default for Expr {
+    fn default() -> Self { Self::Block(Vec::new()) }
+}
+
 impl Expr {
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expr> + 'a> {
         use Expr::*;
@@ -182,7 +186,7 @@ impl<T> Default for TypeRelationGeneric<T> {
     fn default() -> Self { Self::Unrelated }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct FuncCode {
     pub name: VarName,
     pub ret_type: TypeSpec,

@@ -4,3 +4,13 @@ Option<T> = { None: {} / Some: T }
     x: Option<T> = Option<T>.None { }
     ; x
 }
+
+<T> &Option<T>:. {
+    is_none(); bool {
+        *self == Option<T>.None { }
+    }
+
+    is_some(); bool {
+        *self != Option<T>.None { }
+    }
+}

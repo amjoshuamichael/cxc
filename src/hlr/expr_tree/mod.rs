@@ -271,10 +271,11 @@ impl NodeData {
                 initialize,
             } => {
                 let mut lit = match var_type.name() {
-                    TypeName::Anonymous => String::new(),
+                    TypeName::Anonymous => format!("{var_type:?}"),
                     other => other.to_string(),
                 } + " ";
 
+                println!("{}", lit);
                 lit += "{ \n";
 
                 for field in fields.iter() {
@@ -291,6 +292,8 @@ impl NodeData {
                 }
 
                 lit += "} \n";
+
+                println!("{}", lit);
 
                 lit
             },

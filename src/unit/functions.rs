@@ -130,18 +130,27 @@ impl CompData {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: TypeSpec::GenParam(0).get_ref().get_ref().into(),
+                    type_spec: "&&T".into(),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: TypeSpec::GenParam(0).get_ref().into(),
+                    type_spec: "&T".into(),
                 },
             ],
             generic_count: 1,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::MethodOf(
-                TypeSpec::GenParam(0).get_ref().get_ref().into(),
-            ),
+            relation: TypeSpecRelation::MethodOf("&&T".into()),
+            ..Default::default()
+        });
+
+        out.insert_intrinsic(FuncCode {
+            name: VarName::from("cast"),
+            args: vec![VarDecl {
+                name: VarName::temp(),
+                type_spec: "T".into(),
+            }],
+            ret_type: "U".into(),
+            generic_count: 2,
+            ..Default::default()
         });
 
         out.types.insert("Type".into(), Type::i(64));

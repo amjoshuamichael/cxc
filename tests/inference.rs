@@ -1,4 +1,5 @@
 mod test_utils;
+use cxc::library::StdLib;
 use test_utils::xc_test;
 
 #[test]
@@ -130,5 +131,18 @@ fn infer_default() {
             assert_eq(x.y, 0)
         }
         "#
+    )
+}
+
+#[test]
+fn infer_cast() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); i64 {
+            ; cast( { 90, 8943 } )
+        }
+        "#;
+        unsafe { std::mem::transmute::<(i32, i32), i64>((90, 8943)) }
     )
 }

@@ -661,6 +661,16 @@ fn internal_function<'comp>(
 
             None
         },
+        "cast" => {
+            let src: BasicValueEnum = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let dest_type = info.generics()[1].to_basic_type(&fcs.context);
+
+            let casted =
+                fcs.builder
+                    .build_cast(InstructionOpcode::BitCast, src, dest_type, "cast");
+
+            Some(casted.as_any_value_enum())
+        },
         _ => return None,
     };
 

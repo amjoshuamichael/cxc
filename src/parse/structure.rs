@@ -3,7 +3,7 @@ use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
 use crate::Type;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TypeSpec {
     Named(TypeName),
     Generic(TypeName, Vec<TypeSpec>),
@@ -26,6 +26,8 @@ pub enum TypeSpec {
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
     Union(Box<TypeSpec>, Box<TypeSpec>),
+
+    #[default]
     Void,
     Type(Type),
     Me,
@@ -39,7 +41,7 @@ impl TypeSpec {
 impl From<&str> for TypeSpec {
     fn from(value: &str) -> Self {
         let mut lexed = lex(value);
-        let generic_labels = ["T", "S", "U", "V", "W"]
+        let generic_labels = ["T", "U", "V", "W", "X"]
             .into_iter()
             .enumerate()
             .map(|(index, label)| (TypeName::from(label), index as u8))

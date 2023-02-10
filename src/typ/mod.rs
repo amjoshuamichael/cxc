@@ -505,8 +505,6 @@ pub struct VariantType {
 }
 
 impl VariantType {
-    pub fn parent(&self) -> Type { self.parent.clone() }
-
     pub fn as_struct(&self) -> Type {
         Type::new_struct(vec![
             ("tag".into(), Type::i(32)),
