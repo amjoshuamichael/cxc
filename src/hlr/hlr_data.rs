@@ -119,11 +119,11 @@ impl FuncRep {
     pub fn uniqueify_varname(&mut self, name: &str) -> VarName {
         let name = VarName::from(name);
         let mut uniqueified = name.clone();
+        let mut unique_id = 0;
 
         while self.identifiers.contains(&uniqueified) {
-            let mut inner_name = uniqueified.to_string();
-            inner_name += "_";
-            uniqueified = VarName::from(&*inner_name);
+            uniqueified = VarName::from(&*format!("{name}{unique_id}"));
+            unique_id += 1;
         }
 
         self.identifiers.push(uniqueified.clone());
@@ -173,6 +173,7 @@ impl FuncRep {
                     NodeData::ArrayLit {
                         var_type: arr_type.clone(),
                         parts: byte_ids.clone(),
+                        initialize: InitOpts::NoFill,
                     },
                 );
                 self.tree.replace(
@@ -466,7 +467,7 @@ impl FuncRep {
                 self.tree.replace(space, new_return);
                 space
             },
-            Expr::Array(expr_parts) => {
+            Expr::Array(expr_parts, initialize) => {
                 let space = self.tree.make_one_space(parent);
 
                 let mut parts = Vec::new();
@@ -478,6 +479,7 @@ impl FuncRep {
                 let new_array = NodeData::ArrayLit {
                     var_type: Type::unknown(),
                     parts,
+                    initialize,
                 };
 
                 self.tree.replace(space, new_array);

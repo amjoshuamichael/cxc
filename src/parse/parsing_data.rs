@@ -8,7 +8,7 @@ use crate::{
 use super::*;
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-pub enum StructFill {
+pub enum InitOpts {
     Default,
     Uninit,
 
@@ -24,10 +24,10 @@ pub enum Expr {
     Strin(Arc<str>),
     Ident(VarName),
     TypedValue(TypeSpec, Box<Expr>),
-    Struct(Vec<(VarName, Expr)>, StructFill),
+    Struct(Vec<(VarName, Expr)>, InitOpts),
     StaticMethodPath(TypeSpec, VarName),
-    Tuple(Vec<Expr>, StructFill),
-    Array(Vec<Expr>),
+    Tuple(Vec<Expr>, InitOpts),
+    Array(Vec<Expr>, InitOpts),
     Index(Box<Expr>, Box<Expr>),
     SetVar(VarDecl, Box<Expr>),
     Set(Box<Expr>, Box<Expr>),
@@ -68,7 +68,7 @@ impl Expr {
             | Error { .. } => box once(self),
             Struct(fields, _) => box fields.iter().map(|(_, expr)| expr),
             Tuple(exprs, _) => box exprs.iter(),
-            Array(exprs) => box exprs.iter(),
+            Array(exprs, _) => box exprs.iter(),
             Index(a, i) => box [&**a, &**i].into_iter(),
             SetVar(_, rhs) => box once(&**rhs),
             Set(lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
@@ -180,6 +180,8 @@ impl<T: Clone> TypeRelationGeneric<T> {
             Self::Unrelated => None,
         }
     }
+
+    pub fn is_method(&self) -> bool { matches!(self, Self::MethodOf(_)) }
 }
 
 impl<T> Default for TypeRelationGeneric<T> {

@@ -1,7 +1,7 @@
 use crate::{
     lex::lex,
-    parse::{self, TypeDecl},
-    Type, TypeName, Unit, VarName,
+    parse::{self, GenericLabels, TypeDecl},
+    CompData, Type, TypeName, Unit, VarName,
 };
 
 pub trait XcReflect {
@@ -9,25 +9,26 @@ pub trait XcReflect {
 
     fn type_decl() -> TypeDecl {
         let alias_code = Self::alias_code();
-        let anonymous = !alias_code.contains("=");
+        let is_named = alias_code.contains("=");
 
         let mut lexer = lex(&*Self::alias_code());
 
-        if anonymous {
-            let mut spec_lexer = lexer.split(VarName::default(), Default::default());
-            let spec = parse::parse_type_spec(&mut spec_lexer).expect("error in type spec");
-            TypeDecl {
-                name: TypeName::Anonymous,
-                typ: spec,
-                contains_generics: false,
-            }
-        } else {
+        if is_named {
             parse::file(&mut lexer)
                 .expect("error in type decl")
                 .types_iter()
                 .next()
                 .expect("error in type decl")
                 .clone()
+        } else {
+            let mut spec_lexer = lexer.split(VarName::temp(), GenericLabels::default());
+            let spec = parse::parse_type_spec(&mut spec_lexer).expect("error in type spec");
+
+            TypeDecl {
+                name: TypeName::Anonymous,
+                typ: spec,
+                contains_generics: false,
+            }
         }
     }
 }
@@ -102,17 +103,7 @@ impl_reflect_func! { A B C D E F G H I J; R }
 impl Unit {
     pub fn get_reflect_type<T: XcReflect>(&self) -> Option<Type> {
         let decl = T::type_decl();
-
-        if !decl.contains_generics {
-            Some(
-                self.comp_data
-                    .get_spec(&decl.typ, &Vec::new())
-                    .expect("failure to get reflected type")
-                    .with_name(decl.name),
-            )
-        } else {
-            None
-        }
+        type_from_decl(&*self.comp_data, decl)
     }
 
     pub fn add_reflect_type<T: XcReflect>(&mut self) -> Option<Type> {
@@ -123,16 +114,20 @@ impl Unit {
             comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
         }
 
-        if !decl.contains_generics {
-            Some(
-                self.comp_data
-                    .get_spec(&decl.typ, &Vec::new())
-                    .unwrap()
-                    .with_name(decl.name),
-            )
-        } else {
-            None
-        }
+        type_from_decl(&*self.comp_data, decl)
+    }
+}
+
+fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {
+    if !decl.contains_generics {
+        Some(
+            comp_data
+                .get_spec(&decl.typ, &Vec::new())
+                .unwrap()
+                .with_name(decl.name),
+        )
+    } else {
+        None
     }
 }
 

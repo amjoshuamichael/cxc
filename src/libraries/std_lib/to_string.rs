@@ -5,60 +5,35 @@ use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDe
 use crate::typ::{ArrayType, StructType};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
-use crate::{ExternalFuncAdd, TypeEnum};
+use crate::{ExternalFuncAdd, TypeEnum, Unit, XcReflect};
 
 use crate::libraries::Library;
 
 pub(super) struct ToStringLib;
 
 impl Library for ToStringLib {
-    fn add_to_unit(&self, unit: &mut crate::Unit) {
+    fn add_to_unit(&self, unit: &mut Unit) {
         unit.add_method_deriver("to_string".into(), derive_to_string);
 
         let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
+
+        add_to_string::<i8>(unit);
+        add_to_string::<i16>(unit);
+        add_to_string::<i32>(unit);
+        add_to_string::<i64>(unit);
+        add_to_string::<i128>(unit);
+        add_to_string::<u8>(unit);
+        add_to_string::<u16>(unit);
+        add_to_string::<u32>(unit);
+        add_to_string::<u64>(unit);
+        add_to_string::<u128>(unit);
+        add_to_string::<f32>(unit);
+        add_to_string::<f64>(unit);
+        add_to_string::<bool>(unit);
+
         unit.add_rust_func_explicit(
             "to_string",
-            to_string::<i32> as *const usize,
-            ExternalFuncAdd {
-                ret_type: string_type.clone(),
-                arg_types: vec![Type::i(32).get_ref()],
-                relation: TypeRelation::MethodOf(Type::i(32).get_ref()),
-                ..ExternalFuncAdd::empty()
-            },
-        );
-        unit.add_rust_func_explicit(
-            "to_string",
-            to_string::<i64> as *const usize,
-            ExternalFuncAdd {
-                ret_type: string_type.clone(),
-                arg_types: vec![Type::i(64).get_ref()],
-                relation: TypeRelation::MethodOf(Type::i(64).get_ref()),
-                ..ExternalFuncAdd::empty()
-            },
-        );
-        unit.add_rust_func_explicit(
-            "to_string",
-            to_string::<f32> as *const usize,
-            ExternalFuncAdd {
-                ret_type: string_type.clone(),
-                arg_types: vec![Type::f(32).get_ref()],
-                relation: TypeRelation::MethodOf(Type::f(32).get_ref()),
-                ..ExternalFuncAdd::empty()
-            },
-        );
-        unit.add_rust_func_explicit(
-            "to_string",
-            to_string::<bool> as *const usize,
-            ExternalFuncAdd {
-                ret_type: string_type.clone(),
-                arg_types: vec![Type::bool().get_ref()],
-                relation: TypeRelation::MethodOf(Type::bool().get_ref()),
-                ..ExternalFuncAdd::empty()
-            },
-        );
-        unit.add_rust_func_explicit(
-            "to_string",
-            string_to_string as *const usize,
+            String::clone as *const usize,
             ExternalFuncAdd {
                 ret_type: string_type.clone(),
                 arg_types: vec![string_type.get_ref()],
@@ -66,10 +41,31 @@ impl Library for ToStringLib {
                 ..ExternalFuncAdd::empty()
             },
         );
+
+        unit.push_script(include_str!("to_string.cxc")).unwrap();
     }
 }
 
+fn add_to_string<T: ToString + XcReflect>(unit: &mut Unit) {
+    let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
+    let typ = unit.get_reflect_type::<T>().unwrap();
+    unit.add_rust_func_explicit(
+        "to_string",
+        to_string::<T> as *const usize,
+        ExternalFuncAdd {
+            ret_type: string_type,
+            arg_types: vec![typ.get_ref()],
+            relation: TypeRelation::MethodOf(typ.get_ref()),
+            ..ExternalFuncAdd::empty()
+        },
+    );
+}
+
 pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
+    if typ.is_unknown() {
+        panic!();
+    }
+
     let string_type = comp_data.get_by_name(&"String".into()).unwrap();
 
     let to_string = box Expr::Ident(VarName::from("to_string"));
@@ -111,7 +107,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 let push_prefix_call = Expr::Call {
                     func: push_string.clone(),
                     generics: Vec::new(),
-                    args: vec![field_prefix_expr.get_ref(), output_var_ref.clone()],
+                    args: vec![output_var_ref.clone(), field_prefix_expr.get_ref()],
                     is_method: true,
                 };
                 statements.push(push_prefix_call);
@@ -127,7 +123,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 let push_string_call = Expr::Call {
                     func: push_string.clone(),
                     generics: Vec::new(),
-                    args: vec![field_to_string.get_ref(), output_var_ref.clone()],
+                    args: vec![output_var_ref.clone(), field_to_string.get_ref()],
                     is_method: true,
                 };
                 statements.push(push_string_call);
@@ -136,7 +132,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let push_closer_call = Expr::Call {
                 func: push_string.clone(),
                 generics: Vec::new(),
-                args: vec![Expr::Strin("}".into()).get_ref(), output_var_ref.clone()],
+                args: vec![output_var_ref.clone(), Expr::Strin("}".into()).get_ref()],
                 is_method: true,
             };
             statements.push(push_closer_call);
@@ -174,7 +170,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 let push_comma_call = Expr::Call {
                     func: push_string.clone(),
                     generics: Vec::new(),
-                    args: vec![comma_expr, output_var_ref.clone()],
+                    args: vec![output_var_ref.clone(), comma_expr],
                     is_method: true,
                 };
                 statements.push(push_comma_call);
@@ -195,7 +191,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                 let push_string_call = Expr::Call {
                     func: push_string.clone(),
                     generics: Vec::new(),
-                    args: vec![index_to_string, output_var_ref.clone()],
+                    args: vec![output_var_ref.clone(), index_to_string],
                     is_method: true,
                 };
                 statements.push(push_string_call);
@@ -204,7 +200,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let push_closer_call = Expr::Call {
                 func: push_string.clone(),
                 generics: Vec::new(),
-                args: vec![Expr::Strin("]".into()), output_var_ref.clone()],
+                args: vec![output_var_ref.clone(), Expr::Strin("]".into())],
                 is_method: true,
             };
             statements.push(push_closer_call);
@@ -229,5 +225,4 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     })
 }
 
-fn to_string<T: ToString + std::fmt::Debug>(val: &T) -> String { val.to_string() }
-fn string_to_string(val: &String) -> String { format!(r#""{}""#, val) }
+fn to_string<T: ToString>(val: &T) -> String { val.to_string() }

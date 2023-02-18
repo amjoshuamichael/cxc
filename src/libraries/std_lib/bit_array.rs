@@ -24,6 +24,7 @@ fn num_of_size(input: Vec<Type>, _: &CompData) -> Type {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct BitArray<T: Copy> {
     num: T,
 }

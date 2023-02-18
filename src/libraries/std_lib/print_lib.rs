@@ -13,9 +13,15 @@ impl Library for PrintLib {
                 ..ExternalFuncAdd::empty()
             },
         );
+        unit.add_rust_func_explicit(
+            "panic",
+            panic as *const usize,
+            ExternalFuncAdd {
+                ..ExternalFuncAdd::empty()
+            },
+        );
     }
 }
 
-fn external_print_string(string: String) {
-    println!("{string}");
-}
+fn external_print_string(string: String) { println!("{string}") }
+fn panic(string: &String) { panic!("{string}") }

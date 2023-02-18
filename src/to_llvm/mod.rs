@@ -430,7 +430,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
 
-            for field_index in 0..struct_type.field_count() {
+            for field_index in 0..struct_type.fields.len() {
                 let field = fields
                     .iter()
                     .find(|(f, _)| struct_type.get_field_index(f) == field_index)
@@ -472,7 +472,9 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             None
         },
-        ArrayLit { var_type, parts } => {
+        ArrayLit {
+            var_type, parts, ..
+        } => {
             let mut c_parts = Vec::new();
 
             for part in parts {
@@ -651,9 +653,9 @@ fn internal_function<'comp>(
             Some(size)
         },
         "write" => {
-            let src: BasicValueEnum = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let src: BasicValueEnum = compile(fcs, args[1]).unwrap().try_into().unwrap();
 
-            let dest: PointerValue = compile(fcs, args[1]).unwrap().try_into().unwrap();
+            let dest: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
             let dest_loaded: PointerValue =
                 fcs.builder.build_load(dest, "loaddest").try_into().unwrap();
 

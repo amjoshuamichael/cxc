@@ -16,17 +16,18 @@ pub mod hash;
 mod print_lib;
 mod string;
 mod to_string;
+mod type_helpers;
 mod value_lib;
 use bit_array::BitArrayLib;
 use default::DefaultLib;
 use print_lib::PrintLib;
 use string::StringLib;
 use to_string::ToStringLib;
+use type_helpers::TypeHelperLib;
 use value_lib::ValueLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        unit.add_rust_func("to_i64", [to_i64]);
         unit.add_static_deriver("len".into(), derive_array_len);
 
         unit.push_script(include_str!("vec.cxc")).unwrap();
@@ -43,8 +44,9 @@ impl Library for StdLib {
         unit.add_lib(TypeInterfaceLib);
         unit.add_lib(PrintLib);
         unit.add_lib(BitArrayLib);
+        unit.add_lib(TypeHelperLib);
 
-        unit.add_external_default::<bool>(Type::bool());
+        unit.add_external_default::<bool>();
     }
 }
 
@@ -61,9 +63,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
             type_spec: typ.clone().into(),
         }],
         generic_count: 0,
-        code: Expr::Number(*count as u64),
+        code: Expr::Number(*count as u64).wrap_in_block(),
         relation: TypeSpecRelation::Static(typ.into()),
     })
 }
-
-fn to_i64(input: i32) -> i64 { input as i64 }

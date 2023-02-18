@@ -1,7 +1,7 @@
 mod test_utils;
 
 use cxc::library::StdLib;
-use test_utils::{xc_test, Numbers5};
+use test_utils::{xc_test, Numbers5, Strings4};
 
 #[test]
 fn basic_struct() {
@@ -213,7 +213,7 @@ fn struct_arrays() {
 }
 
 #[test]
-fn active_initialize() {
+fn active_initialize_struct_ints() {
     xc_test!(
         use StdLib;
         "
@@ -229,6 +229,69 @@ fn active_initialize() {
             e: 90,
             ..Default::default()
         }
+    );
+}
+
+#[test]
+fn active_initialize_struct_strings() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); Strings4 {
+            numbers: Strings4 = Strings4 { a = "Aa", b = "Bb", ++ }
+
+            ; numbers
+        }
+        "#;
+        Strings4 {
+            a: "Aa".into(),
+            b: "Bb".into(),
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
+fn active_initialize_array_ints() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); [5]i32 {
+            numbers: [5]i32 = [10, 20, 90, ++]
+
+            ; numbers
+        }
+        ";
+        [10, 20, 90, 0, 0]
+    );
+}
+
+#[test]
+fn string_array() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); [2]String {
+            numbers: [2]String = ["one", "two"]
+            ; numbers
+        }
+        "#;
+        [String::from("one"), String::from("two")]
+    );
+}
+
+#[test]
+fn active_initialize_array_strings() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); [5]String {
+            numbers: [5]String = ["one", "two", "three", ++ ]
+
+            ; numbers
+        }
+        "#;
+        [String::from("one"), String::from("two"), String::from("three"), String::default(), String::default()]
     );
 }
 
@@ -279,5 +342,22 @@ fn deref() {
         }
         ";
         5
+    )
+}
+
+#[test]
+fn field_of_struct_pointer() {
+    xc_test!(
+        "
+        Point2D = { x: i32, y: i32 }
+
+        main() {
+            point: Point2D = { x = 5, y = 10 }
+            point_ref: &Point2D = &point
+
+            ; point_ref.x + point_ref.y
+        }
+        ";
+        15
     )
 }

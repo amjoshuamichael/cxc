@@ -5,15 +5,15 @@ use crate::libraries::Library;
 pub(super) struct StringLib;
 
 impl crate::XcReflect for String {
-    fn alias_code() -> String { "String = Vec<u8>".to_string() }
+    fn alias_code() -> String { "String = { Vec<u8> }".to_string() }
 }
 
 impl Library for StringLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         let string_type = unit.add_reflect_type::<String>().unwrap();
 
-        unit.add_external_default::<String>(string_type.clone());
-        unit.add_external_clone::<String>(string_type.clone());
+        unit.add_external_default::<String>();
+        unit.add_external_clone::<String>();
 
         unit.add_rust_func_explicit(
             "new",
@@ -52,4 +52,4 @@ fn string_from_bytes(buf: *mut u8, length: usize) -> String {
     String::from_utf8_lossy(&slice).to_string()
 }
 
-fn push_string(other: &String, this: &mut String) { *this += &**other; }
+fn push_string(this: &mut String, other: &String) { *this += &**other; }

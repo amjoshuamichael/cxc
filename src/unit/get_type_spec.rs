@@ -191,8 +191,8 @@ impl CompData {
             TypeSpec::Void => Type::void(),
             TypeSpec::Type(typ) => typ.clone(),
             TypeSpec::Me => {
-                if let Some(se) = generics.get_self() {
-                    se
+                if let Some(me) = generics.get_self() {
+                    me
                 } else {
                     panic!()
                 }

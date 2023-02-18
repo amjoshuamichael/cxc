@@ -1,7 +1,7 @@
 use crate::{
     hlr::hlr_data::{DataFlowInfo, FuncRep},
     lex::VarName,
-    parse::{Opcode, StructFill},
+    parse::{InitOpts, Opcode},
     FuncType, Type, TypeEnum, UniqueFuncInfo,
 };
 
@@ -30,6 +30,18 @@ impl NodeDataGen for usize {
             NodeData::Number {
                 value: *self as u64,
                 lit_type: Type::i(std::mem::size_of::<usize>() as u32),
+            },
+        )
+    }
+}
+
+impl NodeDataGen for VarName {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        hlr.tree.insert(
+            parent,
+            NodeData::Ident {
+                name: self.clone(),
+                var_type: hlr.data_flow.get(self).unwrap().typ.clone(),
             },
         )
     }
@@ -195,11 +207,30 @@ impl NodeDataGen for CallGen {
     }
 }
 
+impl NodeDataGen for UniqueFuncInfo {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let func_type = hlr.comp_data.get_func_type(&self).unwrap();
+        let TypeEnum::Func(FuncType { ret: ret_type, .. } ) = func_type.as_type_enum()
+            else { panic!() };
+
+        hlr.tree.insert(
+            parent,
+            NodeData::Call {
+                f: self.name.clone(),
+                generics: self.own_generics.clone(),
+                relation: self.relation.clone(),
+                ret_type: ret_type.clone(),
+                a: Vec::new(),
+            },
+        )
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct StructLitGen {
     pub var_type: Type,
     pub fields: Vec<(VarName, Box<dyn NodeDataGen>)>,
-    pub initialize: StructFill,
+    pub initialize: InitOpts,
 }
 
 impl NodeDataGen for StructLitGen {

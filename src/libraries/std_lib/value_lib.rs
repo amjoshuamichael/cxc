@@ -9,7 +9,7 @@ pub(super) struct ValueLib;
 
 impl Library for ValueLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        let value_type = unit.add_opaque_type::<XcValue>();
+        let value_type = unit.add_reflect_type::<XcValue>().unwrap();
 
         unit.add_rust_func_explicit(
             "from",

@@ -26,7 +26,7 @@ impl Debug for ExprTree {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         writeln!(fmt)?;
         for expr in &self.nodes {
-            writeln!(fmt, "{}", expr.1.to_string())?
+            writeln!(fmt, "{:?}: {}", expr.0, expr.1.to_string())?
         }
 
         Ok(())
@@ -96,11 +96,12 @@ pub enum NodeData {
     StructLit {
         var_type: Type,
         fields: Vec<(VarName, ExprID)>,
-        initialize: StructFill,
+        initialize: InitOpts,
     },
     ArrayLit {
         var_type: Type,
         parts: Vec<ExprID>,
+        initialize: InitOpts,
     },
     Ident {
         var_type: Type,
@@ -286,9 +287,9 @@ impl NodeData {
                 }
 
                 match initialize {
-                    StructFill::Default => lit += "++ \n",
-                    StructFill::Uninit => lit += "-- \n",
-                    StructFill::NoFill => {},
+                    InitOpts::Default => lit += "++ \n",
+                    InitOpts::Uninit => lit += "-- \n",
+                    InitOpts::NoFill => {},
                 }
 
                 lit += "} \n";
@@ -297,7 +298,9 @@ impl NodeData {
 
                 lit
             },
-            ArrayLit { parts, .. } => {
+            ArrayLit {
+                parts, initialize, ..
+            } => {
                 let mut lit = "[".into();
 
                 for (p, part) in parts.iter().enumerate() {
@@ -305,6 +308,12 @@ impl NodeData {
                         lit += ", ";
                     }
                     lit += &*tree.get(*part).to_string(tree);
+                }
+
+                match initialize {
+                    InitOpts::Default => lit += ", ++ ",
+                    InitOpts::Uninit => lit += ", -- ",
+                    InitOpts::NoFill => {},
                 }
 
                 lit += "]".into();

@@ -100,6 +100,12 @@ pub struct Point2D {
 
 impl Point2D {
     pub fn sqr_magnitude(&self) -> i32 { self.x * self.x + self.y * self.y }
+    pub fn magnify(&self, by: i32) -> Point2D {
+        Point2D {
+            x: self.x * by,
+            y: self.y * by,
+        }
+    }
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,6 +142,14 @@ pub struct Numbers5 {
     pub e: i32,
 }
 
+#[derive(Default, Clone, Debug, XcReflect, PartialEq, Eq)]
+pub struct Strings4 {
+    pub a: String,
+    pub b: String,
+    pub c: String,
+    pub d: String,
+}
+
 impl<'a> TestUtilsLib<'a> {
     pub(crate) fn new(code: &'a str) -> Self { TestUtilsLib { code } }
 }
@@ -160,6 +174,10 @@ impl<'a> Library for TestUtilsLib<'a> {
 
         if self.code.contains("Numbers5") {
             unit.add_reflect_type::<Numbers5>();
+        }
+
+        if self.code.contains("Strings4") {
+            unit.add_reflect_type::<Strings4>();
         }
     }
 }

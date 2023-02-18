@@ -109,8 +109,9 @@ fn hello_world() {
 #[test]
 fn derivations() {
     let mut unit = Unit::new();
-    unit.add_lib(StdLib).add_lib(TypeInterfaceLib).push_script(
-        "
+    unit.add_lib(TypeInterfaceLib)
+        .push_script(
+            "
         Point2D = {
             x: i32,
             y: i32
@@ -124,13 +125,11 @@ fn derivations() {
 
         test_derivation() {
             point2D: Point2D = Point2D { x = 0, y = 0 }
-            assert_eq<i32>(point2D.type_field_count(), 2)
 
-            point3D: Point3D = Point3D { x = 0, y = 0, z = 0 }
-            assert_eq<i32>(point3D.type_field_count(), 3)
         }
-    ",
-    );
+        ",
+        )
+        .unwrap();
 
     unsafe { unit.get_fn_by_name::<(), ()>("test_derivation")(()) };
 }

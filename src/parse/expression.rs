@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Atom {
     Expr(Expr),
     Op(Opcode),
@@ -113,13 +113,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         Tok::Strin(val) => Expr::Strin(val).into(),
         Tok::VarName(val) => Expr::Ident(val.clone()).into(),
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
-        Tok::LBrack => Expr::Array(parse_list(
-            (Tok::LBrack, Tok::RBrack),
-            Some(Tok::Comma),
-            parse_expr,
-            lexer,
-        )?)
-        .into(),
+        Tok::LBrack => parse_array_literal(lexer)?.into(),
         Tok::LParen => {
             lexer.assert_next_tok_is(Tok::LParen)?;
             let enclosed = Expr::Enclosed(box parse_math_expr(lexer)?).into();
@@ -130,7 +124,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             lexer.next_tok()?;
             lexer.next_tok()?;
 
-            Expr::Tuple(Vec::new(), StructFill::NoFill).into()
+            Expr::Tuple(Vec::new(), InitOpts::NoFill).into()
         },
         _ if let Ok(type_spec) = parse_type_spec(&mut lexer.detach()) => {
             parse_type_spec(lexer)?;
@@ -159,7 +153,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         Tok::LCurly => {
             let exprs = parse_list(Tok::curlys(), Some(Tok::Comma), parse_math_expr, lexer)?;
 
-            Expr::Tuple(exprs, StructFill::NoFill).into()
+            Expr::Tuple(exprs, InitOpts::NoFill).into()
         },
         _ => return Ok(None)
     };
@@ -193,12 +187,13 @@ fn parse_call(
 
     let call_expr = match func {
         Atom::Expr(Expr::Member(object, method_name)) => {
-            args.push(Expr::UnarOp(Opcode::Ref, object));
+            let mut new_args = vec![Expr::UnarOp(Opcode::Ref, object)];
+            new_args.append(&mut args);
 
             Expr::Call {
                 func: box Expr::Ident(method_name),
                 generics,
-                args,
+                args: new_args,
                 is_method: true,
             }
         },
@@ -281,13 +276,13 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
     let initialize = match lexer.next_tok()? {
         Tok::DoublePlus => {
             lexer.assert_next_tok_is(Tok::RCurly)?;
-            StructFill::Default
+            InitOpts::Default
         },
         Tok::DoubleMinus => {
             lexer.assert_next_tok_is(Tok::RCurly)?;
-            StructFill::Uninit
+            InitOpts::Uninit
         },
-        Tok::RCurly => StructFill::NoFill,
+        Tok::RCurly => InitOpts::NoFill,
         got => {
             return Err(ParseError::UnexpectedTok {
                 got,
@@ -297,6 +292,48 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
     };
 
     Ok(Expr::Struct(fields, initialize))
+}
+
+fn parse_array_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError> {
+    lexer.assert_next_tok_is(Tok::LBrack)?;
+    let mut expressions = Vec::new();
+
+    loop {
+        match lexer.peek_tok()? {
+            Tok::DoublePlus => {
+                lexer.next_tok()?;
+                lexer.assert_next_tok_is(Tok::RBrack)?;
+                return Ok(Expr::Array(expressions, InitOpts::Default));
+            },
+            Tok::DoubleMinus => {
+                lexer.next_tok()?;
+                lexer.assert_next_tok_is(Tok::RBrack)?;
+                return Ok(Expr::Array(expressions, InitOpts::Uninit));
+            },
+            Tok::RBrack => {
+                lexer.next_tok()?;
+                return Ok(Expr::Array(expressions, InitOpts::NoFill));
+            },
+            _ => {
+                let expr =
+                    lexer.recover_with(parse_math_expr, vec![&Tok::Comma, &Tok::RBrack])?;
+                expressions.push(expr);
+            },
+        };
+
+        match lexer.next_tok()? {
+            Tok::RBrack => {
+                return Ok(Expr::Array(expressions, InitOpts::NoFill));
+            },
+            Tok::Comma => {},
+            got => {
+                return Err(ParseError::UnexpectedTok {
+                    got,
+                    expected: vec![TokName::RBrack, TokName::Comma],
+                })
+            },
+        }
+    }
 }
 
 fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> ParseResult<bool> {

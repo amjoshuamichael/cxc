@@ -4,6 +4,7 @@ use inkwell::values::{BasicMetadataValueEnum, CallableValue};
 
 use crate::{
     typ::ReturnStyle, FuncType, Kind, Type, TypeEnum, TypeRelation, UniqueFuncInfo, Unit,
+    XcReflect,
 };
 
 pub struct ExternalFuncAdd {
@@ -48,7 +49,8 @@ impl Unit {
         self.add_rust_func_explicit(name, function_ptr, ext_add)
     }
 
-    pub fn add_external_default<T: Default>(&mut self, typ: Type) {
+    pub fn add_external_default<T: Default + XcReflect>(&mut self) {
+        let typ = self.get_reflect_type::<T>().unwrap();
         self.add_rust_func_explicit(
             "default",
             T::default as *const usize,
@@ -60,10 +62,25 @@ impl Unit {
         );
     }
 
-    pub fn add_external_clone<T: Clone>(&mut self, typ: Type) {
+    pub fn add_external_clone<T: Clone + XcReflect>(&mut self) {
+        let typ = self.get_reflect_type::<T>().unwrap();
         self.add_rust_func_explicit(
             "clone",
             T::clone as *const usize,
+            ExternalFuncAdd {
+                arg_types: vec![typ.get_ref()],
+                ret_type: typ.clone(),
+                relation: TypeRelation::MethodOf(typ.get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
+        );
+    }
+
+    pub fn add_external_to_string<T: ToString + XcReflect>(&mut self) {
+        let typ = self.get_reflect_type::<T>().unwrap();
+        self.add_rust_func_explicit(
+            "to_string",
+            T::to_string as *const usize,
             ExternalFuncAdd {
                 arg_types: vec![typ.get_ref()],
                 ret_type: typ.clone(),

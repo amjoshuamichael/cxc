@@ -135,7 +135,6 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                         own_generics: vec![hlr.ret_type.clone()],
                     },
                     args: vec![
-                        box hlr.tree.get(*to_return),
                         box UnarOpGen {
                             hs: box NodeData::Ident {
                                 var_type: output_var_typ.clone(),
@@ -144,6 +143,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                             op: Opcode::Ref,
                             ret_type: output_var_typ.get_ref(),
                         },
+                        box hlr.tree.get(*to_return),
                     ],
                 },
             );

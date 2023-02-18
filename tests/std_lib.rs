@@ -61,29 +61,29 @@ fn vec_push_and_check() {
             two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new()
 
             current_index: i32 = 0
-            @ current_index < number_of_checks + 0 {
+            @ current_index < number_of_checks {
                 num_vec.push<i32>(current_index)
 
                 current_index = current_index + 1
             }
 
             current_index = 0
-            @ current_index < number_of_checks + 0 {
-                assert_eq<i32>(num_vec.get<i32>(to_i64(current_index)), current_index)
+            @ current_index < number_of_checks {
+                assert_eq<i32>(num_vec.get<i32>(current_index), current_index)
 
                 current_index = current_index + 1
             }
 
 
             current_index: i64 = 0
-            @ current_index < number_of_checks + 0 {
+            @ current_index < number_of_checks {
                 two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
 
                 current_index = current_index + 1
             }
 
             current_index = 0
-            @ current_index < number_of_checks + 0 {
+            @ current_index < number_of_checks {
                 in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
                 corresponding: TwoNums = two_nums_from_one(current_index)
 
@@ -135,7 +135,7 @@ fn option_rc() {
             main(); Option< Rc<i32> > {
                 x: i32 = 90
                 rc: Rc<i32> = Rc<i32>:new(x)
-                output: Option< Rc<u32> > = Option< Rc<i32> >.Some rc
+                output: Option< Rc<i32> > = Option< Rc<i32> >.Some rc
 
                 ; output
             }
@@ -153,7 +153,7 @@ fn option_vec() {
                 x: i32 = 90
                 vec: Vec<i32> = Vec<i32>:new()
                 vec.push(x)
-                output: Option< Vec<u32> > = Option< Rc<i32> >.Some vec
+                output: Option< Vec<i32> > = Option< Vec<i32> >.Some vec
 
                 ; output
             }
@@ -277,19 +277,26 @@ fn cast() {
     )
 }
 
-//#[test]
-// fn option_is_some_is_none() {
-//    xc_test!(
-//        "
-//        main() {
-//            some: Option<i32> = Option<i32>.Some { 10 }
-//            assert_eq(some.is_some(), true)
-//            assert_eq(some.is_none(), false)
-//
-//            none: Option<i32> = Option<i32>.None { }
-//            assert_eq(none.is_none(), true)
-//            assert_eq(none.is_some(), false)
-//        }
-//        "
-//    )
-//}
+#[test]
+#[should_panic(expected = "1 is not equal to 2!")]
+fn int_failed_assert() {
+    xc_test!(
+        "
+        main() {
+            assert_eq(1, 2)
+        }
+        "
+    )
+}
+
+#[test]
+#[should_panic(expected = "true is not equal to false!")]
+fn bool_failed_assert() {
+    xc_test!(
+        "
+        main() {
+            assert_eq(true, false)
+        }
+        "
+    )
+}

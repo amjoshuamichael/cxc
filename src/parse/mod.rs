@@ -190,10 +190,12 @@ pub fn parse_func_code(
     let generic_count = lexer.generic_count() as u32;
 
     if let TypeSpecRelation::MethodOf(relation) = &relation {
-        args.push(VarDecl {
+        let mut new_args = vec![VarDecl {
             name: VarName::from("self"),
             type_spec: relation.clone(),
-        });
+        }];
+        new_args.append(&mut args);
+        args = new_args;
     }
 
     Ok(FuncCode {
@@ -225,7 +227,7 @@ fn parse_var_decl(lexer: &mut FuncParseContext) -> ParseResult<VarDecl> {
 }
 
 fn parse_block(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
-    Ok(Expr::Block(parse_list((Tok::LCurly, Tok::RCurly), None, parse_stmt, lexer)?))
+    Ok(Expr::Block(parse_list(Tok::curlys(), None, parse_stmt, lexer)?))
 }
 
 fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
@@ -235,18 +237,21 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         if matches!(lhs, Expr::Ident(_)) {
             let Expr::Ident(var_name) = lhs else { todo!("new err type") };
 
-            let var = if lexer.next_tok()? == Tok::Assignment {
-                VarDecl {
+            let var = match lexer.next_tok()? {
+                Tok::Assignment => VarDecl {
                     name: var_name,
                     type_spec: TypeSpec::Type(Type::unknown()),
-                }
-            } else {
-                let type_spec = lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
-                lexer.assert_next_tok_is(Tok::Assignment)?;
-                VarDecl {
-                    name: var_name,
-                    type_spec,
-                }
+                },
+                Tok::Colon => {
+                    let type_spec =
+                        lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
+                    lexer.assert_next_tok_is(Tok::Assignment)?;
+                    VarDecl {
+                        name: var_name,
+                        type_spec,
+                    }
+                },
+                _ => todo!("new err type"),
             };
 
             let rhs = lexer.recover(parse_expr)?;

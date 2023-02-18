@@ -1,18 +1,23 @@
-use crate::{lex::VarName, parse::StructFill, TypeEnum, TypeRelation, UniqueFuncInfo};
+use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, UniqueFuncInfo};
 
 use super::{
-    expr_tree::{CallGen, MakeVarGen, MemberGen, NodeData},
-    hlr_data::FuncRep,
+    expr_tree::{CallGen, IndexGen, MakeVarGen, MemberGen, NodeData, SetVarGen},
+    hlr_data::{DataFlowInfo, FuncRep},
 };
 
 pub fn handle_active_initialization(hlr: &mut FuncRep) {
+    handle_struct_active_initialization(hlr);
+    handle_array_active_initialization(hlr);
+}
+
+fn handle_struct_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many(
         |data| matches!(data, NodeData::StructLit { .. }),
         |structlit_id, structlit_data, hlr| {
             let NodeData::StructLit { var_type, fields: field_ids, initialize } = 
                 structlit_data else { panic!() };
 
-            if *initialize != StructFill::Default {
+            if *initialize != InitOpts::Default {
                 return;
             }
 
@@ -59,6 +64,71 @@ pub fn handle_active_initialization(hlr: &mut FuncRep) {
 
                 field_ids.push((field_name.clone(), initialized));
             }
+        },
+    );
+}
+
+fn handle_array_active_initialization(hlr: &mut FuncRep) {
+    hlr.modify_many(
+        |data| matches!(data, NodeData::ArrayLit { .. }),
+        |arraylit_id, arraylit_data, hlr| {
+            let NodeData::ArrayLit { var_type, parts: part_ids, initialize } = 
+                arraylit_data.clone() else { panic!() };
+
+            if initialize != InitOpts::Default {
+                return;
+            }
+
+            let TypeEnum::Array(array_type) = var_type.as_type_enum() 
+                else { panic!() };
+
+            let defaulted_array = hlr.uniqueify_varname("defaulted_array");
+
+            hlr.data_flow.insert(
+                defaulted_array.clone(),
+                DataFlowInfo {
+                    typ: var_type.clone(),
+                    ..Default::default()
+                },
+            );
+
+            let set_default_array = hlr
+                .insert_statement_before(
+                    arraylit_id,
+                    MakeVarGen {
+                        set: defaulted_array.clone(),
+                        var_type: var_type.clone(),
+                        to: box arraylit_data.clone(),
+                        ..Default::default()
+                    },
+                )
+                .inserted_id();
+
+            hlr.tree.set_parent(arraylit_id, set_default_array);
+
+            for index in part_ids.len()..(array_type.count as usize) {
+                hlr.insert_statement_before(
+                    arraylit_id,
+                    SetVarGen {
+                        lhs: box IndexGen {
+                            object: box defaulted_array.clone(),
+                            index: box index,
+                            ret_type: array_type.base.clone(),
+                        },
+                        rhs: box UniqueFuncInfo {
+                            name: VarName::from("default"),
+                            relation: TypeRelation::Static(array_type.base.clone()),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                );
+            }
+
+            *arraylit_data = NodeData::Ident {
+                name: defaulted_array.clone(),
+                var_type: var_type.clone(),
+            };
         },
     );
 }

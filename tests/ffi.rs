@@ -1,7 +1,7 @@
 #![allow(unused_must_use)]
 mod test_utils;
 use cxc::library::StdLib;
-use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, XcValue};
+use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, TypeRelation, XcValue};
 use cxc::{Type, Unit};
 use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 
@@ -31,8 +31,6 @@ fn basic_pointer() {
     unit.push_script(
         "
             square(num: &i32) {
-                print(40)
-                print(*num)
                 num.write<i32>(*num * *num)
             }
         ",
@@ -156,15 +154,47 @@ fn i32_and_ref() {
 }
 
 #[test]
+fn method_on_struct_with_arg() {
+    let mut unit = Unit::new();
+
+    let point2d = unit.add_reflect_type::<Point2D>().unwrap();
+    unit.add_rust_func_explicit(
+        "magnify",
+        Point2D::magnify as *const usize,
+        ExternalFuncAdd {
+            arg_types: vec![point2d.get_ref().clone(), Type::i(32)].clone(),
+            ret_type: Type::i(32),
+            relation: TypeRelation::MethodOf(point2d.get_ref()),
+            ..ExternalFuncAdd::empty()
+        },
+    );
+
+    unit.push_script(
+        "
+        main(); i32 {
+            point: Point2D = Point2D { x = 42, y = 43 }
+            point = point.magnify(40)
+            ; point.x
+        }
+        ",
+    )
+    .unwrap();
+
+    let func = unit.get_fn_by_name::<(), i32>("main");
+    let output = unsafe { func(()) };
+    assert_eq!(output, 1680);
+}
+
+#[test]
 fn external_function() {
     pub fn print_num(input: i64) {
-        println!("{input}");
+        assert!(input < 100);
     }
 
     let mut unit = Unit::new();
 
     unit.add_rust_func_explicit(
-        "print_num",
+        "assert_is_less_than_100",
         print_num as *const usize,
         ExternalFuncAdd {
             arg_types: vec![Type::i(64)],
@@ -176,7 +206,7 @@ fn external_function() {
         call(); i64 {
             x: i64 = 0
             @ x < 100 {
-                print_num(x)
+                assert_is_less_than_100(x)
                 x = x + 1
             }
 
@@ -241,9 +271,7 @@ fn reflected_type_masks() {
     unit.push_script(
         "
         main() {
-            print(2)
             assert_is_five(&5)
-            print(3)
             assert_is_five(&5.0)
             ; 0 
         }

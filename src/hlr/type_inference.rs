@@ -1,7 +1,7 @@
 use super::prelude::*;
 use crate::{
     lex::indent_parens,
-    parse::{Opcode, StructFill, TypeSpec},
+    parse::{InitOpts, Opcode, TypeSpec},
     FuncType, Type, TypeEnum, TypeRelation, VarName,
 };
 use indexmap::IndexMap;
@@ -163,7 +163,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
             } => {
                 match relation {
                     TypeRelation::MethodOf(_) => {
-                        let last_arg = *a.last().unwrap();
+                        let last_arg = *a.first().unwrap();
                         infer_map.insert(
                             Inferable::Relation(id),
                             Constraint::SameAs(last_arg.into()),
@@ -214,7 +214,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 fields,
                 initialize,
             } => {
-                if var_type.is_unknown() && initialize == StructFill::NoFill {
+                if var_type.is_unknown() && initialize == InitOpts::NoFill {
                     let infer_fields = fields
                         .iter()
                         .enumerate()
@@ -222,7 +222,9 @@ pub fn infer_types(hlr: &mut FuncRep) {
                             (field_name.clone(), TypeSpec::GenParam(index as u8))
                         })
                         .collect();
+
                     let spec = TypeSpec::Struct(infer_fields);
+
                     infer_map.insert(
                         id,
                         Constraint::RelatedTo {
@@ -233,16 +235,25 @@ pub fn infer_types(hlr: &mut FuncRep) {
                     );
                 }
             },
-            NodeData::ArrayLit { parts, .. } => {
-                let first_element = *parts.first().unwrap();
-                infer_map.insert(
-                    id,
-                    Constraint::RelatedTo {
-                        spec: TypeSpec::Array(box TypeSpec::GenParam(0), parts.len() as u32),
-                        gen_params: vec![first_element.into()],
-                        method_of: None,
-                    },
-                );
+            NodeData::ArrayLit {
+                var_type,
+                parts,
+                initialize,
+            } => {
+                if var_type.is_unknown() && initialize == InitOpts::NoFill {
+                    let first_element = *parts.first().unwrap();
+                    infer_map.insert(
+                        id,
+                        Constraint::RelatedTo {
+                            spec: TypeSpec::Array(
+                                box TypeSpec::GenParam(0),
+                                parts.len() as u32,
+                            ),
+                            gen_params: vec![first_element.into()],
+                            method_of: None,
+                        },
+                    );
+                }
             },
             NodeData::Index { object, .. } => infer_map.insert(
                 id,
@@ -276,7 +287,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
     infer_map.insert(Inferable::ReturnType, Constraint::SameAs(hlr.tree.root.into()));
 
-    for _ in 0..9 {
+    for _ in 0..12 {
         type_solving_round(&mut infer_map, hlr);
         infer_calls(&mut infer_map, hlr);
 
@@ -301,7 +312,13 @@ pub fn infer_types(hlr: &mut FuncRep) {
             println!("{:?}", inferable);
         }
 
-        println!("{:?}", &infer_map.calls);
+        println!("---UKNOWN CALLS---");
+        for call in &infer_map.calls {
+            let Inferable::Expr(call_id) = call else { panic!() };
+            let call_data = hlr.tree.get(*call_id);
+            let unique_info = hlr.tree.unique_func_info_of_call(&call_data);
+            println!("{unique_info:?}");
+        }
     }
 
     panic!("type inference failed");

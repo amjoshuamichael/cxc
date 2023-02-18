@@ -166,12 +166,16 @@ impl CompData {
     pub fn insert_code(&mut self, code: FuncCode) -> FuncDeclInfo {
         let decl_info = code.decl_info();
         self.func_code.insert(decl_info.clone(), code);
-        self.decl_names
-            .entry(decl_info.name.clone())
-            .and_modify(|set| set.push(decl_info.clone()))
-            .or_insert(vec![decl_info.clone()]);
+        self.append_type_for_name(&decl_info);
 
         decl_info
+    }
+
+    pub(crate) fn append_type_for_name(&mut self, info: &FuncDeclInfo) {
+        self.decl_names
+            .entry(info.name.clone())
+            .and_modify(|set| set.push(info.clone()))
+            .or_insert(vec![info.clone()]);
     }
 
     pub fn insert_temp_function(&mut self, code: FuncCode) -> UniqueFuncInfo {
@@ -285,7 +289,8 @@ impl CompData {
     }
 
     pub fn get_derived_code(&self, info: &UniqueFuncInfo) -> Option<FuncCode> {
-        if let Ok(deriver_info) = DeriverInfo::try_from(info.clone()) {
+        if let Ok(deriver_info) = DeriverInfo::try_from(info.clone()) && 
+            info.relation.inner_type()?.is_known() {
             let deriver = self.derivers.get(&deriver_info)?;
             deriver(self, info.relation.inner_type()?)
         } else {

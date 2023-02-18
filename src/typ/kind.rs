@@ -51,7 +51,7 @@ impl Kind for FuncType {
             .join(", ");
         let ret_name = &self.ret;
 
-        format!("({args_names}) -> {ret_name:?}")
+        format!("({args_names}); {ret_name:?}")
     }
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {

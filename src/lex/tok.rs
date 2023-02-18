@@ -208,7 +208,7 @@ pub enum Tok {
     Assignment,
 
     #[regex(
-        "[a-z_][A-Za-z0-9_]+|\
+        "[a-z_][a-zA-Z0-9_]+|\
         [a-z_]",
         |t| VarName(Arc::from(t.slice()))
     )]
@@ -217,7 +217,7 @@ pub enum Tok {
     #[regex(
         "[A-Z][A-Za-z0-9]+|\
         [A-Z]|\
-        u8|u16|u32|u64|i8|i16|i32|i64|f16|f32|f64|f128|bool",
+        u[0-9]*|i[0-9]*|f16|f32|f64|f128|bool",
         TypeName::from_tok,
         priority = 2
     )]

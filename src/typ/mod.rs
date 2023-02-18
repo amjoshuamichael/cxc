@@ -259,11 +259,11 @@ impl Type {
     pub fn from_function(&self) -> &TypeName { &self.0.from_function }
     pub fn parameters(&self) -> &Vec<Type> { &self.0.parameters }
 
-    pub fn with_name(self, name: TypeName) -> Self {
+    pub(crate) fn with_name(self, name: TypeName) -> Self {
         self.modify_type_data(|data| data.name = name.clone())
     }
 
-    pub fn with_generics(self, generics: &Vec<Type>) -> Self {
+    pub(crate) fn with_generics(self, generics: &Vec<Type>) -> Self {
         self.modify_type_data(|data| data.generics = generics.clone())
     }
 
@@ -390,12 +390,12 @@ impl Deref for TypeEnum {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug)]
 pub struct RefType {
-    base: Type,
+    pub base: Type,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug)]
 pub struct FuncType {
     pub ret: Type,
     pub args: Vec<Type>,
@@ -428,8 +428,6 @@ impl StructType {
             .position(|field| field.0 == *field_name)
             .unwrap()
     }
-
-    pub fn field_count(&self) -> usize { self.fields.len() }
 
     pub fn is_tuple(&self) -> bool { self.fields.len() == 0 || &*self.fields[0].0 == "0" }
 }

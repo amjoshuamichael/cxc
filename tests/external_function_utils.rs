@@ -8,9 +8,8 @@ use cxc::{
 fn default_util() {
     let mut unit = Unit::new();
 
-    let string_type = unit.add_opaque_type::<String>();
-
-    unit.add_external_default::<String>(string_type);
+    unit.add_lib(StdLib);
+    unit.add_external_default::<String>();
     unit.push_script("main(); String { ; String:default() }");
 
     let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")(()) };
@@ -21,9 +20,10 @@ fn default_util() {
 fn clone_util() {
     let mut unit = Unit::new();
 
-    let string_type = unit.add_opaque_type::<String>();
+    unit.add_lib(StdLib);
+    unit.add_external_clone::<String>();
 
-    unit.add_external_clone::<String>(string_type.clone());
+    let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
 
     unit.add_rust_func_explicit(
         "a_cool_string",
@@ -40,7 +40,7 @@ fn clone_util() {
             cool_string: String = a_cool_string()
             ; cool_string.clone()
         }
-    ",
+        ",
     );
 
     let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")(()) };

@@ -4,7 +4,7 @@ use crate::{
     parse::{self, Expr, FuncCode, TypeRelation},
     to_llvm::compile_routine,
     typ::{FuncType, ReturnStyle},
-    TypeEnum, Unit,
+    TypeEnum, Unit, XcReflect,
 };
 use std::{collections::HashMap, mem::transmute};
 
@@ -16,6 +16,10 @@ use super::{UniqueFuncInfo, XcFunc};
 pub struct XcValue {
     typ: Type,
     data: Vec<u8>,
+}
+
+impl XcReflect for XcValue {
+    fn alias_code() -> String { "XcValue = { typ: Type, data: Vec<u8> }".to_string() }
 }
 
 impl XcValue {
@@ -34,16 +38,6 @@ impl XcValue {
         Self {
             typ,
             data: slice.to_vec(),
-        }
-    }
-
-    #[cfg(feature = "bytemuck")]
-    pub fn new_opaque<T: bytemuck::NoUninit>(data: T) -> Self {
-        let typ = Type::opaque_type::<T>();
-
-        Self {
-            typ,
-            data: Vec::from(bytemuck::bytes_of(&data)),
         }
     }
 

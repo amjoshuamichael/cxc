@@ -26,6 +26,11 @@ Vec<T> = {
         ptr: &T = self.data_loc + index
         ; *ptr
     }
+
+    get_ref(index: i64); &T {
+        ptr: &T = self.data_loc + index
+        ; ptr
+    }
 }
 
 <T> Vec<T>:: {

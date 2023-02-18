@@ -99,6 +99,7 @@ impl ExprTree {
     pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData { &mut self.nodes[at].data }
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of].parent }
+    pub fn set_parent(&mut self, of: ExprID, to: ExprID) { self.nodes[of].parent = to }
 
     pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
         let parent = self.parent(of);

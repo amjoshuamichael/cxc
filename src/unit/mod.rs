@@ -99,19 +99,15 @@ impl Unit {
 
     pub fn push_script<'s>(&'s mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
         let lexed = lex(script);
-        let parsed = match parse::parse(lexed) {
-            Ok(file) => file,
-            Err(errs) => {
-                if crate::XC_DEBUG {
-                    for err in &errs {
-                        println!("{err}");
-                    }
+        let parsed = parse::parse(lexed).map_err(|errs| {
+            if crate::XC_DEBUG {
+                for err in &errs {
+                    println!("{err}");
                 }
+            }
 
-                let comp_errors = { errs }.drain(..).map(CErr::Parse).collect();
-                return Err(comp_errors);
-            },
-        };
+            { errs }.drain(..).map(CErr::Parse).collect::<Vec<_>>()
+        })?;
 
         let funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
@@ -235,27 +231,6 @@ impl Unit {
         self.module.get_function(&*func_info.to_string())
     }
 
-    pub fn add_opaque_type<T>(&mut self) -> Type {
-        let name = {
-            let name = std::any::type_name::<T>();
-            let last_colon_index = name.rfind(":").map(|p| p + 1).unwrap_or(0);
-            &name[last_colon_index..]
-        };
-
-        self.add_named_opaque_type::<T>(name)
-    }
-
-    pub fn add_named_opaque_type<T>(&mut self, name: &str) -> Type {
-        let opaque_type = Type::opaque_with_size(std::mem::size_of::<T>() as u32, name);
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-        comp_data
-            .types
-            .insert(TypeName::from(name), opaque_type.clone());
-
-        opaque_type
-    }
-
     fn new_func_comp_state<'f>(
         &'f self,
         tree: ExprTree,
@@ -307,8 +282,6 @@ impl Unit {
             .get_function_address(&*info.to_string())
             .unwrap();
 
-        // SAFETY: the function has been received from LLVM, and therefore is safe
-        // because their api guarantees it is.
         unsafe { transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr) }
     }
 

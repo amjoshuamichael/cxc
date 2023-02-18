@@ -120,7 +120,7 @@ fn infer_alloc() {
 }
 
 #[test]
-fn infer_default() {
+fn infer_default_struct() {
     xc_test!(
         r#"
         Defaultable = { x: i32, y: i32 }
@@ -129,6 +129,21 @@ fn infer_default() {
             x = Defaultable { ++ } 
             assert_eq(x.x, 0)
             assert_eq(x.y, 0)
+        }
+        "#
+    )
+}
+
+#[test]
+fn infer_default_array() {
+    xc_test!(
+        r#"
+        main() {
+            x: [4]i32 = [ 90, 43, ++ ]
+            assert_eq(x[0], 90)
+            assert_eq(x[1], 43)
+            assert_eq(x[2], 0)
+            assert_eq(x[3], 0)
         }
         "#
     )
