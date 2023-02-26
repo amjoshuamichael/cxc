@@ -84,6 +84,9 @@ macro_rules! xc_test {
 
         output = unsafe { unit.get_fn_by_name::<(), _>("main")(()) };
 
+        #[cfg(feature = "show-bytes")]
+        cxc::bytesof::print_binary_two(&$expected_output, &output);
+
         assert_eq!(output, $expected_output);
     }};
 }

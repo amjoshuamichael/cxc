@@ -228,6 +228,10 @@ impl CompData {
         is_intrinsic || self.compiled.contains(info)
     }
 
+    pub fn name_is_intrinsic(&self, name: &VarName) -> bool {
+        self.intrinsics.iter().any(|decl| &decl.name == name)
+    }
+
     pub fn get_declaration_of(&self, info: &UniqueFuncInfo) -> Option<FuncDeclInfo> {
         let possible_decls = self.decl_names.get(&info.name)?;
 

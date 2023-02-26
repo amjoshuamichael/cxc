@@ -664,14 +664,16 @@ fn internal_function<'comp>(
             None
         },
         "cast" => {
-            let src: BasicValueEnum = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let src = compile_as_ptr(fcs, args[0]);
             let dest_type = info.generics()[1].to_basic_type(&fcs.context);
+            let casted = fcs.builder.build_alloca(dest_type, "cast");
 
-            let casted =
-                fcs.builder
-                    .build_cast(InstructionOpcode::BitCast, src, dest_type, "cast");
+            fcs.builder
+                .build_memcpy(casted, 1, src, 1, dest_type.size_of().unwrap())
+                .unwrap();
+            let casted_loaded = fcs.builder.build_load(casted, "cast-load");
 
-            Some(casted.as_any_value_enum())
+            Some(casted_loaded.as_any_value_enum())
         },
         _ => return None,
     };

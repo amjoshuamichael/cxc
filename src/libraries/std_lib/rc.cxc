@@ -13,7 +13,7 @@ Rc<T> = {
         box: &RcBox<T> = alloc< RcBox<T> >( 2 )
 
         box.write< RcBox<T> > (
-            RcBox<T> { strong = 1, weak = 1, value = value }
+            RcBox<T> { strong = 1, weak = 0, value = value }
         )
         
         rc: Rc<T> = Rc<T> { inner = box }

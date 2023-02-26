@@ -63,6 +63,10 @@ impl InferMap {
             .keys()
             .all(|inferable| type_of_inferable(inferable, hlr).is_known())
             && self.calls.len() == 0
+            && hlr.tree.ids_in_order().iter().all(|id| {
+                let node = hlr.tree.get_ref(*id);
+                node.ret_type().is_known()
+            })
     }
 }
 
@@ -361,6 +365,24 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
                 }
 
                 if !found_generic {
+                    return None;
+                }
+            },
+            Struct(fields) => {
+                let mut found_field = false;
+
+                for (index, (field_name, field_spec)) in fields.iter().enumerate() {
+                    if spec_from_perspective_of_generic(field_spec, generic_index).is_some() {
+                        lhs = StructMember(box lhs, field_name.clone());
+                        rhs = field_spec.clone();
+
+                        found_field = true;
+
+                        break;
+                    }
+                }
+
+                if !found_field {
                     return None;
                 }
             },

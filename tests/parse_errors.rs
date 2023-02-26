@@ -77,3 +77,8 @@ fn unknown_type() {
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), None);
 }
+
+// TODO: this throws an error that isn't caught
+// function(arg: &Arg)) {
+//    # code..
+//}

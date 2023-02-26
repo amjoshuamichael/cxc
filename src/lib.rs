@@ -6,6 +6,12 @@
 #![feature(type_changing_struct_update)]
 #![feature(if_let_guard)]
 
+// HOW DEBUG FlAGS WORK:
+// 1. xc-debug: enables debug printing for the compiler itself
+// 2. llvm-debug: enables debug printing for the LLVM IR
+// 3. show-bytes: enables debug printing for the bytes of each type, during
+// tests using the xc_test! macro
+
 pub static XC_DEBUG: bool = cfg!(feature = "xc-debug");
 pub static LLVM_DEBUG: bool = cfg!(feature = "llvm-debug");
 
@@ -32,6 +38,8 @@ pub mod error {
 #[cfg(feature = "cxc_derive")]
 pub use cxc_derive::XcReflect;
 
+#[cfg(feature = "show-bytes")]
+pub mod bytesof;
 mod errors;
 mod hlr;
 mod lex;

@@ -7,6 +7,7 @@ use crate::{
 };
 
 use super::{Library, TypeInterfaceLib};
+use std::collections::HashMap;
 
 pub struct StdLib;
 

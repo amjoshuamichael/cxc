@@ -114,7 +114,37 @@ impl Unit {
             comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
         }
 
-        type_from_decl(&*self.comp_data, decl)
+        let typ = type_from_decl(&*self.comp_data, decl)?;
+
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(
+                std::mem::size_of::<T>(),
+                typ.size(),
+                "Improper reflection. {} in cxc has size {}, and {} in rust has size {}",
+                typ.name(),
+                typ.size(),
+                std::any::type_name::<T>(),
+                std::mem::size_of::<T>(),
+            );
+            if let Ok(xc_opt) = self
+                .comp_data
+                .get_spec(&"Option<T>".into(), &vec![typ.clone()])
+            {
+                let xc_opt_size = xc_opt.size();
+                assert_eq!(
+                    std::mem::size_of::<Option<T>>(),
+                    xc_opt_size,
+                    "Improper reflection. Option<{}> in cxc has size {}, and Option<{}> in rust has size {}. This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.",
+                    typ.name(),
+                    xc_opt_size,
+                    std::any::type_name::<T>(),
+                    std::mem::size_of::<Option<T>>(),
+                );
+            }
+        }
+
+        Some(typ)
     }
 }
 

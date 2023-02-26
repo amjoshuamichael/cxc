@@ -9,7 +9,7 @@ use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 
-/// The HLR Data Type.
+#[derive(Debug)]
 pub struct FuncRep {
     pub tree: ExprTree,
     pub comp_data: Rc<CompData>,

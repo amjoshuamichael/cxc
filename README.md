@@ -35,6 +35,7 @@ fn main() {
 ```
 
 # ⚠️ WARNING ⚠️  ( USE AT YOUR OWN RISK )
+**Pardon our dust!**
 * The compiler is very young, and there are still many bugs. (If you are using the language, please feel free to throw any issue reports my way! Any feedback of any kind is greatly appreciated!!)
 * `cxc` is a low-level language, so it does a lot of low-level and unsafe operations at runtime. this means that the communication between `cxc` and rust code is unsafe and unstable. Because the compiler is not mature, many of the FFI and ABI bugs have not been ironed out.
 * This also isn't a quick and easy tool for scripting. [There are many (better) options for adding scripting to an application.](https://www.boringcactus.com/2020/09/16/survey-of-rust-embeddable-scripting-languages.html) `cxc` is designed for applications that are serious about scripting, or where the ability to script is a main feature.

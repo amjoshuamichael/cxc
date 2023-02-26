@@ -31,7 +31,7 @@ impl Kind for RefType {
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
         if self.base.is_void() {
-            context.i32_type().ptr_type(AddressSpace::default()).into()
+            context.i8_type().ptr_type(AddressSpace::default()).into()
         } else {
             self.base
                 .to_basic_type(context)
@@ -124,7 +124,7 @@ impl Kind for StructType {
             .collect();
 
         context
-            .struct_type(&field_types[..], true)
+            .struct_type(&field_types[..], false)
             .as_any_type_enum()
     }
 }
@@ -133,17 +133,13 @@ impl Kind for SumType {
     fn to_string(&self) -> String { format!("/{:?}/", self.variants) }
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
-        // find the largest type in variants
-        let largest_variant = self.largest_variant().to_basic_type(context);
-
-        if self.is_discriminant_nullref() {
-            context
-                .struct_type(&[largest_variant], false)
-                .as_any_type_enum()
-        } else {
-            context
-                .struct_type(&[context.i32_type().as_basic_type_enum(), largest_variant], false)
-                .as_any_type_enum()
+        let size = self.largest_variant_as_struct().size() as u32;
+        match size {
+            0..=8 => context.custom_width_int_type(size * 8).into(),
+            9..=16 => context
+                .struct_type(&*vec![context.i32_type().into(); size as usize / 4], false)
+                .into(),
+            17.. => context.custom_width_int_type(size * 8).into(),
         }
     }
 }
@@ -152,15 +148,7 @@ impl Kind for VariantType {
     fn to_string(&self) -> String { format!("{:?}.{}", self.parent, self.tag) }
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
-        context
-            .struct_type(
-                &[
-                    context.i32_type().as_basic_type_enum(),
-                    self.variant_type.to_basic_type(context),
-                ],
-                false,
-            )
-            .as_any_type_enum()
+        self.as_struct().to_basic_type(context).as_any_type_enum()
     }
 }
 
@@ -200,7 +188,7 @@ impl Kind for BoolType {
 }
 
 impl Kind for ArrayType {
-    fn to_string(&self) -> String { format!("[{:?}; {}]", self.base, self.count) }
+    fn to_string(&self) -> String { format!("[{}]{:?}", self.count, self.base) }
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
         self.base

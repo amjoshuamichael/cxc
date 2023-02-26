@@ -276,7 +276,6 @@ impl NodeData {
                     other => other.to_string(),
                 } + " ";
 
-                println!("{}", lit);
                 lit += "{ \n";
 
                 for field in fields.iter() {
@@ -293,8 +292,6 @@ impl NodeData {
                 }
 
                 lit += "} \n";
-
-                println!("{}", lit);
 
                 lit
             },

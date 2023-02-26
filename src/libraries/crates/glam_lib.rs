@@ -1,6 +1,6 @@
 use crate::XcReflect;
 use crate::{library::Library, ExternalFuncAdd, Type, TypeRelation};
-use glam::{Mat2, Mat3, Mat4, Vec2, Vec3};
+use glam::{Mat2, Mat3, Mat4, Vec2, Vec3, Vec4};
 
 pub struct GlamLib;
 
@@ -30,14 +30,25 @@ impl Library for GlamLib {
             },
         );
 
-        unit.add_opaque_type::<Mat4>();
-        unit.add_opaque_type::<Mat3>();
-        unit.add_opaque_type::<Mat2>();
+        unit.add_reflect_type::<Mat3>();
+        // unit.add_reflect_type::<Mat4>();
     }
 }
 
 extern "C" fn new_vec3(x: f32, y: f32, z: f32) -> Vec3 { Vec3::new(x, y, z) }
 extern "C" fn new_vec2(x: f32, y: f32) -> Vec2 { Vec2::new(x, y) }
+
+impl XcReflect for Vec4 {
+    fn alias_code() -> String {
+        "Vec4 = {
+            x: f32,
+            y: f32,
+            z: f32,
+            w: f32
+        }"
+        .into()
+    }
+}
 
 impl XcReflect for Vec3 {
     fn alias_code() -> String {
@@ -55,6 +66,29 @@ impl XcReflect for Vec2 {
         "Vec2 = {
             x: f32,
             y: f32
+        }"
+        .into()
+    }
+}
+
+impl XcReflect for Mat3 {
+    fn alias_code() -> String {
+        "Mat3 = {
+            x_axis: Vec3,
+            y_axis: Vec3,
+            z_axis: Vec3
+        }"
+        .into()
+    }
+}
+
+impl XcReflect for Mat4 {
+    fn alias_code() -> String {
+        "Mat4 = {
+            x_axis: Vec4,
+            y_axis: Vec4,
+            z_axis: Vec4,
+            w_axis: Vec4
         }"
         .into()
     }

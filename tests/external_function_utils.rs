@@ -79,8 +79,6 @@ fn type_level_functions() {
                 ++
             }
 
-            print(42)
-            print(defaulted_with_i32.thei32)
             assert_eq<i32>(defaulted_with_i32.thei32, 0)
         }
         ",

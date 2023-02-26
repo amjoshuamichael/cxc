@@ -142,11 +142,16 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
                 Expr::TypedValue(type_spec, box expr).into()
             }
         },
-        Tok::LCurly
-            if matches!(
-                lexer.peek_by(1)?,
-                Tok::VarName(_) | Tok::DoublePlus | Tok::DoubleMinus
-            ) =>
+        Tok::LCurly 
+            if matches!( 
+                (lexer.peek_by(1)?, lexer.peek_by(2)?),
+                (Tok::DoublePlus, _) |
+                (Tok::DoubleMinus, _) 
+            ) || 
+            (
+                matches!(lexer.peek_by(1)?, Tok::VarName(_)) && 
+                !matches!(lexer.peek_by(2)?, Tok::RCurly | Tok::Comma)
+            ) => 
         {
             parse_struct_literal(lexer)?.into()
         },

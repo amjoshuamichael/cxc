@@ -159,19 +159,18 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 fn handle_other_calls(hlr: &mut FuncRep) {
     for call_id in hlr.tree.ids_in_order().drain(..).rev() {
         let data = hlr.tree.get(call_id);
-        if !matches!(data, NodeData::Call { .. }) {
-            continue;
-        };
 
-        match data.ret_type().return_style() {
-            ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
-            ReturnStyle::MoveIntoI64I64 => todo!(),
-            ReturnStyle::ThroughI64
-            | ReturnStyle::ThroughI64I32
-            | ReturnStyle::ThroughI64I64 => {
-                format_call_returning_struct(hlr, call_id);
-            },
-            ReturnStyle::Direct | ReturnStyle::Void => {},
+        if let NodeData::Call { ref f, .. } = data && !hlr.comp_data.name_is_intrinsic(&f) {
+            match data.ret_type().return_style() {
+                ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
+                ReturnStyle::MoveIntoI64I64 => todo!(),
+                ReturnStyle::ThroughI64
+                | ReturnStyle::ThroughI64I32
+                | ReturnStyle::ThroughI64I64 => {
+                    format_call_returning_struct(hlr, call_id);
+                },
+                ReturnStyle::Direct | ReturnStyle::Void => {},
+            }
         }
     }
 }

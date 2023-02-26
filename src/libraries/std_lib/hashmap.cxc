@@ -1,0 +1,4 @@
+RustHashMap<T, S> = { 
+    a_ptr: &u8,
+    other_data: [5]i64,
+}

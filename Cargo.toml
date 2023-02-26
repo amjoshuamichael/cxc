@@ -26,6 +26,7 @@ default = ["cxc_derive", "compiler"]
 xc-debug = []
 llvm-debug = []
 compiler = []
+show-bytes = []
 
 [profile.bench]
 debug = true

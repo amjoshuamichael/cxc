@@ -90,7 +90,7 @@ impl Type {
                 }
 
                 if sum_type.is_discriminant_nullref() {
-                    sum_type.largest_variant().return_style()
+                    sum_type.largest_variant_data().return_style()
                 } else {
                     return_style_from_size(self.size())
                 }
@@ -468,13 +468,21 @@ impl SumType {
             .unwrap()
     }
 
-    pub fn largest_variant(&self) -> Type {
+    pub fn largest_variant_data(&self) -> Type {
+        self.variants[self.largest_variant_index()].1.clone()
+    }
+
+    pub fn largest_variant_as_struct(&self) -> Type {
+        VariantType::as_struct_no_parent(self, &self.largest_variant_data())
+    }
+
+    pub fn largest_variant_index(&self) -> usize {
         self.variants
             .iter()
-            .map(|(_, typ)| typ)
-            .max_by_key(|typ| typ.size())
+            .enumerate()
+            .max_by_key(|(_, (_, typ))| typ.size())
             .unwrap()
-            .clone()
+            .0
     }
 
     pub fn is_discriminant_nullref(&self) -> bool {
@@ -504,10 +512,40 @@ pub struct VariantType {
 
 impl VariantType {
     pub fn as_struct(&self) -> Type {
-        Type::new_struct(vec![
-            ("tag".into(), Type::i(32)),
-            ("data".into(), self.variant_type.clone()),
-        ])
+        let TypeEnum::Sum(parent) = self.parent.as_type_enum() else { panic!() };
+
+        Self::as_struct_no_parent(parent, &self.variant_type)
+    }
+
+    pub fn as_struct_no_parent(parent: &SumType, variant_type: &Type) -> Type {
+        let tag = ("tag".into(), Type::i(8));
+
+        let mut fields = match variant_type.as_type_enum() {
+            TypeEnum::Struct(StructType { fields, .. }) => fields.clone(),
+            _ => vec![("data".into(), variant_type.clone())],
+        };
+
+        if !parent.is_discriminant_nullref() {
+            fields.insert(0, tag);
+        }
+
+        let as_struct_no_padding = Type::new_struct(fields.clone());
+
+        let padding_amount = if &parent.largest_variant_data() != variant_type {
+            parent.largest_variant_as_struct().size() - as_struct_no_padding.size()
+        } else {
+            0
+        };
+
+        if padding_amount > 0 {
+            fields.push(("padding".into(), Type::i(8).get_array(padding_amount as u32)));
+        }
+        Type::new_struct(fields)
+    }
+
+    pub fn parent_as_sum_type(&self) -> SumType {
+        let TypeEnum::Sum(sum_type) = self.parent.as_type_enum() else { panic!() };
+        sum_type.clone()
     }
 }
 

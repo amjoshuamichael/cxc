@@ -113,7 +113,7 @@ fn rc() {
 }
 
 #[test]
-fn option() {
+fn basic_option() {
     xc_test!(
         use StdLib;
         "
@@ -135,12 +135,45 @@ fn option_rc() {
             main(); Option< Rc<i32> > {
                 x: i32 = 90
                 rc: Rc<i32> = Rc<i32>:new(x)
-                output: Option< Rc<i32> > = Option< Rc<i32> >.Some rc
+                output: Option< Rc<i32> > = Option< Rc<i32> >.Some { rc }
 
                 ; output
             }
         ";
         Some(Rc::new(90))
+    )
+}
+
+// TODO: add ability to return sum types directly
+#[test]
+fn option_rc_and_int64() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< { i64, Rc<i32> } > {
+                output: Option< { i64, Rc<i32> } > = 
+                    Option< { i64, Rc<i32> } >.Some { i64 4, Rc<i32>:new(90) }
+
+                ; output
+            }
+        ";
+        Some((4i64, Rc::new(90)))
+    )
+}
+
+#[test]
+fn option_rc_and_int32() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< { i32, Rc<i32> } > {
+                output: Option< { i32, Rc<i32> } > = 
+                    Option< { i32, Rc<i32> } >.Some { i32 4, Rc<i32>:new(90) }
+
+                ; output
+            }
+        ";
+        Some((4, Rc::new(90)))
     )
 }
 
@@ -153,7 +186,7 @@ fn option_vec() {
                 x: i32 = 90
                 vec: Vec<i32> = Vec<i32>:new()
                 vec.push(x)
-                output: Option< Vec<i32> > = Option< Vec<i32> >.Some vec
+                output: Option< Vec<i32> > = Option< Vec<i32> >.Some { vec }
 
                 ; output
             }
@@ -184,7 +217,7 @@ fn bigger_option() {
         "
             main(); Option<{i32, f32, i32}> {
                 output: Option<{i32, f32, i32}> = 
-                    Option<{i32, f32, i32}>.Some{ {i32, f32, i32} { 10, 20.0, 30 }}
+                    Option<{i32, f32, i32}>.Some { 10, 20.0, 30 }
 
                 ; output
             }
