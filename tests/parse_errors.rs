@@ -59,7 +59,6 @@ fn in_struct_expression() {
 }
 
 #[test]
-#[should_panic]
 fn unknown_type() {
     let mut unit = Unit::new();
 
@@ -73,12 +72,28 @@ fn unknown_type() {
         )
         .unwrap_err();
     let mut iter = errors.drain(..);
+    assert_matches!(iter.next(), Some(CErr::Type(_)));
+    assert_matches!(iter.next(), None);
+}
+
+// TODO: analyze num of delimiters in code and return error if they are
+// improperly matched
+#[test]
+#[ignore]
+fn empty_block() {
+    let mut unit = Unit::new();
+
+    let mut errors = unit
+        .push_script(
+            r#"
+            main()) {
+                # code ..
+            }
+            "#,
+        )
+        .unwrap_err();
+    let mut iter = errors.drain(..);
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), None);
 }
-
-// TODO: this throws an error that isn't caught
-// function(arg: &Arg)) {
-//    # code..
-//}

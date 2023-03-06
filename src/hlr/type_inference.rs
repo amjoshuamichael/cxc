@@ -371,7 +371,7 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
             Struct(fields) => {
                 let mut found_field = false;
 
-                for (index, (field_name, field_spec)) in fields.iter().enumerate() {
+                for (field_name, field_spec) in fields.iter() {
                     if spec_from_perspective_of_generic(field_spec, generic_index).is_some() {
                         lhs = StructMember(box lhs, field_name.clone());
                         rhs = field_spec.clone();

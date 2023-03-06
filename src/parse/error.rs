@@ -65,6 +65,7 @@ pub enum ParseError {
     UnexpectedTok { got: Tok, expected: Vec<TokName> },
     ImproperExpression,
     ArgListWithImproperPredecessor,
+    BadVariantName(TypeName),
 }
 
 #[derive(Debug, Clone, PartialEq)]

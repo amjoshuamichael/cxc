@@ -420,33 +420,6 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             Some(val.as_any_value_enum())
         },
-        StructLit {
-            var_type: struct_type,
-            fields,
-            ..
-        } => {
-            // TODO: set each field individually instead of using const_struct
-            let mut compiled_fields = Vec::new();
-
-            let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
-
-            for field_index in 0..struct_type.fields.len() {
-                let field = fields
-                    .iter()
-                    .find(|(f, _)| struct_type.get_field_index(f) == field_index)
-                    .unwrap();
-
-                let compiled_field: BasicValueEnum =
-                    compile(fcs, field.1).unwrap().try_into().unwrap();
-                compiled_fields.push(compiled_field);
-            }
-
-            Some(
-                fcs.context
-                    .const_struct(&compiled_fields[..], true)
-                    .as_any_value_enum(),
-            )
-        },
         Return { to_return, .. } => {
             if let Some(to_return) = to_return {
                 let ret_val: BasicValueEnum =
@@ -515,6 +488,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             Some(val.as_any_value_enum())
         },
+        NodeData::StructLit { .. } => todo!(),
     };
 
     if crate::LLVM_DEBUG {
@@ -556,7 +530,7 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
                 .as_type_enum() 
                     else { panic!() };
 
-            let field_index = struct_type.get_field_index(&field);
+            let field_index = struct_type.get_field_index(&field).unwrap();
 
             let object = compile_as_ptr_unless_already_ptr(fcs, object);
 

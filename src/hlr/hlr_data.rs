@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
-use crate::errors::TResult;
+use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
@@ -34,7 +34,11 @@ impl DataFlowInfo {
 }
 
 impl FuncRep {
-    pub fn from_code(code: FuncCode, comp_data: Rc<CompData>, info: UniqueFuncInfo) -> Self {
+    pub fn from_code(
+        code: FuncCode,
+        comp_data: Rc<CompData>,
+        info: UniqueFuncInfo,
+    ) -> CResult<Self> {
         let mut new = FuncRep {
             tree: ExprTree::default(),
             ret_type: comp_data
@@ -49,7 +53,7 @@ impl FuncRep {
         for (a, arg) in code.args.iter().enumerate() {
             new.identifiers.push(arg.name.clone());
 
-            let typ = new.comp_data.get_spec(&arg.type_spec, &new.info).unwrap();
+            let typ = new.comp_data.get_spec(&arg.type_spec, &new.info)?;
 
             new.data_flow.insert(
                 arg.name.clone(),
@@ -71,7 +75,7 @@ impl FuncRep {
         let new_root = new.add_expr(code.code, new.tree.root);
         new.tree.root = new_root;
 
-        new
+        Ok(new)
     }
 
     fn args(&self) -> Vec<(VarName, DataFlowInfo)> {

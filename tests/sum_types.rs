@@ -1,8 +1,8 @@
 #![allow(unused_must_use)]
 mod test_utils;
 use cxc::{library::StdLib, Unit};
-
-use test_utils::{xc_test, Point2D};
+use std::rc::Rc;
+use test_utils::{xc_test, BoolMM, BoolMMM, BoolMore, Point2D, Point3D};
 
 #[derive(Debug, PartialEq)]
 pub enum IntOrFloat {
@@ -223,4 +223,359 @@ fn rather_large_enum_v3() {
         ";
         RatherLargeEnum::V3
     );
+}
+
+#[test]
+fn basic_option() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option<i32> {
+                output: Option<i32> = Option<i32>.Some { 10 }
+
+                ; output
+            }
+        ";
+        Some(10)
+    )
+}
+
+#[test]
+fn option_rc() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< Rc<i32> > {
+                x: i32 = 90
+                rc: Rc<i32> = Rc<i32>:new(x)
+                output: Option< Rc<i32> > = Option< Rc<i32> >.Some { rc }
+
+                ; output
+            }
+        ";
+        Some(Rc::new(90))
+    )
+}
+
+// TODO: add ability to return sum types directly
+#[test]
+fn option_rc_and_int64() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< { i64, Rc<i32> } > {
+                output: Option< { i64, Rc<i32> } > = 
+                    Option< { i64, Rc<i32> } >.Some { i64 4, Rc<i32>:new(90) }
+
+                ; output
+            }
+        ";
+        Some((4i64, Rc::new(90)))
+    )
+}
+
+#[test]
+fn option_rc_and_int32() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< { i32, Rc<i32> } > {
+                output: Option< { i32, Rc<i32> } > = 
+                    Option< { i32, Rc<i32> } >.Some { i32 4, Rc<i32>:new(90) }
+
+                ; output
+            }
+        ";
+        Some((4, Rc::new(90)))
+    )
+}
+
+#[test]
+fn option_vec() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option< Vec<i32> > {
+                x: i32 = 90
+                vec: Vec<i32> = Vec<i32>:new()
+                vec.push(x)
+                output: Option< Vec<i32> > = Option< Vec<i32> >.Some { vec }
+
+                ; output
+            }
+        ";
+        Some(vec![90])
+    )
+}
+
+#[test]
+fn option_default() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option<i32> {
+                output: Option<i32> = Option<i32>:default()
+
+                ; output
+            }
+        ";
+        Option::<i32>::None
+    )
+}
+
+#[test]
+fn option_numbers3_once() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option<Point3D> {
+                output: Option<Point3D> = 
+                    Option<Point3D>.Some { x = 10, y = 20, z = 30 }
+
+                ; output
+            }
+        ";
+        Option::<Point3D>::Some(Point3D { x: 10, y: 20, z: 30 })
+    )
+}
+
+#[test]
+fn option_numbers3_twice() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option<{Point3D, Point3D}> {
+                output: Option<{Point3D, Point3D}> = 
+                    Option<{Point3D, Point3D}>.Some {
+                        { x = 394, y = 744, z = 53 },
+                        { x = 94, y = 49, z = 384 }
+                    }
+
+                ; output
+            }
+        ";
+        Option::<(Point3D, Point3D)>::Some((
+            Point3D { x: 394, y: 744, z: 53 },
+            Point3D { x: 94, y: 49, z: 384 }
+        ))
+    )
+}
+
+#[test]
+fn bigger_option() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); Option<{i32, f32, i32}> {
+                output: Option<{i32, f32, i32}> = 
+                    Option<{i32, f32, i32}>.Some { 10, 20.0, 30 }
+
+                ; output
+            }
+        ";
+        Option::<(i32, f32, i32)>::Some((10, 20.0, 30))
+    )
+}
+
+#[test]
+fn bool_and_then_some_true() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMore {
+                output: BoolMore = BoolMore.Bool { true }
+
+                ; output
+            }
+        ";
+        BoolMore::Bool(true)
+    )
+}
+
+#[test]
+fn bool_and_then_some_false() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMore {
+                output: BoolMore = BoolMore.Bool { false }
+
+                ; output
+            }
+        ";
+        BoolMore::Bool(false)
+    )
+}
+
+#[test]
+fn bool_and_then_some_bool() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); { u8, u8 } {
+                output: { BoolMore, BoolMore } =
+                    { BoolMore.Bool { false }, BoolMore.Bool { true } }
+
+                ; output
+            }
+        ";
+        (BoolMore::Bool(false), BoolMore::Bool(true))
+    )
+}
+
+#[test]
+fn bool_and_then_some_variants() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); { BoolMore, BoolMore, BoolMore, BoolMore } {
+                output: { BoolMore, BoolMore, BoolMore, BoolMore } =
+                    { BoolMore.V5 { }, BoolMore.V3 { }, BoolMore.V4 { }, BoolMore.V2 { } } 
+
+                ; output
+            }
+        ";
+        (BoolMore::V5, BoolMore::V3, BoolMore::V4, BoolMore::V2)
+    )
+}
+
+#[test]
+fn bool_mm_t() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMM {
+                output: BoolMM = BoolMM.BoolM { BoolMore.Bool { true } }
+
+                ; output
+            }
+        ";
+        BoolMM::BoolM(BoolMore::Bool(true))
+    )
+}
+
+#[test]
+fn bool_mm_f() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMM {
+                output: BoolMM = BoolMM.BoolM { BoolMore.Bool { false } }
+
+                ; output
+            }
+        ";
+        BoolMM::BoolM(BoolMore::Bool(false))
+    )
+}
+
+#[test]
+fn bool_mm_v1() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMM {
+                output: BoolMM = BoolMM.BoolM { BoolMore.V2 { } }
+
+                ; output
+            }
+        ";
+        BoolMM::BoolM(BoolMore::V2)
+    )
+}
+
+#[test]
+fn bool_mm_v2() {
+    xc_test!(
+        use StdLib;
+        "
+            # BoolMore
+
+            main(); BoolMM {
+                output: BoolMM = BoolMM.V6 {}
+
+                ; output
+            }
+        ";
+        BoolMM::V6
+    )
+}
+
+#[test]
+fn bool_mmm_t() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMMM {
+                output: BoolMMM = BoolMMM.BoolMM { BoolMM.BoolM { BoolMore.Bool { true } } }
+
+                ; output
+            }
+        ";
+        BoolMMM::BoolMM(BoolMM::BoolM(BoolMore::Bool(true)))
+    )
+}
+
+#[test]
+fn bool_mmm_f() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMMM {
+                output: BoolMMM = BoolMMM.BoolMM { BoolMM.BoolM { BoolMore.Bool { false } } }
+
+                ; output
+            }
+        ";
+        BoolMMM::BoolMM(BoolMM::BoolM(BoolMore::Bool(false)))
+    )
+}
+
+#[test]
+fn bool_mmm_v1() {
+    xc_test!(
+        use StdLib;
+        "
+            main(); BoolMMM {
+                output: BoolMMM = BoolMMM.BoolMM { BoolMM.BoolM { BoolMore.V2 { } } }
+
+                ; output
+            }
+        ";
+        BoolMMM::BoolMM(BoolMM::BoolM(BoolMore::V2))
+    )
+}
+
+#[test]
+fn bool_mmm_v2() {
+    xc_test!(
+        use StdLib;
+        "
+            # BoolMore
+
+            main(); BoolMMM {
+                output: BoolMMM = BoolMMM.BoolMM { BoolMM.V6 { } }
+
+                ; output
+            }
+        ";
+        BoolMMM::BoolMM(BoolMM::V6)
+    )
+}
+
+#[test]
+fn bool_mmm_v3() {
+    xc_test!(
+        use StdLib;
+        "
+            # BoolMore
+
+            main(); BoolMMM {
+                output: BoolMMM = BoolMMM.V11 { }
+
+                ; output
+            }
+        ";
+        BoolMMM::V11
+    )
 }

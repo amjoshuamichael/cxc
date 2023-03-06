@@ -79,7 +79,6 @@ impl ToString for ExprNode {
     }
 }
 
-// TODO: combine SetVar and MakeVar
 #[derive(Clone, Debug)]
 pub enum NodeData {
     Number {
@@ -132,7 +131,7 @@ pub enum NodeData {
     Member {
         ret_type: Type,
         object: ExprID,
-        field: VarName, // TODO: use an index instead of a name
+        field: VarName,
     },
     Index {
         ret_type: Type,
@@ -368,7 +367,6 @@ impl NodeData {
                 call
             },
             FirstClassCall { f, a: args, .. } => {
-                // TODO: support is_method
                 let mut call = "(".into();
                 call += &*tree.get(*f).to_string(tree);
                 call += ")";

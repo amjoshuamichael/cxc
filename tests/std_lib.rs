@@ -27,7 +27,7 @@ fn default_vec_with_push() {
         "
             main(); Vec<i32> {
                 output: Vec<i32> = Vec<i32>:default()                
-                output.push<i32>(432)
+                output.push(432)
 
                 ; output
             }
@@ -62,7 +62,7 @@ fn vec_push_and_check() {
 
             current_index: i32 = 0
             @ current_index < number_of_checks {
-                num_vec.push<i32>(current_index)
+                num_vec.push(current_index)
 
                 current_index = current_index + 1
             }
@@ -77,7 +77,7 @@ fn vec_push_and_check() {
 
             current_index: i64 = 0
             @ current_index < number_of_checks {
-                two_num_vec.push<TwoNums>(two_nums_from_one(current_index))
+                two_num_vec.push(two_nums_from_one(current_index))
 
                 current_index = current_index + 1
             }
@@ -109,120 +109,6 @@ fn rc() {
         }
         ";
         Rc::new(90i32)
-    )
-}
-
-#[test]
-fn basic_option() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option<i32> {
-                output: Option<i32> = Option<i32>.Some { 10 }
-
-                ; output
-            }
-        ";
-        Some(10)
-    )
-}
-
-#[test]
-fn option_rc() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option< Rc<i32> > {
-                x: i32 = 90
-                rc: Rc<i32> = Rc<i32>:new(x)
-                output: Option< Rc<i32> > = Option< Rc<i32> >.Some { rc }
-
-                ; output
-            }
-        ";
-        Some(Rc::new(90))
-    )
-}
-
-// TODO: add ability to return sum types directly
-#[test]
-fn option_rc_and_int64() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option< { i64, Rc<i32> } > {
-                output: Option< { i64, Rc<i32> } > = 
-                    Option< { i64, Rc<i32> } >.Some { i64 4, Rc<i32>:new(90) }
-
-                ; output
-            }
-        ";
-        Some((4i64, Rc::new(90)))
-    )
-}
-
-#[test]
-fn option_rc_and_int32() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option< { i32, Rc<i32> } > {
-                output: Option< { i32, Rc<i32> } > = 
-                    Option< { i32, Rc<i32> } >.Some { i32 4, Rc<i32>:new(90) }
-
-                ; output
-            }
-        ";
-        Some((4, Rc::new(90)))
-    )
-}
-
-#[test]
-fn option_vec() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option< Vec<i32> > {
-                x: i32 = 90
-                vec: Vec<i32> = Vec<i32>:new()
-                vec.push(x)
-                output: Option< Vec<i32> > = Option< Vec<i32> >.Some { vec }
-
-                ; output
-            }
-        ";
-        Some(vec![90])
-    )
-}
-
-#[test]
-fn option_default() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option<i32> {
-                output: Option<i32> = Option<i32>:default()
-
-                ; output
-            }
-        ";
-        Option::<i32>::None
-    )
-}
-
-#[test]
-fn bigger_option() {
-    xc_test!(
-        use StdLib;
-        "
-            main(); Option<{i32, f32, i32}> {
-                output: Option<{i32, f32, i32}> = 
-                    Option<{i32, f32, i32}>.Some { 10, 20.0, 30 }
-
-                ; output
-            }
-        ";
-        Option::<(i32, f32, i32)>::Some((10, 20.0, 30))
     )
 }
 

@@ -245,8 +245,10 @@ pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 pub fn parse_sum(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     fn parse_variant(lexer: &mut TypeParseContext) -> ParseResult<(TypeName, TypeSpec)> {
         let variant_name = lexer.next_tok()?.type_name()?;
-        // TODO: throw error if variant_name is not a regular type name, and is a
-        // primitive instead, e.g. `i32` or `f64`
+
+        if !matches!(variant_name, TypeName::Other(_)) {
+            return Err(ParseError::BadVariantName(variant_name));
+        }
 
         lexer.assert_next_tok_is(Tok::Colon)?;
 

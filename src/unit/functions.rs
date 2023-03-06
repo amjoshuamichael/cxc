@@ -255,8 +255,8 @@ impl CompData {
         info: &UniqueFuncInfo,
         context: &'static Context,
         module: &Module<'static>,
-    ) {
-        let function_type = self.get_func_type(info).unwrap();
+    ) -> CResult<()> {
+        let function_type = self.get_func_type(info)?;
         let TypeEnum::Func(llvm_function_type) = function_type.as_type_enum()
             else { panic!() };
 
@@ -270,6 +270,8 @@ impl CompData {
         self.func_types.insert(info.clone(), function_type.clone());
         self.globals
             .insert(info.name.clone(), (function_type, empty_function.as_global_value()));
+
+        Ok(())
     }
 
     pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<Type> {
@@ -277,7 +279,7 @@ impl CompData {
             return Ok(cached_type.clone());
         }
 
-        let code = self.get_code(info.clone())?; // TODO: return CResult
+        let code = self.get_code(info.clone())?;
 
         let ret_type = &self.get_spec(&code.ret_type, info)?;
 

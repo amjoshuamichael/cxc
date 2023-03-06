@@ -10,11 +10,13 @@ use std::sync::Arc;
 
 pub mod could_come_from;
 pub mod fields_iter;
+pub mod invalid_state;
 mod kind;
 mod nested_field_count;
 mod size;
 
 use inkwell::types::FunctionType;
+use invalid_state::InvalidState;
 pub use kind::Kind;
 
 use self::fields_iter::FieldsIter;
@@ -33,6 +35,7 @@ impl Default for Type {
 #[derive(PartialEq, Eq, Debug)]
 pub enum ReturnStyle {
     Direct,
+    ThroughI32,
     ThroughI64,
     ThroughI64I32,
     ThroughI64I64,
@@ -56,10 +59,10 @@ impl Type {
                 ReturnStyle::ThroughI64I64
             } else if size == 12 {
                 ReturnStyle::ThroughI64I32
-            } else if size == 8 {
+            } else if size <= 8 {
                 ReturnStyle::ThroughI64
-            } else if size == 4 {
-                ReturnStyle::Direct
+            } else if size <= 4 {
+                ReturnStyle::ThroughI32
             } else {
                 todo!("cannot find return style for type of size {size}")
             }
@@ -67,7 +70,7 @@ impl Type {
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
-            Struct(_) | Array(_) | Opaque(_) | Variant(_) => {
+            Struct(_) | Array(_) | Variant(_) => {
                 if self.size() > 16 {
                     return ReturnStyle::Sret;
                 }
@@ -75,6 +78,7 @@ impl Type {
                 let mut prim_iter = PrimitiveFieldsIter::new(self.clone());
                 if let Some(first_field) = prim_iter.next() && 
                     let Some(second_field) = prim_iter.next() {
+
                     if first_field.size() == 4 && second_field.size() == 8 {
                         ReturnStyle::MoveIntoI64I64
                     } else {
@@ -89,7 +93,7 @@ impl Type {
                     return ReturnStyle::Sret;
                 }
 
-                if sum_type.is_discriminant_nullref() {
+                if sum_type.has_internal_discriminant() {
                     sum_type.largest_variant_data().return_style()
                 } else {
                     return_style_from_size(self.size())
@@ -113,6 +117,7 @@ impl Type {
 
     pub fn raw_return_type(&self) -> Type {
         match self.return_style() {
+            ReturnStyle::ThroughI32 => Type::i(32),
             ReturnStyle::ThroughI64 => Type::i(64),
             ReturnStyle::ThroughI64I32 => Type::new_struct(vec![
                 (VarName::from("0"), Type::i(64)),
@@ -227,21 +232,6 @@ impl Type {
         Type::new(TypeEnum::Sum(SumType { variants }))
     }
 
-    pub fn opaque_with_size(size: u32, name: &str) -> Type {
-        Type::new(TypeEnum::Opaque(OpaqueType { size })).with_name(TypeName::from(name))
-    }
-
-    pub fn opaque_type<T>() -> Type {
-        let full_name = std::any::type_name::<T>();
-        let scope_end_position = full_name.rfind(":").unwrap();
-        let basic_name = &full_name[scope_end_position..];
-
-        Type::new(TypeEnum::Opaque(OpaqueType {
-            size: std::mem::size_of::<T>() as u32,
-        }))
-        .with_name(TypeName::from(basic_name))
-    }
-
     pub fn unknown() -> Type { Type::new(TypeEnum::Unknown) }
 
     pub fn void() -> Type { Type::new(TypeEnum::Void) }
@@ -292,6 +282,7 @@ impl Type {
     pub fn is_unknown(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Unknown) }
     pub fn is_known(&self) -> bool { !self.is_unknown() }
     pub fn is_void(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Void) }
+    pub fn is_empty(&self) -> bool { self == &Type::empty() }
 }
 
 impl Into<TypeSpec> for Type {
@@ -352,7 +343,6 @@ pub enum TypeEnum {
     Struct(StructType),
     Sum(SumType),
     Variant(VariantType),
-    Opaque(OpaqueType),
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
@@ -381,7 +371,6 @@ impl Deref for TypeEnum {
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
             TypeEnum::Bool(t) => t,
-            TypeEnum::Opaque(t) => t,
             TypeEnum::Sum(t) => t,
             TypeEnum::Variant(t) => t,
             TypeEnum::Void => &VOID_STATIC,
@@ -422,11 +411,11 @@ impl StructType {
         return Err(TErr::FieldNotFound(self.clone(), field_name.clone()));
     }
 
-    pub fn get_field_index(&self, field_name: &VarName) -> usize {
+    pub fn get_field_index(&self, field_name: &VarName) -> TResult<usize> {
         self.fields
             .iter()
             .position(|field| field.0 == *field_name)
-            .unwrap()
+            .ok_or(TErr::FieldNotFound(self.clone(), field_name.clone()))
     }
 
     pub fn is_tuple(&self) -> bool { self.fields.len() == 0 || &*self.fields[0].0 == "0" }
@@ -485,18 +474,34 @@ impl SumType {
             .0
     }
 
-    pub fn is_discriminant_nullref(&self) -> bool {
-        if self.variants.len() == 2
-            && self.variants[0].1 == Type::empty()
-            && self.variants[1].1 != Type::empty()
-        {
-            let nonempty_variant = &self.variants[1].1;
+    pub fn has_internal_discriminant(&self) -> bool {
+        if self.variants.len() == 0 {
+            return false;
+        }
 
-            let first_type_is_ref = matches!(nonempty_variant.as_type_enum(), TypeEnum::Ref(_));
-            let first_type_contains_ref: bool = FieldsIter::new(nonempty_variant.clone())
-                .any(|typ| matches!(typ.as_type_enum(), TypeEnum::Ref(_)));
+        let mut nonempty_variants = self.variants.iter().filter(|(_, typ)| !typ.is_empty());
+        if let Some((_, nonempty_variant)) = nonempty_variants.next() {
+            if nonempty_variants.next().is_some() {
+                return false;
+            }
 
-            first_type_is_ref || first_type_contains_ref
+            if nonempty_variant
+                .invalid_state((self.variants.len() - 2) as u32)
+                .is_some()
+            {
+                return true;
+            }
+
+            let mut nonempty_variant_fields =
+                PrimitiveFieldsIter::new(nonempty_variant.clone());
+
+            nonempty_variant_fields.any(|variant_type| {
+                variant_type
+                    // we subtract one because the len() method counts from one, and then we
+                    // subtract one because one variant has some data
+                    .invalid_state((self.variants.len() - 2) as u32)
+                    .is_some()
+            })
         } else {
             false
         }
@@ -525,7 +530,7 @@ impl VariantType {
             _ => vec![("data".into(), variant_type.clone())],
         };
 
-        if !parent.is_discriminant_nullref() {
+        if !parent.has_internal_discriminant() {
             fields.insert(0, tag);
         }
 
@@ -589,9 +594,4 @@ static VOID_STATIC: VoidType = VoidType();
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
-}
-
-#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
-pub struct OpaqueType {
-    pub size: u32,
 }

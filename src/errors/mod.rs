@@ -38,7 +38,9 @@ pub enum TErr {
     Unknown(TypeName),
     UnknownFunc(TypeName),
     FieldNotFound(StructType, VarName),
+    NoFieldOnNonStruct(Type, VarName),
     VariantNotFound(SumType, TypeName),
+    NoVariantOnNonEnum(Type, TypeName),
     CantGetGeneric(Type, Vec<Type>, u32),
     TooFewGenerics(Vec<Type>, u8),
 }

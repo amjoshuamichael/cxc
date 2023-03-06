@@ -11,7 +11,7 @@ struct SharedNum(Rc<RefCell<usize>>);
 
 impl SharedNum {
     pub fn inc(&self) { *self.0.borrow_mut() += 1 }
-    pub fn dec(&self) { *self.0.borrow_mut() -= 1 }
+    pub fn dec(&self) { *self.0.borrow_mut() -= 1; }
     pub fn val(&self) -> usize { *self.0.borrow() }
     pub fn detach(&self) -> Self {
         let num = (*self.0).clone();

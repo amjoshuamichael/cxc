@@ -1,7 +1,9 @@
+use inkwell::context::Context;
+
 use crate::{
     lex::lex,
     parse::{self, GenericLabels, TypeDecl},
-    CompData, Type, TypeName, Unit, VarName,
+    CompData, Kind, Type, TypeName, Unit, VarName,
 };
 
 pub trait XcReflect {
@@ -109,6 +111,10 @@ impl Unit {
     pub fn add_reflect_type<T: XcReflect>(&mut self) -> Option<Type> {
         let decl = T::type_decl();
 
+        self.add_type_with_decl::<T>(decl)
+    }
+
+    pub fn add_type_with_decl<T>(&mut self, decl: TypeDecl) -> Option<Type> {
         {
             let comp_data = self.comp_data_mut();
             comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
@@ -118,29 +124,36 @@ impl Unit {
 
         #[cfg(debug_assertions)]
         {
-            assert_eq!(
-                std::mem::size_of::<T>(),
-                typ.size(),
-                "Improper reflection. {} in cxc has size {}, and {} in rust has size {}",
-                typ.name(),
-                typ.size(),
-                std::any::type_name::<T>(),
-                std::mem::size_of::<T>(),
-            );
+            fn do_size_assertion<T>(with: &Type, ex_err: &str) {
+                assert_eq!(
+                    std::mem::size_of::<T>(),
+                    with.size(),
+                    "Improper reflection. {:?} in cxc ({}) has size {},
+                        and {} in rust has size {}. {}",
+                    with,
+                    {
+                        let context = Context::create();
+                        format!(
+                            "{:?}",
+                            with.clone()
+                                .with_name(TypeName::Anonymous)
+                                .to_any_type(&context)
+                        )
+                    },
+                    with.size(),
+                    std::any::type_name::<T>(),
+                    std::mem::size_of::<T>(),
+                    ex_err
+                );
+            }
+
+            do_size_assertion::<T>(&typ, "");
+
             if let Ok(xc_opt) = self
                 .comp_data
                 .get_spec(&"Option<T>".into(), &vec![typ.clone()])
             {
-                let xc_opt_size = xc_opt.size();
-                assert_eq!(
-                    std::mem::size_of::<Option<T>>(),
-                    xc_opt_size,
-                    "Improper reflection. Option<{}> in cxc has size {}, and Option<{}> in rust has size {}. This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.",
-                    typ.name(),
-                    xc_opt_size,
-                    std::any::type_name::<T>(),
-                    std::mem::size_of::<Option<T>>(),
-                );
+                do_size_assertion::<Option<T>>(&xc_opt, "This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.");
             }
         }
 

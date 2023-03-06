@@ -153,6 +153,51 @@ pub struct Strings4 {
     pub d: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BoolMore {
+    Bool(bool),
+    V2,
+    V3,
+    V4,
+    V5,
+}
+
+impl XcReflect for BoolMore {
+    fn alias_code() -> String {
+        "BoolMore = { Bool: bool / V2: {} / V3: {} / V4: {} / V5: {} }".into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BoolMM {
+    BoolM(BoolMore),
+    V6,
+    V7,
+    V8,
+    V9,
+}
+
+impl XcReflect for BoolMM {
+    fn alias_code() -> String {
+        "BoolMM = { BoolM: BoolMore / V6: {} / V7: {} / V8: {} / V9: {} }".into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BoolMMM {
+    BoolMM(BoolMM),
+    V10,
+    V11,
+    V12,
+    V13,
+}
+
+impl XcReflect for BoolMMM {
+    fn alias_code() -> String {
+        "BoolMMM = { BoolMM: BoolMM / V10: {} / V11: {} / V12: {} / V13: {} }".into()
+    }
+}
+
 impl<'a> TestUtilsLib<'a> {
     pub(crate) fn new(code: &'a str) -> Self { TestUtilsLib { code } }
 }
@@ -181,6 +226,18 @@ impl<'a> Library for TestUtilsLib<'a> {
 
         if self.code.contains("Strings4") {
             unit.add_reflect_type::<Strings4>();
+        }
+
+        if self.code.contains("BoolMore") {
+            unit.add_reflect_type::<BoolMore>();
+        }
+
+        if self.code.contains("BoolMM") {
+            unit.add_reflect_type::<BoolMM>();
+        }
+
+        if self.code.contains("BoolMMM") {
+            unit.add_reflect_type::<BoolMMM>();
         }
     }
 }

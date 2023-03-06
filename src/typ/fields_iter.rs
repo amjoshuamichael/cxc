@@ -183,9 +183,7 @@ mod tests {
 
     #[test]
     fn fields_iter_struct() {
-        let mut iter = FieldsIter::new(Type::new(TypeEnum::Struct(StructType {
-            fields: vec![("a".into(), Type::i(32)), ("b".into(), Type::f32())],
-        })));
+        let mut iter = FieldsIter::new(Type::new_tuple(vec![Type::i(32), Type::f32()]));
 
         assert_eq!(iter.next(), Some(Type::i(32)));
         assert_eq!(iter.next(), Some(Type::f32()));

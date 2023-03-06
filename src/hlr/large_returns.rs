@@ -15,9 +15,10 @@ pub fn handle_large_returns(hlr: &mut FuncRep) {
 
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
-        ReturnStyle::ThroughI64 | ReturnStyle::ThroughI64I32 | ReturnStyle::ThroughI64I64 => {
-            return_by_through(hlr, hlr.ret_type.raw_return_type())
-        },
+        ReturnStyle::ThroughI32
+        | ReturnStyle::ThroughI64
+        | ReturnStyle::ThroughI64I32
+        | ReturnStyle::ThroughI64I64 => return_by_through(hlr, hlr.ret_type.raw_return_type()),
         ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
         ReturnStyle::Sret => return_by_pointer(hlr),
         ReturnStyle::Void | ReturnStyle::Direct => {},
@@ -164,7 +165,8 @@ fn handle_other_calls(hlr: &mut FuncRep) {
             match data.ret_type().return_style() {
                 ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::MoveIntoI64I64 => todo!(),
-                ReturnStyle::ThroughI64
+                ReturnStyle::ThroughI32
+                | ReturnStyle::ThroughI64
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64 => {
                     format_call_returning_struct(hlr, call_id);

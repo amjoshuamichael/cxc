@@ -83,42 +83,6 @@ fn generics_f() {
     )
 }
 
-// TODO: this does not work
-//#[test]
-// fn opaque_types() {
-//    let context = LLVMContext::new();
-//    let mut unit = Unit::new(&context);
-//
-//    let point_2d_opaque = unit.add_opaque_type::<Point2D>();
-//    unit.add_rust_func_explicit(
-//        "sqr_magnitude",
-//        Point2D::sqr_magnitude as *const usize,
-//        ExternalFuncAdd {
-//            arg_types: vec![point_2d_opaque.clone().get_ref()],
-//            ret_type: Type::i(32),
-//            relation: TypeRelation::MethodOf(point_2d_opaque.get_ref()),
-//            ..ExternalFuncAdd::empty()
-//        },
-//    );
-//
-//    unit.push_script(
-//        r#"
-//        hello_world(input: { i64, i64}); i32 {
-//            printable: { i64, i64 } = input
-//            print<i32>(printable.1)
-//            #output: i32 = input.sqr_magnitude()
-//            ; 23
-//        }
-//        "#,
-//    );
-//
-//    let point = Point2D { x: 2, y: 3 };
-//    let output = unsafe { unit.get_fn_by_name::<_, i32>("hello_world")(point)
-// };
-//
-//    assert_eq!(output, point.sqr_magnitude());
-//}
-
 #[test]
 fn methods() {
     xc_test!(

@@ -9,7 +9,7 @@ fn small_value() {
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
     let value = unit.get_value("double(4)");
-    let out_point = unsafe { value.consume_as::<i32>() };
+    let out_point = unsafe { value.unwrap().consume::<i32>() };
     assert_eq!(out_point, 8);
 }
 
@@ -20,7 +20,7 @@ fn medium_value() {
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
     let value = unit.get_value("Point2D { x = double(4), y = 40 }");
-    let out_point = unsafe { value.consume_as::<Point2D>() };
+    let out_point = unsafe { value.unwrap().consume::<Point2D>() };
     assert_eq!(out_point, Point2D { x: 8, y: 40 });
 }
 
@@ -31,7 +31,7 @@ fn large_value() {
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
     let value = unit.get_value("Point3D { x = 84, y = double(4), z = 40 }");
-    let out_point = unsafe { value.consume_as::<Point3D>() };
+    let out_point = unsafe { value.unwrap().consume::<Point3D>() };
     assert_eq!(out_point, Point3D { x: 84, y: 8, z: 40 });
 }
 
@@ -42,7 +42,7 @@ fn extra_large_value() {
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
     let value = unit.get_value("Numbers4 { a = 1, b = double(3), c = 8, d = 4}");
-    let out_point = unsafe { value.consume_as::<Numbers4>() };
+    let out_point = unsafe { value.unwrap().consume::<Numbers4>() };
     assert_eq!(
         out_point,
         Numbers4 {
@@ -61,7 +61,7 @@ fn jumbo_value() {
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
     let value = unit.get_value("Numbers5 { a = 1, b = 2, c = double(3), d = 4, e = 5 }");
-    let out_point = unsafe { value.consume_as::<Numbers5>() };
+    let out_point = unsafe { value.unwrap().consume::<Numbers5>() };
     assert_eq!(
         out_point,
         Numbers5 {

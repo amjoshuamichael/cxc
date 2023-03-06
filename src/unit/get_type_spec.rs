@@ -81,15 +81,18 @@ impl CompData {
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
             TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_deref().unwrap(),
             TypeSpec::StructMember(struct_type, field_name) => {
-                // TODO: errors here
                 let struct_type = self.get_spec(struct_type, generics)?.complete_deref();
-                let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { panic!() };
+                let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { 
+                    return Err(TErr::NoFieldOnNonStruct(struct_type, field_name.clone()));
+                };
 
                 struct_type.get_field_type(field_name)?.clone()
             },
             TypeSpec::SumMember(sum_type, type_name) => {
                 let sum_type = self.get_spec(sum_type, generics)?;
-                let TypeEnum::Sum(sum_type_inner) = sum_type.as_type_enum() else { panic!() };
+                let TypeEnum::Sum(sum_type_inner) = sum_type.as_type_enum() else { 
+                    return Err(TErr::NoVariantOnNonEnum(sum_type, type_name.clone()));
+                };
 
                 sum_type_inner
                     .get_variant_type(&sum_type, &type_name)

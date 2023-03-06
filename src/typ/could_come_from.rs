@@ -91,7 +91,7 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type, comp_data: &CompD
                     return false;
                 }
             },
-            TypeEnum::Int(_) | TypeEnum::Float(_) | TypeEnum::Opaque(_) => {
+            TypeEnum::Int(_) | TypeEnum::Float(_) => {
                 if !self_next.is_subtype_of(&other_next) {
                     return false;
                 };

@@ -4,6 +4,7 @@ pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
 pub use self::value_api::XcValue;
 use crate::errors::CErr;
+use crate::errors::CResult;
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::hlr_data_output::FuncOutput;
@@ -147,7 +148,8 @@ impl Unit {
             funcs_to_compile
         };
 
-        self.compile_func_set(funcs_to_process.clone());
+        self.compile_func_set(funcs_to_process.clone())
+            .map_err(|x| vec![x])?;
 
         Ok(funcs_to_process)
     }
@@ -156,14 +158,14 @@ impl Unit {
         Rc::get_mut(&mut self.comp_data).unwrap()
     }
 
-    pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) {
+    pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) -> CResult<()> {
         set = set
             .into_iter()
             .filter(|info| !self.comp_data.has_been_compiled(info))
             .collect();
 
         if set.len() == 0 {
-            return;
+            return Ok(());
         }
 
         self.reset_execution_engine();
@@ -185,11 +187,11 @@ impl Unit {
                         &info,
                         &mut self.context,
                         &mut self.module,
-                    );
+                    )?;
 
                     hlr
                 })
-                .collect();
+                .collect::<CResult<Vec<FuncOutput>>>()?;
 
             set = func_reps
                 .iter()
@@ -209,6 +211,8 @@ impl Unit {
             println!("compiled these: ");
             println!("{}", self.module.print_to_string().to_string());
         }
+
+        Ok(())
     }
 
     fn compile(&mut self, output: &mut FuncOutput) {

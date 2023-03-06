@@ -1,4 +1,5 @@
 use crate::{
+    errors::CResult,
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, Expr, FuncCode, TypeRelation},
@@ -60,7 +61,7 @@ impl XcValue {
             ..Default::default()
         };
 
-        unit.compile_func_set(vec![info.clone()]);
+        unit.compile_func_set(vec![info.clone()]).unwrap();
 
         let mut output = String::new();
 
@@ -73,7 +74,7 @@ impl XcValue {
     }
 
     pub unsafe fn get_data_as<T>(&self) -> *const T { self.data.as_ptr() as *const T }
-    pub unsafe fn consume_as<T>(mut self) -> T {
+    pub unsafe fn consume<T>(mut self) -> T {
         let capacity = self.data.capacity();
         let data_ptr = self.data.as_mut_ptr();
         let mut casted_vec =
@@ -94,9 +95,9 @@ impl XcValue {
 }
 
 impl Unit {
-    pub fn get_value(&mut self, of: &str) -> XcValue {
+    pub fn get_value(&mut self, of: &str) -> CResult<XcValue> {
         if of == "" {
-            return XcValue::default();
+            return Ok(XcValue::default());
         }
 
         let temp_name = "newfunc";
@@ -117,11 +118,11 @@ impl Unit {
             ..Default::default()
         };
 
-        let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code);
+        let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code)?;
 
         {
             let dependencies = func_rep.get_func_dependencies().drain().collect();
-            self.compile_func_set(dependencies);
+            self.compile_func_set(dependencies)?;
         }
 
         let mut fcs = {
@@ -160,7 +161,7 @@ impl Unit {
             func_rep.func_type.as_type_enum() else { panic!() };
 
         let value = match ret_type.return_style() {
-            ReturnStyle::Direct | ReturnStyle::ThroughI64 => {
+            ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
                 let new_func: XcFunc<(), i64> = unsafe { transmute(func_addr) };
                 let out: [u8; 8] = unsafe { transmute(new_func(())) };
                 XcValue::new_from_arr(ret_type.clone(), out)
@@ -188,7 +189,7 @@ impl Unit {
             .free_fn_machine_code(fcs.function);
         unsafe { fcs.function.delete() };
 
-        value
+        Ok(value)
     }
 }
 

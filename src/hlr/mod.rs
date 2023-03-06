@@ -11,6 +11,7 @@ mod type_inference;
 
 use std::rc::Rc;
 
+use crate::errors::CResult;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
@@ -31,7 +32,11 @@ use self::handle_variant_literals::handle_variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::handle_large_returns;
 
-pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) -> FuncOutput {
+pub fn hlr<'a>(
+    info: UniqueFuncInfo,
+    comp_data: Rc<CompData>,
+    code: FuncCode,
+) -> CResult<FuncOutput> {
     if crate::XC_DEBUG {
         println!();
         println!("====HLR of {}====", info.name.to_string());
@@ -39,7 +44,7 @@ pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) ->
 
     assert!(matches!(code.code, Expr::Block(_)), "hlr input must be a block");
 
-    let mut output = FuncRep::from_code(code, comp_data.clone(), info);
+    let mut output = FuncRep::from_code(code, comp_data.clone(), info)?;
 
     if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());
@@ -57,5 +62,5 @@ pub fn hlr<'a>(info: UniqueFuncInfo, comp_data: Rc<CompData>, code: FuncCode) ->
         println!("{}", &output.tree.to_string());
     }
 
-    output.output()
+    Ok(output.output())
 }

@@ -17,6 +17,12 @@ pub trait NodeDataGen: std::fmt::Debug {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID;
 }
 
+impl NodeDataGen for Box<dyn NodeDataGen> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        self.as_ref().add_to_expr_tree(hlr, parent)
+    }
+}
+
 impl NodeDataGen for NodeData {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(parent, self.clone())
@@ -248,6 +254,36 @@ impl NodeDataGen for StructLitGen {
             NodeData::StructLit {
                 var_type: self.var_type.clone(),
                 fields: added_fields,
+                initialize: self.initialize,
+            },
+        );
+
+        space
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ArrayLitGen {
+    pub var_type: Type,
+    pub parts: Vec<Box<dyn NodeDataGen>>,
+    pub initialize: InitOpts,
+}
+
+impl NodeDataGen for ArrayLitGen {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let parts = self
+            .parts
+            .iter()
+            .map(|data| data.add_to_expr_tree(hlr, space))
+            .collect();
+
+        hlr.tree.replace(
+            space,
+            NodeData::ArrayLit {
+                var_type: self.var_type.clone(),
+                parts,
                 initialize: self.initialize,
             },
         );

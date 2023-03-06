@@ -1,3 +1,4 @@
+use super::invalid_state::InvalidState;
 use super::*;
 use std::iter::once;
 
@@ -9,7 +10,7 @@ use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
 use inkwell::AddressSpace;
 
-pub trait Kind {
+pub trait Kind: InvalidState {
     fn to_string(&self) -> String;
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f>;
 
@@ -139,7 +140,15 @@ impl Kind for SumType {
             9..=16 => context
                 .struct_type(&*vec![context.i32_type().into(); size as usize / 4], false)
                 .into(),
-            17.. => context.custom_width_int_type(size * 8).into(),
+            17.. => {
+                // TODO: enum variants like i1, i32, i32, i32, i32 won't work here
+                let padding_size = size as usize - 4;
+                let mut struct_fields = vec![context.i32_type().as_basic_type_enum()];
+                struct_fields.extend(
+                    vec![context.i32_type().as_basic_type_enum(); padding_size / 4].into_iter(),
+                );
+                context.struct_type(&*struct_fields, false).into()
+            },
         }
     }
 }
@@ -211,15 +220,5 @@ impl Kind for VoidType {
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
         context.void_type().as_any_type_enum()
-    }
-}
-
-impl Kind for OpaqueType {
-    fn to_string(&self) -> String { format!("Opaque with size {} bytes", self.size) }
-
-    fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
-        context
-            .custom_width_int_type(self.size * 8)
-            .as_any_type_enum()
     }
 }

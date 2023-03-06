@@ -16,10 +16,10 @@ pub static XC_DEBUG: bool = cfg!(feature = "xc-debug");
 pub static LLVM_DEBUG: bool = cfg!(feature = "llvm-debug");
 
 pub use lex::{TypeName, VarName};
-pub use parse::TypeRelation;
+pub use parse::{TypeDecl, TypeRelation};
 pub use typ::{
-    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, OpaqueType, RefType, StructType,
-    Type, TypeData, TypeEnum,
+    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, RefType, StructType, Type,
+    TypeData, TypeEnum,
 };
 pub use unit::{CompData, ExternalFuncAdd, UniqueFuncInfo, Unit, XcFunc, XcReflect, XcValue};
 
