@@ -239,10 +239,12 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 }
 
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
+    println!("{}", &hlr.tree.get(og_call_id).to_string(&hlr.tree));
     let data = hlr.tree.get(og_call_id);
 
     let NodeData::Call { a: old_args, f, generics, relation, ret_type: call_ret_type } = 
         data.clone() else { panic!(); };
+    dbg!(&call_ret_type);
 
     let call_var = hlr.uniqueify_varname("call_out");
 

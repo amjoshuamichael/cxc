@@ -7,20 +7,32 @@ use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 
 #[test]
 fn return_arg() {
-    xc_test!(
-        input, i32; => i32;
-        "; input";
-        32 => 32
-    )
+    let mut unit = Unit::new();
+    unit.push_script(" main(a: i32); i32 { ; a } ");
+
+    let num = unsafe { unit.get_fn_by_name::<[i32], i32>("main")(32) };
+    assert_eq!(num, 32);
 }
 
 #[test]
 fn multiple_args() {
-    xc_test!(
-        a, i32; b, i32; => i32;
-        "; a + b";
-        4, 5 => 9
-    )
+    let mut unit = Unit::new();
+
+    unit.add_lib(cxc::library::StdLib);
+    unit.push_script(
+        "
+        add(a: i32, b: i32); i32 {
+            ; a + b
+        }
+
+        add2(a: i32, b: i32); i32 {
+            ; a + b
+        }
+        ",
+    );
+
+    let num = unsafe { unit.get_fn_by_name::<(i32, i32), i32>("add")(4, 5) };
+    assert_eq!(num, 9);
 }
 
 #[test]
@@ -37,7 +49,7 @@ fn basic_pointer() {
     );
 
     let mut num = 4;
-    unsafe { unit.get_fn_by_name::<&mut i32, i32>("square")(&mut num) };
+    unsafe { unit.get_fn_by_name::<[&mut i32], i32>("square")(&mut num) };
     assert_eq!(num, 16);
 }
 
@@ -103,7 +115,8 @@ fn struct_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = unsafe { unit.get_fn_by_name("sqr_magnitude_of")(&point) };
+    let sqr_mag: i32 =
+        unsafe { unit.get_fn_by_name::<[&Point2D], i32>("sqr_magnitude_of")(&point) };
     assert_eq!(sqr_mag, 13);
 }
 
@@ -148,7 +161,7 @@ fn i32_and_ref() {
     .unwrap();
 
     let mut thirty_two = 32;
-    let func = unit.get_fn_by_name::<&i32, (i32, &i32)>("main");
+    let func = unit.get_fn_by_name::<[&i32], (i32, &i32)>("main");
     let output: (i32, &i32) = unsafe { func(&mut thirty_two) };
     assert_eq!(output, (10, &thirty_two));
 }
@@ -180,8 +193,7 @@ fn method_on_struct_with_arg() {
     )
     .unwrap();
 
-    let func = unit.get_fn_by_name::<(), i32>("main");
-    let output = unsafe { func(()) };
+    let output = unsafe { unit.get_fn_by_name::<(), i32>("main")() };
     assert_eq!(output, 1680);
 }
 
@@ -216,7 +228,7 @@ fn external_function() {
     )
     .unwrap();
 
-    unsafe { unit.get_fn_by_name::<(), i64>("call")(()) };
+    unsafe { unit.get_fn_by_name::<(), i64>("call")() };
 }
 
 #[test]
@@ -278,7 +290,7 @@ fn reflected_type_masks() {
         ",
     );
 
-    unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
+    unsafe { unit.get_fn_by_name::<(), i32>("main")() };
 }
 
 #[test]
@@ -324,5 +336,5 @@ fn value_from_code() {
         ",
     );
 
-    unsafe { unit.get_fn_by_name::<(), i32>("main")(()) };
+    unsafe { unit.get_fn_by_name::<(), i32>("main")() };
 }

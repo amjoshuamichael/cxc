@@ -58,8 +58,7 @@ impl Kind for FuncType {
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
         self.llvm_func_type(context)
             .ptr_type(AddressSpace::default())
-            .try_into()
-            .unwrap()
+            .as_any_type_enum()
     }
 }
 
@@ -162,7 +161,10 @@ impl Kind for VariantType {
 }
 
 impl Kind for IntType {
-    fn to_string(&self) -> String { format!("i{}", self.size) }
+    fn to_string(&self) -> String {
+        let prefix = if self.signed { 'i' } else { 'u' };
+        format!("{prefix}{}", self.size)
+    }
 
     fn to_any_type<'f>(&self, context: &'f Context) -> AnyTypeEnum<'f> {
         context.custom_width_int_type(self.size).as_any_type_enum()

@@ -12,7 +12,7 @@ fn default_util() {
     unit.add_external_default::<String>();
     unit.push_script("main(); String { ; String:default() }");
 
-    let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")(()) };
+    let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")() };
     assert_eq!(default_string, String::default());
 }
 
@@ -43,7 +43,7 @@ fn clone_util() {
         ",
     );
 
-    let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")(()) };
+    let default_string = unsafe { unit.get_fn_by_name::<(), String>("main")() };
     assert_eq!(default_string, a_cool_string());
 }
 
@@ -84,5 +84,5 @@ fn type_level_functions() {
         ",
     );
 
-    unsafe { unit.get_fn_by_name::<(), ()>("main")(()) };
+    unsafe { unit.get_fn_by_name::<(), ()>("main")() };
 }

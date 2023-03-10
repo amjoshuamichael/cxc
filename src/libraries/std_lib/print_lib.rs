@@ -13,10 +13,16 @@ impl Library for PrintLib {
                 ..ExternalFuncAdd::empty()
             },
         );
+
         unit.add_rust_func_explicit(
             "panic",
             panic as *const usize,
             ExternalFuncAdd {
+                arg_types: vec![unit
+                    .comp_data
+                    .get_by_name(&"String".into())
+                    .unwrap()
+                    .get_ref()],
                 ..ExternalFuncAdd::empty()
             },
         );

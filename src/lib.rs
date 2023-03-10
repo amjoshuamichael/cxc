@@ -5,6 +5,7 @@
 #![feature(box_syntax)]
 #![feature(type_changing_struct_update)]
 #![feature(if_let_guard)]
+#![feature(min_specialization)]
 
 // HOW DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
@@ -21,7 +22,7 @@ pub use typ::{
     ArrayType, BoolType, FloatType, FuncType, IntType, Kind, RefType, StructType, Type,
     TypeData, TypeEnum,
 };
-pub use unit::{CompData, ExternalFuncAdd, UniqueFuncInfo, Unit, XcFunc, XcReflect, XcValue};
+pub use unit::{CompData, ExternalFuncAdd, UniqueFuncInfo, Unit, XcReflect, XcValue};
 
 pub mod library {
     pub use crate::libraries::*;

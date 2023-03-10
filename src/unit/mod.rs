@@ -1,3 +1,4 @@
+use self::externalize::Externalize;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
@@ -33,13 +34,12 @@ use std::mem::transmute;
 use std::rc::Rc;
 
 mod add_external;
+mod externalize;
 mod functions;
 pub mod get_type_spec;
 mod reflect;
 mod rust_type_name_conversion;
 mod value_api;
-
-pub type XcFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
 pub struct Unit {
     pub comp_data: Rc<CompData>,
@@ -257,7 +257,11 @@ impl Unit {
         }
     }
 
-    pub fn get_fn_by_name<I, O>(&self, name: &str) -> unsafe extern "C" fn(_: I, ...) -> O {
+    pub fn get_fn_by_name<I, O>(&self, name: &str) -> I::Externalized
+    where
+        I: Externalize<O>,
+        I: ?Sized,
+    {
         let func_info = UniqueFuncInfo {
             name: name.into(),
             ..Default::default()
@@ -266,10 +270,11 @@ impl Unit {
         self.get_fn_by_info::<I, O>(&func_info)
     }
 
-    pub fn get_fn_by_info<I, O>(
-        &self,
-        info: &UniqueFuncInfo,
-    ) -> unsafe extern "C" fn(_: I, ...) -> O {
+    pub fn get_fn_by_info<I, O>(&self, info: &UniqueFuncInfo) -> I::Externalized
+    where
+        I: Externalize<O>,
+        I: ?Sized,
+    {
         assert!(
             self.
                 module
@@ -286,7 +291,7 @@ impl Unit {
             .get_function_address(&*info.to_string())
             .unwrap();
 
-        unsafe { transmute::<usize, unsafe extern "C" fn(_: I, ...) -> O>(func_addr) }
+        unsafe { I::externalize(func_addr) }
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

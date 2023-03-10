@@ -1,5 +1,9 @@
+use crate::typ::Kind;
+use inkwell::attributes::{Attribute, AttributeLoc};
+
 use crate::{
     errors::{CResult, FErr, TErr, TResult},
+    typ::ReturnStyle,
     FuncType, Type, TypeRelation,
 };
 
@@ -260,11 +264,13 @@ impl CompData {
         let TypeEnum::Func(llvm_function_type) = function_type.as_type_enum()
             else { panic!() };
 
-        let empty_function = module.add_function(
+        let mut empty_function = module.add_function(
             &*info.to_string(),
             llvm_function_type.llvm_func_type(&context),
             None,
         );
+
+        add_sret_attribute_to_func(&mut empty_function, &context, &llvm_function_type.ret);
 
         self.compiled.insert(info.clone());
         self.func_types.insert(info.clone(), function_type.clone());

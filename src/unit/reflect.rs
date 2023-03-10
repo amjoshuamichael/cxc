@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use inkwell::context::Context;
 
 use crate::{
@@ -102,10 +104,35 @@ impl_reflect_func! { A B C D E F G H; R }
 impl_reflect_func! { A B C D E F G H I; R }
 impl_reflect_func! { A B C D E F G H I J; R }
 
+macro_rules! impl_reflect_generic {
+    ( $arg:ident ) => {
+        impl<T: XcReflect> XcReflect for $arg<T> {
+            fn alias_code() -> String {
+                // TODO: make this "reflected" keyword more important in code
+                let mut code = String::from("Reflected = ");
+                code += stringify!($arg);
+                code += "<";
+                code += &*T::type_decl().name.to_string();
+                code += ">";
+                code
+            }
+        }
+    };
+}
+
+impl_reflect_generic!(Option);
+impl_reflect_generic!(Vec);
+impl_reflect_generic!(Rc);
+
 impl Unit {
     pub fn get_reflect_type<T: XcReflect>(&self) -> Option<Type> {
         let decl = T::type_decl();
-        type_from_decl(&*self.comp_data, decl)
+
+        if decl.name == "Reflected".into() {
+            Some(self.comp_data.get_spec(&decl.typ, &()).unwrap())
+        } else {
+            type_from_decl(&*self.comp_data, decl)
+        }
     }
 
     pub fn add_reflect_type<T: XcReflect>(&mut self) -> Option<Type> {

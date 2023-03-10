@@ -3,7 +3,7 @@ use crate::{
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, Expr, FuncCode, TypeRelation},
-    to_llvm::compile_routine,
+    to_llvm::{add_sret_attribute_to_func, compile_routine},
     typ::{FuncType, ReturnStyle},
     TypeEnum, Unit, XcReflect,
 };
@@ -11,7 +11,9 @@ use std::{collections::HashMap, mem::transmute};
 
 use crate::Type;
 
-use super::{UniqueFuncInfo, XcFunc};
+use super::UniqueFuncInfo;
+
+pub type ExternFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
 #[derive(Default, Debug)]
 pub struct XcValue {
@@ -22,6 +24,16 @@ pub struct XcValue {
 impl XcReflect for XcValue {
     fn alias_code() -> String { "XcValue = { typ: Type, data: Vec<u8> }".to_string() }
 }
+
+// This MAX_BYTES static is used as an output for functions that return a value
+// larger than 16 bytes. These functions really return through a pointer that is
+// passed as an argument, but on ARM machines, this pointer has its own special
+// register, so we need rust to put the pointer into this register. This could
+// be done through inline assmebly, but it's difficult to target arm assembly on
+// rust. Therefore, we use this static as a workaround.
+const MAX_VALUE_SIZE: usize = 4096;
+type MaxBytes = [u8; MAX_VALUE_SIZE];
+static mut MAX_BYTES: MaxBytes = [0; MAX_VALUE_SIZE];
 
 impl XcValue {
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
@@ -67,7 +79,7 @@ impl XcValue {
 
         unsafe {
             let func = unit.get_fn_by_info::<(&mut String, *const usize), ()>(&info);
-            func((&mut output, self.const_ptr()));
+            func(&mut output, self.const_ptr());
         };
 
         indent_parens(output)
@@ -100,7 +112,7 @@ impl Unit {
             return Ok(XcValue::default());
         }
 
-        let temp_name = "newfunc";
+        let temp_name = "Newfunc";
 
         self.reset_execution_engine();
 
@@ -126,11 +138,12 @@ impl Unit {
         }
 
         let mut fcs = {
-            let TypeEnum::Func(function_type) = func_rep.func_type.as_type_enum()
+            let TypeEnum::Func(func_type) = func_rep.func_type.as_type_enum()
                 else { unreachable!() };
-            let ink_func_type = function_type.llvm_func_type(&self.context);
+            let ink_func_type = func_type.llvm_func_type(&self.context);
 
-            let function = self.module.add_function(temp_name, ink_func_type, None);
+            let mut function = self.module.add_function(temp_name, ink_func_type, None);
+            add_sret_attribute_to_func(&mut function, &self.context, &func_type.ret);
 
             self.new_func_comp_state(
                 func_rep.take_tree(),
@@ -146,9 +159,8 @@ impl Unit {
             compile_routine(&mut fcs, &self.module);
         };
 
-        if crate::XC_DEBUG {
-            let func = self.module.get_function(temp_name).unwrap();
-            println!("{func}");
+        if crate::LLVM_DEBUG {
+            println!("{}", self.module.print_to_string().to_string());
         }
 
         let func_addr = self
@@ -160,33 +172,36 @@ impl Unit {
         let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 
             func_rep.func_type.as_type_enum() else { panic!() };
 
-        let value = match ret_type.return_style() {
-            ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
-                let new_func: XcFunc<(), i64> = unsafe { transmute(func_addr) };
-                let out: [u8; 8] = unsafe { transmute(new_func(())) };
-                XcValue::new_from_arr(ret_type.clone(), out)
-            },
-            ReturnStyle::ThroughI64I32
-            | ReturnStyle::ThroughI64I64
-            | ReturnStyle::MoveIntoI64I64 => {
-                let new_func: XcFunc<(), (i64, i64)> = unsafe { transmute(func_addr) };
-                let out: [u8; 16] = unsafe { transmute(new_func(())) };
-                XcValue::new_from_arr(ret_type.clone(), out)
-            },
-            ReturnStyle::Sret => {
-                let data_vec: Vec<u8> = vec![0; ret_type.size()];
-                let new_func: XcFunc<*const u8, ()> = unsafe { transmute(func_addr) };
-                unsafe { new_func(data_vec.as_ptr()) };
-                XcValue::new_from_vec(ret_type.clone(), data_vec)
-            },
-            ReturnStyle::Void => {
-                panic!("value returns none!")
-            },
+        let value = unsafe {
+            match ret_type.return_style() {
+                ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
+                    let new_func: ExternFunc<(), i64> = transmute(func_addr);
+                    let out: [u8; 8] = transmute(new_func(()));
+                    XcValue::new_from_arr(ret_type.clone(), out)
+                },
+                ReturnStyle::ThroughI64I32
+                | ReturnStyle::ThroughI64I64
+                | ReturnStyle::MoveIntoI64I64 => {
+                    let new_func: ExternFunc<(), (i64, i64)> = transmute(func_addr);
+                    let out: [u8; 16] = transmute(new_func(()));
+                    XcValue::new_from_arr(ret_type.clone(), out)
+                },
+                ReturnStyle::Sret => {
+                    let new_func: ExternFunc<(), MaxBytes> = transmute(func_addr);
+                    MAX_BYTES = new_func(());
+                    let data_vec = MAX_BYTES[..ret_type.size()].to_vec();
+                    XcValue::new_from_vec(ret_type.clone(), data_vec)
+                },
+                ReturnStyle::Void => {
+                    panic!("value returns none!")
+                },
+            }
         };
 
         self.execution_engine
             .borrow()
             .free_fn_machine_code(fcs.function);
+
         unsafe { fcs.function.delete() };
 
         Ok(value)

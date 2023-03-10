@@ -12,6 +12,6 @@ pub fn main() {
     )
     .unwrap();
 
-    let hello_world = unit.get_fn_by_name("main");
-    unsafe { hello_world(()) }
+    let hello_world = unit.get_fn_by_name::<(), ()>("main");
+    unsafe { hello_world() }
 }

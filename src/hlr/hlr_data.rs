@@ -6,6 +6,7 @@ use super::hlr_data_output::FuncOutput;
 use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::parse::*;
+use crate::typ::ReturnStyle;
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 
@@ -109,8 +110,14 @@ impl FuncRep {
     pub fn comp_data(&self) -> Rc<CompData> { self.comp_data.clone() }
 
     pub fn output(self) -> FuncOutput {
+        let mut func_arg_types = self.arg_types();
+
+        if self.ret_type.return_style() == ReturnStyle::Sret {
+            func_arg_types.remove(0);
+        }
+
         let out = FuncOutput {
-            func_type: self.ret_type.clone().func_with_args(self.arg_types()),
+            func_type: self.ret_type.clone().func_with_args(func_arg_types),
             arg_names: Some(self.arg_names()),
             tree: Some(self.tree),
             data_flow: Some(self.data_flow),

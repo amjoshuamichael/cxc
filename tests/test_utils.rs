@@ -14,7 +14,7 @@ macro_rules! xc_test {
             concat!("test() ; ", stringify!($ret), "{ ", $code, " }"),
         ).unwrap();
 
-        let output = unsafe { unit.get_fn_by_name::<(), $ret>("test")(()) };
+        let output = unsafe { unit.get_fn_by_name::<(), $ret>("test")() };
         assert_eq!(output, $result);
     }};
 
@@ -52,7 +52,7 @@ macro_rules! xc_test {
 
         #[allow(unused_parens)]
         let output: $ret = unsafe {
-            unit.get_fn_by_name("test")($($arg_val),*)
+            unit.get_fn_by_name::<($($arg_ty,)+), $ret>("test")($($arg_val),*)
         };
         assert_eq!(output, $result);
     }};
@@ -66,7 +66,7 @@ macro_rules! xc_test {
 
         unit.push_script($code).unwrap();
 
-        unsafe { unit.get_fn_by_name::<(), ()>("main")(()) };
+        unsafe { unit.get_fn_by_name::<(), ()>("main")() };
     }};
 
     ($(use $($lib:ident),+;)? $code:expr; $expected_output:expr) => {{
@@ -82,7 +82,7 @@ macro_rules! xc_test {
         // this is just so output uses the expected output's type
         let mut output = $expected_output;
 
-        output = unsafe { unit.get_fn_by_name::<(), _>("main")(()) };
+        output = unsafe { unit.get_fn_by_name::<(), _>("main")() };
 
         #[cfg(feature = "show-bytes")]
         cxc::bytesof::print_binary_two(&$expected_output, &output);

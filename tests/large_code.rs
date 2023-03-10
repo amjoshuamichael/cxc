@@ -95,7 +95,6 @@ fn backwards_call() {
 }
 
 #[test]
-#[ignore]
 fn hello_world() {
     xc_test!(
         r#"
@@ -131,7 +130,7 @@ fn derivations() {
         )
         .unwrap();
 
-    unsafe { unit.get_fn_by_name::<(), ()>("test_derivation")(()) };
+    unsafe { unit.get_fn_by_name::<(), ()>("test_derivation")() };
 }
 
 #[test]

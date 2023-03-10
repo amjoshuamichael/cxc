@@ -4,7 +4,7 @@ use crate::hlr::prelude::*;
 use crate::lex::VarName;
 use crate::parse::Opcode::*;
 use crate::typ::{Kind, ReturnStyle};
-use crate::unit::*;
+use crate::{unit::*, FuncType};
 use crate::{Type, TypeEnum};
 use core::cell::RefCell;
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -41,20 +41,34 @@ impl FunctionCompilationState {
     }
 }
 
+pub fn add_sret_attribute_to_func(
+    function: &mut FunctionValue<'static>,
+    context: &'static Context,
+    ret: &Type,
+) {
+    if ret.return_style() == ReturnStyle::Sret {
+        let sret_id = Attribute::get_named_enum_kind_id("sret");
+        let sret_attribute = context.create_type_attribute(sret_id, ret.to_any_type(&context));
+        function.add_attribute(AttributeLoc::Param(0), sret_attribute);
+    }
+}
+
+pub fn add_sret_attribute_to_call_site(
+    callsite: &mut CallSiteValue<'static>,
+    context: &'static Context,
+    ret: &Type,
+) {
+    if ret.return_style() == ReturnStyle::Sret {
+        let sret_id = Attribute::get_named_enum_kind_id("sret");
+        let sret_attribute = context.create_type_attribute(sret_id, ret.to_any_type(&context));
+        callsite.add_attribute(AttributeLoc::Param(0), sret_attribute);
+    }
+}
+
 pub fn compile_routine(
     fcs: &mut FunctionCompilationState,
     module: &Module<'static>,
 ) -> Option<AnyValueEnum<'static>> {
-    if fcs.ret_type.return_style() == ReturnStyle::Sret {
-        // informs llvm that we are returning via the first parameter in the
-        // function, which is a pointer.
-        let sret_id = Attribute::get_named_enum_kind_id("sret");
-        let any_type = fcs.ret_type.to_any_type(&fcs.context);
-        let sret_attribute = fcs.context.create_type_attribute(sret_id, any_type);
-        fcs.function
-            .add_attribute(AttributeLoc::Param(0), sret_attribute);
-    }
-
     build_stack_allocas(
         &mut fcs.variables,
         &fcs.tree,
@@ -160,7 +174,10 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             return Some(to_store);
         },
-        Ident { ref name, .. } => {
+        Ident {
+            ref var_type,
+            ref name,
+        } => {
             if let Some(param_index) = fcs.arg_names.iter().position(|arg| arg == name) {
                 let param = fcs
                     .function
@@ -175,7 +192,11 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             }
 
             let val = fcs.variables.get(&name).unwrap().clone();
-            let loaded = fcs.builder.build_load(val, &*fcs.new_uuid());
+            let loaded = fcs.builder.build_load(
+                var_type.to_basic_type(&fcs.context),
+                val,
+                &*fcs.new_uuid(),
+            );
 
             Some(loaded.into())
         },
@@ -269,13 +290,18 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
                     Some(result.into())
                 },
-                TypeEnum::Ref(_) => {
+                TypeEnum::Ref(pointing_to) => {
                     let lhs = lhs.try_into().expect("incorrect type for expression");
                     let rhs = rhs.try_into().expect("incorrect type for expression");
 
                     let result = match op {
                         Plus => unsafe {
-                            fcs.builder.build_in_bounds_gep(lhs, &[rhs], "ptrmath")
+                            fcs.builder.build_in_bounds_gep(
+                                pointing_to.base.to_basic_type(&fcs.context),
+                                lhs,
+                                &[rhs],
+                                "ptrmath",
+                            )
                         },
                         _ => todo!(),
                     };
@@ -359,9 +385,12 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             Ref => Some(compile_as_ptr(fcs, hs).as_any_value_enum()),
             Deref => {
                 let var_ptr = compile(fcs, hs).unwrap();
-                let val = fcs
-                    .builder
-                    .build_load(var_ptr.into_pointer_value(), &*fcs.new_uuid());
+                let pointed_to_type = fcs.tree.get(hs).ret_type().get_deref().unwrap();
+                let val = fcs.builder.build_load(
+                    pointed_to_type.to_basic_type(&fcs.context),
+                    var_ptr.into_pointer_value(),
+                    &*fcs.new_uuid(),
+                );
                 Some(val.into())
             },
             Not => {
@@ -377,6 +406,9 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             if internal_function_ouptut.is_some() {
                 internal_function_ouptut.unwrap()
             } else {
+                let function_type = fcs.comp_data.get_func_type(&info).unwrap();
+                let TypeEnum::Func(FuncType { ret, .. }) = function_type.as_type_enum() else { panic!() };
+
                 let function = fcs.used_functions.get(&info).unwrap().clone();
                 let mut arg_vals = Vec::new();
 
@@ -387,17 +419,19 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                     arg_vals.push(basic_meta_arg);
                 }
 
-                let output = fcs
-                    .builder
-                    .build_call(function, &*arg_vals, "call")
-                    .as_any_value_enum();
+                let mut callsite = fcs.builder.build_direct_call(function, &*arg_vals, "call");
 
-                Some(output)
+                add_sret_attribute_to_call_site(&mut callsite, &fcs.context, &ret);
+
+                Some(callsite.as_any_value_enum())
             }
         },
-        FirstClassCall { ref f, ref a, .. } => {
+        FirstClassCall {
+            ref f,
+            ref a,
+            ref ret_type,
+        } => {
             let function_ptr = compile(fcs, *f).unwrap().into_pointer_value();
-            let function_ptr = CallableValue::try_from(function_ptr).unwrap();
 
             let mut arg_vals = Vec::new();
 
@@ -407,16 +441,31 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                 arg_vals.push(basic_meta_arg);
             }
 
+            let func_type = ret_type.to_basic_type(&fcs.context).fn_type(
+                &*a.iter()
+                    .map(|a| {
+                        fcs.tree
+                            .get(*a)
+                            .ret_type()
+                            .to_basic_type(&fcs.context)
+                            .into()
+                    })
+                    .collect::<Vec<BasicMetadataTypeEnum>>(),
+                false,
+            );
+
             let output = fcs
                 .builder
-                .build_call(function_ptr, &*arg_vals, "call")
+                .build_indirect_call(func_type, function_ptr, &*arg_vals, "call")
                 .as_any_value_enum();
 
             Some(output)
         },
-        Member { .. } => {
+        Member { ret_type, .. } => {
             let ptr = compile_as_ptr(fcs, expr_id);
-            let val = fcs.builder.build_load(ptr, "load");
+            let val = fcs
+                .builder
+                .build_load(ret_type.to_basic_type(&fcs.context), ptr, "load");
 
             Some(val.as_any_value_enum())
         },
@@ -431,12 +480,10 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                 if type_of_return == raw_type_of_return {
                     fcs.builder.build_return(Some(&ret_val));
                 } else {
-                    let casted_value = fcs.builder.build_alloca(
-                        raw_type_of_return.to_basic_type(&fcs.context),
-                        "castedret",
-                    );
+                    let rawtype = raw_type_of_return.to_basic_type(&fcs.context);
+                    let casted_value = fcs.builder.build_alloca(rawtype, "castedret");
                     fcs.builder.build_store(casted_value, ret_val);
-                    let loaded_cast = fcs.builder.build_load(casted_value, "loadcast");
+                    let loaded_cast = fcs.builder.build_load(rawtype, casted_value, "loadcast");
                     fcs.builder.build_return(Some(&loaded_cast));
                 }
             } else {
@@ -482,9 +529,11 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             Some(array.as_any_value_enum())
         },
-        Index { .. } => {
+        Index { ret_type, .. } => {
             let ptr = compile_as_ptr(fcs, expr_id);
-            let val = fcs.builder.build_load(ptr, "load");
+            let val = fcs
+                .builder
+                .build_load(ret_type.to_basic_type(&fcs.context), ptr, "load");
 
             Some(val.as_any_value_enum())
         },
@@ -522,7 +571,11 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
                 new_temp
             },
         },
-        Member { object, field, .. } => {
+        Member {
+            ret_type,
+            object,
+            field,
+        } => {
             let typ = fcs.tree.get(object).ret_type();
 
             let complete_deref = typ.complete_deref();
@@ -535,7 +588,12 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
             let object = compile_as_ptr_unless_already_ptr(fcs, object);
 
             fcs.builder
-                .build_struct_gep(object, field_index as u32, &*format!("{field}access"))
+                .build_struct_gep(
+                    complete_deref.to_basic_type(&fcs.context),
+                    object,
+                    field_index as u32,
+                    &*format!("{field}_access"),
+                )
                 .unwrap()
         },
         Index {
@@ -543,12 +601,13 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
             index,
             ret_type,
         } => {
-            let object = compile_as_ptr(fcs, object);
+            let object_ptr = compile_as_ptr(fcs, object);
             let index = compile(fcs, index).unwrap().into_int_value();
 
             let gepped_array = unsafe {
                 fcs.builder.build_in_bounds_gep(
-                    object,
+                    fcs.tree.get(object).ret_type().to_basic_type(&fcs.context),
+                    object_ptr,
                     &[fcs.context.i32_type().const_int(0, false), index],
                     "gep",
                 )
@@ -630,8 +689,12 @@ fn internal_function<'comp>(
             let src: BasicValueEnum = compile(fcs, args[1]).unwrap().try_into().unwrap();
 
             let dest: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let dest_loaded: PointerValue =
-                fcs.builder.build_load(dest, "loaddest").try_into().unwrap();
+            let load_ty = info.own_generics[0].clone();
+            let dest_loaded: PointerValue = fcs
+                .builder
+                .build_load(load_ty.get_ref().to_basic_type(&fcs.context), dest, "loaddest")
+                .try_into()
+                .unwrap();
 
             fcs.builder.build_store(dest_loaded, src);
 
@@ -645,7 +708,7 @@ fn internal_function<'comp>(
             fcs.builder
                 .build_memcpy(casted, 1, src, 1, dest_type.size_of().unwrap())
                 .unwrap();
-            let casted_loaded = fcs.builder.build_load(casted, "cast-load");
+            let casted_loaded = fcs.builder.build_load(dest_type, casted, "cast-load");
 
             Some(casted_loaded.as_any_value_enum())
         },
