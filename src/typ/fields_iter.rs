@@ -127,7 +127,7 @@ impl Iterator for FieldsIter {
             _ => return None,
         };
 
-        return Some(to_return.clone());
+        Some(to_return.clone())
     }
 }
 

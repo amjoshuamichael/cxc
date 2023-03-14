@@ -60,7 +60,7 @@ enum TypeOps {
 
 pub fn parse_type_spec(lexer: &mut FuncParseContext) -> Result<TypeSpec, ParseError> {
     let mut temp_lexer = lexer.split(TypeName::Anonymous, lexer.generic_labels.clone());
-    Ok(parse_type(&mut temp_lexer)?)
+    parse_type(&mut temp_lexer)
 }
 
 fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
@@ -95,7 +95,7 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 }
 
 fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    let beginning_of_alias = lexer.peek_tok()?.clone();
+    let beginning_of_alias = lexer.peek_tok()?;
 
     let type_alias = match beginning_of_alias {
         Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2)) {
@@ -190,7 +190,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         },
     };
 
-    let final_output = match lexer.peek_tok().clone() {
+    let final_output = match lexer.peek_tok() {
         Ok(Tok::Dot) => {
             lexer.next_tok()?;
 

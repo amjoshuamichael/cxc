@@ -13,9 +13,9 @@ pub trait XcReflect {
 
     fn type_decl() -> TypeDecl {
         let alias_code = Self::alias_code();
-        let is_named = alias_code.contains("=");
+        let is_named = alias_code.contains('=');
 
-        let mut lexer = lex(&*Self::alias_code());
+        let mut lexer = lex(&Self::alias_code());
 
         if is_named {
             parse::file(&mut lexer)
@@ -131,7 +131,7 @@ impl Unit {
         if decl.name == "Reflected".into() {
             Some(self.comp_data.get_spec(&decl.typ, &()).unwrap())
         } else {
-            type_from_decl(&*self.comp_data, decl)
+            type_from_decl(&self.comp_data, decl)
         }
     }
 
@@ -143,11 +143,11 @@ impl Unit {
 
     pub fn add_type_with_decl<T>(&mut self, decl: TypeDecl) -> Option<Type> {
         {
-            let comp_data = self.comp_data_mut();
+            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
             comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
         }
 
-        let typ = type_from_decl(&*self.comp_data, decl)?;
+        let typ = type_from_decl(&self.comp_data, decl)?;
 
         #[cfg(debug_assertions)]
         {

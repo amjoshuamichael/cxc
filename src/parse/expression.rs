@@ -6,8 +6,8 @@ enum Atom {
     Op(Opcode),
 }
 
-impl Into<Atom> for Expr {
-    fn into(self) -> Atom { Atom::Expr(self) }
+impl From<Expr> for Atom {
+    fn from(expr: Expr) -> Atom { Atom::Expr(expr) }
 }
 
 impl Errable for Atom {
@@ -34,12 +34,10 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     while let Ok(next) = lexer.peek_tok() {
         let atom = if matches!(last_atom, Atom::Op(_)) {
             // if the last atom was an operator, we expect these
-            let atom = match parse_atom_after_op(lexer)? {
+            match parse_atom_after_op(lexer)? {
                 Some(atom) => atom,
                 _ => break,
-            };
-
-            atom
+            }
         } else if matches!(next, Tok::LAngle) && after_generics(lexer, Tok::LParen)? {
             let generics = parse_list(
                 (Tok::LAngle, Tok::RAngle),
@@ -86,7 +84,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
         last_atom = atom.clone();
 
-        atoms.push(atom.into());
+        atoms.push(atom);
     }
 
     detect_unary_ops(&mut atoms)?;
@@ -96,7 +94,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         return Err(ParseError::ImproperExpression);
     }
 
-    Ok(atoms.pop().unwrap().unwrap_expr()?)
+    atoms.pop().unwrap().unwrap_expr()
 }
 
 // parses atoms that go in between operators. Like the 1, 2, and "Hello" in 1 *
@@ -111,7 +109,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         },
         Tok::Bool(val) => Expr::Bool(val).into(),
         Tok::Strin(val) => Expr::Strin(val).into(),
-        Tok::VarName(val) => Expr::Ident(val.clone()).into(),
+        Tok::VarName(val) => Expr::Ident(val).into(),
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
         Tok::LBrack => parse_array_literal(lexer)?.into(),
         Tok::LParen => {
@@ -350,7 +348,7 @@ fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> ParseResult<bool> {
 
     let list = parse_list(Tok::angles(), Some(Tok::Comma), parse_type_spec, &mut detached);
 
-    Ok(detached.errors.deref().unwrap().len() == 0
+    Ok(detached.errors.deref().unwrap().is_empty()
         && list.is_ok()
         && detached.peek_tok()? == tok)
 }

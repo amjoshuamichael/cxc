@@ -162,7 +162,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
     for call_id in hlr.tree.ids_in_order().drain(..).rev() {
         let data = hlr.tree.get(call_id);
 
-        if let NodeData::Call { ref f, .. } = data && !hlr.comp_data.name_is_intrinsic(&f) {
+        if let NodeData::Call { ref f, .. } = data && !hlr.comp_data.name_is_intrinsic(f) {
             match data.ret_type().return_style() {
                 ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::MoveIntoI64I64 => todo!(),
@@ -213,7 +213,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
                 op: Opcode::Ref,
                 hs: box NodeData::Ident {
                     var_type: raw_ret_var_type.clone(),
-                    name: raw_ret_var_name.clone(),
+                    name: raw_ret_var_name,
                 },
             },
             box UnarOpGen {
@@ -289,7 +289,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         og_call_id,
         NodeData::Ident {
             var_type: call_ret_type,
-            name: call_var.clone(),
+            name: call_var,
         },
     );
 }

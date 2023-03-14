@@ -1,4 +1,4 @@
-use std::mem::transmute;
+use std::rc::Rc;
 
 use inkwell::values::BasicMetadataValueEnum;
 
@@ -47,7 +47,7 @@ impl Unit {
             ..ExternalFuncAdd::empty()
         };
 
-        let function_ptr: *const usize = unsafe { transmute(function[0]) };
+        let function_ptr: *const usize = function[0] as *const usize;
 
         self.add_rust_func_explicit(name, function_ptr, ext_add)
     }
@@ -117,9 +117,9 @@ impl Unit {
             func_type.as_type_enum() else { panic!() };
         let ret_type = func_type_inner.ret.clone();
 
-        let ink_func_ptr_type = func_type.to_any_type(&self.context).into_pointer_type();
+        let ink_func_ptr_type = func_type.to_any_type(self.context).into_pointer_type();
 
-        let ink_func_type = func_type_inner.llvm_func_type(&self.context);
+        let ink_func_type = func_type_inner.llvm_func_type(self.context);
 
         // TODO: Check if function already exists, and update gen if nescssary
         let func_info = UniqueFuncInfo {
@@ -131,9 +131,9 @@ impl Unit {
 
         let mut function =
             self.module
-                .add_function(&*func_info.to_string(), ink_func_type, None);
+                .add_function(&func_info.to_string(), ink_func_type, None);
 
-        add_sret_attribute_to_func(&mut function, &self.context, &ret_type);
+        add_sret_attribute_to_func(&mut function, self.context, &ret_type);
 
         let builder = self.context.create_builder();
 
@@ -153,20 +153,20 @@ impl Unit {
 
         if ret_type.return_style() == ReturnStyle::Sret {
             let mut out =
-                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &*arg_vals, "call");
-            add_sret_attribute_to_call_site(&mut out, &self.context, &ret_type);
+                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &arg_vals, "call");
+            add_sret_attribute_to_call_site(&mut out, self.context, &ret_type);
             builder.build_return(None);
         } else if ret_type.is_void() {
-            builder.build_indirect_call(ink_func_type, llvm_func_ptr, &*arg_vals, "call");
+            builder.build_indirect_call(ink_func_type, llvm_func_ptr, &arg_vals, "call");
             builder.build_return(None);
         } else {
             let out =
-                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &*arg_vals, "call");
+                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &arg_vals, "call");
             let out = out.try_as_basic_value().unwrap_left();
             builder.build_return(Some(&out));
         }
 
-        let comp_data = self.comp_data_mut();
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
         comp_data.compiled.insert(
             func_info.clone(),

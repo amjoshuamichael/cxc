@@ -18,25 +18,23 @@ impl ExprTree {
     pub fn ids_in_order(&self) -> Vec<ExprID> {
         use NodeData::*;
 
-        fn ids_of<'a>(tree: &'a ExprTree, id: ExprID) -> Vec<ExprID> {
+        fn ids_of(tree: &ExprTree, id: ExprID) -> Vec<ExprID> {
             let rest = match tree.get(id) {
                 Number { .. } | Float { .. } | Bool { .. } | Ident { .. } => Vec::new(),
                 StructLit { fields, .. } => fields
                     .iter()
-                    .map(|(_, id)| ids_of(tree, *id))
-                    .flatten()
+                    .flat_map(|(_, id)| ids_of(tree, *id))
                     .collect(),
                 ArrayLit { parts: many, .. }
                 | Call { a: many, .. }
                 | Block { stmts: many, .. } => {
-                    many.iter().map(|id| ids_of(tree, *id)).flatten().collect()
+                    many.iter().flat_map(|id| ids_of(tree, *id)).collect()
                 },
                 FirstClassCall {
                     f: one, a: many, ..
                 } => many
                     .iter()
-                    .map(|id| ids_of(tree, *id))
-                    .flatten()
+                    .flat_map(|id| ids_of(tree, *id))
                     .chain(ids_of(tree, one).drain(..))
                     .collect(),
                 BinOp { lhs: l, rhs: r, .. }
@@ -177,20 +175,20 @@ impl FuncRep {
         }
     }
 
-    pub fn insert_statement_before<'a>(
-        &'a mut self,
+    pub fn insert_statement_before(
+        &mut self,
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
-    ) -> InsertionData<'a> {
+    ) -> InsertionData<'_> {
         let new_statement = self.insert_statement_inner(statement_origin, new_data, 0);
         InsertionData(self, new_statement)
     }
 
-    pub fn insert_statement_after<'a>(
-        &'a mut self,
+    pub fn insert_statement_after(
+        &mut self,
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
-    ) -> InsertionData<'a> {
+    ) -> InsertionData {
         let new_statement = self.insert_statement_inner(statement_origin, new_data, 1);
         InsertionData(self, new_statement)
     }

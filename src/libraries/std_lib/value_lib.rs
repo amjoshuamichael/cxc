@@ -25,8 +25,7 @@ impl Library for ValueLib {
     }
 }
 
-fn make_a_val(type_ptr: *const TypeData, data: *const u8) -> XcValue {
-    let the_type = unsafe { Type::from_raw(type_ptr) };
-    let val = unsafe { XcValue::new_from_ptr(the_type.clone(), data) };
-    val
+unsafe fn make_a_val(type_ptr: *const TypeData, data: *const u8) -> XcValue {
+    let the_type = Type::from_raw(type_ptr);
+    XcValue::new_from_ptr(the_type, data)
 }

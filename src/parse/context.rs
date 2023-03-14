@@ -106,7 +106,7 @@ impl<N: Default + Clone> ParseContext<N> {
                 .ok_or(ParseError::UnexpectedEndOfFile)?
                 .1;
 
-            Self::check_scope(&self.scope, &next);
+            Self::check_scope(&self.scope, next);
             self.tok_pos.inc();
         }
 
@@ -179,7 +179,7 @@ impl<N: Default + Clone> ParseContext<N> {
                     }
 
                     if has_increased_once {
-                        Self::check_scope(&self.scope, &next_token);
+                        Self::check_scope(&self.scope, next_token);
                     }
                     has_increased_once = true;
                     self.tok_pos.inc();

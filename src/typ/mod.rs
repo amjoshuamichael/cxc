@@ -155,7 +155,7 @@ impl Type {
     }
 
     pub fn deref_x_times(self, count: u8) -> Option<Type> {
-        let mut output = self.clone();
+        let mut output = self;
 
         for _ in 0..count {
             output = output.get_deref()?;
@@ -181,6 +181,10 @@ impl Type {
 
     pub fn as_u64(self) -> u64 { self.into_raw() as u64 }
     pub fn into_raw(self) -> *const TypeData { Arc::into_raw(self.0) }
+
+    /// # Safety
+    ///
+    /// Ensure that data is a valid pointer to a TypeData
     pub unsafe fn from_raw(data: *const TypeData) -> Self { Self(Arc::from_raw(data)) }
 
     pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size, signed: true })) }
@@ -251,16 +255,16 @@ impl Type {
         self.modify_type_data(|data| data.name = name.clone())
     }
 
-    pub(crate) fn with_generics(self, generics: &Vec<Type>) -> Self {
-        self.modify_type_data(|data| data.generics = generics.clone())
+    pub(crate) fn with_generics(self, generics: &[Type]) -> Self {
+        self.modify_type_data(|data| data.generics = generics.to_owned())
     }
 
     pub fn with_from_function(self, name: TypeName) -> Self {
         self.modify_type_data(|data| data.from_function = name.clone())
     }
 
-    pub fn with_parameters(self, parameters: &Vec<Type>) -> Self {
-        self.modify_type_data(|data| data.parameters = parameters.clone())
+    pub fn with_parameters(self, parameters: &[Type]) -> Self {
+        self.modify_type_data(|data| data.parameters = parameters.to_owned())
     }
 
     pub fn modify_type_data(self, function: impl FnOnce(&mut TypeData)) -> Self {
@@ -283,8 +287,8 @@ impl Type {
     pub fn is_empty(&self) -> bool { self == &Type::empty() }
 }
 
-impl Into<TypeSpec> for Type {
-    fn into(self) -> TypeSpec { TypeSpec::Type(self) }
+impl From<Type> for TypeSpec {
+    fn from(typ: Type) -> TypeSpec { TypeSpec::Type(typ) }
 }
 
 #[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord)]
@@ -401,7 +405,7 @@ impl StructType {
             }
         }
 
-        return Err(TErr::FieldNotFound(self.clone(), field_name.clone()));
+        Err(TErr::FieldNotFound(self.clone(), field_name.clone()))
     }
 
     pub fn get_field_index(&self, field_name: &VarName) -> TResult<usize> {
@@ -411,7 +415,7 @@ impl StructType {
             .ok_or(TErr::FieldNotFound(self.clone(), field_name.clone()))
     }
 
-    pub fn is_tuple(&self) -> bool { self.fields.len() == 0 || &*self.fields[0].0 == "0" }
+    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || &*self.fields[0].0 == "0" }
 }
 
 // TODO: is not interroperable with a rust sum type with 0 variants.
@@ -468,7 +472,7 @@ impl SumType {
     }
 
     pub fn has_internal_discriminant(&self) -> bool {
-        if self.variants.len() == 0 {
+        if self.variants.is_empty() {
             return false;
         }
 
@@ -561,13 +565,13 @@ pub enum FloatType {
     F64,
 }
 
-impl Into<FloatType> for u32 {
-    fn into(self) -> FloatType {
-        match self {
+impl From<u32> for FloatType {
+    fn from(size: u32) -> FloatType {
+        match size {
             16 => FloatType::F16,
             32 => FloatType::F32,
             64 => FloatType::F64,
-            _ => panic!("{} is an invalid float size", self),
+            _ => panic!("{size} is an invalid float size"),
         }
     }
 }

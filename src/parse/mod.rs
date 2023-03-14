@@ -26,13 +26,13 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpan
 
     let errors = lexer.errors.deref().unwrap();
 
-    if errors.len() == 0 {
+    if errors.is_empty() {
         match script {
             Ok(script) => Ok(script),
             Err(error) => Err(vec![ParseErrorSpanned {
                 start: 0,
                 end: lexer.inner.last().unwrap().2,
-                tokens_between: TokenSpan::new(&*lexer.inner, 0, lexer.inner.len()),
+                tokens_between: TokenSpan::new(&lexer.inner, 0, lexer.inner.len()),
                 error,
             }]),
         }
@@ -69,7 +69,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 let generic_labels = parse_generics(lexer)?;
 
                 if matches!(lexer.peek_by(1)?, Tok::LAngle | Tok::Assignment)
-                    && generic_labels.len() == 0
+                    && generic_labels.is_empty()
                 {
                     lexer.recover(|lexer| {
                         let type_name = lexer.next_tok()?.type_name()?;
@@ -200,7 +200,7 @@ pub fn parse_func_code(
 
     Ok(FuncCode {
         name: lexer.name.clone(),
-        ret_type: ret_type.into(),
+        ret_type,
         args,
         code,
         generic_count,

@@ -8,7 +8,7 @@ pub trait Errable {
 }
 
 impl Errable for () {
-    fn err() -> Self { () }
+    fn err() -> Self {}
 }
 
 impl Errable for Expr {

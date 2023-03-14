@@ -88,7 +88,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let mut statements = Vec::new();
             let make_var = Expr::SetVar(
                 VarDecl {
-                    name: output_var.clone(),
+                    name: output_var,
                     type_spec: string_type.into(),
                 },
                 box Expr::Strin(Arc::from(&*prefix)),
@@ -130,9 +130,9 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             }
 
             let push_closer_call = Expr::Call {
-                func: push_string.clone(),
+                func: push_string,
                 generics: Vec::new(),
-                args: vec![output_var_ref.clone(), Expr::Strin("}".into()).get_ref()],
+                args: vec![output_var_ref, Expr::Strin("}".into()).get_ref()],
                 is_method: true,
             };
             statements.push(push_closer_call);
@@ -149,7 +149,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let mut statements = Vec::new();
             let make_var = Expr::SetVar(
                 VarDecl {
-                    name: output_var.clone(),
+                    name: output_var,
                     type_spec: string_type.into(),
                 },
                 box Expr::Strin("[".into()),
@@ -198,9 +198,9 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             }
 
             let push_closer_call = Expr::Call {
-                func: push_string.clone(),
+                func: push_string,
                 generics: Vec::new(),
-                args: vec![output_var_ref.clone(), Expr::Strin("]".into())],
+                args: vec![output_var_ref, Expr::Strin("]".into())],
                 is_method: true,
             };
             statements.push(push_closer_call);
@@ -214,14 +214,14 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
     Some(FuncCode {
         name: VarName::from("to_string"),
-        ret_type: TypeSpec::Named("String".into()).into(),
+        ret_type: TypeSpec::Named("String".into()),
         args: vec![VarDecl {
             name: VarName::from("input"),
             type_spec: typ.clone().into(),
         }],
         generic_count: 0,
         code: expr,
-        relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ.into())),
+        relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
     })
 }
 

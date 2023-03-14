@@ -44,7 +44,7 @@ impl From<String> for VarName {
 
 impl Deref for VarName {
     type Target = str;
-    fn deref(&self) -> &Self::Target { &*self.0 }
+    fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 #[derive(PartialEq, Default, Eq, Clone, Hash, PartialOrd, Ord)]
@@ -63,7 +63,7 @@ pub enum TypeName {
 
 impl TypeName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self {
-        match t.slice().chars().nth(0) {
+        match t.slice().chars().next() {
             Some('i') => return Self::I(t.slice()[1..].parse().expect("improper int type")),
             Some('u') => return Self::U(t.slice()[1..].parse().expect("improper uint type")),
             _ => {},
@@ -91,7 +91,7 @@ impl Display for TypeName {
 impl Debug for TypeName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let out = match self {
-            Self::Other(name) => &*name,
+            Self::Other(name) => name,
             Self::I(size) => return write!(f, "i{size}"),
             Self::U(size) => return write!(f, "u{size}"),
             Self::F64 => "f64",

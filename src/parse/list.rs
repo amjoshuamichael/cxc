@@ -11,7 +11,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
 
     lexer.assert_next_tok_is(opener)?;
 
-    if lexer.peek_tok()? == closer.clone() {
+    if lexer.peek_tok()? == closer {
         lexer.next_tok()?;
         return Ok(Vec::new());
     }

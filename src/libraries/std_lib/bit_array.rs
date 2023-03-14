@@ -33,7 +33,7 @@ impl<T: BitAnd<u32> + BitOrAssign<u32> + Copy> BitArray<T>
 where
     <T as BitAnd<u32>>::Output: PartialOrd<u32>,
 {
-    pub fn get(&self, index: u32) -> bool { return (self.num & (1 << index)) > 0 }
+    pub fn get(&self, index: u32) -> bool { (self.num & (1 << index)) > 0 }
     pub fn set(&mut self, index: u32, to: bool) { self.num |= (to as u32) << index }
     pub fn new() -> BitArray<u32> { BitArray::<u32> { num: 0 } }
 }

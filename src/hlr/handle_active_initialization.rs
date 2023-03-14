@@ -120,13 +120,12 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                             relation: TypeRelation::Static(array_type.base.clone()),
                             ..Default::default()
                         },
-                        ..Default::default()
                     },
                 );
             }
 
             *arraylit_data = NodeData::Ident {
-                name: defaulted_array.clone(),
+                name: defaulted_array,
                 var_type: var_type.clone(),
             };
         },

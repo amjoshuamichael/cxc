@@ -9,15 +9,13 @@ impl Type {
         // temporary type, we'll assume that that field is equal, and
         // move on.
         let filler = Type::empty().with_name("Filler".into());
-        let filled_spec = comp_data
-            .get_spec(&spec, &vec![filler.clone(); 10])
-            .unwrap();
+        let filled_spec = comp_data.get_spec(&spec, &vec![filler; 10]).unwrap();
 
-        could_come_from_filled(self, &filled_spec, comp_data)
+        could_come_from_filled(self, &filled_spec)
     }
 }
 
-fn could_come_from_filled(self_type: &Type, other_type: &Type, comp_data: &CompData) -> bool {
+fn could_come_from_filled(self_type: &Type, other_type: &Type) -> bool {
     let filler = Type::empty().with_name("Filler".into());
 
     let mut self_iter = FieldsIter::new(self_type.clone().wrap());
@@ -41,9 +39,7 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type, comp_data: &CompD
                 .generics()
                 .iter()
                 .zip(self_next.generics().iter())
-                .all(|(other_gen, self_gen)| {
-                    could_come_from_filled(self_gen, other_gen, comp_data)
-                })
+                .all(|(other_gen, self_gen)| could_come_from_filled(self_gen, other_gen))
         {
             self_iter.skip_children_of_last();
             other_iter.skip_children_of_last();
@@ -56,9 +52,7 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type, comp_data: &CompD
                 .parameters()
                 .iter()
                 .zip(self_next.parameters().iter())
-                .all(|(other_gen, self_gen)| {
-                    could_come_from_filled(self_gen, other_gen, comp_data)
-                })
+                .all(|(other_gen, self_gen)| could_come_from_filled(self_gen, other_gen))
         {
             self_iter.skip_children_of_last();
             other_iter.skip_children_of_last();
@@ -72,9 +66,7 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type, comp_data: &CompD
             }) => {
                 let TypeEnum::Array(ArrayType { count: other_count, base: other_base }) = 
                         other_next.as_type_enum() else { return false };
-                if other_count != self_count
-                    || !could_come_from_filled(self_base, other_base, comp_data)
-                {
+                if other_count != self_count || !could_come_from_filled(self_base, other_base) {
                     return false;
                 };
             },

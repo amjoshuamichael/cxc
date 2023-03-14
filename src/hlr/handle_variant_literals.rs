@@ -30,14 +30,14 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                     hlr.insert_quick(struct_parent, sum_type.tag_data(invalid_state_index))
                 } else {
                     let castable_data = if fields.len() == 1 {
-                        hlr.tree.get(fields[0].1.clone())
+                        hlr.tree.get(fields[0].1)
                     } else {
                         let struct_data_type = struct_data_clone.ret_type_mut().unwrap();
                         *struct_data_type = variant_type.as_struct();
                         struct_data_clone
                     };
 
-                    let new_data_id = hlr.insert_quick(
+                    hlr.insert_quick(
                         hlr.tree.parent(struct_id),
                         CallGen {
                             info: UniqueFuncInfo {
@@ -50,9 +50,7 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                             },
                             args: vec![box castable_data],
                         },
-                    );
-
-                    new_data_id
+                    )
                 };
 
                 *struct_data = hlr.tree.get(variant_data);

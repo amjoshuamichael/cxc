@@ -86,7 +86,7 @@ impl CompData {
                     return Err(TErr::NoFieldOnNonStruct(struct_type, field_name.clone()));
                 };
 
-                struct_type.get_field_type(field_name)?.clone()
+                struct_type.get_field_type(field_name)?
             },
             TypeSpec::SumMember(sum_type, type_name) => {
                 let sum_type = self.get_spec(sum_type, generics)?;
@@ -95,7 +95,7 @@ impl CompData {
                 };
 
                 sum_type_inner
-                    .get_variant_type(&sum_type, &type_name)
+                    .get_variant_type(&sum_type, type_name)
                     .unwrap()
             },
             TypeSpec::Struct(fields) => {
@@ -112,7 +112,7 @@ impl CompData {
                 let mut typed_variants: Vec<(TypeName, Type)> = Vec::new();
 
                 for (name, sub_type_spec) in variants {
-                    let sub_type = self.get_spec(&sub_type_spec, generics)?;
+                    let sub_type = self.get_spec(sub_type_spec, generics)?;
                     typed_variants.push((name.clone(), sub_type));
                 }
 

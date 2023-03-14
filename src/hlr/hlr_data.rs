@@ -116,15 +116,13 @@ impl FuncRep {
             func_arg_types.remove(0);
         }
 
-        let out = FuncOutput {
+        FuncOutput {
             func_type: self.ret_type.clone().func_with_args(func_arg_types),
             arg_names: Some(self.arg_names()),
             tree: Some(self.tree),
             data_flow: Some(self.data_flow),
             info: Some(self.info),
-        };
-
-        out
+        }
     }
 
     pub fn uniqueify_varname(&mut self, name: &str) -> VarName {
@@ -223,7 +221,7 @@ impl FuncRep {
                         .comp_data
                         .globals
                         .get(&name.clone())
-                        .expect(&*format!("could not find identifier {name}"))
+                        .unwrap_or_else(|| panic!("could not find identifier {name}"))
                         .0
                         .clone(),
                 };

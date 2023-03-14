@@ -15,8 +15,8 @@ pub(super) fn size_of_type(typ: Type) -> u64 {
     let machine = target
         .create_target_machine(
             &triple,
-            &*TargetMachine::get_host_cpu_name().to_string(),
-            &*TargetMachine::get_host_cpu_features().to_string(),
+            &TargetMachine::get_host_cpu_name().to_string(),
+            &TargetMachine::get_host_cpu_features().to_string(),
             OptimizationLevel::None,
             RelocMode::Default,
             CodeModel::Default,

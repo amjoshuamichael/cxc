@@ -48,7 +48,6 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
                                 ret_type: field_type.clone(),
                             },
                             rhs: box hlr.tree.get(*field_expr),
-                            ..Default::default()
                         },
                     )
                     .inserted_id();
@@ -56,7 +55,7 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
 
             *struct_data = NodeData::Ident {
                 var_type: struct_type.clone(),
-                name: new_struct_name.clone(),
+                name: new_struct_name,
             };
         },
     )

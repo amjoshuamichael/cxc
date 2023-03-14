@@ -312,7 +312,7 @@ impl NodeData {
                     InitOpts::NoFill => {},
                 }
 
-                lit += "]".into();
+                lit += "]";
 
                 lit
             },
@@ -345,7 +345,7 @@ impl NodeData {
 
                 call += &*f.to_string();
 
-                if generics.len() > 0 {
+                if !generics.is_empty() {
                     call += "<";
                     for (g, generic) in generics.iter().enumerate() {
                         if g > 0 {
@@ -410,16 +410,16 @@ impl NodeData {
             IfThen { i, t, .. } => {
                 let mut it = "? ".into();
                 it += &*tree.get(*i).to_string(tree);
-                it += " ".into();
+                it += " ";
                 it += &*tree.get(*t).to_string(tree);
                 it
             },
             IfThenElse { i, t, e, .. } => {
                 let mut ite = "? ".into();
                 ite += &*tree.get(*i).to_string(tree);
-                ite += " ".into();
+                ite += " ";
                 ite += &*tree.get(*t).to_string(tree);
-                ite += " : ".into();
+                ite += " : ";
                 ite += &*tree.get(*e).to_string(tree);
                 ite
             },

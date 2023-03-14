@@ -50,7 +50,7 @@ impl CompData {
             ret_type: TypeSpec::Void,
             args: vec![VarDecl {
                 name: VarName::temp(),
-                type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
+                type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
             }],
 
             generic_count: 1,
@@ -64,11 +64,11 @@ impl CompData {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
                     name: VarName::temp(),
@@ -87,11 +87,11 @@ impl CompData {
             args: vec![
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)).into(),
+                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
                     name: VarName::temp(),
@@ -211,12 +211,12 @@ impl CompData {
             false
         };
 
-        if let Some(func) = self.compiled.get(&info) && 
-            !func.code().pointer().is_none() {
+        if let Some(func) = self.compiled.get(info) && 
+            func.code().pointer().is_some() {
             return true;
-        } else {
-            return is_intrinsic;
         }
+
+        is_intrinsic
     }
 
     pub fn name_is_intrinsic(&self, name: &VarName) -> bool {
@@ -241,11 +241,7 @@ impl CompData {
         None
     }
 
-    pub fn update_func_info<'a>(
-        &mut self,
-        info: UniqueFuncInfo,
-        module: &Module<'static>,
-    ) -> bool {
+    pub fn update_func_info(&mut self, info: UniqueFuncInfo, module: &Module<'static>) -> bool {
         assert_eq!(info.gen, Gen::Latest);
 
         let info_made_old = UniqueFuncInfo {
@@ -256,16 +252,16 @@ impl CompData {
         if !self.compiled.contains_key(&info_made_old) && 
             let Some(v) = self.compiled.remove(&info) {
             module
-                .get_function(&*info.to_string())
+                .get_function(&info.to_string())
                 .unwrap()
                 .as_global_value()
-                .set_name(&*info_made_old.to_string());
+                .set_name(&info_made_old.to_string());
 
             v.disable_pointer();
             self.compiled.insert(info.clone(), v.clone());
 
             // TODO: set fn pointer
-            self.compiled.insert(info_made_old.clone(), Func::new_compiled(info_made_old.clone(), v.typ()));
+            self.compiled.insert(info_made_old.clone(), Func::new_compiled(info_made_old, v.typ()));
 
             true
         } else { false }
@@ -273,7 +269,7 @@ impl CompData {
 
     pub fn new_generation(&mut self) { self.generations.push(Gen::random()) }
 
-    pub fn create_func_placeholder<'a>(
+    pub fn create_func_placeholder(
         &mut self,
         info: &UniqueFuncInfo,
         context: &'static Context,
@@ -281,18 +277,14 @@ impl CompData {
     ) -> CResult<()> {
         let function_type = self.get_func_type(info)?;
 
-        let mut empty_function = module.add_function(
-            &*info.to_string(),
-            function_type.llvm_func_type(&context),
-            None,
-        );
+        let mut empty_function =
+            module.add_function(&info.to_string(), function_type.llvm_func_type(context), None);
 
-        add_sret_attribute_to_func(&mut empty_function, &context, &function_type.ret);
+        add_sret_attribute_to_func(&mut empty_function, context, &function_type.ret);
 
-        if !self.compiled.contains_key(&info.clone()) {
-            self.compiled
-                .insert(info.clone(), Func::new_compiled(info.clone(), function_type.clone()));
-        }
+        self.compiled
+            .entry(info.clone())
+            .or_insert_with(|| Func::new_compiled(info.clone(), function_type.clone()));
 
         self.globals.insert(
             info.name.clone(),
@@ -304,7 +296,7 @@ impl CompData {
 
     pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<FuncType> {
         if let Some(compiled) = self.compiled.get(info) {
-            return Ok(compiled.typ().clone());
+            return Ok(compiled.typ());
         }
 
         let code = self.get_code(info.clone())?;
@@ -318,7 +310,7 @@ impl CompData {
             .collect::<TResult<Vec<_>>>()?;
 
         Ok(FuncType {
-            ret: ret_type.clone(),
+            ret: ret_type,
             args: arg_types,
         })
     }
@@ -454,22 +446,22 @@ impl UniqueFuncInfo {
     pub fn og_name(&self) -> VarName { self.name.clone() }
     pub fn is_method(&self) -> bool { matches!(self.relation, TypeRelation::MethodOf(_)) }
     pub fn is_static(&self) -> bool { matches!(self.relation, TypeRelation::Static(_)) }
-    pub fn has_generics(&self) -> bool { self.generics().len() > 0 }
+    pub fn has_generics(&self) -> bool { !self.generics().is_empty() }
 }
 
-impl Into<UniqueFuncInfo> for &str {
-    fn into(self) -> UniqueFuncInfo {
+impl From<&str> for UniqueFuncInfo {
+    fn from(name: &str) -> UniqueFuncInfo {
         UniqueFuncInfo {
-            name: self.into(),
+            name: name.into(),
             ..Default::default()
         }
     }
 }
 
-impl Into<UniqueFuncInfo> for VarName {
-    fn into(self) -> UniqueFuncInfo {
+impl From<VarName> for UniqueFuncInfo {
+    fn from(name: VarName) -> UniqueFuncInfo {
         UniqueFuncInfo {
-            name: self,
+            name,
             ..Default::default()
         }
     }

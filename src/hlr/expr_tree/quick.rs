@@ -113,8 +113,8 @@ impl NodeDataGen for SetVarGen {
         hlr.tree.replace(
             space,
             NodeData::Set {
-                lhs: lhs.clone(),
-                rhs: rhs.clone(),
+                lhs,
+                rhs,
                 ret_type: hlr.tree.get_ref(lhs).ret_type(),
             },
         );
@@ -213,7 +213,7 @@ impl NodeDataGen for CallGen {
 
 impl NodeDataGen for UniqueFuncInfo {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
-        let func_type = hlr.comp_data.get_func_type(&self).unwrap();
+        let func_type = hlr.comp_data.get_func_type(self).unwrap();
 
         hlr.tree.insert(
             parent,
@@ -221,7 +221,7 @@ impl NodeDataGen for UniqueFuncInfo {
                 f: self.name.clone(),
                 generics: self.generics.clone(),
                 relation: self.relation.clone(),
-                ret_type: func_type.ret.clone(),
+                ret_type: func_type.ret,
                 a: Vec::new(),
             },
         )

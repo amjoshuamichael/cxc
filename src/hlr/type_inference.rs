@@ -17,12 +17,12 @@ enum Inferable {
     ReturnType,
 }
 
-impl Into<Inferable> for &VarName {
-    fn into(self) -> Inferable { Inferable::Var(self.clone()) }
+impl From<&VarName> for Inferable {
+    fn from(var: &VarName) -> Inferable { Inferable::Var(var.clone()) }
 }
 
-impl Into<Inferable> for ExprID {
-    fn into(self) -> Inferable { Inferable::Expr(self) }
+impl From<ExprID> for Inferable {
+    fn from(id: ExprID) -> Inferable { Inferable::Expr(id) }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -62,7 +62,7 @@ impl InferMap {
         self.inferables
             .keys()
             .all(|inferable| type_of_inferable(inferable, hlr).is_known())
-            && self.calls.len() == 0
+            && self.calls.is_empty()
             && hlr.tree.ids_in_order().iter().all(|id| {
                 let node = hlr.tree.get_ref(*id);
                 node.ret_type().is_known()
@@ -93,7 +93,7 @@ fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
         },
         CallGeneric(id, index) => {
             let NodeData::Call { generics, .. } = hlr.tree.get(*id) else { panic!() };
-            generics[*index as usize].clone()
+            generics[*index].clone()
         },
         ReturnType => hlr.ret_type.clone(),
     }
@@ -117,7 +117,7 @@ fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
         },
         CallGeneric(id, index) => {
             let NodeData::Call { ref mut generics, .. } = hlr.tree.get_mut(*id) else { panic!() };
-            generics[*index as usize] = to
+            generics[*index] = to
         },
         ReturnType => hlr.ret_type = to,
     }
@@ -303,7 +303,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
     }
 
     if crate::XC_DEBUG {
-        println!("{}", indent_parens(format!("{infer_map:?}").replace("\n", "")));
+        println!("{}", indent_parens(format!("{infer_map:?}").replace('\n', "")));
         println!("{:?}", &hlr.tree);
         println!("{}", &hlr.tree.to_string());
 
@@ -337,7 +337,7 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
     let mut lhs = GenParam(0);
     let mut rhs = spec.clone();
 
-    while &rhs != &gen_param_spec {
+    while rhs != gen_param_spec {
         match &rhs {
             GenParam(_) => return None, // gen param is not equal to the one we're looking for
             Ref(elem) | Deref(elem) | Array(elem, _) => {
@@ -413,7 +413,7 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
                         }
 
                         let reversed_spec =
-                            spec_from_perspective_of_generic(&spec, param_index as u32);
+                            spec_from_perspective_of_generic(spec, param_index as u32);
 
                         if reversed_spec.is_none() {
                             continue;
@@ -439,12 +439,12 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
         for constraint in constraints {
             match constraint {
                 Constraint::IsType(typ) => {
-                    if !Type::are_subtypes(typ, &type_of_inferable(&unknown, hlr)) {
+                    if !Type::are_subtypes(typ, &type_of_inferable(unknown, hlr)) {
                         set_inferable(unknown, typ, hlr);
                     }
                 },
                 Constraint::SameAs(inferable) => {
-                    let to = type_of_inferable(&inferable, hlr);
+                    let to = type_of_inferable(inferable, hlr);
 
                     if to.is_unknown() {
                         continue;
@@ -458,20 +458,20 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     method_of,
                 } => {
                     let gen_params = gen_params
-                        .into_iter()
-                        .map(|inferable| type_of_inferable(&inferable, hlr))
+                        .iter()
+                        .map(|inferable| type_of_inferable(inferable, hlr))
                         .collect::<Vec<_>>();
 
                     let method_of = method_of
                         .as_ref()
-                        .map(|inferable| type_of_inferable(&inferable, hlr));
+                        .map(|inferable| type_of_inferable(inferable, hlr));
 
                     if gen_params.iter().all(Type::is_known)
                         && (method_of.is_none() || method_of.as_ref().unwrap().is_known())
                     {
                         let to = hlr
                             .comp_data
-                            .get_spec(&spec, &(gen_params, method_of))
+                            .get_spec(spec, &(gen_params, method_of))
                             .unwrap();
 
                         set_inferable(unknown, &to, hlr);

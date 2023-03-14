@@ -32,19 +32,19 @@ use self::handle_variant_literals::handle_variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::handle_large_returns;
 
-pub fn hlr<'a>(
+pub fn hlr(
     info: UniqueFuncInfo,
     comp_data: Rc<CompData>,
     code: FuncCode,
 ) -> CResult<FuncOutput> {
     if crate::XC_DEBUG {
         println!();
-        println!("====HLR of {}====", info.name.to_string());
+        println!("====HLR of {}====", info.name);
     }
 
     assert!(matches!(code.code, Expr::Block(_)), "hlr input must be a block");
 
-    let mut output = FuncRep::from_code(code, comp_data.clone(), info)?;
+    let mut output = FuncRep::from_code(code, comp_data, info)?;
 
     if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());

@@ -40,7 +40,7 @@ lazy_static::lazy_static! {
 
 impl XcValue {
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
-        let size = typ.size() as usize;
+        let size = typ.size();
         let data = data[0..size].to_vec();
 
         Self { typ, data }
@@ -48,6 +48,9 @@ impl XcValue {
 
     pub fn new_from_vec(typ: Type, data: Vec<u8>) -> Self { Self { typ, data } }
 
+    /// # Safety
+    ///
+    /// Ensure the pointer is pointing to a type equivalent to typ.
     pub unsafe fn new_from_ptr(typ: Type, ptr: *const u8) -> Self {
         let slice = std::slice::from_raw_parts(ptr, typ.size());
 
@@ -87,7 +90,14 @@ impl XcValue {
         Some(indent_parens(output))
     }
 
+    /// # Safety
+    ///
+    /// Ensure the generic type 'T' is the same as the type of the value.
     pub unsafe fn get_data_as<T>(&self) -> *const T { self.data.as_ptr() as *const T }
+
+    /// # Safety
+    ///
+    /// Ensure the generic type 'T' is the same as the type of the value.
     pub unsafe fn consume<T>(mut self) -> T {
         let capacity = self.data.capacity();
         let data_ptr = self.data.as_mut_ptr();
@@ -105,12 +115,12 @@ impl XcValue {
 
     pub fn get_size(&self) -> usize { self.data.len() }
     pub fn get_type(&self) -> &Type { &self.typ }
-    pub fn get_slice(&self) -> &[u8] { &*self.data }
+    pub fn get_slice(&self) -> &[u8] { &self.data }
 }
 
 impl Unit {
     pub fn get_value(&mut self, of: &str) -> CResult<XcValue> {
-        if of == "" {
+        if of.is_empty() {
             return Ok(XcValue::default());
         }
 
@@ -132,7 +142,7 @@ impl Unit {
             ..Default::default()
         };
 
-        let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code)?;
+        let mut func_rep = hlr(info, self.comp_data.clone(), code)?;
 
         {
             // TODO: what's goin on here?
@@ -143,10 +153,10 @@ impl Unit {
         let mut fcs = {
             let TypeEnum::Func(func_type) = func_rep.func_type.as_type_enum()
                 else { unreachable!() };
-            let ink_func_type = func_type.llvm_func_type(&self.context);
+            let ink_func_type = func_type.llvm_func_type(self.context);
 
             let mut function = self.module.add_function(temp_name, ink_func_type, None);
-            add_sret_attribute_to_func(&mut function, &self.context, &func_type.ret);
+            add_sret_attribute_to_func(&mut function, self.context, &func_type.ret);
 
             self.new_func_comp_state(
                 func_rep.take_tree(),
@@ -179,7 +189,7 @@ impl Unit {
             match ret_type.return_style() {
                 ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
                     let new_func: ExternFunc<(), i64> = transmute(func_addr);
-                    let out: [u8; 8] = transmute(new_func(()));
+                    let out: [u8; 8] = new_func(()).to_ne_bytes();
                     XcValue::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::ThroughI64I32

@@ -75,7 +75,7 @@ impl FuncType {
                 context.void_type().fn_type(&args[..], false)
             } else {
                 let return_type = self.ret.raw_return_type().to_basic_type(context);
-                return_type.fn_type(&*args, false)
+                return_type.fn_type(&args, false)
             }
         } else {
             let args: Vec<BasicMetadataTypeEnum> = once(&self.ret.clone().get_ref())
@@ -102,12 +102,10 @@ impl Kind for StructType {
                     name += &*format!(", {}", &*typ.to_string());
                 }
             }
-        } else {
-            if let Some((first_name, first_typ)) = fields_iter.next() {
-                name += &*format!("{}: {}", &**first_name, first_typ.to_string());
-                for (field_name, typ) in fields_iter {
-                    name += &*format!(", {}: {}", &**field_name, typ.to_string());
-                }
+        } else if let Some((first_name, first_typ)) = fields_iter.next() {
+            name += &*format!("{}: {}", &**first_name, first_typ.to_string());
+            for (field_name, typ) in fields_iter {
+                name += &*format!(", {}: {}", &**field_name, typ.to_string());
             }
         }
 
@@ -137,7 +135,7 @@ impl Kind for SumType {
         match size {
             0..=8 => context.custom_width_int_type(size * 8).into(),
             9..=16 => context
-                .struct_type(&*vec![context.i32_type().into(); size as usize / 4], false)
+                .struct_type(&vec![context.i32_type().into(); size as usize / 4], false)
                 .into(),
             17.. => {
                 // TODO: enum variants like i1, i32, i32, i32, i32 won't work here
@@ -146,7 +144,7 @@ impl Kind for SumType {
                 struct_fields.extend(
                     vec![context.i32_type().as_basic_type_enum(); padding_size / 4].into_iter(),
                 );
-                context.struct_type(&*struct_fields, false).into()
+                context.struct_type(&struct_fields, false).into()
             },
         }
     }

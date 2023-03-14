@@ -67,13 +67,17 @@ impl Debug for CompData {
     }
 }
 
+impl Default for Unit {
+    fn default() -> Self { Self::new() }
+}
+
 impl Unit {
     pub fn new() -> Self {
         let context: &'static _ =
             unsafe { std::mem::transmute(Box::leak(box Context::create())) };
 
         let random_module_name = format!("cxc_{:x}", rand::random::<u64>());
-        let module = Context::create_module(&context, &*random_module_name);
+        let module = Context::create_module(context, &random_module_name);
 
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::None)
@@ -83,7 +87,7 @@ impl Unit {
             comp_data: Rc::new(CompData::new()),
             execution_engine: Rc::new(RefCell::new(execution_engine)),
             module,
-            context: &context,
+            context,
         }
     }
 
@@ -99,7 +103,7 @@ impl Unit {
         );
     }
 
-    pub fn push_script<'s>(&'s mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
+    pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
         let lexed = lex(script);
 
         let parsed = parse::parse(lexed).map_err(|errs| {
@@ -142,7 +146,7 @@ impl Unit {
                         .map_inner_type(|spec| comp_data.get_spec(&spec, &()).unwrap());
 
                     let func_info = UniqueFuncInfo {
-                        name: decl.name.clone(),
+                        name: decl.name,
                         relation,
                         ..Default::default()
                     };
@@ -162,17 +166,10 @@ impl Unit {
         Ok(funcs_to_process)
     }
 
-    fn comp_data_mut<'a>(&'a mut self) -> &'a mut CompData {
-        Rc::get_mut(&mut self.comp_data).unwrap()
-    }
-
     pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) -> CResult<()> {
-        set = set
-            .into_iter()
-            .filter(|info| !self.comp_data.has_been_compiled(info))
-            .collect();
+        set.retain(|info| !self.comp_data.has_been_compiled(info));
 
-        if set.len() == 0 {
+        if set.is_empty() {
             return Ok(());
         }
 
@@ -192,11 +189,7 @@ impl Unit {
 
                     let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
-                    comp_data.create_func_placeholder(
-                        &info,
-                        &mut self.context,
-                        &mut self.module,
-                    )?;
+                    comp_data.create_func_placeholder(&info, self.context, &self.module)?;
 
                     hlr
                 })
@@ -204,8 +197,7 @@ impl Unit {
 
             set = func_reps
                 .iter()
-                .map(|f| f.get_func_dependencies().into_iter())
-                .flatten()
+                .flat_map(|f| f.get_func_dependencies().into_iter())
                 .filter(|f| !self.comp_data.has_been_compiled(f))
                 .collect();
 
@@ -279,11 +271,11 @@ impl Unit {
     }
 
     fn get_func_value(&self, func_info: &UniqueFuncInfo) -> Option<FunctionValue<'static>> {
-        self.module.get_function(&*func_info.to_string())
+        self.module.get_function(&func_info.to_string())
     }
 
-    fn new_func_comp_state<'f>(
-        &'f self,
+    fn new_func_comp_state(
+        &self,
         tree: ExprTree,
         data_flow: DataFlow,
         function: FunctionValue<'static>,
@@ -310,7 +302,7 @@ impl Unit {
         assert!(
             self.
                 module
-                .get_function(&*info.to_string())?
+                .get_function(&info.to_string())?
                 .get_param_iter()
                 .all(|param_type| !param_type.is_array_value()),
             "Cannot run function that has array value as parameter. Pass in an array pointer instead."

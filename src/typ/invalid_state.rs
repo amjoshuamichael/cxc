@@ -18,12 +18,12 @@ impl InvalidState for Type {
 impl InvalidState for RefType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index == 0 {
-            return Some(box NodeData::Number {
+            Some(box NodeData::Number {
                 value: 0,
                 lit_type: Type::i(64),
-            });
+            })
         } else {
-            return None;
+            None
         }
     }
 }
@@ -31,12 +31,12 @@ impl InvalidState for RefType {
 impl InvalidState for BoolType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index + 2 < 256 {
-            return Some(box NodeData::Number {
+            Some(box NodeData::Number {
                 value: (index + 2) as u64,
                 lit_type: Type::i(8),
-            });
+            })
         } else {
-            return None;
+            None
         }
     }
 }
@@ -46,7 +46,7 @@ impl InvalidState for IntType {
         if self.size % 8 != 0 {
             todo!()
         } else {
-            return None;
+            None
         }
     }
 }
@@ -58,12 +58,12 @@ impl InvalidState for FloatType {
 impl InvalidState for FuncType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index == 0 {
-            return Some(box NodeData::Number {
+            Some(box NodeData::Number {
                 value: 0,
                 lit_type: Type::i(64),
-            });
+            })
         } else {
-            return None;
+            None
         }
     }
 }
@@ -92,7 +92,7 @@ impl InvalidState for StructType {
             }
         }
 
-        return None;
+        None
     }
 }
 
@@ -103,22 +103,20 @@ impl InvalidState for SumType {
         if self.has_internal_discriminant() {
             self.largest_variant_data()
                 .invalid_state(index + variant_count - 1)
+        } else if variant_count + index < 256 {
+            Some(box StructLitGen {
+                var_type: self.largest_variant_as_struct(),
+                fields: vec![(
+                    "tag".into(),
+                    box NodeData::Number {
+                        value: (variant_count + index) as u64,
+                        lit_type: Type::i(8),
+                    },
+                )],
+                initialize: InitOpts::Uninit,
+            })
         } else {
-            if variant_count + index < 256 {
-                return Some(box StructLitGen {
-                    var_type: self.largest_variant_as_struct(),
-                    fields: vec![(
-                        "tag".into(),
-                        box NodeData::Number {
-                            value: (variant_count + index) as u64,
-                            lit_type: Type::i(8),
-                        },
-                    )],
-                    initialize: InitOpts::Uninit,
-                });
-            } else {
-                return None;
-            }
+            None
         }
     }
 }

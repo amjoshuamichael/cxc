@@ -49,7 +49,7 @@ impl Library for StringLib {
 
 fn string_from_bytes(buf: *mut u8, length: usize) -> String {
     let slice = unsafe { std::slice::from_raw_parts(buf, length) };
-    String::from_utf8_lossy(&slice).to_string()
+    String::from_utf8_lossy(slice).to_string()
 }
 
 fn push_string(this: &mut String, other: &String) { *this += &**other; }

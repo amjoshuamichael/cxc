@@ -247,6 +247,6 @@ pub type GenericLabels = HashMap<TypeName, u8>;
 pub fn merge(one: &GenericLabels, another: &GenericLabels) -> GenericLabels {
     one.iter()
         .chain(another.iter())
-        .map(|(n, i)| (n.clone(), i.clone()))
+        .map(|(n, i)| (n.clone(), *i))
         .collect()
 }
