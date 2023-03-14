@@ -245,25 +245,30 @@ impl CompData {
         &mut self,
         info: UniqueFuncInfo,
         module: &Module<'static>,
-    ) -> UniqueFuncInfo {
-        if let Some(v) = self.compiled.remove(&info) {
-            let mut old_info = info.clone();
-            old_info.gen = *self.generations.last().unwrap();
+    ) -> bool {
+        assert_eq!(info.gen, Gen::Latest);
 
+        let info_made_old = UniqueFuncInfo {
+            gen: *self.generations.last().unwrap(),
+            ..info.clone()
+        };
+
+        if !self.compiled.contains_key(&info_made_old) && 
+            let Some(v) = self.compiled.remove(&info) {
             module
                 .get_function(&*info.to_string())
                 .unwrap()
                 .as_global_value()
-                .set_name(&*old_info.to_string());
+                .set_name(&*info_made_old.to_string());
 
-            // self.compiled
-            //    .insert(old_info, Func::new_compiled(&info, v.code()));
-            // TODO: make pointer an option
             v.disable_pointer();
-            self.compiled.insert(info.clone(), v);
-        }
+            self.compiled.insert(info.clone(), v.clone());
 
-        info
+            // TODO: set fn pointer
+            self.compiled.insert(info_made_old.clone(), Func::new_compiled(info_made_old.clone(), v.typ()));
+
+            true
+        } else { false }
     }
 
     pub fn new_generation(&mut self) { self.generations.push(Gen::random()) }

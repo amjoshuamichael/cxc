@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use crate::{lex::VarName, unit::UniqueFuncInfo, Type};
 
@@ -17,8 +17,8 @@ pub struct FuncOutput {
 }
 
 impl FuncOutput {
-    pub fn get_func_dependencies(&self) -> HashSet<UniqueFuncInfo> {
-        let mut output = HashSet::<UniqueFuncInfo>::new();
+    pub fn get_func_dependencies(&self) -> BTreeSet<UniqueFuncInfo> {
+        let mut output = BTreeSet::<UniqueFuncInfo>::new();
 
         let tree = self.tree_ref();
 

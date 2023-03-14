@@ -135,7 +135,8 @@ impl Unit {
         let mut func_rep = hlr(info.clone(), self.comp_data.clone(), code)?;
 
         {
-            let dependencies = func_rep.get_func_dependencies().drain().collect();
+            // TODO: what's goin on here?
+            let dependencies = func_rep.get_func_dependencies().into_iter().collect();
             self.compile_func_set(dependencies)?;
         }
 

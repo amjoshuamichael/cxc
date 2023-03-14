@@ -38,3 +38,40 @@ fn hot_reload_many() {
     assert_eq!(best(), 900);
     assert_eq!(worst(), 1);
 }
+
+#[test]
+#[serial]
+fn depended_on() {
+    let mut unit = Unit::new();
+
+    unit.push_script("the_best_num(); i32 { ; 41 }").unwrap();
+    unit.push_script("double_that(); i32 { ; the_best_num() * 2 }")
+        .unwrap();
+    let doubled = unit.get_fn("double_that").unwrap().downcast::<(), i32>();
+    let best = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
+    assert_eq!(best(), 41);
+    assert_eq!(doubled(), 82);
+
+    unit.push_script("the_best_num(); i32 { ; 42 }").unwrap();
+    assert_eq!(best(), 42);
+    assert_eq!(doubled(), 84);
+}
+
+#[test]
+#[serial]
+fn depends_on() {
+    let mut unit = Unit::new();
+
+    unit.push_script("the_best_num(); i32 { ; 42 }").unwrap();
+    unit.push_script("worse_num(); i32 { ; the_best_num() - 1 }")
+        .unwrap();
+    let worse = unit.get_fn("worse_num").unwrap().downcast::<(), i32>();
+    let best = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
+    assert_eq!(best(), 42);
+    assert_eq!(worse(), 41);
+
+    unit.push_script("worse_num(); i32 { ; the_best_num() - 2 }")
+        .unwrap();
+    assert_eq!(best(), 42);
+    assert_eq!(worse(), 40);
+}

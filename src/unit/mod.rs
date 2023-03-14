@@ -58,6 +58,7 @@ pub struct CompData {
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncDeclInfo>,
     generations: Vec<Gen>,
+    dependencies: BTreeMap<UniqueFuncInfo, BTreeSet<UniqueFuncInfo>>,
 }
 
 impl Debug for CompData {
@@ -140,14 +141,15 @@ impl Unit {
                         .clone()
                         .map_inner_type(|spec| comp_data.get_spec(&spec, &()).unwrap());
 
-                    comp_data.update_func_info(
-                        UniqueFuncInfo {
-                            name: decl.name.clone(),
-                            relation,
-                            ..Default::default()
-                        },
-                        &self.module,
-                    )
+                    let func_info = UniqueFuncInfo {
+                        name: decl.name.clone(),
+                        relation,
+                        ..Default::default()
+                    };
+
+                    comp_data.update_func_info(func_info.clone(), &self.module);
+
+                    func_info
                 })
                 .collect();
 
@@ -180,7 +182,7 @@ impl Unit {
         let mut all_func_infos = Vec::new();
 
         while !set.is_empty() {
-            all_func_infos.extend(set.clone().drain(..));
+            all_func_infos.extend(set.clone().into_iter());
 
             let func_reps: Vec<FuncOutput> = { set }
                 .drain(..)
@@ -189,6 +191,7 @@ impl Unit {
                     let hlr = hlr(info.clone(), self.comp_data.clone(), code);
 
                     let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
                     comp_data.create_func_placeholder(
                         &info,
                         &mut self.context,
@@ -201,12 +204,41 @@ impl Unit {
 
             set = func_reps
                 .iter()
-                .map(|f| f.get_func_dependencies())
+                .map(|f| f.get_func_dependencies().into_iter())
                 .flatten()
                 .filter(|f| !self.comp_data.has_been_compiled(f))
                 .collect();
 
-            all_funcs_to_compile.extend({ func_reps }.drain(..));
+            {
+                let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
+                for func in func_reps.iter() {
+                    let depended_on_by = comp_data
+                        .dependencies
+                        .get(func.info_ref())
+                        .cloned()
+                        .unwrap_or_default();
+
+                    let depended_on_by = depended_on_by
+                        .into_iter()
+                        .filter(|f| comp_data.update_func_info(f.clone(), &self.module));
+
+                    set.extend(depended_on_by);
+                }
+            }
+
+            all_funcs_to_compile.extend(func_reps.into_iter());
+        }
+
+        {
+            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
+            for func in &all_funcs_to_compile {
+                for depends_on in func.get_func_dependencies() {
+                    let calling_set = comp_data.dependencies.entry(depends_on).or_default();
+                    calling_set.insert(func.info_ref().clone());
+                }
+            }
         }
 
         for func_output in &mut all_funcs_to_compile {
