@@ -1,6 +1,6 @@
-use self::externalize::Externalize;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
+use self::functions::Func;
 pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
 pub use self::value_api::XcValue;
@@ -18,7 +18,7 @@ use crate::to_llvm::*;
 use crate::Type;
 use crate::TypeEnum;
 pub use add_external::ExternalFuncAdd;
-pub use functions::UniqueFuncInfo;
+pub use functions::{Gen, UniqueFuncInfo};
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -30,11 +30,10 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::mem::transmute;
 use std::rc::Rc;
 
 mod add_external;
-mod externalize;
+pub mod callable;
 mod functions;
 pub mod get_type_spec;
 mod reflect;
@@ -50,22 +49,20 @@ pub struct Unit {
 
 #[derive(Clone, Default)]
 pub struct CompData {
-    pub(crate) types: BTreeMap<TypeName, Type>,
     aliases: BTreeMap<TypeName, TypeSpec>,
+    pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     pub(crate) globals: BTreeMap<VarName, (Type, GlobalValue<'static>)>,
-    compiled: BTreeSet<UniqueFuncInfo>,
-    func_types: BTreeMap<UniqueFuncInfo, Type>,
+    compiled: BTreeMap<UniqueFuncInfo, Func>,
     pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
     decl_names: BTreeMap<VarName, Vec<FuncDeclInfo>>,
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
-    pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     intrinsics: BTreeSet<FuncDeclInfo>,
-    reflect_arg_types: BTreeMap<UniqueFuncInfo, Vec<bool>>,
+    generations: Vec<Gen>,
 }
 
 impl Debug for CompData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "compilation data holding {} types", self.types.len())
+        write!(f, "CompData {{ ... }}")
     }
 }
 
@@ -73,7 +70,10 @@ impl Unit {
     pub fn new() -> Self {
         let context: &'static _ =
             unsafe { std::mem::transmute(Box::leak(box Context::create())) };
-        let module = Context::create_module(&context, "new_module");
+
+        let random_module_name = format!("cxc_{:x}", rand::random::<u64>());
+        let module = Context::create_module(&context, &*random_module_name);
+
         let execution_engine = module
             .create_jit_execution_engine(OptimizationLevel::None)
             .expect("unable to create execution engine");
@@ -100,6 +100,7 @@ impl Unit {
 
     pub fn push_script<'s>(&'s mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
         let lexed = lex(script);
+
         let parsed = parse::parse(lexed).map_err(|errs| {
             if crate::XC_DEBUG {
                 for err in &errs {
@@ -112,6 +113,8 @@ impl Unit {
 
         let funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+
+            comp_data.new_generation();
 
             for decl in parsed.types_iter().cloned() {
                 comp_data.add_type_alias(decl.name, decl.typ);
@@ -137,11 +140,14 @@ impl Unit {
                         .clone()
                         .map_inner_type(|spec| comp_data.get_spec(&spec, &()).unwrap());
 
-                    UniqueFuncInfo {
-                        name: decl.name.clone(),
-                        relation,
-                        own_generics: Vec::new(),
-                    }
+                    comp_data.update_func_info(
+                        UniqueFuncInfo {
+                            name: decl.name.clone(),
+                            relation,
+                            ..Default::default()
+                        },
+                        &self.module,
+                    )
                 })
                 .collect();
 
@@ -207,6 +213,15 @@ impl Unit {
             self.compile(func_output);
         }
 
+        for func_info in &all_func_infos {
+            self.comp_data.compiled.get(func_info).unwrap().set_pointer(
+                self.execution_engine
+                    .borrow()
+                    .get_function_address(&func_info.to_string())
+                    .expect("unable to get function address") as *const usize,
+            );
+        }
+
         if crate::LLVM_DEBUG {
             println!("compiled these: ");
             println!("{}", self.module.print_to_string().to_string());
@@ -257,41 +272,19 @@ impl Unit {
         }
     }
 
-    pub fn get_fn_by_name<I, O>(&self, name: &str) -> I::Externalized
-    where
-        I: Externalize<O>,
-        I: ?Sized,
-    {
-        let func_info = UniqueFuncInfo {
-            name: name.into(),
-            ..Default::default()
-        };
+    pub fn get_fn(&self, with: impl Into<UniqueFuncInfo>) -> Option<&Func> {
+        let info = with.into();
 
-        self.get_fn_by_info::<I, O>(&func_info)
-    }
-
-    pub fn get_fn_by_info<I, O>(&self, info: &UniqueFuncInfo) -> I::Externalized
-    where
-        I: Externalize<O>,
-        I: ?Sized,
-    {
         assert!(
             self.
                 module
-                .get_function(&*info.to_string())
-                .unwrap()
+                .get_function(&*info.to_string())?
                 .get_param_iter()
                 .all(|param_type| !param_type.is_array_value()),
             "Cannot run function that has array value as parameter. Pass in an array pointer instead."
         );
 
-        let func_addr = self
-            .execution_engine
-            .borrow()
-            .get_function_address(&*info.to_string())
-            .unwrap();
-
-        unsafe { I::externalize(func_addr) }
+        self.comp_data.compiled.get(&info)
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

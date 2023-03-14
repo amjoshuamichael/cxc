@@ -1,13 +1,14 @@
 use std::mem::transmute;
 
-use inkwell::types::{BasicMetadataTypeEnum, BasicType};
-use inkwell::values::{BasicMetadataValueEnum, FunctionValue};
+use inkwell::values::BasicMetadataValueEnum;
 
 use crate::to_llvm::add_sret_attribute_to_call_site;
 use crate::{
     to_llvm::add_sret_attribute_to_func, typ::ReturnStyle, FuncType, Kind, Type, TypeEnum,
     TypeRelation, UniqueFuncInfo, Unit, XcReflect,
 };
+
+use super::functions::Func;
 
 pub struct ExternalFuncAdd {
     pub ret_type: Type,
@@ -114,16 +115,18 @@ impl Unit {
             .func_with_args(ext_add.arg_types.clone());
         let TypeEnum::Func(func_type_inner) = 
             func_type.as_type_enum() else { panic!() };
-        let ret_type = func_type_inner.ret_type();
+        let ret_type = func_type_inner.ret.clone();
 
         let ink_func_ptr_type = func_type.to_any_type(&self.context).into_pointer_type();
 
         let ink_func_type = func_type_inner.llvm_func_type(&self.context);
 
+        // TODO: Check if function already exists, and update gen if nescssary
         let func_info = UniqueFuncInfo {
             name: name.into(),
             relation: ext_add.relation.clone(),
-            own_generics: ext_add.generics,
+            generics: ext_add.generics,
+            ..Default::default()
         };
 
         let mut function =
@@ -139,7 +142,7 @@ impl Unit {
             builder.position_at_end(block);
         }
 
-        let func_ptr = self
+        let llvm_func_ptr = self
             .context
             .i64_type()
             .const_int(function_ptr as u64, false)
@@ -150,25 +153,29 @@ impl Unit {
 
         if ret_type.return_style() == ReturnStyle::Sret {
             let mut out =
-                builder.build_indirect_call(ink_func_type, func_ptr, &*arg_vals, "call");
+                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &*arg_vals, "call");
             add_sret_attribute_to_call_site(&mut out, &self.context, &ret_type);
             builder.build_return(None);
         } else if ret_type.is_void() {
-            let out = builder.build_indirect_call(ink_func_type, func_ptr, &*arg_vals, "call");
+            builder.build_indirect_call(ink_func_type, llvm_func_ptr, &*arg_vals, "call");
             builder.build_return(None);
         } else {
-            let out = builder.build_indirect_call(ink_func_type, func_ptr, &*arg_vals, "call");
+            let out =
+                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &*arg_vals, "call");
             let out = out.try_as_basic_value().unwrap_left();
             builder.build_return(Some(&out));
         }
 
         let comp_data = self.comp_data_mut();
 
-        comp_data.compiled.insert(func_info.clone());
-        comp_data.func_types.insert(func_info.clone(), func_type);
-
-        if ext_add.type_mask.len() > 0 {
-            comp_data.reflect_arg_types(&func_info, ext_add.type_mask.clone());
-        }
+        comp_data.compiled.insert(
+            func_info.clone(),
+            Func::new_external(
+                func_info,
+                func_type_inner.clone(),
+                function_ptr,
+                ext_add.type_mask.clone(),
+            ),
+        );
     }
 }

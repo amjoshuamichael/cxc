@@ -5,8 +5,6 @@ use super::{
     hlr_data::FuncRep,
 };
 
-use crate::typ::invalid_state::InvalidState;
-
 pub fn handle_variant_literals(hlr: &mut FuncRep) {
     hlr.modify_many_rev(
         |data| matches!(data, NodeData::StructLit { .. }),
@@ -44,7 +42,7 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                         CallGen {
                             info: UniqueFuncInfo {
                                 name: "cast".into(),
-                                own_generics: vec![
+                                generics: vec![
                                     variant_type.variant_type.clone(),
                                     variant_type.parent.clone(),
                                 ],
@@ -103,7 +101,7 @@ pub fn handle_variant_literals(hlr: &mut FuncRep) {
                     CallGen {
                         info: crate::UniqueFuncInfo {
                             name: VarName::from("cast"),
-                            own_generics: vec![
+                            generics: vec![
                                 variant_type.as_struct(),
                                 variant_type.parent.clone(),
                             ],

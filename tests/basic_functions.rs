@@ -5,10 +5,11 @@ use test_utils::xc_test;
 fn assign_i() {
     xc_test!(
         "
+        ; i32 {
             x: i32 = 300
             ; x
-        "
-        => i32;
+        }
+        ";
         300
     )
 }
@@ -17,11 +18,12 @@ fn assign_i() {
 fn assign_f() {
     xc_test!(
         "
+        ; f32 {
             x: f32 = 320.7
             ; x
-        "
-        => f32;
-        320.7
+        }
+        ";
+        320.7f32
     )
 }
 
@@ -29,10 +31,11 @@ fn assign_f() {
 fn assign_bool() {
     xc_test!(
         "
+        ; bool { 
             x: bool = true
             ; x
-        "
-        => bool;
+        }
+        ";
         true
     )
 }
@@ -41,6 +44,7 @@ fn assign_bool() {
 fn factorial_while() {
     xc_test!(
         "
+        ; i32 {
             current: i32 = 5
             output: i32 = 1
 
@@ -50,8 +54,8 @@ fn factorial_while() {
             }
 
             ; output
-        "
-        => i32;
+        }
+        ";
         120
     )
 }

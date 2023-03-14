@@ -7,11 +7,7 @@ pub fn handle_arg_type_reflection(hlr: &mut FuncRep) {
         |data| matches!(data, NodeData::Call { .. }),
         |call_id, mut call_data, hlr| {
             let info = hlr.tree.unique_func_info_of_call(call_data);
-            let type_mask = hlr.comp_data.get_reflect_type_masks(&info);
-
-            if type_mask.len() == 0 {
-                return;
-            }
+            let Some(type_mask) = hlr.comp_data.get_reflect_type_masks(&info) else { return };
 
             let NodeData::Call { ref mut a, .. } = &mut call_data else { panic!() };
             let mut added_so_far = 0;

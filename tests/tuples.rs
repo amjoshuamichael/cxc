@@ -6,10 +6,11 @@ use test_utils::xc_test;
 fn basic_tuple() {
     xc_test!(
         "
+        ; i32 {
             x: { i32, i32 } = { i32, i32 } { 90, 43 }
             ; x.0 - x.1
-        "
-        => i32;
+        }
+        ";
         47
     )
 }
@@ -18,12 +19,13 @@ fn basic_tuple() {
 fn nested_tuple() {
     xc_test!(
         "
+        ; i32 {
             x: { { i32, i32 }, i32 } = 
                 { { i32, i32 }, i32 } 
                     { {i32, i32} { 90, 60 }, 43 }
             ; x.0.0 - x.0.1 + x.1
-        "
-        => i32;
+        }
+        ";
         73
     )
 }

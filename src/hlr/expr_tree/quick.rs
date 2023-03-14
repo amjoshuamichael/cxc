@@ -2,7 +2,7 @@ use crate::{
     hlr::hlr_data::{DataFlowInfo, FuncRep},
     lex::VarName,
     parse::{InitOpts, Opcode},
-    FuncType, Type, TypeEnum, UniqueFuncInfo,
+    Type, UniqueFuncInfo,
 };
 
 use super::{ExprID, NodeData};
@@ -195,16 +195,14 @@ impl NodeDataGen for CallGen {
             .collect();
 
         let func_type = hlr.comp_data.get_func_type(&self.info).unwrap();
-        let TypeEnum::Func(FuncType { ret: ret_type, .. } ) = func_type.as_type_enum()
-            else { panic!() };
 
         hlr.tree.replace(
             space,
             NodeData::Call {
                 f: self.info.name.clone(),
-                generics: self.info.own_generics.clone(),
+                generics: self.info.generics.clone(),
                 relation: self.info.relation.clone(),
-                ret_type: ret_type.clone(),
+                ret_type: func_type.ret,
                 a: args,
             },
         );
@@ -216,16 +214,14 @@ impl NodeDataGen for CallGen {
 impl NodeDataGen for UniqueFuncInfo {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let func_type = hlr.comp_data.get_func_type(&self).unwrap();
-        let TypeEnum::Func(FuncType { ret: ret_type, .. } ) = func_type.as_type_enum()
-            else { panic!() };
 
         hlr.tree.insert(
             parent,
             NodeData::Call {
                 f: self.name.clone(),
-                generics: self.own_generics.clone(),
+                generics: self.generics.clone(),
                 relation: self.relation.clone(),
-                ret_type: ret_type.clone(),
+                ret_type: func_type.ret.clone(),
                 a: Vec::new(),
             },
         )

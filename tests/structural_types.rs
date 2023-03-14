@@ -6,10 +6,11 @@ use test_utils::xc_test;
 fn basic_structural_type() {
     xc_test!(
         "
+        ; i32 {
             x: { x: i32, y: i32 } = { x: i32, y: i32 } { x = 30, y = 90 }
             ; x.y - x.x
-        "
-        => i32;
+        }
+        ";
         60
     )
 }
@@ -21,12 +22,13 @@ fn nested_structural_type() {
     // purely for testing purposes.
     xc_test!(
         "
+        ; i32 {
             x: { x: { a: i32, b: i32 }, y: i32 } = 
                 { x: { a: i32, b: i32 }, y: i32 } 
                     { x = { a: i32, b: i32 } { a = 90, b = 30 }, y = 90 }
             ; x.x.a - x.x.b + x.y
-        "
-        => i32;
+        }
+        ";
         150
     )
 }

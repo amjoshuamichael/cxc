@@ -1,10 +1,5 @@
 use std::ops::DerefMut;
 
-use crate::{
-    hlr::expr_tree::{IndexGen, MemberGen, NodeDataGen, UnarOpGen},
-    parse::Opcode,
-};
-
 use super::*;
 
 pub struct PrimitiveFieldsIter {
@@ -67,47 +62,6 @@ impl FieldsIter {
             index: 0,
             inner: None,
             has_iterated_at_least_once: false,
-        }
-    }
-
-    pub fn build_accessor_nodes(
-        &self,
-        center: Box<dyn NodeDataGen + 'static>,
-    ) -> Box<dyn NodeDataGen> {
-        let accessed: Box<dyn NodeDataGen> = match self.over.as_type_enum() {
-            TypeEnum::Struct(StructType { fields }) => {
-                let (field_name, field_type) = fields[self.index].clone();
-
-                box MemberGen {
-                    object: center,
-                    field: field_name,
-                    ret_type: field_type,
-                }
-            },
-            TypeEnum::Ref(RefType { base }) => {
-                if self.has_iterated_at_least_once {
-                    box UnarOpGen {
-                        op: Opcode::Deref,
-                        hs: center,
-                        ret_type: base.clone(),
-                    }
-                } else {
-                    center
-                }
-            },
-            TypeEnum::Array(ArrayType { base, .. }) => box IndexGen {
-                object: center,
-                index: box self.index,
-                ret_type: base.clone(),
-            },
-            TypeEnum::Variant(_) => unreachable!(),
-            _ => return center,
-        };
-
-        if let Some(inner_iter) = &self.inner {
-            inner_iter.build_accessor_nodes(accessed)
-        } else {
-            accessed
         }
     }
 

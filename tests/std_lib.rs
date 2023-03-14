@@ -229,7 +229,7 @@ fn panic() {
     xc_test!(
         r#"
         main() {
-            panic(&"failure!")
+            panic()
         }
         "#
     )

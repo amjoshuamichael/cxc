@@ -133,7 +133,8 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                     info: UniqueFuncInfo {
                         name: VarName::from("write"),
                         relation: TypeRelationGeneric::MethodOf(output_var_typ.get_ref()),
-                        own_generics: vec![hlr.ret_type.clone()],
+                        generics: vec![hlr.ret_type.clone()],
+                        ..Default::default()
                     },
                     args: vec![
                         box UnarOpGen {
@@ -202,8 +203,9 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     .after_that(CallGen {
         info: UniqueFuncInfo {
             name: VarName::from("memcpy"),
-            own_generics: vec![raw_ret_var_type.clone()],
+            generics: vec![raw_ret_var_type.clone()],
             relation: TypeRelation::Unrelated,
+            ..Default::default()
         },
         args: vec![
             box UnarOpGen {
@@ -239,12 +241,10 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 }
 
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
-    println!("{}", &hlr.tree.get(og_call_id).to_string(&hlr.tree));
     let data = hlr.tree.get(og_call_id);
 
     let NodeData::Call { a: old_args, f, generics, relation, ret_type: call_ret_type } = 
         data.clone() else { panic!(); };
-    dbg!(&call_ret_type);
 
     let call_var = hlr.uniqueify_varname("call_out");
 
@@ -277,8 +277,9 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         CallGen {
             info: UniqueFuncInfo {
                 name: f,
-                own_generics: generics,
+                generics,
                 relation,
+                ..Default::default()
             },
             args: new_args,
         },

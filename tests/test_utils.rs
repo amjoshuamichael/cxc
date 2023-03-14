@@ -5,84 +5,29 @@
 use cxc::XcReflect;
 
 macro_rules! xc_test {
-    ($code:expr => $ret:ty; $result:expr) => {{
-        let mut unit = cxc::Unit::new();
+    ($code:expr) => {
+        xc_test! (use cxc::library::StdLib; $code; ())
+    };
 
-        unit.add_lib(test_utils::TestUtilsLib::new($code));
-
-        unit.push_script(
-            concat!("test() ; ", stringify!($ret), "{ ", $code, " }"),
-        ).unwrap();
-
-        let output = unsafe { unit.get_fn_by_name::<(), $ret>("test")() };
-        assert_eq!(output, $result);
-    }};
-
-    (
-        $($arg:ident, $arg_ty:ty $(,aka $cxc_type:expr)?; )+ => $ret:ty;
-        $code:expr;
-        $($arg_val:expr),+ => $result:expr
-    ) => {{
-        let mut unit = cxc::Unit::new();
-
-        unit.add_lib(test_utils::TestUtilsLib::new($code));
-
-        let mut args = String::new();
-        $(
-            args += stringify!($arg);
-
-            args += ": ";
-
-            #[allow(unused_mut)]
-            #[allow(unused_assignments)]
-            let mut arg_type = stringify!($arg_ty);
-            $(arg_type = $cxc_type;)?
-            args += arg_type;
-
-            args += ", ";
-        )*
-
-        unit.push_script(
-            &*(
-                String::from("test(") +
-                &*args +
-                concat!(")", "; ", stringify!($ret), "{ ", $code, " }")
-            )
-        ).unwrap();
-
-        #[allow(unused_parens)]
-        let output: $ret = unsafe {
-            unit.get_fn_by_name::<($($arg_ty,)+), $ret>("test")($($arg_val),*)
-        };
-        assert_eq!(output, $result);
-    }};
-
-    ($code:expr) => {{
-        let mut unit = cxc::Unit::new();
-
-        unit.add_lib(cxc::library::StdLib);
-
-        unit.add_lib(test_utils::TestUtilsLib::new($code));
-
-        unit.push_script($code).unwrap();
-
-        unsafe { unit.get_fn_by_name::<(), ()>("main")() };
-    }};
-
-    ($(use $($lib:ident),+;)? $code:expr; $expected_output:expr) => {{
+    ($(use $($lib:path),+;)? $code:expr; $expected_output:expr) => {{
         let mut unit = cxc::Unit::new();
 
         $( $( unit.add_lib($lib); )* )?
 
         unit.add_lib(test_utils::TestUtilsLib::new($code));
 
-        unit.push_script($code).unwrap();
+        let code = $code;
+        if code.contains("main()") {
+            unit.push_script($code).unwrap();
+        } else {
+            unit.push_script(&*format!("main() {code}")).unwrap();
+        }
 
         #[allow(unused_assignments)]
         // this is just so output uses the expected output's type
         let mut output = $expected_output;
 
-        output = unsafe { unit.get_fn_by_name::<(), _>("main")() };
+        output = unit.get_fn("main").unwrap().downcast::<(), _>()();
 
         #[cfg(feature = "show-bytes")]
         cxc::bytesof::print_binary_two(&$expected_output, &output);

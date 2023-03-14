@@ -123,8 +123,11 @@ fn ref_option_some() {
     );
 
     let mut thirty_two = 32;
-    let func = unit.get_fn_by_name::<[&i32], Option<&i32>>("main");
-    let output: Option<&i32> = unsafe { func(&mut thirty_two) };
+    let func = unit
+        .get_fn("main")
+        .unwrap()
+        .downcast::<(&i32,), Option<&i32>>();
+    let output: Option<&i32> = func(&mut thirty_two);
     assert_eq!(output, Option::Some(&thirty_two));
 }
 
@@ -144,8 +147,11 @@ fn ref_and_more_option() {
     );
 
     let mut thirty_two = 32;
-    let func = unit.get_fn_by_name::<[&i32], Option<(i32, &i32)>>("main");
-    let output: Option<(i32, &i32)> = unsafe { func(&mut thirty_two) };
+    let func = unit
+        .get_fn("main")
+        .unwrap()
+        .downcast::<(&mut i32,), Option<(i32, &i32)>>();
+    let output: Option<(i32, &i32)> = func(&mut thirty_two);
     assert_eq!(output, Option::Some((10, &32)));
 }
 

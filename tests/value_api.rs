@@ -77,7 +77,6 @@ fn jumbo_value() {
 #[test]
 fn biggest_value() {
     let mut unit = Unit::new();
-    unit.add_lib(TestUtilsLib::new("Numbers5"));
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
     let value = unit.get_value("{ 1, 2, double(3), 4, 5, 6 }");

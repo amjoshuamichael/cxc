@@ -1,9 +1,5 @@
-use crate::typ::Kind;
-use inkwell::attributes::{Attribute, AttributeLoc};
-
 use crate::{
     errors::{CResult, FErr, TErr, TResult},
-    typ::ReturnStyle,
     FuncType, Type, TypeRelation,
 };
 
@@ -157,7 +153,7 @@ impl CompData {
             ..Default::default()
         });
 
-        out.types.insert("Type".into(), Type::i(64));
+        out.aliases.insert("Type".into(), TypeSpec::Int(64));
 
         out
     }
@@ -199,28 +195,13 @@ impl CompData {
 
     pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
 
-    pub fn reflect_arg_types(&mut self, info: &UniqueFuncInfo, mask: Vec<bool>) {
-        assert!({
-            let func_type = self.get_func_type(info).unwrap();
-            let TypeEnum::Func(FuncType { args, .. }) = 
-                func_type.as_type_enum() else { panic!() };
-
-            let arg_count = mask.iter().filter(|refl| **refl).count() + mask.len();
-            args.len() == arg_count
-        });
-
-        self.reflect_arg_types.insert(info.clone(), mask);
-    }
-
-    pub fn get_reflect_type_masks(&self, info: &UniqueFuncInfo) -> Vec<bool> {
-        self.reflect_arg_types
-            .get(info)
-            .cloned()
-            .unwrap_or_default()
+    pub fn get_reflect_type_masks(&self, info: &UniqueFuncInfo) -> Option<Vec<bool>> {
+        let FuncCodeInfo::External { ref reflect_types_of, .. } = &self.compiled.get(info)?.code() else { return None };
+        Some(reflect_types_of.clone())
     }
 
     pub fn unique_func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
-        self.compiled.iter()
+        self.compiled.keys()
     }
 
     pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
@@ -229,7 +210,13 @@ impl CompData {
         } else {
             false
         };
-        is_intrinsic || self.compiled.contains(info)
+
+        if let Some(func) = self.compiled.get(&info) && 
+            !func.code().pointer().is_none() {
+            return true;
+        } else {
+            return is_intrinsic;
+        }
     }
 
     pub fn name_is_intrinsic(&self, name: &VarName) -> bool {
@@ -254,6 +241,33 @@ impl CompData {
         None
     }
 
+    pub fn update_func_info<'a>(
+        &mut self,
+        info: UniqueFuncInfo,
+        module: &Module<'static>,
+    ) -> UniqueFuncInfo {
+        if let Some(v) = self.compiled.remove(&info) {
+            let mut old_info = info.clone();
+            old_info.gen = *self.generations.last().unwrap();
+
+            module
+                .get_function(&*info.to_string())
+                .unwrap()
+                .as_global_value()
+                .set_name(&*old_info.to_string());
+
+            // self.compiled
+            //    .insert(old_info, Func::new_compiled(&info, v.code()));
+            // TODO: make pointer an option
+            v.disable_pointer();
+            self.compiled.insert(info.clone(), v);
+        }
+
+        info
+    }
+
+    pub fn new_generation(&mut self) { self.generations.push(Gen::random()) }
+
     pub fn create_func_placeholder<'a>(
         &mut self,
         info: &UniqueFuncInfo,
@@ -261,33 +275,36 @@ impl CompData {
         module: &Module<'static>,
     ) -> CResult<()> {
         let function_type = self.get_func_type(info)?;
-        let TypeEnum::Func(llvm_function_type) = function_type.as_type_enum()
-            else { panic!() };
 
         let mut empty_function = module.add_function(
             &*info.to_string(),
-            llvm_function_type.llvm_func_type(&context),
+            function_type.llvm_func_type(&context),
             None,
         );
 
-        add_sret_attribute_to_func(&mut empty_function, &context, &llvm_function_type.ret);
+        add_sret_attribute_to_func(&mut empty_function, &context, &function_type.ret);
 
-        self.compiled.insert(info.clone());
-        self.func_types.insert(info.clone(), function_type.clone());
-        self.globals
-            .insert(info.name.clone(), (function_type, empty_function.as_global_value()));
+        if !self.compiled.contains_key(&info.clone()) {
+            self.compiled
+                .insert(info.clone(), Func::new_compiled(info.clone(), function_type.clone()));
+        }
+
+        self.globals.insert(
+            info.name.clone(),
+            (Type::new(TypeEnum::Func(function_type)), empty_function.as_global_value()),
+        );
 
         Ok(())
     }
 
-    pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<Type> {
-        if let Some(cached_type) = self.func_types.get(info) {
-            return Ok(cached_type.clone());
+    pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<FuncType> {
+        if let Some(compiled) = self.compiled.get(info) {
+            return Ok(compiled.typ().clone());
         }
 
         let code = self.get_code(info.clone())?;
 
-        let ret_type = &self.get_spec(&code.ret_type, info)?;
+        let ret_type = self.get_spec(&code.ret_type, info)?;
 
         let arg_types = code
             .args
@@ -295,9 +312,10 @@ impl CompData {
             .map(|arg| self.get_spec(&arg.type_spec, info))
             .collect::<TResult<Vec<_>>>()?;
 
-        let func_type = ret_type.clone().func_with_args(arg_types);
-
-        Ok(func_type)
+        Ok(FuncType {
+            ret: ret_type.clone(),
+            args: arg_types,
+        })
     }
 
     pub fn get_derived_code(&self, info: &UniqueFuncInfo) -> Option<FuncCode> {
@@ -348,13 +366,6 @@ impl CompData {
     pub fn contains(&self, key: &TypeName) -> bool { self.aliases.contains_key(key) }
 
     pub fn get_by_name(&self, name: &TypeName) -> TResult<Type> {
-        {
-            let cached_type = self.types.get(name);
-            if let Some(cached_type) = cached_type {
-                return Ok(cached_type.clone());
-            }
-        }
-
         let alias = self.get_alias_for(name)?;
         let realized_type = self.get_spec(alias, &vec![])?;
         Ok(realized_type.with_name(name.clone()))
@@ -365,7 +376,11 @@ impl CompData {
     }
 }
 
-use std::hash::Hash;
+use std::{
+    hash::Hash,
+    num::NonZeroU32,
+    sync::{Arc, RwLock},
+};
 
 use super::*;
 
@@ -379,23 +394,30 @@ pub struct FuncDeclInfo {
 pub struct UniqueFuncInfo {
     pub name: VarName,
     pub relation: TypeRelation,
-    pub own_generics: Vec<Type>,
+    pub generics: Vec<Type>,
+    pub gen: Gen,
 }
 
 impl ToString for UniqueFuncInfo {
     fn to_string(&self) -> String {
+        let gen_suffix = match self.gen {
+            Gen::Latest => String::new(),
+            Gen::Specific(n) => format!("{n:x}"),
+        };
+
         match &self.relation {
             TypeRelation::Static(typ) => {
-                format!("{:?}::{:?}{:?}", typ, self.name, self.own_generics)
+                format!("{:?}::{:?}{:?}", typ, self.name, self.generics)
             },
             TypeRelation::MethodOf(typ) => {
-                format!("M_{:?}{:?}{:?}", typ, self.name, self.own_generics)
+                format!("M_{:?}{:?}{:?}", typ, self.name, self.generics)
             },
-            TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.own_generics),
+            TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.generics),
         }
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '_')
-        .collect()
+        .collect::<String>()
+            + &*gen_suffix
     }
 }
 
@@ -408,12 +430,13 @@ impl UniqueFuncInfo {
         UniqueFuncInfo {
             name: og_name.clone(),
             relation: relation.clone(),
-            own_generics: generics,
+            generics,
+            gen: Gen::Latest,
         }
     }
 
     pub fn generics(&self) -> Vec<Type> {
-        let mut some_generics = self.own_generics.clone();
+        let mut some_generics = self.generics.clone();
 
         if let Some(typ) = self.relation.inner_type() {
             let typ_generics = typ.generics().clone();
@@ -427,4 +450,122 @@ impl UniqueFuncInfo {
     pub fn is_method(&self) -> bool { matches!(self.relation, TypeRelation::MethodOf(_)) }
     pub fn is_static(&self) -> bool { matches!(self.relation, TypeRelation::Static(_)) }
     pub fn has_generics(&self) -> bool { self.generics().len() > 0 }
+}
+
+impl Into<UniqueFuncInfo> for &str {
+    fn into(self) -> UniqueFuncInfo {
+        UniqueFuncInfo {
+            name: self.into(),
+            ..Default::default()
+        }
+    }
+}
+
+impl Into<UniqueFuncInfo> for VarName {
+    fn into(self) -> UniqueFuncInfo {
+        UniqueFuncInfo {
+            name: self,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Func {
+    inner: Arc<RwLock<FuncInner>>,
+}
+
+#[derive(Debug)]
+pub struct FuncDowncasted<A, R> {
+    pub inner: Func,
+    pub _phantoms: (std::marker::PhantomData<A>, std::marker::PhantomData<R>),
+}
+
+// TODO: include name, relation, and generics in FuncInner
+impl Func {
+    fn new(inner: FuncInner) -> Func {
+        Self {
+            inner: Arc::new(RwLock::new(inner)),
+        }
+    }
+
+    pub fn new_compiled(_: UniqueFuncInfo, typ: FuncType) -> Func {
+        Self::new(FuncInner {
+            typ,
+            code: FuncCodeInfo::Compiled { pointer: None },
+        })
+    }
+
+    pub fn new_external(
+        _: UniqueFuncInfo,
+        typ: FuncType,
+        pointer: *const usize,
+        reflect_types_of: Vec<bool>,
+    ) -> Func {
+        Self::new(FuncInner {
+            typ,
+            code: FuncCodeInfo::External {
+                pointer,
+                reflect_types_of,
+            },
+        })
+    }
+
+    pub fn typ(&self) -> FuncType { self.inner.read().unwrap().typ.clone() }
+    pub fn code(&self) -> FuncCodeInfo {
+        let inner = self.inner.read().unwrap();
+        inner.code.clone()
+    }
+
+    pub(super) fn set_pointer(&self, pointer: *const usize) {
+        let mut inner = self.inner.write().unwrap();
+        inner.code = FuncCodeInfo::Compiled {
+            pointer: Some(pointer),
+        };
+    }
+
+    pub(super) fn disable_pointer(&self) {
+        let mut inner = self.inner.write().unwrap();
+        inner.code = FuncCodeInfo::Compiled { pointer: None };
+    }
+}
+
+#[derive(Debug)]
+struct FuncInner {
+    typ: FuncType,
+    code: FuncCodeInfo,
+}
+
+#[derive(Clone, Debug)]
+pub enum FuncCodeInfo {
+    // TODO: use NonNull here
+    Compiled {
+        pointer: Option<*const usize>,
+    },
+    External {
+        pointer: *const usize,
+        // TODO: convert to a slice so that FuncCodeInfo can be Copy
+        reflect_types_of: Vec<bool>,
+    },
+}
+
+impl FuncCodeInfo {
+    pub fn pointer(&self) -> Option<*const usize> {
+        match self {
+            FuncCodeInfo::Compiled { pointer } => *pointer,
+            FuncCodeInfo::External { pointer, .. } => Some(*pointer),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
+pub enum Gen {
+    #[default]
+    Latest,
+
+    Specific(NonZeroU32),
+}
+
+impl Gen {
+    pub fn random() -> Gen { Gen::Specific(NonZeroU32::new(rand::random::<u32>()).unwrap()) }
 }

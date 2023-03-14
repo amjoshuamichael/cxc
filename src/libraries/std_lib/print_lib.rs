@@ -9,7 +9,6 @@ impl Library for PrintLib {
             "external_print_string",
             external_print_string as *const usize,
             ExternalFuncAdd {
-                arg_types: vec![unit.comp_data.get_by_name(&"String".into()).unwrap()],
                 ..ExternalFuncAdd::empty()
             },
         );
@@ -30,4 +29,4 @@ impl Library for PrintLib {
 }
 
 fn external_print_string(string: String) { println!("{string}") }
-fn panic(string: &String) { panic!("{string}") }
+fn panic() { panic!("") }

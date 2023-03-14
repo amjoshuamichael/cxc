@@ -51,7 +51,7 @@ impl<T: GenericTable> GenericTable for (T, Option<Type>) {
 
 impl GenericTable for UniqueFuncInfo {
     fn get_at_index(&self, index: u8) -> Option<Type> {
-        self.own_generics.get(index as usize).cloned()
+        self.generics.get(index as usize).cloned()
     }
     fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
 }
@@ -147,15 +147,9 @@ impl CompData {
                     .map(|ga| self.get_spec(ga, generics))
                     .collect::<TResult<Vec<_>>>()?;
 
-                let cached_type = self.types.get(name);
-
-                if let Some(cached_type) = cached_type {
-                    cached_type.clone()
-                } else {
-                    self.get_spec(self.get_alias_for(name)?, &generics)?
-                        .with_name(name.clone())
-                        .with_generics(&generics)
-                }
+                self.get_spec(self.get_alias_for(name)?, &generics)?
+                    .with_name(name.clone())
+                    .with_generics(&generics)
             },
             TypeSpec::GetGeneric(on, index) => {
                 let on = self.get_spec(on, generics)?;

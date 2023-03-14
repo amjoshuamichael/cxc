@@ -7,10 +7,11 @@ use test_utils::{xc_test, Numbers5, Strings4};
 fn basic_struct() {
     xc_test!(
         "
+        ; i32 {
             x: Point2D = Point2D { x = 30, y = 90 }
             ; x.x + x.y
-        "
-        => i32;
+        }
+        ";
         120
     )
 }
@@ -34,12 +35,13 @@ fn set_to_with_function() {
 fn anonymous() {
     xc_test!(
         "
+        ; i32 {
             x: { x: i32, y: i32 } = {--}
             x.x = 30
             x.y = 90
             ; x.x + x.y
-        "
-        => i32;
+        }
+        ";
         120
     )
 }
@@ -48,13 +50,14 @@ fn anonymous() {
 fn anonymous_extra() {
     xc_test!(
         "
+        ; i32 {
             x: { x: i32, y: { x: i32, y: i32 } } = {--}
             x.x = 30
             x.y.x = 40
             x.y.y = 50
             ; x.x + x.y.x + x.y.y
-        "
-        => i32;
+        }
+        "; 
         120
     )
 }
@@ -63,10 +66,11 @@ fn anonymous_extra() {
 fn generics_i() {
     xc_test!(
         "
+        ; i32 { 
             x: TwoOf<i32> = TwoOf<i32> { one = 42, two = 32 }
             ; x.one + x.two
-        "
-        => i32;
+        }
+        ";
         74
     )
 }
@@ -75,11 +79,12 @@ fn generics_i() {
 fn generics_f() {
     xc_test!(
         "
+        ; f32 {
             x: TwoOf<f32> = TwoOf<f32> { one = 42.4, two = 32.3 }
             ; x.one + x.two
-        "
-        => f32;
-        74.7
+        }
+        ";
+        74.7f32
     )
 }
 

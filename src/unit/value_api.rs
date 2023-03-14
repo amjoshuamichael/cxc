@@ -7,7 +7,7 @@ use crate::{
     typ::{FuncType, ReturnStyle},
     TypeEnum, Unit, XcReflect,
 };
-use std::{collections::HashMap, mem::transmute};
+use std::{collections::HashMap, mem::transmute, sync::Mutex};
 
 use crate::Type;
 
@@ -33,7 +33,10 @@ impl XcReflect for XcValue {
 // rust. Therefore, we use this static as a workaround.
 const MAX_VALUE_SIZE: usize = 4096;
 type MaxBytes = [u8; MAX_VALUE_SIZE];
-static mut MAX_BYTES: MaxBytes = [0; MAX_VALUE_SIZE];
+
+lazy_static::lazy_static! {
+    static ref MAX_BYTES: Mutex<MaxBytes> = Mutex::new([0; MAX_VALUE_SIZE]);
+}
 
 impl XcValue {
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
@@ -66,7 +69,7 @@ impl XcValue {
         }
     }
 
-    pub fn to_string(&self, unit: &mut Unit) -> String {
+    pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
         let info = UniqueFuncInfo {
             name: "to_string".into(),
             relation: TypeRelation::MethodOf(self.typ.clone()),
@@ -77,12 +80,11 @@ impl XcValue {
 
         let mut output = String::new();
 
-        unsafe {
-            let func = unit.get_fn_by_info::<(&mut String, *const usize), ()>(&info);
-            func(&mut output, self.const_ptr());
-        };
+        let func = unit.get_fn(info)?;
+        let func = func.downcast::<(&mut String, *const usize), ()>();
+        func(&mut output, self.const_ptr());
 
-        indent_parens(output)
+        Some(indent_parens(output))
     }
 
     pub unsafe fn get_data_as<T>(&self) -> *const T { self.data.as_ptr() as *const T }
@@ -188,8 +190,13 @@ impl Unit {
                 },
                 ReturnStyle::Sret => {
                     let new_func: ExternFunc<(), MaxBytes> = transmute(func_addr);
-                    MAX_BYTES = new_func(());
-                    let data_vec = MAX_BYTES[..ret_type.size()].to_vec();
+
+                    let data_vec = {
+                        let mut bytes_lock = MAX_BYTES.lock().unwrap();
+                        *bytes_lock = new_func(());
+                        bytes_lock[..ret_type.size()].to_vec()
+                    };
+
                     XcValue::new_from_vec(ret_type.clone(), data_vec)
                 },
                 ReturnStyle::Void => {

@@ -6,6 +6,9 @@
 #![feature(type_changing_struct_update)]
 #![feature(if_let_guard)]
 #![feature(min_specialization)]
+#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+#![feature(tuple_trait)]
 
 // HOW DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself

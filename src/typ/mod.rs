@@ -19,8 +19,6 @@ use inkwell::types::FunctionType;
 use invalid_state::InvalidState;
 pub use kind::Kind;
 
-use self::fields_iter::FieldsIter;
-
 #[derive(Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub struct Type(Arc<TypeData>);
 
@@ -45,7 +43,7 @@ pub enum ReturnStyle {
 }
 
 impl Type {
-    fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
+    pub fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
     pub fn size(&self) -> usize { size::size_of_type(self.clone()) as usize }
 
@@ -388,11 +386,6 @@ pub struct RefType {
 pub struct FuncType {
     pub ret: Type,
     pub args: Vec<Type>,
-}
-
-impl FuncType {
-    pub fn ret_type(&self) -> Type { self.ret.clone() }
-    pub fn args(&self) -> Vec<Type> { self.args.clone() }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord)]

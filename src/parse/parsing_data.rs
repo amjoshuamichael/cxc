@@ -1,7 +1,7 @@
 use std::{fmt::Debug, hash::Hash, iter::once, sync::Arc};
 
 use crate::{
-    unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
+    unit::{CompData, FuncDeclInfo, Gen, UniqueFuncInfo},
     Type,
 };
 
@@ -206,7 +206,7 @@ impl FuncCode {
         }
     }
 
-    pub fn to_unique_func_info(&self, comp_data: &CompData) -> UniqueFuncInfo {
+    pub fn to_unique_func_info(&self, comp_data: &CompData, gen: Gen) -> UniqueFuncInfo {
         let relation = self
             .relation
             .clone()
@@ -215,7 +215,8 @@ impl FuncCode {
         UniqueFuncInfo {
             name: self.name.clone(),
             relation,
-            own_generics: Vec::new(),
+            generics: Vec::new(),
+            gen,
         }
     }
 

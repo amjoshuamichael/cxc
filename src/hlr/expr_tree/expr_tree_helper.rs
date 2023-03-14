@@ -135,11 +135,10 @@ impl ExprTree {
         UniqueFuncInfo {
             name: f,
             relation,
-            own_generics: generics,
+            generics,
+            ..Default::default()
         }
     }
-
-    pub fn print_id(&self, id: ExprID) { println!("{}", self.get(id).to_string(self)) }
 }
 
 impl FuncRep {

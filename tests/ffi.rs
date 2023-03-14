@@ -8,9 +8,9 @@ use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 #[test]
 fn return_arg() {
     let mut unit = Unit::new();
-    unit.push_script(" main(a: i32); i32 { ; a } ");
+    unit.push_script("main(a: i32); i32 { ; a }");
 
-    let num = unsafe { unit.get_fn_by_name::<[i32], i32>("main")(32) };
+    let num = unit.get_fn("main").unwrap().downcast::<(i32,), i32>()(32);
     assert_eq!(num, 32);
 }
 
@@ -31,7 +31,7 @@ fn multiple_args() {
         ",
     );
 
-    let num = unsafe { unit.get_fn_by_name::<(i32, i32), i32>("add")(4, 5) };
+    let num = unit.get_fn("add").unwrap().downcast::<(i32, i32), i32>()(4, 5);
     assert_eq!(num, 9);
 }
 
@@ -42,56 +42,29 @@ fn basic_pointer() {
     unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
-            square(num: &i32) {
-                num.write<i32>(*num * *num)
-            }
+        square(num: &i32) {
+            num.write<i32>(*num * *num)
+        }
         ",
     );
 
     let mut num = 4;
-    unsafe { unit.get_fn_by_name::<[&mut i32], i32>("square")(&mut num) };
+    unit.get_fn("square")
+        .unwrap()
+        .downcast::<(&mut i32,), i32>()(&mut num);
     assert_eq!(num, 16);
 }
 
 #[test]
-fn one_el_array_out() {
-    xc_test!(
-        "main(); [1]i32 { ; [1] }";
-        [1]
-    )
-}
-
+fn one_el_array_out() { xc_test!("; [1]i32 { ; [1] }"; [1]) }
 #[test]
-fn two_el_array_out() {
-    xc_test!(
-        "main(); [2]i32 { ; [1, 4] }";
-        [1, 4]
-    )
-}
-
+fn two_el_array_out() { xc_test!( "; [2]i32 { ; [1, 4] }"; [1, 4]) }
 #[test]
-fn three_el_array_out() {
-    xc_test!(
-        "main(); [3]i32 { ; [1, 4, 9] }";
-        [1, 4, 9]
-    )
-}
-
+fn three_el_array_out() { xc_test!( "; [3]i32 { ; [1, 4, 9] }"; [1, 4, 9]) }
 #[test]
-fn four_el_array_out() {
-    xc_test!(
-        "main(); [4]i32 { ; [1, 4, 9, 90] }";
-        [1, 4, 9, 90]
-    )
-}
-
+fn four_el_array_out() { xc_test!( "; [4]i32 { ; [1, 4, 9, 90] }"; [1, 4, 9, 90]) }
 #[test]
-fn five_el_array_out() {
-    xc_test!(
-        "main(); [5]i32 { ; [1, 4, 9, 90, 129] }";
-        [1, 4, 9, 90, 129]
-    )
-}
+fn five_el_array_out() { xc_test!( "; [5]i32 { ; [1, 4, 9, 90, 129] }"; [1, 4, 9, 90, 129]) }
 
 #[test]
 fn struct_pointer() {
@@ -115,15 +88,17 @@ fn struct_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 =
-        unsafe { unit.get_fn_by_name::<[&Point2D], i32>("sqr_magnitude_of")(&point) };
+    let sqr_mag: i32 = unit
+        .get_fn("sqr_magnitude_of")
+        .unwrap()
+        .downcast::<(&Point2D,), i32>()(&point);
     assert_eq!(sqr_mag, 13);
 }
 
 #[test]
 fn small_struct() {
     xc_test!(
-        "; Point2D { x = 32, y = 43 }" => Point2D;
+        "; Point2D { ; Point2D { x = 32, y = 43 } }";
         Point2D { x: 32, y: 43 }
     )
 }
@@ -131,7 +106,7 @@ fn small_struct() {
 #[test]
 fn medium_struct() {
     xc_test!(
-        "; Point3D { x = 32, y = 43, z = 13 }" => Point3D;
+        "; Point3D { ; Point3D { x = 32, y = 43, z = 13 } }";
         Point3D { x: 32, y: 43, z: 13 }
     )
 }
@@ -139,7 +114,7 @@ fn medium_struct() {
 #[test]
 fn large_struct() {
     xc_test!(
-        "; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 }" => Numbers5;
+        "; Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }";
         Numbers5 { a: 1, b: 2, c: 3, d: 4, e: 5 }
     )
 }
@@ -161,8 +136,11 @@ fn i32_and_ref() {
     .unwrap();
 
     let mut thirty_two = 32;
-    let func = unit.get_fn_by_name::<[&i32], (i32, &i32)>("main");
-    let output: (i32, &i32) = unsafe { func(&mut thirty_two) };
+    let func = unit
+        .get_fn("main")
+        .unwrap()
+        .downcast::<(&i32,), (i32, &i32)>();
+    let output: (i32, &i32) = func(&mut thirty_two);
     assert_eq!(output, (10, &thirty_two));
 }
 
@@ -193,7 +171,7 @@ fn method_on_struct_with_arg() {
     )
     .unwrap();
 
-    let output = unsafe { unit.get_fn_by_name::<(), i32>("main")() };
+    let output = unit.get_fn("main").unwrap().downcast::<(), i32>()();
     assert_eq!(output, 1680);
 }
 
@@ -228,7 +206,7 @@ fn external_function() {
     )
     .unwrap();
 
-    unsafe { unit.get_fn_by_name::<(), i64>("call")() };
+    unit.get_fn("call").unwrap().downcast::<(), i64>();
 }
 
 #[test]
@@ -290,7 +268,7 @@ fn reflected_type_masks() {
         ",
     );
 
-    unsafe { unit.get_fn_by_name::<(), i32>("main")() };
+    unit.get_fn("main").unwrap().downcast::<(), i32>();
 }
 
 #[test]
@@ -336,5 +314,5 @@ fn value_from_code() {
         ",
     );
 
-    unsafe { unit.get_fn_by_name::<(), i32>("main")() };
+    unit.get_fn("main").unwrap().downcast::<(), i32>();
 }

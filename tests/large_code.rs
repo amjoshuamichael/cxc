@@ -130,7 +130,7 @@ fn derivations() {
         )
         .unwrap();
 
-    unsafe { unit.get_fn_by_name::<(), ()>("test_derivation")() };
+    unit.get_fn("test_derivation").unwrap().downcast::<(), ()>()()
 }
 
 #[test]

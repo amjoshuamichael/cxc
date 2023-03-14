@@ -4,7 +4,7 @@ use crate::hlr::prelude::*;
 use crate::lex::VarName;
 use crate::parse::Opcode::*;
 use crate::typ::{Kind, ReturnStyle};
-use crate::{unit::*, FuncType};
+use crate::unit::*;
 use crate::{Type, TypeEnum};
 use core::cell::RefCell;
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -407,7 +407,6 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                 internal_function_ouptut.unwrap()
             } else {
                 let function_type = fcs.comp_data.get_func_type(&info).unwrap();
-                let TypeEnum::Func(FuncType { ret, .. }) = function_type.as_type_enum() else { panic!() };
 
                 let function = fcs.used_functions.get(&info).unwrap().clone();
                 let mut arg_vals = Vec::new();
@@ -421,7 +420,11 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
                 let mut callsite = fcs.builder.build_direct_call(function, &*arg_vals, "call");
 
-                add_sret_attribute_to_call_site(&mut callsite, &fcs.context, &ret);
+                add_sret_attribute_to_call_site(
+                    &mut callsite,
+                    &fcs.context,
+                    &function_type.ret,
+                );
 
                 Some(callsite.as_any_value_enum())
             }
@@ -571,11 +574,7 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
                 new_temp
             },
         },
-        Member {
-            ret_type,
-            object,
-            field,
-        } => {
+        Member { object, field, .. } => {
             let typ = fcs.tree.get(object).ret_type();
 
             let complete_deref = typ.complete_deref();
@@ -689,7 +688,7 @@ fn internal_function<'comp>(
             let src: BasicValueEnum = compile(fcs, args[1]).unwrap().try_into().unwrap();
 
             let dest: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let load_ty = info.own_generics[0].clone();
+            let load_ty = info.generics[0].clone();
             let dest_loaded: PointerValue = fcs
                 .builder
                 .build_load(load_ty.get_ref().to_basic_type(&fcs.context), dest, "loaddest")

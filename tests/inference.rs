@@ -6,10 +6,11 @@ use test_utils::xc_test;
 fn infer_i() {
     xc_test!(
         "
+        ; i32 {
             x = 300
             ; x
-        "
-        => i32;
+        }
+        ";
         300
     )
 }
@@ -18,11 +19,12 @@ fn infer_i() {
 fn infer_f() {
     xc_test!(
         "
+        ; f32 {
             x = 320.7
             ; x
-        "
-        => f32;
-        320.7
+        }
+        ";
+        320.7f32
     )
 }
 
@@ -30,10 +32,11 @@ fn infer_f() {
 fn infer_b() {
     xc_test!(
         "
+        ; bool {
             x = true
             ; x
-        "
-        => bool;
+        }
+        ";
         true
     )
 }
@@ -42,10 +45,10 @@ fn infer_b() {
 fn infer_struct() {
     xc_test!(
         "
-            main(); i32 {
-                twonums = { x = 43, y = 94 }
-                ; twonums.y
-            }
+        ; i32 {
+            twonums = { x = 43, y = 94 }
+            ; twonums.y
+        }
         ";
         94
     )
@@ -55,10 +58,10 @@ fn infer_struct() {
 fn infer_tuple() {
     xc_test!(
         "
-            main(); i32 {
-                twonums = { 43, 94 }
-                ; twonums.1
-            }
+        ; i32 {
+            twonums = { 43, 94 }
+            ; twonums.1
+        }
         ";
         94
     )
@@ -68,6 +71,7 @@ fn infer_tuple() {
 fn factorial_while() {
     xc_test!(
         "
+        ; i32 {
             current = 5
             output = 1
 
@@ -77,8 +81,8 @@ fn factorial_while() {
             }
 
             ; output
-        "
-        => i32;
+        }
+        ";
         120
     )
 }
