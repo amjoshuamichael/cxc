@@ -33,6 +33,12 @@ impl ExternalFuncAdd {
         self.type_mask = vec![true; self.arg_types.len()];
         self
     }
+
+    pub fn method_of(mut self, typ: Type) -> Self {
+        self.relation = TypeRelation::MethodOf(typ.clone());
+        self.arg_types.insert(0, typ);
+        self
+    }
 }
 
 impl Unit {

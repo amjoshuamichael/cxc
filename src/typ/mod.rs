@@ -208,7 +208,10 @@ impl Type {
     pub fn empty() -> Type { Type::new_struct(Vec::new()) }
 
     pub fn new_struct(fields: Vec<(VarName, Type)>) -> Type {
-        Type::new(TypeEnum::Struct(StructType { fields }))
+        Type::new(TypeEnum::Struct(StructType {
+            fields,
+            repr: Repr::Rust,
+        }))
     }
 
     pub fn new_tuple(fields: Vec<Type>) -> Type {
@@ -220,6 +223,7 @@ impl Type {
 
         Type::new(TypeEnum::Struct(StructType {
             fields: indexed_fields,
+            repr: Repr::Rust,
         }))
     }
 
@@ -392,9 +396,17 @@ pub struct FuncType {
     pub args: Vec<Type>,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, Default, PartialOrd, Ord, Debug)]
+pub enum Repr {
+    #[default]
+    Rust,
+    C,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord)]
 pub struct StructType {
     pub fields: Vec<(VarName, Type)>,
+    pub repr: Repr,
 }
 
 impl StructType {
@@ -482,23 +494,9 @@ impl SumType {
                 return false;
             }
 
-            if nonempty_variant
+            nonempty_variant
                 .invalid_state((self.variants.len() - 2) as u32)
                 .is_some()
-            {
-                return true;
-            }
-
-            let mut nonempty_variant_fields =
-                PrimitiveFieldsIter::new(nonempty_variant.clone());
-
-            nonempty_variant_fields.any(|variant_type| {
-                variant_type
-                    // we subtract one because the len() method counts from one, and then we
-                    // subtract one because one variant has some data
-                    .invalid_state((self.variants.len() - 2) as u32)
-                    .is_some()
-            })
         } else {
             false
         }

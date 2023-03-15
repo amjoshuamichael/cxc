@@ -10,7 +10,7 @@ Rc<T> = {
 
 <T> Rc<T>:: { 
     new(value: T); Rc<T> {
-        box: &RcBox<T> = alloc< RcBox<T> >( 2 )
+        box: &RcBox<T> = alloc< RcBox<T> >( 1 )
 
         box.write< RcBox<T> > (
             RcBox<T> { strong = 1, weak = 0, value = value }

@@ -27,11 +27,12 @@ glam = { version = "0.22.0", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["cxc_derive", "compiler"]
+default = ["cxc_derive", "compiler", "ffi-assertions"]
 xc-debug = []
 llvm-debug = []
 compiler = []
 show-bytes = []
+ffi-assertions = []
 
 [profile.bench]
 debug = true

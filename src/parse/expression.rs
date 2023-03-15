@@ -190,13 +190,12 @@ fn parse_call(
 
     let call_expr = match func {
         Atom::Expr(Expr::Member(object, method_name)) => {
-            let mut new_args = vec![Expr::UnarOp(Opcode::Ref, object)];
-            new_args.append(&mut args);
+            args.insert(0, Expr::UnarOp(Opcode::Ref, object));
 
             Expr::Call {
                 func: box Expr::Ident(method_name),
                 generics,
-                args: new_args,
+                args,
                 is_method: true,
             }
         },

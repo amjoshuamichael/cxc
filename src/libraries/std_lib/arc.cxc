@@ -1,0 +1,44 @@
+Arc<T> = {
+    ptr: &ArcInner<T>,
+}
+
+ArcInner<T> = {
+    strong: AtomicUsize,
+
+    # the value usize::MAX acts as a sentinel for temporarily "locking" the
+    # ability to upgrade weak pointers or downgrade strong ones; this is used
+    # to avoid races in `make_mut` and `get_mut`.
+    weak: AtomicUsize,
+
+    data: T,
+}
+
+<T> Arc<T>:: { 
+    new(data: T); Arc<T> {
+        inner: &ArcInner<T> = alloc< ArcInner<T> >( 1 )
+
+        inner.write< ArcInner<T> > (
+            ArcInner<T> { 
+                strong = AtomicUsize:new(1), 
+                weak = AtomicUsize:new(1), 
+                data = data 
+            }
+        )
+        
+        arc: Arc<T> = Arc<T> { ptr = inner }
+
+        ; arc
+    }
+
+    default(); Rc<T> {
+        ; Rc<T>:new(T:default())
+    }
+}
+
+<T> &Arc<T>:. {
+    clone(); Arc<T> {
+        old_size = self.ptr.strong.fetch_add(1, Ordering.Relaxed {})
+
+        ; Arc<T> { ptr = self.ptr }
+    }
+}

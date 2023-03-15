@@ -26,7 +26,7 @@ pub fn handle_struct_literals(hlr: &mut FuncRep) {
             let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
                 else { unreachable!() };
 
-            let TypeEnum::Struct(StructType { fields: field_types }) = 
+            let TypeEnum::Struct(StructType { fields: field_types, .. }) = 
                 struct_type.as_type_enum() else { unreachable!() };
 
             for (field_name, field_expr) in field_exprs {

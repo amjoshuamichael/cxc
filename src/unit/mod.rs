@@ -1,8 +1,8 @@
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
-use self::functions::Func;
 pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
+pub use self::functions::{Func, FuncDowncasted};
 pub use self::value_api::XcValue;
 use crate::errors::CErr;
 use crate::errors::CResult;
@@ -299,14 +299,17 @@ impl Unit {
     pub fn get_fn(&self, with: impl Into<UniqueFuncInfo>) -> Option<&Func> {
         let info = with.into();
 
-        assert!(
-            self.
-                module
-                .get_function(&info.to_string())?
-                .get_param_iter()
-                .all(|param_type| !param_type.is_array_value()),
-            "Cannot run function that has array value as parameter. Pass in an array pointer instead."
-        );
+        #[cfg(feature = "ffi-assertions")]
+        {
+            assert!(
+                self.
+                    module
+                    .get_function(&info.to_string())?
+                    .get_param_iter()
+                    .all(|param_type| !param_type.is_array_value()),
+                "Cannot run function that has array value as parameter. Pass in an array pointer instead."
+            );
+        }
 
         self.comp_data.compiled.get(&info)
     }

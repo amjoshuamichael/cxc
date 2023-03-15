@@ -1,7 +1,7 @@
 use crate::hlr::expr_tree::{ArrayLitGen, NodeDataGen, StructLitGen};
 use crate::parse::InitOpts;
 use crate::{hlr::expr_tree::NodeData, BoolType, FloatType, FuncType, IntType, RefType, Type};
-use crate::{ArrayType, StructType, TypeEnum};
+use crate::{ArrayType, Repr, StructType, TypeEnum};
 
 use super::{SumType, UnknownType, VariantType, VoidType};
 
@@ -82,6 +82,10 @@ impl InvalidState for ArrayType {
 
 impl InvalidState for StructType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
+        if self.repr == Repr::C {
+            return None;
+        }
+
         for (field_name, field_type) in &self.fields {
             if field_type.invalid_state(0).is_some() {
                 return Some(box StructLitGen {

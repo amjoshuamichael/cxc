@@ -1,5 +1,5 @@
 mod test_utils;
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 use cxc::library::StdLib;
 use test_utils::xc_test;
@@ -192,6 +192,40 @@ fn cast() {
         }
         ";
         unsafe { std::mem::transmute::<(i32, i32), i64>((32, 32)) }
+    )
+}
+
+#[test]
+fn arc_test() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); Arc<i32> {
+            x: i32 = 90
+            arc: Arc<i32> = Arc<i32>:new(x)
+
+            ; arc
+        }
+        ";
+        Arc::new(90i32)
+    )
+}
+
+// TODO: naming a variable with the name of a method causes bugs??
+#[test]
+fn arc_clone() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); Arc<i32> {
+            x: i32 = 90
+            arc: Arc<i32> = Arc<i32>:new(x)
+            cloned: Arc<i32> = arc.clone()
+
+            ; cloned
+        }
+        ";
+        Arc::new(90i32)
     )
 }
 

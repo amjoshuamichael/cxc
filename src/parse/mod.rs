@@ -251,7 +251,12 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                         type_spec,
                     }
                 },
-                _ => todo!("new err type"),
+                err => {
+                    return Err(ParseError::UnexpectedTok {
+                        got: err,
+                        expected: vec![TokName::Assignment, TokName::Colon],
+                    })
+                },
             };
 
             let rhs = lexer.recover(parse_expr)?;

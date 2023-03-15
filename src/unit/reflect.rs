@@ -149,7 +149,7 @@ impl Unit {
 
         let typ = type_from_decl(&self.comp_data, decl)?;
 
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "ffi-assertions")]
         {
             fn do_size_assertion<T>(with: &Type, ex_err: &str) {
                 assert_eq!(

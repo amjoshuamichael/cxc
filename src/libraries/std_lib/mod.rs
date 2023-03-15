@@ -10,6 +10,7 @@ use super::{Library, TypeInterfaceLib};
 
 pub struct StdLib;
 
+mod atomic_lib;
 pub mod bit_array;
 mod default;
 pub mod hash;
@@ -18,6 +19,7 @@ mod string;
 mod to_string;
 mod type_helpers;
 mod value_lib;
+use atomic_lib::AtomicLib;
 use bit_array::BitArrayLib;
 use default::DefaultLib;
 use print_lib::PrintLib;
@@ -45,6 +47,9 @@ impl Library for StdLib {
         unit.add_lib(PrintLib);
         unit.add_lib(BitArrayLib);
         unit.add_lib(TypeHelperLib);
+
+        unit.add_lib(AtomicLib);
+        unit.push_script(include_str!("arc.cxc")).unwrap();
 
         unit.add_external_default::<bool>();
     }

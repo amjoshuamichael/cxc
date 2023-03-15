@@ -22,10 +22,12 @@ pub static LLVM_DEBUG: bool = cfg!(feature = "llvm-debug");
 pub use lex::{TypeName, VarName};
 pub use parse::{TypeDecl, TypeRelation};
 pub use typ::{
-    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, RefType, StructType, Type,
+    ArrayType, BoolType, FloatType, FuncType, IntType, Kind, RefType, Repr, StructType, Type,
     TypeData, TypeEnum,
 };
-pub use unit::{CompData, ExternalFuncAdd, UniqueFuncInfo, Unit, XcReflect, XcValue};
+pub use unit::{
+    CompData, ExternalFuncAdd, Func, FuncDowncasted, UniqueFuncInfo, Unit, XcReflect, XcValue,
+};
 
 pub mod library {
     pub use crate::libraries::*;

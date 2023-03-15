@@ -472,10 +472,24 @@ pub struct Func {
     inner: Arc<RwLock<FuncInner>>,
 }
 
-#[derive(Debug)]
 pub struct FuncDowncasted<A, R> {
     pub inner: Func,
     pub _phantoms: (std::marker::PhantomData<A>, std::marker::PhantomData<R>),
+}
+
+impl<A, R> Debug for FuncDowncasted<A, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.inner.code().pointer())
+    }
+}
+
+impl<A, R> Clone for FuncDowncasted<A, R> {
+    fn clone(&self) -> Self {
+        FuncDowncasted {
+            inner: self.inner.clone(),
+            _phantoms: Default::default(),
+        }
+    }
 }
 
 // TODO: include name, relation, and generics in FuncInner
