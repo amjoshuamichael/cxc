@@ -142,11 +142,10 @@ fn auto_deref_member() {
     )
 }
 
-// TODO: This test doesn't work????
 #[test]
-#[ignore]
 fn auto_deref_method_1() {
     xc_test!(
+        use StdLib;
         r#"
         MyPoint = { x: f32, y: f32 }
 
@@ -154,12 +153,13 @@ fn auto_deref_method_1() {
             ; self.x * self.x + self.y * self.y
         }
 
-        main() {
+        main(); f32 {
             rc_point: Rc<MyPoint> = Rc<MyPoint>:new(MyPoint { x = 4.0, y = 3.0 })
-            sqr_hypotenuse: f32 = rc_point.sqr_hypotenuse()
-            assert_eq<f32>(sqr_hypotenuse, 25.0)
+            sqr_hyp: f32 = rc_point.sqr_hypotenuse()
+            ; sqr_hyp
         }
-        "#
+        "#;
+        25.0f32
     )
 }
 

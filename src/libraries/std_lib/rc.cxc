@@ -31,4 +31,8 @@ Rc<T> = {
         ptr: &T = &self.inner.value
         ; ptr
     }
+
+    to_string(); String {
+        ; (*self.deref()).to_string()
+    }
 }
