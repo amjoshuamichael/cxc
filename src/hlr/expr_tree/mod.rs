@@ -26,7 +26,13 @@ impl Debug for ExprTree {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         writeln!(fmt)?;
         for expr in &self.nodes {
-            writeln!(fmt, "{:?}: {}", expr.0, expr.1.to_string())?
+            writeln!(
+                fmt,
+                "{:?} : {} : {:?}",
+                expr.0,
+                expr.1.data.to_string(self).replace('\n', ""),
+                expr.1.data.ret_type()
+            )?
         }
 
         Ok(())

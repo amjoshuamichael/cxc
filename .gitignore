@@ -1,6 +1,7 @@
 # rust specific
 /target
 /Cargo.lock
+/flamegraph.svg
 
 # platform specific
 .idea/*

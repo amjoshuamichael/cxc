@@ -32,7 +32,6 @@ pub fn handle_op_overloading(hlr: &mut FuncRep) {
             }
         },
     );
-    println!("{}", hlr.tree.to_string());
 
     // TODO: binary operator overloading
 }

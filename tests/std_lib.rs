@@ -112,6 +112,40 @@ fn rc() {
 }
 
 #[test]
+fn big_rc() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); Rc<{i32, i32}> {
+            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
+
+            ; rcx
+        }
+        ";
+        Rc::new((90i32, 90i32))
+    )
+}
+
+#[test]
+fn big_rc_to_string() {
+    xc_test!(
+        use StdLib;
+        "
+        &{i32, i32}:.sum(); i32 {
+            ; self.0 + self.1
+        }
+
+        main(); i32 {
+            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
+
+            ; rcx.sum()
+        }
+        ";
+        String::default()
+    )
+}
+
+#[test]
 fn bit_array_16() {
     xc_test!(
         "
