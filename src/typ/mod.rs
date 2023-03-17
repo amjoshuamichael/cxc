@@ -179,20 +179,18 @@ impl Type {
         }
     }
 
-    pub fn get_auto_deref(&self, comp_data: &CompData) -> Option<Type> {
+    pub fn get_auto_deref(&self, comp_data: &CompData) -> TResult<Type> {
         if let TypeEnum::Ref(RefType { base }) = self.as_type_enum() {
-            Some(base.clone())
+            Ok(base.clone())
         } else {
-            Some(
-                comp_data
-                    .get_func_type(&UniqueFuncInfo::new(
-                        &"deref".into(),
-                        &TypeRelation::MethodOf(self.get_ref()),
-                        self.generics().clone(),
-                    ))
-                    .ok()?
-                    .ret,
-            )
+            Ok(comp_data
+                .get_func_type(&UniqueFuncInfo::new(
+                    &"deref".into(),
+                    &TypeRelation::MethodOf(self.get_ref()),
+                    self.generics().clone(),
+                ))
+                .map_err(|_| TErr::CantDeref(self.clone()))?
+                .ret)
         }
     }
 
@@ -200,7 +198,7 @@ impl Type {
         let mut chain = Vec::new();
         chain.push(self.clone());
 
-        while let Some(derefed) = chain.last().cloned().unwrap().get_auto_deref(comp_data) {
+        while let Ok(derefed) = chain.last().cloned().unwrap().get_auto_deref(comp_data) {
             chain.push(derefed);
         }
 

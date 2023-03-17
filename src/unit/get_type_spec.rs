@@ -94,10 +94,7 @@ impl CompData {
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
-            TypeSpec::Deref(base) => self
-                .get_spec(base, generics)?
-                .get_auto_deref(&*self)
-                .unwrap(),
+            TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_auto_deref(&*self)?,
             TypeSpec::StructMember(struct_type, field_name) => {
                 let deref_chain = self.get_spec(struct_type, generics)?.deref_chain(self);
 

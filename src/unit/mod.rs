@@ -15,6 +15,7 @@ use crate::libraries::Library;
 use crate::parse;
 use crate::parse::*;
 use crate::to_llvm::*;
+use crate::Kind;
 use crate::Type;
 use crate::TypeEnum;
 pub use add_external::ExternalFuncAdd;
@@ -22,7 +23,9 @@ pub use functions::{Gen, UniqueFuncInfo};
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
+use inkwell::types::BasicType;
 use inkwell::values::*;
+use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
 pub use reflect::XcReflect;
 use std::cell::RefCell;
@@ -51,7 +54,7 @@ pub struct Unit {
 pub struct CompData {
     aliases: BTreeMap<TypeName, TypeSpec>,
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
-    pub(crate) globals: BTreeMap<VarName, (Type, GlobalValue<'static>)>,
+    pub(crate) globals: BTreeMap<VarName, (Type, PointerValue<'static>)>,
     compiled: BTreeMap<UniqueFuncInfo, Func>,
     pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
     decl_names: BTreeMap<VarName, Vec<FuncDeclInfo>>,
@@ -347,5 +350,23 @@ impl Unit {
     pub fn add_type_level_func(&mut self, func_name: TypeName, func: TypeLevelFunc) {
         let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
         comp_data.type_level_funcs.insert(func_name, func);
+    }
+
+    pub fn add_global<T: XcReflect>(&mut self, name: VarName, val: *mut T) {
+        let as_int = val as usize;
+
+        let typ = self.get_reflect_type::<T>().unwrap();
+
+        let as_ptr_val = self
+            .context
+            .i64_type()
+            .const_int(as_int as u64, false)
+            .const_to_pointer(
+                typ.to_basic_type(self.context)
+                    .ptr_type(AddressSpace::default()),
+            );
+
+        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
+        comp_data.globals.insert(name, (typ.get_ref(), as_ptr_val));
     }
 }

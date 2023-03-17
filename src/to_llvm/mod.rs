@@ -184,8 +184,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             }
 
             if let Some(global) = fcs.comp_data.globals.get(name) {
-                let out = global.1.as_pointer_value();
-                return Some(AnyValueEnum::PointerValue(out));
+                return Some(AnyValueEnum::PointerValue(global.1));
             }
 
             let val = *fcs.variables.get(name).unwrap();

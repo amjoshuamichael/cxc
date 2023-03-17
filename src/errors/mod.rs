@@ -43,6 +43,7 @@ pub enum TErr {
     NoVariantOnNonEnum(Type, TypeName),
     CantGetGeneric(Type, Vec<Type>, u32),
     TooFewGenerics(Vec<Type>, u8),
+    CantDeref(Type),
 }
 
 #[derive(Debug)]

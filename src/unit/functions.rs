@@ -134,7 +134,7 @@ impl CompData {
                 },
                 VarDecl {
                     name: VarName::temp(),
-                    type_spec: "&T".into(),
+                    type_spec: "T".into(),
                 },
             ],
             generic_count: 1,
@@ -288,7 +288,10 @@ impl CompData {
 
         self.globals.insert(
             info.name.clone(),
-            (Type::new(TypeEnum::Func(function_type)), empty_function.as_global_value()),
+            (
+                Type::new(TypeEnum::Func(function_type)),
+                empty_function.as_global_value().as_pointer_value(),
+            ),
         );
 
         Ok(())
