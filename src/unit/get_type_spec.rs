@@ -56,8 +56,23 @@ impl GenericTable for UniqueFuncInfo {
     fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
 }
 
+pub struct GetSpecReport {
+    typ: Type,
+    pub deref_count: i8,
+}
+
 impl CompData {
     pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> TResult<Type> {
+        self.get_spec_report(&spec, generics).map(|re| re.typ)
+    }
+
+    pub fn get_spec_report(
+        &self,
+        spec: &TypeSpec,
+        generics: &impl GenericTable,
+    ) -> TResult<GetSpecReport> {
+        let mut deref_count: i8 = 0;
+
         let typ = match spec {
             TypeSpec::Named(name) => self.get_by_name(name)?,
             TypeSpec::TypeLevelFunc(name, args) => {
@@ -79,14 +94,30 @@ impl CompData {
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
-            TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_deref().unwrap(),
+            TypeSpec::Deref(base) => self
+                .get_spec(base, generics)?
+                .get_auto_deref(&*self)
+                .unwrap(),
             TypeSpec::StructMember(struct_type, field_name) => {
-                let struct_type = self.get_spec(struct_type, generics)?.complete_deref();
-                let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() else { 
-                    return Err(TErr::NoFieldOnNonStruct(struct_type, field_name.clone()));
-                };
+                let deref_chain = self.get_spec(struct_type, generics)?.deref_chain(self);
 
-                struct_type.get_field_type(field_name)?
+                let mut member = None;
+
+                for (t, typ) in { deref_chain }.drain(..).enumerate() {
+                    if let TypeEnum::Struct(struct_type) = typ.as_type_enum() 
+                        && let Ok(field_type) = struct_type.get_field_type(field_name) {
+
+                        member = Some(field_type);
+                        deref_count = t as i8;
+                        break;
+                    }
+                }
+
+                if let Some(member) = member {
+                    member
+                } else {
+                    panic!()
+                }
             },
             TypeSpec::SumMember(sum_type, type_name) => {
                 let sum_type = self.get_spec(sum_type, generics)?;
@@ -196,6 +227,6 @@ impl CompData {
             },
         };
 
-        Ok(typ)
+        Ok(GetSpecReport { typ, deref_count })
     }
 }

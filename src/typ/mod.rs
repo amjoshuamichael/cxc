@@ -2,6 +2,8 @@ use crate::errors::{TErr, TResult};
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
 use crate::typ::fields_iter::PrimitiveFieldsIter;
+use crate::UniqueFuncInfo;
+use crate::{CompData, TypeRelation};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
@@ -69,7 +71,9 @@ impl Type {
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) | Variant(_) => {
-                if self.size() > 16 {
+                let size = self.size();
+
+                if size > 16 {
                     return ReturnStyle::Sret;
                 }
 
@@ -80,21 +84,23 @@ impl Type {
                     if first_field.size() == 4 && second_field.size() == 8 {
                         ReturnStyle::MoveIntoI64I64
                     } else {
-                        return_style_from_size(self.size())
+                        return_style_from_size(size)
                     }
                 } else {
                     ReturnStyle::Direct
                 }
             },
             Sum(sum_type) => {
-                if self.size() > 16 {
+                let size = self.size();
+
+                if size > 16 {
                     return ReturnStyle::Sret;
                 }
 
                 if sum_type.has_internal_discriminant() {
                     sum_type.largest_variant_data().return_style()
                 } else {
-                    return_style_from_size(self.size())
+                    return_style_from_size(size)
                 }
             },
             Void => ReturnStyle::Void,
@@ -173,6 +179,34 @@ impl Type {
         }
     }
 
+    pub fn get_auto_deref(&self, comp_data: &CompData) -> Option<Type> {
+        if let TypeEnum::Ref(RefType { base }) = self.as_type_enum() {
+            Some(base.clone())
+        } else {
+            Some(
+                comp_data
+                    .get_func_type(&UniqueFuncInfo::new(
+                        &"deref".into(),
+                        &TypeRelation::MethodOf(self.get_ref()),
+                        self.generics().clone(),
+                    ))
+                    .ok()?
+                    .ret,
+            )
+        }
+    }
+
+    pub fn deref_chain(&self, comp_data: &CompData) -> Vec<Type> {
+        let mut chain = Vec::new();
+        chain.push(self.clone());
+
+        while let Some(derefed) = chain.last().cloned().unwrap().get_auto_deref(comp_data) {
+            chain.push(derefed);
+        }
+
+        chain
+    }
+
     pub fn get_array(self, count: u32) -> Type {
         Type::new(TypeEnum::Array(ArrayType { base: self, count }))
     }
@@ -235,7 +269,17 @@ impl Type {
             variants.swap(0, 1);
         }
 
-        Type::new(TypeEnum::Sum(SumType { variants }))
+        let largest_variant_index = variants
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, (_, typ))| typ.size())
+            .unwrap()
+            .0;
+
+        Type::new(TypeEnum::Sum(SumType {
+            variants,
+            largest_variant_index,
+        }))
     }
 
     pub fn unknown() -> Type { Type::new(TypeEnum::Unknown) }
@@ -434,6 +478,7 @@ impl StructType {
 #[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct SumType {
     pub variants: Vec<(TypeName, Type)>,
+    largest_variant_index: usize,
 }
 
 impl SumType {
@@ -467,21 +512,14 @@ impl SumType {
     }
 
     pub fn largest_variant_data(&self) -> Type {
-        self.variants[self.largest_variant_index()].1.clone()
+        self.variants[self.largest_variant_index].1.clone()
     }
 
     pub fn largest_variant_as_struct(&self) -> Type {
         VariantType::as_struct_no_parent(self, &self.largest_variant_data())
     }
 
-    pub fn largest_variant_index(&self) -> usize {
-        self.variants
-            .iter()
-            .enumerate()
-            .max_by_key(|(_, (_, typ))| typ.size())
-            .unwrap()
-            .0
-    }
+    pub fn largest_variant_index(&self) -> usize { self.largest_variant_index }
 
     pub fn has_internal_discriminant(&self) -> bool {
         if self.variants.is_empty() {
@@ -490,7 +528,7 @@ impl SumType {
 
         let mut nonempty_variants = self.variants.iter().filter(|(_, typ)| !typ.is_empty());
         if let Some((_, nonempty_variant)) = nonempty_variants.next() {
-            if nonempty_variants.next().is_some() {
+            if nonempty_variants.count() != 0 {
                 return false;
             }
 

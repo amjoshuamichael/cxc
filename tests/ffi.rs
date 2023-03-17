@@ -1,5 +1,7 @@
 #![allow(unused_must_use)]
 mod test_utils;
+use std::rc::Rc;
+
 use cxc::library::StdLib;
 use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, TypeRelation, XcValue};
 use cxc::{Type, Unit};
@@ -77,9 +79,7 @@ fn struct_pointer() {
             y: i32
         }
 
-        sqr_magnitude_of(in_ptr: &Point2D); i32 {
-            in: Point2D = *in_ptr
-
+        sqr_magnitude_of(in: &Point2D); i32 {
             ; in.x * in.x + in.y * in.y
         }
         ",
@@ -92,6 +92,34 @@ fn struct_pointer() {
         .get_fn("sqr_magnitude_of")
         .unwrap()
         .downcast::<(&Point2D,), i32>()(&point);
+    assert_eq!(sqr_mag, 13);
+}
+
+#[test]
+fn struct_rc_pointer() {
+    let mut unit = Unit::new();
+
+    unit.add_lib(StdLib);
+    unit.push_script(
+        r#"
+        Point2D = {
+            x: i32,
+            y: i32
+        }
+
+        sqr_magnitude_of(in: Rc<Point2D>); i32 {
+            ; in.x * in.x + in.y * in.y
+        }
+        "#,
+    )
+    .unwrap();
+
+    let point = Point2D { x: 2, y: 3 };
+
+    let sqr_mag: i32 = unit
+        .get_fn("sqr_magnitude_of")
+        .unwrap()
+        .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point));
     assert_eq!(sqr_mag, 13);
 }
 

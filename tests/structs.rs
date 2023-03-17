@@ -122,6 +122,25 @@ fn methods() {
 }
 
 #[test]
+fn auto_deref_member() {
+    xc_test!(
+        use StdLib;
+        "
+        MyPoint = { x: f32, y: f32 }
+
+        main(); f32 {
+            x: {&&&MyPoint}.x = 4.0
+            y: {&&Rc<MyPoint>}.x = 4.0
+            z: {&&Rc<&MyPoint>}.x = 4.0
+
+            ; x + y + z
+        }
+        ";
+        12.0f32
+    )
+}
+
+#[test]
 fn arrays() {
     xc_test!(
         "

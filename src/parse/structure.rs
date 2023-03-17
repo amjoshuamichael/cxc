@@ -102,7 +102,52 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             (Ok(Tok::VarName(_)), Ok(Tok::Colon)) => parse_struct(lexer)?,
             (Ok(Tok::TypeName(_)), Ok(Tok::Colon)) => parse_sum(lexer)?,
             _ => {
-                TypeSpec::Tuple(parse_list(Tok::curlys(), Some(Tok::Comma), parse_type, lexer)?)
+                lexer.assert_next_tok_is(Tok::LCurly)?;
+
+                let mut elems = Vec::new();
+
+                if lexer.peek_tok()? == Tok::RCurly {
+                    lexer.next_tok()?;
+                    return Ok(TypeSpec::Tuple(Vec::new()));
+                }
+
+                elems.push(parse_type(lexer)?);
+
+                match (lexer.next_tok()?, lexer.peek_tok()) {
+                    (Tok::RCurly, _) => elems.into_iter().next().unwrap(),
+                    (Tok::Comma, Ok(Tok::RCurly)) => {
+                        lexer.assert_next_tok_is(Tok::RCurly)?;
+                        TypeSpec::Tuple(elems)
+                    },
+                    (Tok::Comma, Ok(_)) => {
+                        loop {
+                            if lexer.peek_tok() == Ok(Tok::RCurly) {
+                                break;
+                            }
+
+                            elems.push(parse_type(lexer)?);
+
+                            match lexer.next_tok()? {
+                                Tok::Comma => continue,
+                                Tok::RCurly => break,
+                                got => {
+                                    return Err(ParseError::UnexpectedTok {
+                                        expected: vec![TokName::RCurly, TokName::Comma],
+                                        got,
+                                    })
+                                },
+                            }
+                        }
+
+                        TypeSpec::Tuple(elems)
+                    },
+                    (got, _) => {
+                        return Err(ParseError::UnexpectedTok {
+                            expected: vec![TokName::RCurly, TokName::Comma],
+                            got,
+                        })
+                    },
+                }
             },
         },
         Tok::AmpersandSet(count) => {

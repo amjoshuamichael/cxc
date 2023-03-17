@@ -2,7 +2,7 @@ use crate::hlr::expr_tree::{ExprID, NodeData::*};
 use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::prelude::*;
 use crate::lex::VarName;
-use crate::parse::Opcode::*;
+use crate::parse::Opcode::{self, *};
 use crate::typ::{Kind, ReturnStyle};
 use crate::unit::*;
 use crate::{Type, TypeEnum};
@@ -544,16 +544,6 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
     output
 }
 
-fn compile_as_ptr_unless_already_ptr(
-    fcs: &FunctionCompilationState,
-    expr_id: ExprID,
-) -> PointerValue<'static> {
-    match fcs.tree.get(expr_id).ret_type().as_type_enum() {
-        TypeEnum::Ref(_) => compile(fcs, expr_id).unwrap().into_pointer_value(),
-        _ => compile_as_ptr(fcs, expr_id),
-    }
-}
-
 fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerValue<'static> {
     match fcs.tree.get(expr_id) {
         Ident { name, .. } => match fcs.variables.get(&name) {
@@ -578,7 +568,7 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
 
             let field_index = struct_type.get_field_index(&field).unwrap();
 
-            let object = compile_as_ptr_unless_already_ptr(fcs, object);
+            let object = compile_as_ptr(fcs, object);
 
             fcs.builder
                 .build_struct_gep(
@@ -614,6 +604,9 @@ fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerVal
                     "cast",
                 )
                 .into_pointer_value()
+        },
+        UnarOp { op, hs, .. } if op == Opcode::Deref => {
+            compile(fcs, hs).unwrap().into_pointer_value()
         },
         other_expression => {
             let value = compile(fcs, expr_id).unwrap();

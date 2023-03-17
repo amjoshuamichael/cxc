@@ -6,7 +6,7 @@ use std::sync::atomic::*;
 macro_rules! impl_atomic_reflect {
     ($type:ty, $to:ty) => {
         impl XcReflect for $type {
-            fn alias_code() -> String { stringify!($type = Transparent({ $to })).into() }
+            fn alias_code() -> String { stringify!($type = Transparent({ $to, })).into() }
         }
     };
 }

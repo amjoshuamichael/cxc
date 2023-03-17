@@ -25,3 +25,10 @@ Rc<T> = {
         ; Rc<T>:new(T:default())
     }
 }
+
+<T> &Rc<T>:. { 
+    deref(); &T {
+        ptr: &T = &self.inner.value
+        ; ptr
+    }
+}

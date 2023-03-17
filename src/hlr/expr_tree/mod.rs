@@ -339,7 +339,7 @@ impl NodeData {
             } => {
                 let mut call = match relation {
                     TypeRelation::Static(typ) => format!("{typ:?}") + "::",
-                    TypeRelation::MethodOf(typ) => format!("{typ:?}") + ".",
+                    TypeRelation::MethodOf(typ) => format!("({typ:?})") + ".",
                     TypeRelation::Unrelated => String::default(),
                 };
 
@@ -395,9 +395,9 @@ impl NodeData {
                 object
             },
             UnarOp { op, hs, .. } => {
-                let mut op = op.to_string();
-                op += &*tree.get(*hs).to_string(tree);
-                op
+                let mut unarop = op.to_string();
+                unarop += &*tree.get(*hs).to_string(tree);
+                format!("({unarop})")
             },
             BinOp { lhs, op, rhs, .. } => {
                 let mut binop = tree.get(*lhs).to_string(tree);
@@ -405,7 +405,7 @@ impl NodeData {
                 binop += &*op.to_string();
                 binop += " ";
                 binop += &*tree.get(*rhs).to_string(tree);
-                binop
+                format!("({binop})")
             },
             IfThen { i, t, .. } => {
                 let mut it = "? ".into();

@@ -411,6 +411,7 @@ impl ToString for UniqueFuncInfo {
             },
             TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.generics),
         }
+        .replace("&", "ref")
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '_')
         .collect::<String>()

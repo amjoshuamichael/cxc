@@ -28,7 +28,7 @@ impl From<ExprID> for Inferable {
 #[derive(Default, Clone, Debug)]
 struct InferMap {
     inferables: IndexMap<Inferable, IndexSet<Constraint>>,
-    calls: IndexSet<Inferable>,
+    calls: IndexSet<ExprID>,
 }
 
 impl InferMap {
@@ -50,13 +50,11 @@ impl InferMap {
         self.inferables.iter()
     }
 
-    pub fn add_call(&mut self, inferable: impl Into<Inferable>) {
-        self.calls.insert(inferable.into());
-    }
+    pub fn add_call(&mut self, inferable: ExprID) { self.calls.insert(inferable); }
 
-    pub fn remove_call(&mut self, inferable: &Inferable) { self.calls.remove(inferable); }
+    pub fn remove_call(&mut self, inferable: &ExprID) { self.calls.remove(inferable); }
 
-    pub fn calls(&self) -> indexmap::set::Iter<Inferable> { self.calls.iter() }
+    pub fn calls(&self) -> indexmap::set::Iter<ExprID> { self.calls.iter() }
 
     pub fn all_types_known(&self, hlr: &FuncRep) -> bool {
         self.inferables
@@ -76,6 +74,9 @@ enum Constraint {
     RelatedTo {
         spec: TypeSpec,
         gen_params: Vec<Inferable>,
+        // Some functions use the Me keyword to reference the type that they are a
+        // method of. This is that type, and it is used when doing type solving on
+        // arguments and return types.
         method_of: Option<Inferable>,
     },
     SameAs(Inferable),
@@ -317,8 +318,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
 
         println!("---UKNOWN CALLS---");
-        for call in &infer_map.calls {
-            let Inferable::Expr(call_id) = call else { panic!() };
+        for call_id in &infer_map.calls {
             let call_data = hlr.tree.get(*call_id);
             let unique_info = hlr.tree.unique_func_info_of_call(&call_data);
             println!("{unique_info:?}");
@@ -483,75 +483,72 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
 }
 
 fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
-    for unknown in infer_map.clone().calls() {
-        let Inferable::Expr(id) = unknown else { panic!() };
+    for id in infer_map.clone().calls() {
         let node_data = hlr.tree.get(*id);
         let func_info = hlr.tree.unique_func_info_of_call(&node_data);
 
-        let NodeData::Call { a, generics, .. } = 
-                        hlr.tree.get(*id) else { unreachable!() };
+        let NodeData::Call { a, .. } = hlr.tree.get(*id) else { unreachable!() };
 
-        if let Ok(func_type) = hlr.comp_data.get_func_type(&func_info) && 
-            generics.iter().all(Type::is_known) {
+        if let Ok(func_type) = hlr.comp_data.get_func_type(&func_info) {
+            infer_map.remove_call(id);
 
-            infer_map
-                .remove_call(unknown);
+            set_inferable(&(*id).into(), &func_type.ret, hlr);
+        } else if let Some(decl_info) = hlr.comp_data.get_declaration_of(&func_info) {
+            // Function has generics that we do not know, but because of the signature of
+            // the function declaration (found by the get_declaration_of)
+            // method, we can fill in some constraints that will help us find
+            // the type
 
-            set_inferable(unknown, &func_type.ret, hlr);
-        } else if let Some(decl_info) = hlr.comp_data.get_declaration_of(&func_info)
-        {
-            infer_map
-                .remove_call(unknown);
-                let code = hlr.comp_data.func_code.get(&decl_info);
+            infer_map.remove_call(id);
 
-            if let Some(code) = code && code.has_generics() {
-                {
-                    let NodeData::Call {
+            let code = hlr.comp_data.func_code.get(&decl_info).unwrap();
+
+            {
+                let NodeData::Call {
                         ref mut generics, ..
                     } = hlr.tree.get_mut(*id) else { unreachable!() };
-                    generics.resize(code.generic_count as usize, Type::unknown());
-                }
+                generics.resize(code.generic_count as usize, Type::unknown());
+            }
 
-                let call_generic_inferables = (0..code.generic_count)
-                    .map(|index| Inferable::CallGeneric(*id, index as usize))
-                    .collect::<Vec<_>>();
+            let call_generic_inferables = (0..code.generic_count)
+                .map(|index| Inferable::CallGeneric(*id, index as usize))
+                .collect::<Vec<_>>();
 
-                let relation_inferable = if code.relation.inner_type().is_some() {
-                    Some(Inferable::Relation(*id))
-                } else {
-                    None
-                };
+            let relation_inferable = code
+                .relation
+                .inner_type()
+                .is_some()
+                .then_some(Inferable::Relation(*id));
 
-                for (arg_index, arg) in code.args.iter().enumerate() {
-                    infer_map.insert(
-                        a[arg_index],
-                        Constraint::RelatedTo {
-                            spec: arg.type_spec.clone(),
-                            gen_params: call_generic_inferables.clone(),
-                            method_of: relation_inferable.clone(),
-                        },
-                    );
-                }
-
+            for (arg_index, arg) in code.args.iter().enumerate() {
                 infer_map.insert(
-                    *id,
+                    a[arg_index],
                     Constraint::RelatedTo {
-                        spec: code.ret_type.clone(),
+                        spec: arg.type_spec.clone(),
                         gen_params: call_generic_inferables.clone(),
                         method_of: relation_inferable.clone(),
                     },
                 );
+            }
 
-                if let Some(relation) = code.relation.inner_type() {
-                    infer_map.insert(
-                        Inferable::Relation(*id),
-                        Constraint::RelatedTo {
-                            spec: relation,
-                            gen_params: call_generic_inferables,
-                            method_of: relation_inferable,
-                        },
-                    );   
-                }
+            infer_map.insert(
+                *id,
+                Constraint::RelatedTo {
+                    spec: code.ret_type.clone(),
+                    gen_params: call_generic_inferables.clone(),
+                    method_of: relation_inferable.clone(),
+                },
+            );
+
+            if let Some(relation) = code.relation.inner_type() {
+                infer_map.insert(
+                    Inferable::Relation(*id),
+                    Constraint::RelatedTo {
+                        spec: relation,
+                        gen_params: call_generic_inferables,
+                        method_of: relation_inferable,
+                    },
+                );
             }
         }
     }

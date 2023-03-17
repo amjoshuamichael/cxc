@@ -35,7 +35,7 @@ show-bytes = []
 ffi-assertions = []
 
 [profile.bench]
-debug = true
+opt-level = 3
 
 [profile.release]
 opt-level = 3

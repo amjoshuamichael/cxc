@@ -71,10 +71,13 @@ impl Default for Unit {
     fn default() -> Self { Self::new() }
 }
 
+pub(crate) fn make_context() -> &'static Context {
+    unsafe { std::mem::transmute(Box::leak(box Context::create())) }
+}
+
 impl Unit {
     pub fn new() -> Self {
-        let context: &'static _ =
-            unsafe { std::mem::transmute(Box::leak(box Context::create())) };
+        let context: &'static _ = make_context();
 
         let random_module_name = format!("cxc_{:x}", rand::random::<u64>());
         let module = Context::create_module(context, &random_module_name);

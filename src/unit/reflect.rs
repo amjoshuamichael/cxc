@@ -1,11 +1,9 @@
 use std::rc::Rc;
 
-use inkwell::context::Context;
-
 use crate::{
     lex::lex,
     parse::{self, GenericLabels, TypeDecl},
-    CompData, Kind, Type, TypeName, Unit, VarName,
+    CompData, Type, TypeName, Unit, VarName,
 };
 
 pub trait XcReflect {
@@ -155,18 +153,9 @@ impl Unit {
                 assert_eq!(
                     std::mem::size_of::<T>(),
                     with.size(),
-                    "Improper reflection. {:?} in cxc ({}) has size {},
+                    "Improper reflection. {:?} in cxc has size {},
                         and {} in rust has size {}. {}",
                     with,
-                    {
-                        let context = Context::create();
-                        format!(
-                            "{:?}",
-                            with.clone()
-                                .with_name(TypeName::Anonymous)
-                                .to_any_type(&context)
-                        )
-                    },
                     with.size(),
                     std::any::type_name::<T>(),
                     std::mem::size_of::<T>(),
