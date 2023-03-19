@@ -47,7 +47,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             )?;
 
             parse_call(&mut atoms, generics, lexer)?
-        } else if matches!(next, Tok::LParen) {
+        } else if matches!(next, Tok::LParen) && !lexer.next_is_whitespace() {
             parse_call(&mut atoms, Vec::new(), lexer)?
         } else if matches!((&last_atom, &next), (Atom::Expr(Expr::Ident(_)), Tok::LBrack)) {
             lexer.next_tok()?;

@@ -424,7 +424,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
         FirstClassCall {
             ref f,
             ref a,
-            ref ret_type,
+            ..
         } => {
             let function_ptr = compile(fcs, *f).unwrap().into_pointer_value();
 
@@ -436,22 +436,13 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                 arg_vals.push(basic_meta_arg);
             }
 
-            let func_type = ret_type.to_basic_type(fcs.context).fn_type(
-                &a.iter()
-                    .map(|a| {
-                        fcs.tree
-                            .get(*a)
-                            .ret_type()
-                            .to_basic_type(fcs.context)
-                            .into()
-                    })
-                    .collect::<Vec<BasicMetadataTypeEnum>>(),
-                false,
-            );
+            let func_type = fcs.tree.get(*f).ret_type();
+            let TypeEnum::Func(func_type) = func_type.as_type_enum() else { unreachable!() };
+            let llvm_func_type = func_type.llvm_func_type(&fcs.context);
 
             let output = fcs
                 .builder
-                .build_indirect_call(func_type, function_ptr, &arg_vals, "call")
+                .build_indirect_call(llvm_func_type, function_ptr, &arg_vals, "call")
                 .as_any_value_enum();
 
             Some(output)

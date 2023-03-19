@@ -96,6 +96,13 @@ impl<N: Default + Clone> ParseContext<N> {
 
     pub fn peek_tok(&mut self) -> ParseResult<Tok> { self.peek_by(0) }
 
+    pub fn next_is_whitespace(&mut self) -> bool {
+        match self.inner.get(self.tok_pos.val()) {
+            Some((_, tok, _)) => tok.is_whitespace(),
+            None => false
+        }
+    }
+
     pub fn next_tok(&mut self) -> ParseResult<Tok> {
         let mut next = &Tok::Space;
 

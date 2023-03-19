@@ -213,17 +213,13 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         Tok::LParen => {
             let arg_types = parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
 
-            {
-                let probably_arrow = lexer.next_tok()?;
-                if probably_arrow != Tok::Semicolon {
-                    return Err(ParseError::UnexpectedTok {
-                        got: probably_arrow,
-                        expected: vec![TokName::Semicolon],
-                    });
+            let ret_type = match lexer.peek_tok() {
+                Ok(Tok::Semicolon) => {
+                    lexer.next_tok()?;
+                    parse_type(lexer)?
                 }
-            }
-
-            let ret_type = parse_type(lexer)?;
+                _ => TypeSpec::Void,
+            };
 
             TypeSpec::Function(arg_types, box ret_type)
         },

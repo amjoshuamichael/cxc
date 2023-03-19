@@ -113,7 +113,7 @@ impl CompData {
                 if let Some(member) = member {
                     member
                 } else {
-                    panic!()
+                    panic!();
                 }
             },
             TypeSpec::SumMember(sum_type, type_name) => {
@@ -166,6 +166,7 @@ impl CompData {
             },
             TypeSpec::FuncReturnType(func_type) => {
                 let func_type = self.get_spec(func_type, generics)?;
+                // TODO: error, caught on type inference as "cannot call non func"
                 let TypeEnum::Func(FuncType { ret: ret_type, .. }) = func_type.as_type_enum() else { panic!() };
                 ret_type.clone()
             },

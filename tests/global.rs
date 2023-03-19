@@ -48,6 +48,7 @@ fn big_global() {
     assert_eq!(large_value.d, 60);
 }
 
+
 #[test]
 fn global_rc() {
     let mut unit = Unit::new();
@@ -93,4 +94,39 @@ fn comp_script() {
     .unwrap();
 
     assert_eq!(large_value.c, 60);
+}
+
+#[test]
+fn first_class_void() {
+    let mut unit = Unit::new();
+    unit.add_lib(StdLib);
+
+    let mut large_value = Numbers5::default();
+    large_value.a = 9;
+    unit.add_global("large_value".into(), &mut large_value as *mut _);
+
+    unit.push_script(
+        r#"
+        FnHolder = { (i32), }
+
+        multiply_a_by(x: i32) { 
+            large_value.a = large_value.a * x
+        }
+
+        get_that_fn(); (i32) {
+            ; FnHolder { multiply_a_by }
+        }
+
+        main() {
+            fn: FnHolder = get_that_fn()
+            (fn.0)(3)
+            (fn.0)(9)
+        }
+
+        "#,
+    )
+    .unwrap();
+
+    unit.get_fn("main").unwrap().downcast::<(), ()>()();
+    assert_eq!(large_value.a, 243);
 }

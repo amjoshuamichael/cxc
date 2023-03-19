@@ -51,6 +51,7 @@ mod hlr;
 mod lex;
 mod libraries;
 mod parse;
+#[cfg(feature = "backend-llvm")]
 mod to_llvm;
 mod typ;
 mod unit;
