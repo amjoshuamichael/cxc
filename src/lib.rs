@@ -42,7 +42,7 @@ pub mod error {
 }
 
 #[cfg(feature = "cxc_derive")]
-pub use cxc_derive::XcReflect;
+pub use cxc_derive::{XcReflect, xc_opaque};
 
 #[cfg(feature = "show-bytes")]
 pub mod bytesof;
