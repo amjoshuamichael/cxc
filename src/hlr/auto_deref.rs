@@ -20,6 +20,8 @@ pub fn auto_deref(hlr: &mut FuncRep) {
             match report.deref_count {
                 1.. => {
                     for _ in 0..report.deref_count {
+                        let object_type = hlr.tree.get(*object).ret_type();
+
                         *object = hlr.insert_quick(
                             memberlit,
                             NodeData::UnarOp {

@@ -122,18 +122,20 @@ impl Unit {
             { errs }.drain(..).map(CErr::Parse).collect::<Vec<_>>()
         })?;
 
+        let has_comp_script = parsed.comp_script.is_some();
+
         let funcs_to_process = {
             let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
 
             comp_data.new_generation();
 
-            for decl in parsed.types_iter().cloned() {
+            for decl in parsed.types.iter().cloned() {
                 comp_data.add_type_alias(decl.name, decl.typ);
             }
 
             let mut declarations = Vec::new();
 
-            for code in parsed.funcs_iter() {
+            for code in parsed.funcs.iter() {
                 let is_generic = code.has_generics();
 
                 let decl = comp_data.insert_code(code.clone());
@@ -141,6 +143,10 @@ impl Unit {
                 if !is_generic {
                     declarations.push(decl);
                 }
+            }
+
+            if let Some(comp_script) = parsed.comp_script {
+                declarations.push(comp_data.insert_code(comp_script));
             }
 
             let funcs_to_compile: Vec<UniqueFuncInfo> = { declarations }
@@ -168,6 +174,10 @@ impl Unit {
 
         self.compile_func_set(funcs_to_process.clone())
             .map_err(|x| vec![x])?;
+
+        if has_comp_script {
+            self.run_comp_script();
+        }
 
         Ok(funcs_to_process)
     }
@@ -274,6 +284,18 @@ impl Unit {
         fcs.builder.position_at_end(basic_block);
 
         compile_routine(&mut fcs, &self.module);
+    }
+    
+    fn run_comp_script(&self) {
+        let func = self.execution_engine.borrow().get_function_address(&*UniqueFuncInfo {
+            name: VarName::temp(),
+            ..Default::default()
+        }.to_string()).unwrap();
+
+        unsafe {
+            let func: unsafe extern "C" fn() = std::mem::transmute(func);
+            func()
+        }
     }
 
     fn get_func_value(&self, func_info: &UniqueFuncInfo) -> Option<FunctionValue<'static>> {

@@ -114,38 +114,10 @@ impl VarDecl {
 }
 
 #[derive(Default, Debug)]
-pub struct Script(pub Vec<Decl>);
-
-impl Script {
-    pub fn types_iter(&self) -> impl Iterator<Item = &TypeDecl> {
-        self.0.iter().filter_map(|decl| decl.as_type())
-    }
-
-    pub fn funcs_iter(&self) -> impl Iterator<Item = &FuncCode> {
-        self.0.iter().filter_map(|decl| decl.as_func())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Decl {
-    Func(FuncCode),
-    Type(TypeDecl),
-}
-
-impl Decl {
-    pub fn as_func(&self) -> Option<&FuncCode> {
-        match self {
-            Decl::Func(d) => Some(d),
-            _ => None,
-        }
-    }
-
-    pub fn as_type(&self) -> Option<&TypeDecl> {
-        match self {
-            Decl::Type(d) => Some(d),
-            _ => None,
-        }
-    }
+pub struct Script {
+    pub types: Vec<TypeDecl>,
+    pub funcs: Vec<FuncCode>,
+    pub comp_script: Option<FuncCode>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

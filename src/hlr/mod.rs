@@ -55,7 +55,11 @@ pub fn hlr(
     }
 
     infer_types(&mut output);
+    // TODO: throw error if function has no return
+        println!("{}", &output.tree.to_string());
     auto_deref(&mut output);
+        println!("{}", &output.tree.to_string());
+        dbg!(&output.tree);
     op_overloading(&mut output);
     variant_literals(&mut output);
     active_initialization(&mut output);

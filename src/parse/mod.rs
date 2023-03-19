@@ -42,7 +42,7 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpan
 }
 
 pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
-    let mut declarations: Vec<Decl> = Vec::new();
+    let mut script = Script::default();
 
     if lexer.peek_tok().is_err() {
         // file is empty
@@ -52,12 +52,29 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
     loop {
         match lexer.peek_tok()? {
             Tok::VarName(_) => {
-                declarations.push(Decl::Func(parse_func(
+                script.funcs.push(parse_func(
                     lexer,
                     TypeSpecRelation::Unrelated,
                     GenericLabels::new(),
-                )?));
+                )?);
             },
+            Tok::TripleMinus => {
+                lexer.assert_next_tok_is(Tok::TripleMinus)?;
+
+                let mut func_parser = lexer.split(VarName::from("comp_script"), HashMap::new());
+                let mut statements = Vec::new();
+
+                while lexer.peek_tok() != Err(ParseError::UnexpectedEndOfFile) {
+                    statements.push(parse_stmt(&mut func_parser)?);
+                }
+
+                let code = FuncCode {
+                    ret_type:TypeSpec::Void,
+                    ..FuncCode::from_expr(Expr::Block(statements))
+                };
+
+                script.comp_script = Some(code);
+            }
             _ => {
                 // could either the type we are declaring methods for, as in:
                 //
@@ -81,7 +98,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
 
                         let type_decl = parse_type_decl(context)?;
 
-                        declarations.push(Decl::Type(type_decl));
+                        script.types.push(type_decl);
 
                         Ok(())
                     })?;
@@ -113,14 +130,14 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                     )?;
 
                     for method in methods {
-                        declarations.push(Decl::Func(method));
+                        script.funcs.push(method);
                     }
                 }
             },
         }
 
-        if lexer.peek_tok().is_err() {
-            return Ok(Script(declarations));
+        if lexer.peek_tok() == Err(ParseError::UnexpectedEndOfFile) {
+            return Ok(script);
         }
 
         if crate::XC_DEBUG {

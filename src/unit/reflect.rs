@@ -18,7 +18,7 @@ pub trait XcReflect {
         if is_named {
             parse::file(&mut lexer)
                 .expect("error in type decl")
-                .types_iter()
+                .types.iter()
                 .next()
                 .expect("error in type decl")
                 .clone()

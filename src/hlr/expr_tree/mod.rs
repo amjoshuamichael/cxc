@@ -388,7 +388,9 @@ impl NodeData {
                 call
             },
             Member { object, field, .. } => {
-                let mut member = tree.get(*object).to_string(tree);
+                let mut member = String::from("(");
+                member += &*tree.get(*object).to_string(tree);
+                member += ")";
                 member += ".";
                 member += &*field.to_string();
                 member
@@ -401,17 +403,14 @@ impl NodeData {
                 object
             },
             UnarOp { op, hs, .. } => {
-                let mut unarop = op.to_string();
-                unarop += &*tree.get(*hs).to_string(tree);
-                format!("({unarop})")
+                op.to_string() + &*tree.get(*hs).to_string(tree)
             },
             BinOp { lhs, op, rhs, .. } => {
                 let mut binop = tree.get(*lhs).to_string(tree);
                 binop += " ";
                 binop += &*op.to_string();
                 binop += " ";
-                binop += &*tree.get(*rhs).to_string(tree);
-                format!("({binop})")
+                binop + &*tree.get(*rhs).to_string(tree)
             },
             IfThen { i, t, .. } => {
                 let mut it = "? ".into();

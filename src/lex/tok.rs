@@ -10,6 +10,8 @@ use std::{
     sync::Arc,
 };
 
+// TODO: reify names like "deref", "Sret" and "comp_script" as real types by turning VarName 
+// into an Enum
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
 pub struct VarName(Arc<str>);
 
@@ -204,6 +206,9 @@ pub enum Tok {
     #[token("->")]
     RArrow,
 
+    #[token("---")]
+    TripleMinus,
+
     #[token("=")]
     Assignment,
 
@@ -369,6 +374,7 @@ impl ToString for Tok {
             Dot => ".",
             DoublePlus => "++",
             DoubleMinus => "--",
+            TripleMinus => "---",
             AmpersandSet(count) => return "&".repeat(*count as _),
             Or => "||",
             LessOrEqual => "<=",

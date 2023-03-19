@@ -122,6 +122,7 @@ pub enum TokName {
 
     DoublePlus,
     DoubleMinus,
+    TripleMinus,
 
     Ref,
     Deref,
@@ -193,6 +194,7 @@ impl From<Tok> for TokName {
             Dot => TokName::Dot,
             DoublePlus => TokName::DoublePlus,
             DoubleMinus => TokName::DoubleMinus,
+            TripleMinus => TokName::TripleMinus,
             AmpersandSet(_) => todo!(),
             Or => TokName::Or,
             LessOrEqual => TokName::LessOrEqual,

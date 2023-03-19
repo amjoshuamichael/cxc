@@ -163,7 +163,6 @@ pub fn infer_types(hlr: &mut FuncRep) {
             },
             NodeData::Call {
                 ref relation,
-                ref a,
                 ..
             } => {
                 match relation {
