@@ -5,7 +5,7 @@ use super::{
     hlr_data::{DataFlowInfo, FuncRep},
 };
 
-pub fn handle_active_initialization(hlr: &mut FuncRep) {
+pub fn active_initialization(hlr: &mut FuncRep) {
     handle_struct_active_initialization(hlr);
     handle_array_active_initialization(hlr);
 }

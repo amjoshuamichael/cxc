@@ -5,7 +5,7 @@ use crate::{
 
 use super::{expr_tree::NodeData, hlr_data::FuncRep};
 
-pub fn handle_auto_deref(hlr: &mut FuncRep) {
+pub fn auto_deref(hlr: &mut FuncRep) {
     hlr.modify_many(
         |data| matches!(data, NodeData::Member{..}),
         |memberlit, member_data, hlr| {

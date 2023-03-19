@@ -1,4 +1,4 @@
-use super::handle_struct_literals::handle_struct_literals;
+use super::struct_literals::struct_literals;
 use super::hlr_data::DataFlowInfo;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
@@ -8,7 +8,7 @@ use crate::typ::ReturnStyle;
 use crate::Type;
 use crate::UniqueFuncInfo;
 
-pub fn handle_large_returns(hlr: &mut FuncRep) {
+pub fn large_returns(hlr: &mut FuncRep) {
     handle_other_calls(hlr);
     handle_own_return(hlr);
 }
@@ -99,7 +99,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
         },
     );
 
-    handle_struct_literals(hlr);
+    struct_literals(hlr);
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {

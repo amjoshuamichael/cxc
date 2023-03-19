@@ -2,7 +2,7 @@ use crate::Type;
 
 use super::{expr_tree::NodeData, hlr_data::FuncRep};
 
-pub fn handle_arg_type_reflection(hlr: &mut FuncRep) {
+pub fn arg_type_reflection(hlr: &mut FuncRep) {
     hlr.modify_many(
         |data| matches!(data, NodeData::Call { .. }),
         |call_id, mut call_data, hlr| {

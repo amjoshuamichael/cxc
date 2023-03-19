@@ -1,11 +1,11 @@
 mod add_void_return;
 pub mod expr_tree;
-mod handle_active_initialization;
-mod handle_arg_type_reflection;
-mod handle_auto_deref;
-mod handle_op_overloading;
-mod handle_struct_literals;
-mod handle_variant_literals;
+mod active_initialization;
+mod arg_type_reflection;
+mod auto_deref;
+mod op_overloading;
+mod struct_literals;
+mod variant_literals;
 pub mod hlr_data;
 pub mod hlr_data_output;
 mod large_returns;
@@ -27,14 +27,14 @@ pub mod prelude {
 
 use prelude::*;
 
-use self::handle_active_initialization::handle_active_initialization;
-use self::handle_arg_type_reflection::handle_arg_type_reflection;
-use self::handle_auto_deref::handle_auto_deref;
-use self::handle_op_overloading::handle_op_overloading;
-use self::handle_struct_literals::handle_struct_literals;
-use self::handle_variant_literals::handle_variant_literals;
+use self::active_initialization::active_initialization;
+use self::arg_type_reflection::arg_type_reflection;
+use self::auto_deref::auto_deref;
+use self::op_overloading::op_overloading;
+use self::struct_literals::struct_literals;
+use self::variant_literals::variant_literals;
 use self::hlr_data_output::FuncOutput;
-use self::large_returns::handle_large_returns;
+use self::large_returns::large_returns;
 
 pub fn hlr(
     info: UniqueFuncInfo,
@@ -55,13 +55,13 @@ pub fn hlr(
     }
 
     infer_types(&mut output);
-    handle_auto_deref(&mut output);
-    handle_op_overloading(&mut output);
-    handle_variant_literals(&mut output);
-    handle_active_initialization(&mut output);
-    handle_arg_type_reflection(&mut output);
-    handle_struct_literals(&mut output);
-    handle_large_returns(&mut output);
+    auto_deref(&mut output);
+    op_overloading(&mut output);
+    variant_literals(&mut output);
+    active_initialization(&mut output);
+    arg_type_reflection(&mut output);
+    struct_literals(&mut output);
+    large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output);
 
     if crate::XC_DEBUG {

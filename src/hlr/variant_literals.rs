@@ -5,7 +5,7 @@ use super::{
     hlr_data::FuncRep,
 };
 
-pub fn handle_variant_literals(hlr: &mut FuncRep) {
+pub fn variant_literals(hlr: &mut FuncRep) {
     hlr.modify_many_rev(
         |data| matches!(data, NodeData::StructLit { .. }),
         |struct_id, mut struct_data, hlr| {

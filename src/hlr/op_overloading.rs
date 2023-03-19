@@ -2,7 +2,7 @@ use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName};
 
 use super::{expr_tree::NodeData, hlr_data::FuncRep};
 
-pub fn handle_op_overloading(hlr: &mut FuncRep) {
+pub fn op_overloading(hlr: &mut FuncRep) {
     hlr.modify_many_rev(
         |data| matches!(data, NodeData::UnarOp { .. }),
         |op_id, op_data, hlr| {
