@@ -9,6 +9,9 @@ use std::{
     fmt::{Debug, Display},
     sync::Arc,
 };
+use crate::{XcReflect, xc_opaque};
+
+use crate as cxc;
 
 // TODO: reify names like "deref", "Sret" and "comp_script" as real types by turning VarName 
 // into an Enum
@@ -49,7 +52,8 @@ impl Deref for VarName {
     fn deref(&self) -> &Self::Target { &self.0 }
 }
 
-#[derive(PartialEq, Default, Eq, Clone, Hash, PartialOrd, Ord)]
+#[derive(PartialEq, Default, Eq, Clone, Hash, PartialOrd, Ord, XcReflect)]
+#[xc_opaque]
 pub enum TypeName {
     Other(Arc<str>),
     I(u32),
@@ -66,18 +70,22 @@ pub enum TypeName {
 impl TypeName {
     fn from_tok(t: &mut Lexer<Tok>) -> Self {
         match t.slice().chars().next() {
-            Some('i') => return Self::I(t.slice()[1..].parse().expect("improper int type")),
-            Some('u') => return Self::U(t.slice()[1..].parse().expect("improper uint type")),
-            _ => {},
-        }
-
-        match t.slice() {
-            "f16" => Self::F16,
-            "f32" => Self::F32,
-            "f64" => Self::F64,
-            "bool" => Self::Bool,
-            "Me" => Self::Me,
-            _ => Self::Other(Arc::from(t.slice())),
+            Some('i') => match &t.slice()[1..] {
+                "size" => Self::I(64),
+                num => Self::I(num.parse().expect("improper int type")),
+            },
+            Some('u') => match &t.slice()[1..] {
+                "size" => Self::U(64),
+                num => Self::U(num.parse().expect("improper int type")),
+            },
+            _ => match t.slice() {
+                "f16" => Self::F16,
+                "f32" => Self::F32,
+                "f64" => Self::F64,
+                "bool" => Self::Bool,
+                "Me" => Self::Me,
+                _ => Self::Other(Arc::from(t.slice())),
+            },
         }
     }
 
@@ -222,7 +230,7 @@ pub enum Tok {
     #[regex(
         "[A-Z][A-Za-z0-9]+|\
         [A-Z]|\
-        u[0-9]*|i[0-9]*|f16|f32|f64|f128|bool",
+        u[0-9]*|i[0-9]*|usize|isize|f16|f32|f64|f128|bool",
         TypeName::from_tok,
         priority = 2
     )]

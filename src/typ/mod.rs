@@ -17,11 +17,14 @@ mod kind;
 mod nested_field_count;
 mod size;
 
+use cxc_derive::{XcReflect};
 use inkwell::types::FunctionType;
 use invalid_state::InvalidState;
 pub use kind::Kind;
 
-#[derive(Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
+use crate as cxc;
+
+#[derive(Clone, PartialEq, Hash, Eq, PartialOrd, Ord, XcReflect)]
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
@@ -32,7 +35,7 @@ impl Default for Type {
     fn default() -> Self { Type::unknown() }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, XcReflect)]
 pub enum ReturnStyle {
     Direct,
     ThroughI32,
@@ -337,7 +340,7 @@ impl From<Type> for TypeSpec {
     fn from(typ: Type) -> TypeSpec { TypeSpec::Type(typ) }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord)]
+#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord, XcReflect)]
 pub struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
@@ -384,7 +387,7 @@ impl TypeData {
     pub fn is_named(&self) -> bool { self.name != TypeName::Anonymous }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord)]
+#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord, XcReflect)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -427,25 +430,25 @@ impl Deref for TypeEnum {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
 pub struct RefType {
     pub base: Type,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
 pub struct FuncType {
     pub ret: Type,
     pub args: Vec<Type>,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Default, PartialOrd, Ord, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Default, PartialOrd, Ord, Debug, XcReflect)]
 pub enum Repr {
     #[default]
     Rust,
     C,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
 pub struct StructType {
     pub fields: Vec<(VarName, Type)>,
     pub repr: Repr,
@@ -473,7 +476,7 @@ impl StructType {
 }
 
 // TODO: is not interroperable with a rust sum type with 0 variants.
-#[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord, XcReflect)]
 pub struct SumType {
     pub variants: Vec<(TypeName, Type)>,
     largest_variant_index: usize,
@@ -539,7 +542,7 @@ impl SumType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord, XcReflect)]
 pub struct VariantType {
     pub tag: u32,
     pub parent: Type,
@@ -585,14 +588,14 @@ impl VariantType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
     pub signed: bool,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord, XcReflect)]
 pub enum FloatType {
     F16,
     F32,
@@ -610,18 +613,18 @@ impl From<u32> for FloatType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord, XcReflect)]
 pub struct BoolType;
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct UnknownType();
 static UNKNOWN_STATIC: UnknownType = UnknownType();
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct VoidType();
 static VOID_STATIC: VoidType = VoidType();
 
-#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord, XcReflect)]
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,

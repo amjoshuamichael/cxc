@@ -548,8 +548,8 @@ fn fill_in_call(
             .then_some(Inferable::Relation(*id));
 
         for (arg_index, arg) in code.args.iter().enumerate() {
-            if doing_deref && arg_index == code.args.len() - 1 {
-                // Last argument is the self argument, which is already
+            if doing_deref && arg_index == 0 {
+                // First argument is the self argument, which is already
                 // dereffed
                 continue;
             }
@@ -576,6 +576,11 @@ fn fill_in_call(
         if !doing_deref && code.relation.is_method() {
             let first_arg = *a.first().unwrap();
             infer_map.insert(Inferable::Relation(*id), Constraint::SameAs(first_arg.into()));
+        } else if doing_deref {
+            infer_map.insert(
+                Inferable::Relation(*id), 
+                Constraint::IsType(func_info.relation.inner_type().unwrap())
+            );
         }
 
         if let Some(relation) = code.relation.inner_type() {

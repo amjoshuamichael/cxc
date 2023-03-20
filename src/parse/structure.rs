@@ -122,6 +122,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                     (Tok::Comma, Ok(_)) => {
                         loop {
                             if lexer.peek_tok() == Ok(Tok::RCurly) {
+                                lexer.next_tok()?;
                                 break;
                             }
 

@@ -59,7 +59,7 @@ pub fn auto_deref(hlr: &mut FuncRep) {
                 .unwrap();
 
             for d in 0..deref_level_of_call {
-                let last_arg = a.last_mut().unwrap();
+                let last_arg = a.first_mut().unwrap();
 
                 *last_arg = hlr.insert_quick(
                     callid,

@@ -99,7 +99,7 @@ fn hello_world() {
     xc_test!(
         r#"
         main() {
-            print<&String>(&"hello, world!")
+            print<String>("hello, world!")
         }
         "#
     )

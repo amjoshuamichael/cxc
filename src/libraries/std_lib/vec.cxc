@@ -6,7 +6,14 @@ Vec<T> = {
 
 <T> &Vec<T>:. {
     push(val: T) {
+        ? self.len == 0 {
+            # rust doesn't initialize vecs with a pointer, so if the vec has len 0, 
+            # we should do that.
+            self.write(Vec<T>:new())
+        }
+
         ? self.len >= self.capacity {
+
             # reallocate memory
             self.capacity = self.capacity * i64 2
 

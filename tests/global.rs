@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::test_utils::Numbers5;
 mod test_utils;
 
-use cxc::{Unit, library::StdLib};
+use cxc::{Unit, library::StdLib, Func, Type, FuncType};
 
 static mut GNUM: i32 = 0;
 
@@ -129,4 +129,37 @@ fn first_class_void() {
 
     unit.get_fn("main").unwrap().downcast::<(), ()>()();
     assert_eq!(large_value.a, 243);
+}
+
+#[test]
+fn get_fn_by_ptr() {
+    let mut unit = Unit::new();
+    unit.add_lib(StdLib);
+
+    let mut functions = Vec::<Func>::new();
+    unit.add_global("functions".into(), &mut functions as *mut _);
+
+    unit.push_script(
+        r#"
+        add_two(x: i32); i32 { ; x + 2 }
+        fifty_four(); i32 { ; 54 }
+
+        ---
+
+        functions.push(comp_data.get_fn_by_ptr(add_two))
+        functions.push(comp_data.get_fn_by_ptr(fifty_four))
+        "#
+    ).unwrap();
+
+    let mut funcs_iter = functions.iter();
+    let add_two = funcs_iter.next().unwrap().clone();
+    let fifty_four = funcs_iter.next().unwrap().clone();
+
+    assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
+    assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });
+
+    let add_two = add_two.downcast::<(i32,), i32,>();
+    let fifty_four = fifty_four.downcast::<(), i32>();
+
+    assert_eq!(add_two(fifty_four()), 56);
 }

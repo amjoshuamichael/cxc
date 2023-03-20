@@ -16,6 +16,7 @@ use crate::parse;
 use crate::parse::*;
 use crate::to_llvm::*;
 use crate::Kind;
+use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
 use crate::TypeEnum;
 pub use add_external::ExternalFuncAdd;
@@ -33,6 +34,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::pin::Pin;
 use std::rc::Rc;
 
 mod add_external;
@@ -43,14 +45,19 @@ mod reflect;
 mod rust_type_name_conversion;
 mod value_api;
 
+pub(crate) use functions::FuncCodeInfo;
+
+use crate as cxc;
+
 pub struct Unit {
-    pub comp_data: CompData,
+    pub comp_data: Pin<Box<CompData>>,
     pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'static>>>,
     pub(crate) module: Module<'static>,
     pub(crate) context: &'static Context,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, XcReflectMac)]
+#[xc_opaque]
 pub struct CompData {
     aliases: BTreeMap<TypeName, TypeSpec>,
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
@@ -89,12 +96,17 @@ impl Unit {
             .create_jit_execution_engine(OptimizationLevel::None)
             .expect("unable to create execution engine");
 
-        Self {
-            comp_data: CompData::new(),
+        let mut new = Self {
+            comp_data: Pin::new(Box::new(CompData::new())),
             execution_engine: Rc::new(RefCell::new(execution_engine)),
             module,
             context,
-        }
+        };
+
+        let comp_data_ptr = &mut *new.comp_data as *mut _;
+        new.add_global("comp_data".into(), comp_data_ptr);
+
+        new
     }
 
     pub fn reset_execution_engine(&self) {
@@ -110,6 +122,9 @@ impl Unit {
     }
 
     pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
+        // TODO: make sure that ONLY ONE script is being pushed at a time, and that the Unit 
+        // global can only be accessed from a compilation script
+
         let lexed = lex(script);
 
         let parsed = parse::parse(lexed).map_err(|errs| {

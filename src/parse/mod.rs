@@ -278,7 +278,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
             let rhs = lexer.recover(parse_expr)?;
             Ok(Expr::SetVar(var, box rhs))
-        } else if lexer.peek_tok()? == Tok::Assignment {
+        } else if lexer.peek_tok() == Ok(Tok::Assignment) {
             lexer.assert_next_tok_is(Tok::Assignment)?;
 
             let rhs = lexer.recover(parse_expr)?;

@@ -7,6 +7,7 @@ use crate::typ::{Kind, ReturnStyle};
 use crate::unit::*;
 use crate::{Type, TypeEnum};
 use core::cell::RefCell;
+use either::Either;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -417,7 +418,10 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &function_type.ret);
 
-                Some(callsite.as_any_value_enum())
+                Some(match callsite.try_as_basic_value() {
+                    Either::Left(basic) => basic.as_any_value_enum(),
+                    Either::Right(call) => call.as_any_value_enum(),
+                })
             }
         },
         FirstClassCall {

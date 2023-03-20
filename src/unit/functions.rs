@@ -374,6 +374,10 @@ impl CompData {
     pub fn get_alias_for(&self, name: &TypeName) -> TResult<&TypeSpec> {
         self.aliases.get(name).ok_or(TErr::Unknown(name.clone()))
     }
+
+    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Func {
+        self.compiled.values().find(|func| func.get_pointer() == ptr).unwrap().clone()
+    }
 }
 
 use std::{
@@ -471,7 +475,8 @@ impl From<VarName> for UniqueFuncInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, XcReflectMac)]
+#[xc_opaque] // TODO: add RwLock to cxc
 pub struct Func {
     inner: Arc<RwLock<FuncInner>>,
 }
@@ -543,15 +548,25 @@ impl Func {
         let mut inner = self.inner.write().unwrap();
         inner.code = FuncCodeInfo::Compiled { pointer: None };
     }
+
+    pub(super) fn get_pointer(&self) -> *const usize {
+        let inner = self.inner.read().unwrap();
+
+        match inner.code {
+            FuncCodeInfo::Compiled { pointer } => pointer.unwrap(),
+            FuncCodeInfo::External { pointer, .. } => pointer,
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, XcReflectMac)]
 struct FuncInner {
     typ: FuncType,
     code: FuncCodeInfo,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, XcReflectMac)]
+#[xc_opaque] // TODO: we shouldn't have to do this
 pub enum FuncCodeInfo {
     // TODO: use NonNull here
     Compiled {
@@ -573,7 +588,7 @@ impl FuncCodeInfo {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
 pub enum Gen {
     #[default]
     Latest,

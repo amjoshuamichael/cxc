@@ -19,6 +19,7 @@ mod string;
 mod to_string;
 mod type_helpers;
 mod value_lib;
+mod unit_lib;
 use atomic_lib::AtomicLib;
 use bit_array::BitArrayLib;
 use default::DefaultLib;
@@ -27,6 +28,7 @@ use string::StringLib;
 use to_string::ToStringLib;
 use type_helpers::TypeHelperLib;
 use value_lib::ValueLib;
+use unit_lib::UnitLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
@@ -47,6 +49,7 @@ impl Library for StdLib {
         unit.add_lib(PrintLib);
         unit.add_lib(BitArrayLib);
         unit.add_lib(TypeHelperLib);
+        unit.add_lib(UnitLib);
 
         unit.add_lib(AtomicLib);
         unit.push_script(include_str!("arc.cxc")).unwrap();
