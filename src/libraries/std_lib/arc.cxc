@@ -30,8 +30,8 @@ ArcInner<T> = {
         ; arc
     }
 
-    default(); Rc<T> {
-        ; Rc<T>:new(T:default())
+    default(); Arc<T> {
+        ; Arc<T>:new(T:default())
     }
 }
 

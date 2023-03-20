@@ -253,7 +253,7 @@ impl Type {
         let indexed_fields = fields
             .into_iter()
             .enumerate()
-            .map(|(i, field)| (VarName::from(i.to_string()), field))
+            .map(|(i, field)| ((i as u32).into(), field))
             .collect();
 
         Type::new(TypeEnum::Struct(StructType {
@@ -472,7 +472,7 @@ impl StructType {
             .ok_or(TErr::FieldNotFound(self.clone(), field_name.clone()))
     }
 
-    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || &*self.fields[0].0 == "0" }
+    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].0, VarName::TupleIndex(0)) }
 }
 
 // TODO: is not interroperable with a rust sum type with 0 variants.

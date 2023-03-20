@@ -75,18 +75,18 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
                     var_type: i64i64.clone(),
                     fields: vec![
                         (
-                            VarName::from("0"),
+                            0.into(),
                             box MemberGen {
                                 object: output_var_node_data.clone(),
-                                field: VarName::from("0"),
+                                field: 0.into(),
                                 ret_type: Type::i(32),
                             },
                         ),
                         (
-                            VarName::from("1"),
+                            1.into(),
                             box MemberGen {
                                 object: output_var_node_data.clone(),
-                                field: VarName::from("1"),
+                                field: 1.into(),
                                 ret_type: Type::i(64),
                             },
                         ),

@@ -67,7 +67,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
         name: VarName::from("len"),
         ret_type: Type::i(32).into(),
         args: vec![VarDecl {
-            name: VarName::temp(),
+            name: VarName::None,
             type_spec: typ.clone().into(),
         }],
         generic_count: 0,

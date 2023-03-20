@@ -22,23 +22,23 @@ impl Errable for TypeSpec {
 impl Errable for VarDecl {
     fn err() -> Self {
         VarDecl {
-            name: VarName::error(),
+            name: VarName::Error,
             type_spec: TypeSpec::err(),
         }
     }
 }
 
 impl Errable for VarName {
-    fn err() -> Self { Self::error() }
+    fn err() -> Self { Self::Error }
 }
 impl Errable for TypeName {
-    fn err() -> Self { Self::error() }
+    fn err() -> Self { Self::Anonymous }
 }
 
 impl Errable for FuncCode {
     fn err() -> Self {
         Self {
-            name: VarName::error(),
+            name: VarName::Error,
             ret_type: TypeSpec::err(),
             args: Vec::new(),
             generic_count: 0,

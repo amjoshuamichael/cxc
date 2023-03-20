@@ -295,7 +295,7 @@ impl Unit {
     
     fn run_comp_script(&self) {
         let func = self.execution_engine.borrow().get_function_address(&*UniqueFuncInfo {
-            name: VarName::temp(),
+            name: VarName::None,
             ..Default::default()
         }.to_string()).unwrap();
 

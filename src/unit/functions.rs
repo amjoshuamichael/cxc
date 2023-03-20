@@ -36,7 +36,7 @@ impl CompData {
         out.insert_intrinsic(FuncCode {
             name: VarName::from("alloc"),
             args: vec![VarDecl {
-                name: VarName::temp(),
+                name: VarName::None,
                 type_spec: TypeSpec::Int(32),
             }],
             ret_type: TypeSpec::Ref(box TypeSpec::GenParam(0)),
@@ -49,7 +49,7 @@ impl CompData {
             name: VarName::from("free"),
             ret_type: TypeSpec::Void,
             args: vec![VarDecl {
-                name: VarName::temp(),
+                name: VarName::None,
                 type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
             }],
 
@@ -63,15 +63,15 @@ impl CompData {
             ret_type: TypeSpec::Void,
             args: vec![
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: Type::i(64).into(),
                 },
             ],
@@ -86,15 +86,15 @@ impl CompData {
             ret_type: TypeSpec::Void,
             args: vec![
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
                 },
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: Type::i(64).into(),
                 },
             ],
@@ -129,11 +129,11 @@ impl CompData {
             ret_type: TypeSpec::Void,
             args: vec![
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: "&&T".into(),
                 },
                 VarDecl {
-                    name: VarName::temp(),
+                    name: VarName::None,
                     type_spec: "T".into(),
                 },
             ],
@@ -145,7 +145,7 @@ impl CompData {
         out.insert_intrinsic(FuncCode {
             name: VarName::from("cast"),
             args: vec![VarDecl {
-                name: VarName::temp(),
+                name: VarName::None,
                 type_spec: "T".into(),
             }],
             ret_type: "U".into(),

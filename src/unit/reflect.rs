@@ -23,7 +23,7 @@ pub trait XcReflect {
                 .expect("error in type decl")
                 .clone()
         } else {
-            let mut spec_lexer = lexer.split(VarName::temp(), GenericLabels::default());
+            let mut spec_lexer = lexer.split(VarName::None, GenericLabels::default());
             let spec = parse::parse_type_spec(&mut spec_lexer).expect("error in type spec");
 
             TypeDecl {
@@ -51,7 +51,7 @@ impl_reflect!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f3
 
 macro_rules! impl_reflect_tuple {
     ( $( $elem:ident )+ ) => {
-        impl<$($elem: XcReflect),+> XcReflect for ($($elem),+) {
+        impl<$($elem: XcReflect,)+> XcReflect for ($($elem,)+) {
             fn alias_code() -> String {
                 let mut code = String::from("{");
                 $(
@@ -65,6 +65,7 @@ macro_rules! impl_reflect_tuple {
     };
 }
 
+impl_reflect_tuple! { A }
 impl_reflect_tuple! { A B }
 impl_reflect_tuple! { A B C }
 impl_reflect_tuple! { A B C D }

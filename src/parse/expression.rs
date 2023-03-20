@@ -64,7 +64,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
             let Tok::DottedNum((_, right)) = next else { unreachable!() };
 
-            Expr::Member(box object, right.to_string().into()).into()
+            Expr::Member(box object, right.into()).into()
         } else if next == Tok::Dot {
             lexer.next_tok()?;
             let previous = atoms

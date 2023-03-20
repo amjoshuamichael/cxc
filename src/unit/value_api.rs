@@ -130,7 +130,7 @@ impl Unit {
 
         let expr = {
             let mut lexed = lex(of);
-            let mut context = lexed.split(VarName::temp(), HashMap::new());
+            let mut context = lexed.split(VarName::None, HashMap::new());
 
             Expr::Block(vec![Expr::Return(box parse::parse_expr(&mut context).unwrap())])
         };

@@ -96,7 +96,7 @@ fn build_stack_allocas(
             let var_type = &data_flow.get(name).unwrap().typ;
 
             let var_ptr: PointerValue<'static> =
-                builder.build_alloca(var_type.to_basic_type(context), name);
+                builder.build_alloca(var_type.to_basic_type(context), &*name.to_string());
 
             variables.insert(name.clone(), var_ptr);
         }

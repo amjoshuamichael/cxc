@@ -151,9 +151,7 @@ fn get_fn_by_ptr() {
         "#
     ).unwrap();
 
-    let mut funcs_iter = functions.iter();
-    let add_two = funcs_iter.next().unwrap().clone();
-    let fifty_four = funcs_iter.next().unwrap().clone();
+    let [add_two, fifty_four] = &*functions else { panic!() };
 
     assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
     assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });

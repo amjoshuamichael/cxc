@@ -452,7 +452,7 @@ impl<'a> FuncRep<'a> {
                 let mut fields = Vec::new();
 
                 for (index, expr) in exprs.into_iter().enumerate() {
-                    fields.push((index.to_string().into(), self.add_expr(expr, space)));
+                    fields.push((VarName::TupleIndex(index as _), self.add_expr(expr, space)));
                 }
 
                 let new_struct = NodeData::StructLit {

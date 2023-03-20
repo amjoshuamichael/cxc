@@ -151,7 +151,7 @@ impl CompData {
 
                 for (i, typ) in types.iter().enumerate() {
                     let field_type = self.get_spec(typ, generics)?;
-                    typed_fields.push((VarName::from(i.to_string()), field_type));
+                    typed_fields.push(((i as u32).into(), field_type));
                 }
 
                 Type::new_struct(typed_fields)

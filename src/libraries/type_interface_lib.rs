@@ -31,7 +31,7 @@ fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
         name: VarName::from("type_field_count"),
         ret_type: Type::i(32).into(),
         args: vec![VarDecl {
-            name: VarName::temp(),
+            name: VarName::None,
             type_spec: typ.clone().into(),
         }],
         generic_count: 0,

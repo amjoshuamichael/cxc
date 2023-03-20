@@ -107,7 +107,7 @@ pub struct VarDecl {
 impl VarDecl {
     pub fn no_name(type_spec: TypeSpec) -> Self {
         VarDecl {
-            name: VarName::temp(),
+            name: VarName::None,
             type_spec,
         }
     }
@@ -194,7 +194,7 @@ impl FuncCode {
 
     pub fn from_expr(code: Expr) -> Self {
         Self {
-            name: VarName::temp(),
+            name: VarName::None,
             ret_type: Type::unknown().into(),
             args: Vec::new(),
 

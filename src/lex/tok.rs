@@ -4,7 +4,6 @@ use crate::parse::ParseError;
 use crate::parse::ParseResult;
 use crate::parse::TokName;
 use logos::{Lexer, Logos};
-use std::ops::Deref;
 use std::{
     fmt::{Debug, Display},
     sync::Arc,
@@ -13,43 +12,49 @@ use crate::{XcReflect, xc_opaque};
 
 use crate as cxc;
 
-// TODO: reify names like "deref", "Sret" and "comp_script" as real types by turning VarName 
-// into an Enum
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
-pub struct VarName(Arc<str>);
-
-impl VarName {
-    pub fn temp() -> Self { VarName(Arc::from("temp")) }
-    pub fn error() -> Self { VarName(Arc::from("error")) }
+pub enum VarName {
+    Other(Arc<str>),
+    TupleIndex(u32),
+    None,
+    Error,
+    Sret,
 }
 
 impl Default for VarName {
-    fn default() -> Self { Self::temp() }
+    fn default() -> Self { Self::None }
 }
 
 impl Display for VarName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        match self {
+            VarName::Other(o) => write!(f, "{o}"),
+            VarName::TupleIndex(ti) => write!(f, ".{ti}"),
+            VarName::None => write!(f, "$none"),
+            VarName::Error => write!(f, "$error"),
+            VarName::Sret => write!(f, "$sret"),
+        }
     }
 }
 
 impl Debug for VarName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{self}")
     }
 }
 
 impl From<&str> for VarName {
-    fn from(s: &str) -> Self { Self(Arc::from(s)) }
+    fn from(s: &str) -> Self { 
+        Self::Other(Arc::from(s)) 
+    }
+}
+
+impl From<u32> for VarName {
+    fn from(s: u32) -> Self { Self::TupleIndex(s) }
 }
 
 impl From<String> for VarName {
-    fn from(s: String) -> Self { Self(Arc::from(&*s)) }
-}
-
-impl Deref for VarName {
-    type Target = str;
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn from(s: String) -> Self { Self::Other(Arc::from(&*s)) }
 }
 
 #[derive(PartialEq, Default, Eq, Clone, Hash, PartialOrd, Ord, XcReflect)]
@@ -223,7 +228,7 @@ pub enum Tok {
     #[regex(
         "[a-z_][a-zA-Z0-9_]+|\
         [a-z_]",
-        |t| VarName(Arc::from(t.slice()))
+        |t| VarName::Other(Arc::from(t.slice()))
     )]
     VarName(VarName),
 

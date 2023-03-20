@@ -126,9 +126,9 @@ impl Kind for StructType {
                 }
             }
         } else if let Some((first_name, first_typ)) = fields_iter.next() {
-            name += &*format!("{}: {}", &**first_name, first_typ.to_string());
+            name += &*format!("{first_name}: {first_typ:?}");
             for (field_name, typ) in fields_iter {
-                name += &*format!(", {}: {}", &**field_name, typ.to_string());
+                name += &*format!(", {field_name}: {typ:?}");
             }
         }
 
