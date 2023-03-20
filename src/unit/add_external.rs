@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use inkwell::values::BasicMetadataValueEnum;
 
 use crate::to_llvm::add_sret_attribute_to_call_site;
@@ -172,9 +170,7 @@ impl Unit {
             builder.build_return(Some(&out));
         }
 
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-        comp_data.compiled.insert(
+        self.comp_data.compiled.insert(
             func_info.clone(),
             Func::new_external(
                 func_info,

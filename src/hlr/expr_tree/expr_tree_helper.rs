@@ -139,7 +139,7 @@ impl ExprTree {
     }
 }
 
-impl FuncRep {
+impl<'a> FuncRep<'a> {
     pub fn modify_many(
         &mut self,
         filter: impl Fn(&NodeData) -> bool,
@@ -175,20 +175,20 @@ impl FuncRep {
         }
     }
 
-    pub fn insert_statement_before(
-        &mut self,
+    pub fn insert_statement_before<'ptr>(
+        &'ptr mut self,
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
-    ) -> InsertionData<'_> {
+    ) -> InsertionData<'ptr, 'a> {
         let new_statement = self.insert_statement_inner(statement_origin, new_data, 0);
         InsertionData(self, new_statement)
     }
 
-    pub fn insert_statement_after(
-        &mut self,
+    pub fn insert_statement_after<'ptr>(
+        &'ptr mut self,
         statement_origin: ExprID,
         new_data: impl NodeDataGen,
-    ) -> InsertionData {
+    ) -> InsertionData<'ptr, 'a> {
         let new_statement = self.insert_statement_inner(statement_origin, new_data, 1);
         InsertionData(self, new_statement)
     }
@@ -213,10 +213,10 @@ impl FuncRep {
     }
 }
 
-pub struct InsertionData<'a>(&'a mut FuncRep, ExprID);
+pub struct InsertionData<'ptr, 'a>(&'ptr mut FuncRep<'a>, ExprID);
 
-impl<'a> InsertionData<'a> {
-    pub fn after_that(self, new_data: impl NodeDataGen) -> InsertionData<'a> {
+impl<'ptr, 'a> InsertionData<'ptr, 'a> {
+    pub fn after_that(self, new_data: impl NodeDataGen) -> Self {
         self.0.insert_statement_after(self.1, new_data)
     }
 

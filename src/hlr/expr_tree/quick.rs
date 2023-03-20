@@ -7,7 +7,7 @@ use crate::{
 
 use super::{ExprID, NodeData};
 
-impl FuncRep {
+impl<'a> FuncRep<'a> {
     pub fn insert_quick(&mut self, parent: ExprID, gen: impl NodeDataGen) -> ExprID {
         gen.add_to_expr_tree(self, parent)
     }

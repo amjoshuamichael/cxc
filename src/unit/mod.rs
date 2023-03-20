@@ -44,7 +44,7 @@ mod rust_type_name_conversion;
 mod value_api;
 
 pub struct Unit {
-    pub comp_data: Rc<CompData>,
+    pub comp_data: CompData,
     pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'static>>>,
     pub(crate) module: Module<'static>,
     pub(crate) context: &'static Context,
@@ -90,7 +90,7 @@ impl Unit {
             .expect("unable to create execution engine");
 
         Self {
-            comp_data: Rc::new(CompData::new()),
+            comp_data: CompData::new(),
             execution_engine: Rc::new(RefCell::new(execution_engine)),
             module,
             context,
@@ -125,12 +125,10 @@ impl Unit {
         let has_comp_script = parsed.comp_script.is_some();
 
         let funcs_to_process = {
-            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-            comp_data.new_generation();
+            self.comp_data.new_generation();
 
             for decl in parsed.types.iter().cloned() {
-                comp_data.add_type_alias(decl.name, decl.typ);
+                self.comp_data.add_type_alias(decl.name, decl.typ);
             }
 
             let mut declarations = Vec::new();
@@ -138,7 +136,7 @@ impl Unit {
             for code in parsed.funcs.iter() {
                 let is_generic = code.has_generics();
 
-                let decl = comp_data.insert_code(code.clone());
+                let decl = self.comp_data.insert_code(code.clone());
 
                 if !is_generic {
                     declarations.push(decl);
@@ -146,7 +144,7 @@ impl Unit {
             }
 
             if let Some(comp_script) = parsed.comp_script {
-                declarations.push(comp_data.insert_code(comp_script));
+                declarations.push(self.comp_data.insert_code(comp_script));
             }
 
             let funcs_to_compile: Vec<UniqueFuncInfo> = { declarations }
@@ -155,7 +153,7 @@ impl Unit {
                     let relation = decl
                         .relation
                         .clone()
-                        .map_inner_type(|spec| comp_data.get_spec(&spec, &()).unwrap());
+                        .map_inner_type(|spec| self.comp_data.get_spec(&spec, &()).unwrap());
 
                     let func_info = UniqueFuncInfo {
                         name: decl.name,
@@ -163,7 +161,7 @@ impl Unit {
                         ..Default::default()
                     };
 
-                    comp_data.update_func_info(func_info.clone(), &self.module);
+                    self.comp_data.update_func_info(func_info.clone(), &self.module);
 
                     func_info
                 })
@@ -201,11 +199,9 @@ impl Unit {
                 .drain(..)
                 .map(|info| {
                     let code = self.comp_data.get_code(info.clone()).unwrap();
-                    let hlr = hlr(info.clone(), self.comp_data.clone(), code);
+                    let hlr = hlr(info.clone(), &self.comp_data, code);
 
-                    let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
-                    comp_data.create_func_placeholder(&info, self.context, &self.module)?;
+                    self.comp_data.create_func_placeholder(&info, self.context, &self.module)?;
 
                     hlr
                 })
@@ -218,10 +214,8 @@ impl Unit {
                 .collect();
 
             {
-                let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
                 for func in func_reps.iter() {
-                    let depended_on_by = comp_data
+                    let depended_on_by = self.comp_data
                         .dependencies
                         .get(func.info_ref())
                         .cloned()
@@ -229,7 +223,7 @@ impl Unit {
 
                     let depended_on_by = depended_on_by
                         .into_iter()
-                        .filter(|f| comp_data.update_func_info(f.clone(), &self.module));
+                        .filter(|f| self.comp_data.update_func_info(f.clone(), &self.module));
 
                     set.extend(depended_on_by);
                 }
@@ -239,11 +233,9 @@ impl Unit {
         }
 
         {
-            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-
             for func in &all_funcs_to_compile {
                 for depends_on in func.get_func_dependencies() {
-                    let calling_set = comp_data.dependencies.entry(depends_on).or_default();
+                    let calling_set = self.comp_data.dependencies.entry(depends_on).or_default();
                     calling_set.insert(func.info_ref().clone());
                 }
             }
@@ -318,7 +310,7 @@ impl Unit {
             function,
             builder: self.context.create_builder(),
             context: self.context,
-            comp_data: self.comp_data.clone(),
+            comp_data: &self.comp_data,
             llvm_ir_uuid: RefCell::new(0),
             arg_names,
         }
@@ -348,8 +340,7 @@ impl Unit {
     }
 
     pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.derivers.insert(
+        self.comp_data.derivers.insert(
             DeriverInfo {
                 func_name,
                 is_static: false,
@@ -359,8 +350,7 @@ impl Unit {
     }
 
     pub fn add_static_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.derivers.insert(
+        self.comp_data.derivers.insert(
             DeriverInfo {
                 func_name,
                 is_static: true,
@@ -370,8 +360,7 @@ impl Unit {
     }
 
     pub fn add_type_level_func(&mut self, func_name: TypeName, func: TypeLevelFunc) {
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.type_level_funcs.insert(func_name, func);
+        self.comp_data.type_level_funcs.insert(func_name, func);
     }
 
     pub fn add_global<T: XcReflect>(&mut self, name: VarName, val: *mut T) {
@@ -388,7 +377,6 @@ impl Unit {
                     .ptr_type(AddressSpace::default()),
             );
 
-        let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-        comp_data.globals.insert(name, (typ.get_ref(), as_ptr_val));
+        self.comp_data.globals.insert(name, (typ.get_ref(), as_ptr_val));
     }
 }

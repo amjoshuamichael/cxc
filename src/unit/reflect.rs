@@ -141,8 +141,7 @@ impl Unit {
 
     pub fn add_type_with_decl<T>(&mut self, decl: TypeDecl) -> Option<Type> {
         {
-            let comp_data = Rc::get_mut(&mut self.comp_data).unwrap();
-            comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
+            self.comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
         }
 
         let typ = type_from_decl(&self.comp_data, decl)?;

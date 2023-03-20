@@ -11,8 +11,6 @@ pub mod hlr_data_output;
 mod large_returns;
 mod type_inference;
 
-use std::rc::Rc;
-
 use crate::errors::CResult;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
@@ -38,7 +36,7 @@ use self::large_returns::large_returns;
 
 pub fn hlr(
     info: UniqueFuncInfo,
-    comp_data: Rc<CompData>,
+    comp_data: &CompData,
     code: FuncCode,
 ) -> CResult<FuncOutput> {
     if crate::XC_DEBUG {

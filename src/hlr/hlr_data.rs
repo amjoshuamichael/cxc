@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
@@ -11,9 +10,9 @@ use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 
 #[derive(Debug)]
-pub struct FuncRep {
+pub struct FuncRep<'a> {
     pub tree: ExprTree,
-    pub comp_data: Rc<CompData>,
+    pub comp_data: &'a CompData,
     pub identifiers: Vec<VarName>,
     pub info: UniqueFuncInfo,
     pub ret_type: Type,
@@ -34,10 +33,10 @@ impl DataFlowInfo {
     pub fn is_arg(&self) -> bool { self.arg_index.is_some() }
 }
 
-impl FuncRep {
+impl<'a> FuncRep<'a> {
     pub fn from_code(
         code: FuncCode,
-        comp_data: Rc<CompData>,
+        comp_data: &'a CompData,
         info: UniqueFuncInfo,
     ) -> CResult<Self> {
         let mut new = FuncRep {
@@ -107,7 +106,7 @@ impl FuncRep {
         self.comp_data.get_spec(alias, &self.info)
     }
 
-    pub fn comp_data(&self) -> Rc<CompData> { self.comp_data.clone() }
+    pub fn comp_data(&self) -> &CompData { self.comp_data }
 
     pub fn output(self) -> FuncOutput {
         let mut func_arg_types = self.arg_types();

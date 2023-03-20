@@ -142,7 +142,7 @@ impl Unit {
             ..Default::default()
         };
 
-        let mut func_rep = hlr(info, self.comp_data.clone(), code)?;
+        let mut func_rep = hlr(info, &self.comp_data, code)?;
 
         {
             // TODO: what's goin on here?

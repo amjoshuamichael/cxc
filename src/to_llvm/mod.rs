@@ -16,9 +16,8 @@ use inkwell::values::*;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
 use std::collections::HashMap;
-use std::rc::Rc;
 
-pub struct FunctionCompilationState {
+pub struct FunctionCompilationState<'a> {
     pub tree: ExprTree,
     pub data_flow: DataFlow,
     pub variables: HashMap<VarName, PointerValue<'static>>,
@@ -26,13 +25,13 @@ pub struct FunctionCompilationState {
     pub function: FunctionValue<'static>,
     pub builder: Builder<'static>,
     pub context: &'static Context,
-    pub comp_data: Rc<CompData>,
+    pub comp_data: &'a CompData,
     pub arg_names: Vec<VarName>,
     pub llvm_ir_uuid: RefCell<u32>,
     pub ret_type: Type,
 }
 
-impl FunctionCompilationState {
+impl<'a> FunctionCompilationState<'a> {
     fn new_uuid(&self) -> String {
         let current_uuid = *self.llvm_ir_uuid.borrow();
         let output = current_uuid.to_string();
