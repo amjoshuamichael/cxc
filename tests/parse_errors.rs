@@ -80,7 +80,7 @@ fn unknown_type() {
 // improperly matched
 #[test]
 #[ignore]
-fn empty_block() {
+fn improper_delimiters() {
     let mut unit = Unit::new();
 
     let mut errors = unit

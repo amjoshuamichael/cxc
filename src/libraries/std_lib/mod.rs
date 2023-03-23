@@ -18,7 +18,6 @@ mod print_lib;
 mod string;
 mod to_string;
 mod type_helpers;
-mod value_lib;
 mod unit_lib;
 use atomic_lib::AtomicLib;
 use bit_array::BitArrayLib;
@@ -27,7 +26,6 @@ use print_lib::PrintLib;
 use string::StringLib;
 use to_string::ToStringLib;
 use type_helpers::TypeHelperLib;
-use value_lib::ValueLib;
 use unit_lib::UnitLib;
 
 impl Library for StdLib {
@@ -44,7 +42,6 @@ impl Library for StdLib {
         unit.add_lib(StringLib);
         unit.add_lib(ToStringLib);
         unit.add_lib(DefaultLib);
-        unit.add_lib(ValueLib);
         unit.add_lib(TypeInterfaceLib);
         unit.add_lib(PrintLib);
         unit.add_lib(BitArrayLib);

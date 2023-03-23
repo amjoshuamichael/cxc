@@ -62,9 +62,10 @@ fn type_level_functions() {
     unit.add_lib(StdLib);
 
     unit.add_type_level_func("AddAnI32".into(), add_an_i32);
+    println!("HERE");
 
     unit.push_script(
-        "
+        r#"
         Point = { x: f32, y: f32 }
 
         main() { 
@@ -81,7 +82,7 @@ fn type_level_functions() {
 
             assert_eq<i32>(defaulted_with_i32.thei32, 0)
         }
-        ",
+        "#,
     );
 
     unit.get_fn("main").unwrap().downcast::<(), ()>()();

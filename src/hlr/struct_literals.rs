@@ -1,16 +1,18 @@
-use crate::{typ::StructType, TypeEnum};
+use crate::{typ::StructType, TypeEnum, errors::CResultMany};
 
 use super::{
     expr_tree::{MakeVarGen, MemberGen, NodeData, SetVarGen},
     hlr_data::FuncRep,
 };
 
-pub fn struct_literals(hlr: &mut FuncRep) {
+pub fn struct_literals(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_rev(
-        |data| matches!(data, NodeData::StructLit { .. }),
         |structlit, struct_data, hlr| {
             let new_struct_name = hlr.uniqueify_varname("struct");
             let struct_type = struct_data.ret_type();
+
+            let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
+                else { return Ok(()) };
 
             let mut current_statement = hlr
                 .insert_statement_before(
@@ -23,12 +25,9 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                 )
                 .inserted_id();
 
-            let NodeData::StructLit { fields: field_exprs, .. } = struct_data 
-                else { unreachable!() };
-
             // TODO: error
             let TypeEnum::Struct(StructType { fields: field_types, .. }) = 
-                struct_type.as_type_enum() else { unreachable!() };
+                struct_type.as_type_enum() else { todo!() };
 
             for (field_name, field_expr) in field_exprs {
                 let (_, field_type) = field_types
@@ -58,6 +57,8 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                 var_type: struct_type.clone(),
                 name: new_struct_name,
             };
+
+            Ok(())
         },
     )
 }

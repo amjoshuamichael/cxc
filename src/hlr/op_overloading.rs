@@ -3,11 +3,10 @@ use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName};
 use super::{expr_tree::NodeData, hlr_data::FuncRep};
 
 pub fn op_overloading(hlr: &mut FuncRep) {
-    hlr.modify_many_rev(
-        |data| matches!(data, NodeData::UnarOp { .. }),
+    hlr.modify_many_infallible(
         |op_id, op_data, hlr| {
             let NodeData::UnarOp { hs, op, ret_type } = op_data.clone() 
-                else { unreachable!() };
+                else { return };
             let hs_type = hlr.tree.get(hs).ret_type();
 
             match op {
@@ -29,7 +28,7 @@ pub fn op_overloading(hlr: &mut FuncRep) {
                     };
                 },
                 _ => {},
-            }
+            };
         },
     );
 

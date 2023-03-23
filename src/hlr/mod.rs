@@ -1,7 +1,6 @@
 mod add_void_return;
 pub mod expr_tree;
 mod active_initialization;
-mod arg_type_reflection;
 mod auto_deref;
 mod op_overloading;
 mod struct_literals;
@@ -11,7 +10,7 @@ pub mod hlr_data_output;
 mod large_returns;
 mod type_inference;
 
-use crate::errors::CResult;
+use crate::errors::{CResultMany};
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
@@ -26,7 +25,6 @@ pub mod prelude {
 use prelude::*;
 
 use self::active_initialization::active_initialization;
-use self::arg_type_reflection::arg_type_reflection;
 use self::auto_deref::auto_deref;
 use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
@@ -38,7 +36,7 @@ pub fn hlr(
     info: UniqueFuncInfo,
     comp_data: &CompData,
     code: FuncCode,
-) -> CResult<FuncOutput> {
+) -> CResultMany<FuncOutput> {
     if crate::XC_DEBUG {
         println!();
         println!("====HLR of {}====", info.name);
@@ -54,12 +52,13 @@ pub fn hlr(
 
     infer_types(&mut output);
     // TODO: throw error if function has no return
-    auto_deref(&mut output);
+    auto_deref(&mut output)?;
     op_overloading(&mut output);
+        println!("{}", &output.tree.to_string());
     variant_literals(&mut output);
+        println!("{}", &output.tree.to_string());
     active_initialization(&mut output);
-    arg_type_reflection(&mut output);
-    struct_literals(&mut output);
+    struct_literals(&mut output)?;
     large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output);
 

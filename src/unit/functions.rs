@@ -195,11 +195,6 @@ impl CompData {
 
     pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
 
-    pub fn get_reflect_type_masks(&self, info: &UniqueFuncInfo) -> Option<Vec<bool>> {
-        let FuncCodeInfo::External { ref reflect_types_of, .. } = &self.compiled.get(info)?.code() else { return None };
-        Some(reflect_types_of.clone())
-    }
-
     pub fn unique_func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
         self.compiled.keys()
     }
@@ -520,13 +515,11 @@ impl Func {
         _: UniqueFuncInfo,
         typ: FuncType,
         pointer: *const usize,
-        reflect_types_of: Vec<bool>,
     ) -> Func {
         Self::new(FuncInner {
             typ,
             code: FuncCodeInfo::External {
                 pointer,
-                reflect_types_of,
             },
         })
     }
@@ -574,8 +567,6 @@ pub enum FuncCodeInfo {
     },
     External {
         pointer: *const usize,
-        // TODO: convert to a slice so that FuncCodeInfo can be Copy
-        reflect_types_of: Vec<bool>,
     },
 }
 

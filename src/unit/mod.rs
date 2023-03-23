@@ -5,7 +5,6 @@ use self::functions::TypeLevelFunc;
 pub use self::functions::{Func, FuncDowncasted};
 pub use self::value_api::XcValue;
 use crate::errors::CErr;
-use crate::errors::CResult;
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::hlr_data_output::FuncOutput;
@@ -185,8 +184,7 @@ impl Unit {
             funcs_to_compile
         };
 
-        self.compile_func_set(funcs_to_process.clone())
-            .map_err(|x| vec![x])?;
+        self.compile_func_set(funcs_to_process.clone())?;
 
         if has_comp_script {
             self.run_comp_script();
@@ -195,7 +193,7 @@ impl Unit {
         Ok(funcs_to_process)
     }
 
-    pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) -> CResult<()> {
+    pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) -> CResultMany<()> {
         set.retain(|info| !self.comp_data.has_been_compiled(info));
 
         if set.is_empty() {
@@ -220,7 +218,7 @@ impl Unit {
 
                     hlr
                 })
-                .collect::<CResult<Vec<FuncOutput>>>()?;
+                .collect::<CResultMany<Vec<FuncOutput>>>()?;
 
             set = func_reps
                 .iter()

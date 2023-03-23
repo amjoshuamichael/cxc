@@ -1,3 +1,4 @@
+use crate::errors::{CResultMany};
 use crate::hlr::hlr_data::FuncRep;
 use crate::{Type, UniqueFuncInfo};
 
@@ -142,37 +143,46 @@ impl ExprTree {
 impl<'a> FuncRep<'a> {
     pub fn modify_many(
         &mut self,
-        filter: impl Fn(&NodeData) -> bool,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
-    ) {
-        self.modify_many_inner(self.tree.ids_in_order().drain(..), filter, modifier)
+        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep) -> CResultMany<()>,
+    ) -> CResultMany<()> {
+        self.modify_many_inner(self.tree.ids_in_order().drain(..), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_rev(
         &mut self,
-        filter: impl Fn(&NodeData) -> bool,
+        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep) -> CResultMany<()>,
+    ) -> CResultMany<()> {
+        self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), |a, b, c| { modifier(a, b, c) })
+    }
+
+    pub fn modify_many_infallible(
+        &mut self,
         modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
     ) {
-        self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), filter, modifier)
+        self.modify_many(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
+    }
+
+    pub fn modify_many_infallible_rev(
+        &mut self,
+        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
+    ) {
+        self.modify_many_rev(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
 
     fn modify_many_inner(
         &mut self,
         id_iterator: impl Iterator<Item = ExprID>,
-        filter: impl Fn(&NodeData) -> bool,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
-    ) {
+        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep) -> CResultMany<()>,
+    ) -> CResultMany<()> {
         for index in id_iterator {
-            let data_ref = &self.tree.get_ref(index);
+            let mut data_copy = self.tree.get(index);
 
-            if filter(data_ref) {
-                let mut data_copy = self.tree.get(index);
+            modifier(index, &mut data_copy, self)?;
 
-                modifier(index, &mut data_copy, self);
-
-                self.tree.replace(index, data_copy);
-            }
+            self.tree.replace(index, data_copy);
         }
+
+        Ok(())
     }
 
     pub fn insert_statement_before<'ptr>(

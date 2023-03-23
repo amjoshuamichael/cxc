@@ -13,7 +13,6 @@ pub struct ExternalFuncAdd {
     pub arg_types: Vec<Type>,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
-    pub type_mask: Vec<bool>,
 }
 
 impl ExternalFuncAdd {
@@ -23,13 +22,7 @@ impl ExternalFuncAdd {
             arg_types: Vec::new(),
             relation: TypeRelation::Unrelated,
             generics: Vec::new(),
-            type_mask: Vec::new(),
         }
-    }
-
-    pub fn reflect_variable_types(mut self) -> Self {
-        self.type_mask = vec![true; self.arg_types.len()];
-        self
     }
 
     pub fn method_of(mut self, typ: Type) -> Self {
@@ -101,18 +94,8 @@ impl Unit {
         &mut self,
         name: &str,
         function_ptr: *const usize,
-        mut ext_add: ExternalFuncAdd,
+        ext_add: ExternalFuncAdd,
     ) {
-        {
-            let mut added_so_far = 0;
-            for (index, should_reflect) in ext_add.type_mask.iter().enumerate() {
-                if *should_reflect {
-                    ext_add.arg_types.insert(index + added_so_far, Type::i(64));
-                    added_so_far += 1;
-                }
-            }
-        }
-
         let func_type = ext_add
             .ret_type
             .clone()
@@ -176,7 +159,6 @@ impl Unit {
                 func_info,
                 func_type_inner.clone(),
                 function_ptr,
-                ext_add.type_mask.clone(),
             ),
         );
     }

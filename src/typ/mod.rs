@@ -545,7 +545,7 @@ impl SumType {
 #[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord, XcReflect)]
 pub struct VariantType {
     pub tag: u32,
-    pub parent: Type,
+    pub parent: Type, // TODO: change this to a SumType???
     pub variant_type: Type,
 }
 
@@ -579,6 +579,7 @@ impl VariantType {
         if padding_amount > 0 {
             fields.push(("padding".into(), Type::i(8).get_array(padding_amount as u32)));
         }
+
         Type::new_struct(fields)
     }
 

@@ -3,7 +3,7 @@ mod test_utils;
 use std::rc::Rc;
 
 use cxc::library::StdLib;
-use cxc::{ExternalFuncAdd, FloatType, IntType, TypeData, TypeEnum, TypeRelation, XcValue};
+use cxc::{ExternalFuncAdd, TypeRelation};
 use cxc::{Type, Unit};
 use test_utils::{xc_test, Numbers5, Point2D, Point3D};
 
@@ -234,7 +234,7 @@ fn external_function() {
     )
     .unwrap();
 
-    unit.get_fn("call").unwrap().downcast::<(), i64>();
+    unit.get_fn("call").unwrap().downcast::<(), i64>()();
 }
 
 #[test]
@@ -249,98 +249,4 @@ fn strings() {
         "#;
         String::from("that's cray")
     )
-}
-
-#[test]
-fn reflected_type_masks() {
-    pub fn assert_is_five(type_ptr: *const TypeData, input: *const u8) {
-        let the_type = unsafe { Type::from_raw(type_ptr) };
-        let val = unsafe { XcValue::new_from_ptr(the_type.clone(), input) };
-
-        match the_type.as_type_enum() {
-            TypeEnum::Int(IntType { size: 32, .. }) => {
-                let five: i32 = unsafe { *val.get_data_as::<i32>() };
-
-                assert_eq!(val.get_size(), std::mem::size_of::<i32>());
-                assert_eq!(five, 5);
-            },
-            TypeEnum::Float(FloatType::F32) => {
-                let five: f32 = unsafe { *val.get_data_as::<f32>() };
-
-                assert_eq!(val.get_size(), std::mem::size_of::<f32>());
-                assert_eq!(five, 5.0);
-            },
-            _ => panic!("wrong type!"),
-        }
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "assert_is_five",
-        assert_is_five as *const usize,
-        ExternalFuncAdd {
-            arg_types: vec![Type::void_ptr()],
-            ..ExternalFuncAdd::empty()
-        }
-        .reflect_variable_types(),
-    );
-    unit.add_lib(cxc::library::StdLib);
-    unit.push_script(
-        "
-        main() {
-            assert_is_five(&5)
-            assert_is_five(&5.0)
-            ; 0 
-        }
-        ",
-    );
-
-    unit.get_fn("main").unwrap().downcast::<(), i32>();
-}
-
-#[test]
-fn value_from_code() {
-    pub fn assert_is_five(val: &XcValue) {
-        match val.get_type().as_type_enum() {
-            TypeEnum::Int(IntType { size: 32, .. }) => {
-                let five: i32 = unsafe { *val.get_data_as::<i32>() };
-
-                assert_eq!(val.get_size(), std::mem::size_of::<i32>());
-                assert_eq!(five, 5);
-            },
-            TypeEnum::Float(FloatType::F32) => {
-                let five: f32 = unsafe { *val.get_data_as::<f32>() };
-
-                assert_eq!(val.get_size(), std::mem::size_of::<f32>());
-                assert_eq!(five, 5.0);
-            },
-            _ => panic!("wrong type!"),
-        }
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_lib(StdLib);
-
-    let value_type = unit.comp_data.get_by_name(&"XcValue".into()).unwrap();
-
-    unit.add_rust_func_explicit(
-        "assert_is_five",
-        assert_is_five as *const usize,
-        ExternalFuncAdd {
-            arg_types: vec![value_type.clone()],
-            ..ExternalFuncAdd::empty()
-        },
-    );
-    unit.push_script(
-        "
-        main() {
-            assert_is_five(&XcValue:from(&5))
-            assert_is_five(&XcValue:from(&5.0))
-        }
-        ",
-    );
-
-    unit.get_fn("main").unwrap().downcast::<(), i32>();
 }

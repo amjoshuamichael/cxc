@@ -1,5 +1,5 @@
 use crate::{
-    errors::CResult,
+    errors::{CResultMany},
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, Expr, FuncCode, TypeRelation},
@@ -119,7 +119,7 @@ impl XcValue {
 }
 
 impl Unit {
-    pub fn get_value(&mut self, of: &str) -> CResult<XcValue> {
+    pub fn get_value(&mut self, of: &str) -> CResultMany<XcValue> {
         if of.is_empty() {
             return Ok(XcValue::default());
         }

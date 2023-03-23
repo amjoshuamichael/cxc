@@ -1,21 +1,21 @@
 use crate::{
     parse::{Opcode, TypeSpec},
-    TypeRelation, UniqueFuncInfo,
+    TypeRelation, UniqueFuncInfo, errors::CResultMany,
 };
 
 use super::{expr_tree::NodeData, hlr_data::FuncRep};
 
-pub fn auto_deref(hlr: &mut FuncRep) {
+pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many(
-        |data| matches!(data, NodeData::Member{..}),
         |memberlit, member_data, hlr| {
-            let NodeData::Member { ref mut object, field, .. } = member_data else { unreachable!() };
+            let NodeData::Member { ref mut object, field, .. } = member_data 
+                else { return  Ok(()) };
             let object_type = hlr.tree.get(*object).ret_type();
 
             let report = hlr.comp_data.get_spec_report(
                 &TypeSpec::StructMember(box object_type.clone().into(), field.clone()), 
                 &()
-            ).unwrap();
+            )?;
 
             match report.deref_count {
                 1.. => {
@@ -25,7 +25,7 @@ pub fn auto_deref(hlr: &mut FuncRep) {
                         *object = hlr.insert_quick(
                             memberlit,
                             NodeData::UnarOp {
-                                ret_type: object_type.get_auto_deref(&hlr.comp_data).unwrap().clone(),
+                                ret_type: object_type.get_auto_deref(&hlr.comp_data)?.clone(),
                                 op: Opcode::Deref,
                                 hs: *object,
                             },
@@ -34,14 +34,19 @@ pub fn auto_deref(hlr: &mut FuncRep) {
                 },
                 _ => {},
             }
-        },
-    );
 
-    hlr.modify_many(
-        |data| matches!(data, NodeData::Call { relation, .. } if relation.is_method()),
+            Ok(())
+        },
+    ).unwrap();
+
+    hlr.modify_many_infallible(
         |callid, call_data, hlr| {
-            let unique_func_info = hlr.tree.unique_func_info_of_call(&call_data);
-            let NodeData::Call { ref mut a, .. } = call_data else { unreachable!() };
+            let NodeData::Call { ref mut a, .. } = call_data else { return };
+            let unique_func_info = hlr.tree.unique_func_info_of_call(&hlr.tree.get(callid));
+
+            if !unique_func_info.relation.is_method() {
+                return 
+            }
 
             let method_of = hlr.tree.get(*a.first().unwrap()).ret_type();
             let deref_chain = method_of.deref_chain(&*hlr.comp_data);
@@ -56,7 +61,7 @@ pub fn auto_deref(hlr: &mut FuncRep) {
 
                     hlr.comp_data.get_func_type(&dereffed_func_info).is_ok()
                 })
-                .unwrap();
+                .unwrap_or_else(|| todo!());
 
             for d in 0..deref_level_of_call {
                 let last_arg = a.first_mut().unwrap();
@@ -72,4 +77,6 @@ pub fn auto_deref(hlr: &mut FuncRep) {
             }
         },
     );
+
+    Ok(())
 }

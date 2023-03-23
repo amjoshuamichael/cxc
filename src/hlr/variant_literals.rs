@@ -6,13 +6,12 @@ use super::{
 };
 
 pub fn variant_literals(hlr: &mut FuncRep) {
-    hlr.modify_many_rev(
-        |data| matches!(data, NodeData::StructLit { .. }),
+    hlr.modify_many_infallible_rev(
         |struct_id, mut struct_data, hlr| {
             let mut struct_data_clone = struct_data.clone();
 
             let NodeData::StructLit { ref mut var_type, ref mut fields, ref mut initialize } = 
-                &mut struct_data else { unreachable!() };
+                &mut struct_data else { return };
 
             let TypeEnum::Variant(variant_type) = var_type.as_type_enum() else { return };
             let TypeEnum::Sum(sum_type) = variant_type.parent.as_type_enum() else { panic!() };

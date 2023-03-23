@@ -33,6 +33,14 @@ impl From<FErr> for CErr {
     fn from(value: FErr) -> Self { Self::Func(value) }
 }
 
+impl From<TErr> for Vec<CErr> {
+    fn from(value: TErr) -> Self { vec![CErr::Type(value)] }
+}
+
+impl From<CErr> for Vec<CErr> {
+    fn from(value: CErr) -> Self { vec![value] }
+}
+
 #[derive(Debug)]
 pub enum TErr {
     Unknown(TypeName),

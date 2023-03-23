@@ -18,19 +18,11 @@ fn handle_own_return(hlr: &mut FuncRep) {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
         | ReturnStyle::ThroughI64I32
-        | ReturnStyle::ThroughI64I64 => return_by_through(hlr, hlr.ret_type.raw_return_type()),
+        | ReturnStyle::ThroughI64I64 => {},
         ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
         ReturnStyle::Sret => return_by_pointer(hlr),
         ReturnStyle::Void | ReturnStyle::Direct => {},
     }
-}
-
-fn return_by_through(hlr: &mut FuncRep, typ: Type) {
-    hlr.ret_type = typ.clone();
-    let NodeData::Block { ref mut ret_type, .. } = hlr.tree.get_mut(hlr.tree.root)
-        else { panic!() };
-
-    *ret_type = typ;
 }
 
 fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
@@ -51,11 +43,10 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
         },
     );
 
-    hlr.modify_many(
-        |data| matches!(data, NodeData::Return { .. }),
+    hlr.modify_many_infallible(
         |return_id, mut data, hlr| {
             let NodeData::Return { to_return: Some(ref mut to_return), .. } = &mut data
-            else { unreachable!() };
+                else { return };
 
             let to_return_data = hlr.tree.get(*to_return);
 
@@ -99,7 +90,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
         },
     );
 
-    struct_literals(hlr);
+    struct_literals(hlr).unwrap();
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
@@ -121,11 +112,12 @@ fn return_by_pointer(hlr: &mut FuncRep) {
         },
     );
 
-    hlr.modify_many(
-        |data| matches!(data, NodeData::Return { .. }),
+    hlr.modify_many_infallible(
         |return_id, data, hlr| {
-            let NodeData::Return { to_return: Some(to_return), .. } = data
-            else { unreachable!() };
+            let NodeData::Return { ref mut to_return, .. } = data
+                else { return };
+
+            let Some(ref mut to_return_inner) = to_return else { return };
 
             hlr.insert_statement_before(
                 return_id,
@@ -145,13 +137,10 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                             op: Opcode::Ref,
                             ret_type: output_var_typ.get_ref(),
                         },
-                        box hlr.tree.get(*to_return),
+                        box hlr.tree.get(*to_return_inner),
                     ],
                 },
             );
-
-            let NodeData::Return { ref mut to_return, .. } = data
-            else { unreachable!() };
 
             *to_return = None;
         },

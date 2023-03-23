@@ -95,7 +95,7 @@ fn vec_push_and_check() {
 }
 
 #[test]
-fn rc() {
+fn rc_basic() {
     xc_test!(
         use StdLib;
         "

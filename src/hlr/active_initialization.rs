@@ -11,18 +11,17 @@ pub fn active_initialization(hlr: &mut FuncRep) {
 }
 
 fn handle_struct_active_initialization(hlr: &mut FuncRep) {
-    hlr.modify_many(
-        |data| matches!(data, NodeData::StructLit { .. }),
+    hlr.modify_many_infallible(
         |structlit_id, structlit_data, hlr| {
             let NodeData::StructLit { var_type, fields: field_ids, initialize } = 
-                structlit_data else { panic!() };
+                structlit_data else { return };
 
             if *initialize != InitOpts::Default {
                 return;
             }
 
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
-                else { panic!() };
+                else { todo!("This literal can only use a struct type") };
 
             let new_default_var_name = hlr.uniqueify_varname("default");
 
@@ -69,11 +68,10 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
 }
 
 fn handle_array_active_initialization(hlr: &mut FuncRep) {
-    hlr.modify_many(
-        |data| matches!(data, NodeData::ArrayLit { .. }),
+    hlr.modify_many_infallible(
         |arraylit_id, arraylit_data, hlr| {
             let NodeData::ArrayLit { var_type, parts: part_ids, initialize } = 
-                arraylit_data.clone() else { panic!() };
+                arraylit_data.clone() else { return };
 
             if initialize != InitOpts::Default {
                 return;

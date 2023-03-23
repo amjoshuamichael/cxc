@@ -29,4 +29,4 @@ impl Library for PrintLib {
 }
 
 fn external_print_string(string: String) { println!("{string}") }
-fn panic() { panic!("") }
+fn panic(string: &String) { panic!("{string}") }

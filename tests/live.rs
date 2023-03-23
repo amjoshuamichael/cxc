@@ -1,4 +1,4 @@
-use cxc::Unit;
+use cxc::{Unit, library::StdLib, FuncType, Func, Type};
 use serial_test::serial;
 
 #[test]
@@ -74,4 +74,36 @@ fn depends_on() {
         .unwrap();
     assert_eq!(best(), 42);
     assert_eq!(worse(), 40);
+}
+
+#[test]
+#[serial]
+fn get_fn_by_ptr() {
+    let mut unit = Unit::new();
+    unit.add_lib(StdLib);
+
+    let mut functions = Vec::<Func>::new();
+    unit.add_global("functions".into(), &mut functions as *mut _);
+
+    unit.push_script(
+        r#"
+        add_two(x: i32); i32 { ; x + 2 }
+        fifty_four(); i32 { ; 54 }
+
+        ---
+
+        functions.push(comp_data.get_fn_by_ptr(add_two))
+        functions.push(comp_data.get_fn_by_ptr(fifty_four))
+        "#
+    ).unwrap();
+
+    let [add_two, fifty_four] = &*functions else { panic!() };
+
+    assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
+    assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });
+
+    let add_two = add_two.downcast::<(i32,), i32,>();
+    let fifty_four = fifty_four.downcast::<(), i32>();
+
+    assert_eq!(add_two(fifty_four()), 56);
 }
