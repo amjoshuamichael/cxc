@@ -10,7 +10,7 @@ pub mod hlr_data_output;
 mod large_returns;
 mod type_inference;
 
-use crate::errors::{CResultMany};
+use crate::errors::CResultMany;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
 use crate::unit::{CompData, UniqueFuncInfo};
@@ -18,7 +18,7 @@ use type_inference::infer_types;
 
 pub mod prelude {
     pub use super::{
-        expr_tree::ExprID, expr_tree::ExprTree, expr_tree::NodeData, hlr, hlr_data::FuncRep,
+        expr_tree::ExprID, expr_tree::ExprTree, expr_tree::HNodeData, hlr, hlr_data::FuncRep,
     };
 }
 
@@ -51,16 +51,13 @@ pub fn hlr(
     }
 
     infer_types(&mut output);
-    // TODO: throw error if function has no return
     auto_deref(&mut output)?;
     op_overloading(&mut output);
-        println!("{}", &output.tree.to_string());
     variant_literals(&mut output);
-        println!("{}", &output.tree.to_string());
     active_initialization(&mut output);
     struct_literals(&mut output)?;
     large_returns(&mut output);
-    add_void_return_if_ret_type_is_void(&mut output);
+    add_void_return_if_ret_type_is_void(&mut output)?;
 
     if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());

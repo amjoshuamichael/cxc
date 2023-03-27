@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 use crate::{
     lex::lex,
@@ -49,7 +49,7 @@ macro_rules! impl_reflect {
 
 impl_reflect!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64, bool);
 
-macro_rules! impl_reflect_tuple {
+macro_rules! impl_reflect_set {
     ( $( $elem:ident )+ ) => {
         impl<$($elem: XcReflect,)+> XcReflect for ($($elem,)+) {
             fn alias_code() -> String {
@@ -62,46 +62,32 @@ macro_rules! impl_reflect_tuple {
                 code
             }
         }
-    };
-}
 
-impl_reflect_tuple! { A }
-impl_reflect_tuple! { A B }
-impl_reflect_tuple! { A B C }
-impl_reflect_tuple! { A B C D }
-impl_reflect_tuple! { A B C D E }
-impl_reflect_tuple! { A B C D E F }
-impl_reflect_tuple! { A B C D E F G }
-impl_reflect_tuple! { A B C D E F G H }
-impl_reflect_tuple! { A B C D E F G H I }
-impl_reflect_tuple! { A B C D E F G H I J }
-
-macro_rules! impl_reflect_func {
-    ( $( $arg:ident )+ ; $ret:ident ) => {
-        impl<$($arg: XcReflect),+, $ret: XcReflect> XcReflect for fn($($arg),+) -> $ret {
+        impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for fn($($elem),+) -> R {
             fn alias_code() -> String {
                 let mut code = String::from("(");
                 $(
-                    code += &*$arg::alias_code();
+                    code += &*$elem::alias_code();
                     code += ", ";
                 )+
                 code += "); ";
-                code += &*$ret::alias_code();
+                code += &*R::alias_code();
                 code
             }
         }
     };
 }
 
-impl_reflect_func! { A B; R }
-impl_reflect_func! { A B C; R }
-impl_reflect_func! { A B C D; R }
-impl_reflect_func! { A B C D E; R }
-impl_reflect_func! { A B C D E F; R }
-impl_reflect_func! { A B C D E F G; R }
-impl_reflect_func! { A B C D E F G H; R }
-impl_reflect_func! { A B C D E F G H I; R }
-impl_reflect_func! { A B C D E F G H I J; R }
+impl_reflect_set! { A }
+impl_reflect_set! { A B }
+impl_reflect_set! { A B C }
+impl_reflect_set! { A B C D }
+impl_reflect_set! { A B C D E }
+impl_reflect_set! { A B C D E F }
+impl_reflect_set! { A B C D E F G }
+impl_reflect_set! { A B C D E F G H }
+impl_reflect_set! { A B C D E F G H I }
+impl_reflect_set! { A B C D E F G H I J }
 
 macro_rules! impl_reflect_generic {
     ( $arg:ident ) => {
@@ -122,6 +108,7 @@ macro_rules! impl_reflect_generic {
 impl_reflect_generic!(Option);
 impl_reflect_generic!(Vec);
 impl_reflect_generic!(Rc);
+impl_reflect_generic!(Arc);
 
 impl Unit {
     pub fn get_reflect_type<T: XcReflect>(&self) -> Option<Type> {

@@ -113,7 +113,8 @@ impl Type {
 
     pub fn is_subtype_of(&self, of: &Type) -> bool {
         match self.as_type_enum() {
-            TypeEnum::Variant(VariantType { parent, .. }) => parent == of,
+            TypeEnum::Variant(VariantType { parent, .. }) 
+                if let TypeEnum::Sum(of_sum) = of.as_type_enum() => parent == of_sum,
             other => other == of.as_type_enum(),
         }
     }
@@ -483,11 +484,8 @@ pub struct SumType {
 }
 
 impl SumType {
-    // parent arc contains the Type object which contains this SumType. it is
-    // required to fill in the parent field of the variant type.
     pub fn get_variant_type(
         &self,
-        parent_arc: &Type,
         variant_name: &TypeName,
     ) -> TResult<Type> {
         let (variant_index, variant_type) = self
@@ -500,7 +498,7 @@ impl SumType {
 
         Ok(Type::new(TypeEnum::Variant(VariantType {
             tag: variant_index as u32,
-            parent: parent_arc.clone(),
+            parent: self.clone(),
             variant_type,
         })))
     }
@@ -545,15 +543,17 @@ impl SumType {
 #[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord, XcReflect)]
 pub struct VariantType {
     pub tag: u32,
-    pub parent: Type, // TODO: change this to a SumType???
+    pub parent: SumType,
     pub variant_type: Type,
 }
 
 impl VariantType {
     pub fn as_struct(&self) -> Type {
-        let TypeEnum::Sum(parent) = self.parent.as_type_enum() else { panic!() };
+        Self::as_struct_no_parent(&self.parent, &self.variant_type)
+    }
 
-        Self::as_struct_no_parent(parent, &self.variant_type)
+    pub fn parent_type(&self) -> Type {
+        Type::new(TypeEnum::Sum(self.parent.clone()))
     }
 
     pub fn as_struct_no_parent(parent: &SumType, variant_type: &Type) -> Type {
@@ -581,11 +581,6 @@ impl VariantType {
         }
 
         Type::new_struct(fields)
-    }
-
-    pub fn parent_as_sum_type(&self) -> SumType {
-        let TypeEnum::Sum(sum_type) = self.parent.as_type_enum() else { panic!() };
-        sum_type.clone()
     }
 }
 

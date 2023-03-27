@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    parse::ParseErrorSpanned, typ::SumType, StructType, Type, TypeName, UniqueFuncInfo, VarName,
+    parse::ParseErrorSpanned, typ::SumType, StructType, Type, TypeName, UniqueFuncInfo, VarName, hlr::expr_tree::ExprID,
 };
 
 pub type CResultMany<T> = Result<T, Vec<CErr>>;
@@ -13,6 +13,7 @@ pub enum CErr {
     Parse(ParseErrorSpanned),
     Type(TErr),
     Func(FErr),
+    Usage(UErr),
 }
 
 impl Display for CErr {
@@ -21,6 +22,7 @@ impl Display for CErr {
             Self::Parse(parse_error) => write!(f, "{parse_error}"),
             Self::Type(type_error) => write!(f, "{type_error:?}"),
             Self::Func(func_error) => write!(f, "{func_error:?}"),
+            Self::Usage(func_error) => write!(f, "{func_error:?}"),
         }
     }
 }
@@ -33,13 +35,22 @@ impl From<FErr> for CErr {
     fn from(value: FErr) -> Self { Self::Func(value) }
 }
 
+impl From<UErr> for CErr {
+    fn from(value: UErr) -> Self { Self::Usage(value) }
+}
+
 impl From<TErr> for Vec<CErr> {
     fn from(value: TErr) -> Self { vec![CErr::Type(value)] }
+}
+
+impl From<UErr> for Vec<CErr> {
+    fn from(value: UErr) -> Self { vec![CErr::Usage(value)] }
 }
 
 impl From<CErr> for Vec<CErr> {
     fn from(value: CErr) -> Self { vec![value] }
 }
+
 
 #[derive(Debug)]
 pub enum TErr {
@@ -52,9 +63,16 @@ pub enum TErr {
     CantGetGeneric(Type, Vec<Type>, u32),
     TooFewGenerics(Vec<Type>, u8),
     CantDeref(Type),
+    NotAFunction(Type),
 }
 
 #[derive(Debug)]
 pub enum FErr {
     NotFound(UniqueFuncInfo),
+}
+
+#[derive(Debug)]
+pub enum UErr {
+    NoReturn,
+    BadTypeOfStructLit(ExprID),
 }

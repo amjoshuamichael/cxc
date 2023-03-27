@@ -1,6 +1,6 @@
 use crate::hlr::expr_tree::{ArrayLitGen, NodeDataGen, StructLitGen};
 use crate::parse::InitOpts;
-use crate::{hlr::expr_tree::NodeData, BoolType, FloatType, FuncType, IntType, RefType, Type};
+use crate::{hlr::expr_tree::HNodeData, BoolType, FloatType, FuncType, IntType, RefType, Type};
 use crate::{ArrayType, Repr, StructType, TypeEnum};
 
 use super::{SumType, UnknownType, VariantType, VoidType};
@@ -18,7 +18,7 @@ impl InvalidState for Type {
 impl InvalidState for RefType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index == 0 {
-            Some(box NodeData::Number {
+            Some(box HNodeData::Number {
                 value: 0,
                 lit_type: Type::i(64),
             })
@@ -31,7 +31,7 @@ impl InvalidState for RefType {
 impl InvalidState for BoolType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index + 2 < 256 {
-            Some(box NodeData::Number {
+            Some(box HNodeData::Number {
                 value: (index + 2) as u64,
                 lit_type: Type::i(8),
             })
@@ -58,7 +58,7 @@ impl InvalidState for FloatType {
 impl InvalidState for FuncType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index == 0 {
-            Some(box NodeData::Number {
+            Some(box HNodeData::Number {
                 value: 0,
                 lit_type: Type::i(64),
             })
@@ -112,7 +112,7 @@ impl InvalidState for SumType {
                 var_type: self.largest_variant_as_struct(),
                 fields: vec![(
                     "tag".into(),
-                    box NodeData::Number {
+                    box HNodeData::Number {
                         value: (variant_count + index) as u64,
                         lit_type: Type::i(8),
                     },

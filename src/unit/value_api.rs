@@ -1,5 +1,5 @@
 use crate::{
-    errors::{CResultMany},
+    errors::CResultMany,
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, Expr, FuncCode, TypeRelation},
@@ -144,11 +144,8 @@ impl Unit {
 
         let mut func_rep = hlr(info, &self.comp_data, code)?;
 
-        {
-            // TODO: what's goin on here?
-            let dependencies = func_rep.get_func_dependencies().into_iter().collect();
-            self.compile_func_set(dependencies)?;
-        }
+        let dependencies = func_rep.get_func_dependencies().into_iter().collect();
+        self.compile_func_set(dependencies)?;
 
         let mut fcs = {
             let TypeEnum::Func(func_type) = func_rep.func_type.as_type_enum()
@@ -166,11 +163,9 @@ impl Unit {
             )
         };
 
-        {
-            let block = fcs.context.append_basic_block(fcs.function, "");
-            fcs.builder.position_at_end(block);
-            compile_routine(&mut fcs, &self.module);
-        };
+        let block = fcs.context.append_basic_block(fcs.function, "");
+        fcs.builder.position_at_end(block);
+        compile_routine(&mut fcs, &self.module);
 
         if crate::LLVM_DEBUG {
             println!("{}", self.module.print_to_string().to_string());

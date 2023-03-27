@@ -1,4 +1,4 @@
-use crate::hlr::expr_tree::{ExprID, NodeData::*};
+use crate::hlr::expr_tree::{ExprID, HNodeData::*};
 use crate::hlr::hlr_data::DataFlow;
 use crate::hlr::prelude::*;
 use crate::lex::VarName;
@@ -109,7 +109,7 @@ fn get_used_functions(
     module: &Module<'static>,
 ) {
     for (_, call) in tree.iter() {
-        if !matches!(call, NodeData::Call { .. }) {
+        if !matches!(call, HNodeData::Call { .. }) {
             continue;
         }
 
@@ -424,7 +424,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
                 })
             }
         },
-        FirstClassCall {
+        IndirectCall {
             ref f,
             ref a,
             ..
@@ -527,7 +527,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             Some(val.as_any_value_enum())
         },
-        NodeData::StructLit { .. } => todo!(),
+        HNodeData::StructLit { .. } => todo!(),
     };
 
     if crate::LLVM_DEBUG {

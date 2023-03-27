@@ -89,11 +89,11 @@ fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
         Expr(id) => hlr.tree.get(*id).ret_type(),
         Var(name) => hlr.data_flow.get(name).unwrap().typ.clone(),
         Relation(id) => {
-            let NodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
+            let HNodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
             relation.inner_type().unwrap()
         },
         CallGeneric(id, index) => {
-            let NodeData::Call { generics, .. } = hlr.tree.get(*id) else { panic!() };
+            let HNodeData::Call { generics, .. } = hlr.tree.get(*id) else { panic!() };
             generics[*index].clone()
         },
         ReturnType => hlr.ret_type.clone(),
@@ -113,11 +113,11 @@ fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
         },
         Var(name) => hlr.data_flow.get_mut(name).unwrap().typ = to,
         Relation(id) => {
-            let NodeData::Call { ref mut relation, .. } = hlr.tree.get_mut(*id) else { panic!() };
+            let HNodeData::Call { ref mut relation, .. } = hlr.tree.get_mut(*id) else { panic!() };
             *relation.inner_type_mut().unwrap() = to
         },
         CallGeneric(id, index) => {
-            let NodeData::Call { ref mut generics, .. } = hlr.tree.get_mut(*id) else { panic!() };
+            let HNodeData::Call { ref mut generics, .. } = hlr.tree.get_mut(*id) else { panic!() };
             generics[*index] = to
         },
         ReturnType => hlr.ret_type = to,
@@ -127,162 +127,7 @@ fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut infer_map = InferMap::default();
 
-    // TODO: separate this out into its own function
-    for id in hlr.tree.ids_in_order().into_iter().rev() {
-        let node_data = hlr.tree.get(id);
-
-        if !node_data.ret_type().is_unknown() && !matches!(node_data, NodeData::MakeVar { .. })
-        {
-            continue;
-        }
-
-        match node_data {
-            NodeData::Ident { ref name, .. } => {
-                infer_map.insert(id, Constraint::SameAs(name.into()));
-            },
-            NodeData::BinOp { lhs, .. } => {
-                infer_map.insert(id, Constraint::SameAs(lhs.into()));
-            },
-            NodeData::UnarOp { op, hs, .. } => {
-                let constraint = match op {
-                    Opcode::Not => Constraint::SameAs(hs.into()),
-                    Opcode::Ref => Constraint::RelatedTo {
-                        spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
-                        gen_params: vec![hs.into()],
-                        method_of: None,
-                    },
-                    Opcode::Deref => Constraint::RelatedTo {
-                        spec: TypeSpec::Deref(box TypeSpec::GenParam(0)),
-                        gen_params: vec![hs.into()],
-                        method_of: None,
-                    },
-                    _ => continue,
-                };
-
-                infer_map.insert(id, constraint);
-            },
-            NodeData::Call {
-                ref relation,
-                ..
-            } => {
-                match relation {
-                    TypeRelation::MethodOf(_) => {
-                        infer_map.add_call(id);
-                    },
-                    TypeRelation::Static(_) | TypeRelation::Unrelated => {
-                        infer_map.add_call(id);
-                    },
-                };
-            },
-            NodeData::Member { object, field, .. } => {
-                infer_map.insert(
-                    id,
-                    Constraint::RelatedTo {
-                        spec: TypeSpec::StructMember(box TypeSpec::GenParam(0), field.clone()),
-                        gen_params: vec![object.into()],
-                        method_of: None,
-                    },
-                );
-            },
-            NodeData::FirstClassCall { f, .. } => {
-                infer_map.insert(
-                    id,
-                    Constraint::RelatedTo {
-                        spec: TypeSpec::FuncReturnType(box TypeSpec::GenParam(0)),
-                        gen_params: vec![f.into()],
-                        method_of: None,
-                    },
-                );
-            },
-            NodeData::Block { stmts, .. } => {
-                if let Some(&last_stmt) = stmts.last() {
-                    infer_map.insert(id, Constraint::SameAs(last_stmt.into()));
-                } else {
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                }
-            },
-            NodeData::Return { to_return, .. } => {
-                if let Some(to_return) = to_return {
-                    infer_map.insert(id, Constraint::SameAs(to_return.into()));
-                } else {
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                }
-            },
-            NodeData::StructLit {
-                var_type,
-                fields,
-                initialize,
-            } => {
-                if var_type.is_unknown() && initialize == InitOpts::NoFill {
-                    let infer_fields = fields
-                        .iter()
-                        .enumerate()
-                        .map(|(index, (field_name, _))| {
-                            (field_name.clone(), TypeSpec::GenParam(index as u8))
-                        })
-                        .collect();
-
-                    let spec = TypeSpec::Struct(infer_fields);
-
-                    infer_map.insert(
-                        id,
-                        Constraint::RelatedTo {
-                            spec,
-                            gen_params: fields.iter().map(|(_, id)| (*id).into()).collect(),
-                            method_of: None,
-                        },
-                    );
-                }
-            },
-            NodeData::ArrayLit {
-                var_type,
-                parts,
-                initialize,
-            } => {
-                if var_type.is_unknown() && initialize == InitOpts::NoFill {
-                    let first_element = *parts.first().unwrap();
-                    infer_map.insert(
-                        id,
-                        Constraint::RelatedTo {
-                            spec: TypeSpec::Array(
-                                box TypeSpec::GenParam(0),
-                                parts.len() as u32,
-                            ),
-                            gen_params: vec![first_element.into()],
-                            method_of: None,
-                        },
-                    );
-                }
-            },
-            NodeData::Index { object, .. } => infer_map.insert(
-                id,
-                Constraint::RelatedTo {
-                    spec: TypeSpec::ArrayElem(box TypeSpec::GenParam(0)),
-                    gen_params: vec![object.into()],
-                    method_of: None,
-                },
-            ),
-            NodeData::MakeVar {
-                ref name,
-                rhs,
-                var_type,
-            } => {
-                if var_type.is_known() {
-                    infer_map.insert(name, Constraint::IsType(var_type.clone()));
-                    infer_map.insert(rhs, Constraint::IsType(var_type.clone()));
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                } else {
-                    infer_map.insert(name, Constraint::SameAs(rhs.into()));
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                }
-            },
-            NodeData::Set { lhs, rhs, .. } => {
-                infer_map.insert(id, Constraint::IsType(Type::void()));
-                infer_map.insert(lhs, Constraint::SameAs(rhs.into()));
-            },
-            _ => {},
-        }
-    }
+    setup_initial_constraints(hlr, &mut infer_map); 
 
     infer_map.insert(Inferable::ReturnType, Constraint::SameAs(hlr.tree.root.into()));
 
@@ -320,6 +165,164 @@ pub fn infer_types(hlr: &mut FuncRep) {
     }
 
     panic!("type inference failed");
+}
+
+fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
+    for id in hlr.tree.ids_in_order().into_iter().rev() {
+        let node_data = hlr.tree.get(id);
+
+        if !node_data.ret_type().is_unknown() && !matches!(node_data, HNodeData::MakeVar { .. })
+        {
+            continue;
+        }
+
+        match node_data {
+            HNodeData::Ident { ref name, .. } => {
+                infer_map.insert(id, Constraint::SameAs(name.into()));
+            },
+            HNodeData::BinOp { lhs, .. } => {
+                infer_map.insert(id, Constraint::SameAs(lhs.into()));
+            },
+            HNodeData::UnarOp { op, hs, .. } => {
+                let constraint = match op {
+                    Opcode::Not => Constraint::SameAs(hs.into()),
+                    Opcode::Ref => Constraint::RelatedTo {
+                        spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                        gen_params: vec![hs.into()],
+                        method_of: None,
+                    },
+                    Opcode::Deref => Constraint::RelatedTo {
+                        spec: TypeSpec::Deref(box TypeSpec::GenParam(0)),
+                        gen_params: vec![hs.into()],
+                        method_of: None,
+                    },
+                    _ => continue,
+                };
+
+                infer_map.insert(id, constraint);
+            },
+            HNodeData::Call {
+                ref relation,
+                ..
+            } => {
+                match relation {
+                    TypeRelation::MethodOf(_) => {
+                        infer_map.add_call(id);
+                    },
+                    TypeRelation::Static(_) | TypeRelation::Unrelated => {
+                        infer_map.add_call(id);
+                    },
+                };
+            },
+            HNodeData::Member { object, field, .. } => {
+                infer_map.insert(
+                    id,
+                    Constraint::RelatedTo {
+                        spec: TypeSpec::StructMember(box TypeSpec::GenParam(0), field.clone()),
+                        gen_params: vec![object.into()],
+                        method_of: None,
+                    },
+                );
+            },
+            HNodeData::IndirectCall { f, .. } => {
+                infer_map.insert(
+                    id,
+                    Constraint::RelatedTo {
+                        spec: TypeSpec::FuncReturnType(box TypeSpec::GenParam(0)),
+                        gen_params: vec![f.into()],
+                        method_of: None,
+                    },
+                );
+            },
+            HNodeData::Block { stmts, .. } => {
+                if let Some(&last_stmt) = stmts.last() {
+                    infer_map.insert(id, Constraint::SameAs(last_stmt.into()));
+                } else {
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                }
+            },
+            HNodeData::Return { to_return, .. } => {
+                if let Some(to_return) = to_return {
+                    infer_map.insert(id, Constraint::SameAs(to_return.into()));
+                } else {
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                }
+            },
+            HNodeData::StructLit {
+                var_type,
+                fields,
+                initialize,
+            } => {
+                if var_type.is_unknown() && initialize == InitOpts::NoFill {
+                    let infer_fields = fields
+                        .iter()
+                        .enumerate()
+                        .map(|(index, (field_name, _))| {
+                            (field_name.clone(), TypeSpec::GenParam(index as u8))
+                        })
+                        .collect();
+
+                    let spec = TypeSpec::Struct(infer_fields);
+
+                    infer_map.insert(
+                        id,
+                        Constraint::RelatedTo {
+                            spec,
+                            gen_params: fields.iter().map(|(_, id)| (*id).into()).collect(),
+                            method_of: None,
+                        },
+                    );
+                }
+            },
+            HNodeData::ArrayLit {
+                var_type,
+                parts,
+                initialize,
+            } => {
+                if var_type.is_unknown() && initialize == InitOpts::NoFill {
+                    let first_element = *parts.first().unwrap();
+                    infer_map.insert(
+                        id,
+                        Constraint::RelatedTo {
+                            spec: TypeSpec::Array(
+                                box TypeSpec::GenParam(0),
+                                parts.len() as u32,
+                            ),
+                            gen_params: vec![first_element.into()],
+                            method_of: None,
+                        },
+                    );
+                }
+            },
+            HNodeData::Index { object, .. } => infer_map.insert(
+                id,
+                Constraint::RelatedTo {
+                    spec: TypeSpec::ArrayElem(box TypeSpec::GenParam(0)),
+                    gen_params: vec![object.into()],
+                    method_of: None,
+                },
+            ),
+            HNodeData::MakeVar {
+                ref name,
+                rhs,
+                var_type,
+            } => {
+                if var_type.is_known() {
+                    infer_map.insert(name, Constraint::IsType(var_type.clone()));
+                    infer_map.insert(rhs, Constraint::IsType(var_type.clone()));
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                } else {
+                    infer_map.insert(name, Constraint::SameAs(rhs.into()));
+                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                }
+            },
+            HNodeData::Set { lhs, rhs, .. } => {
+                infer_map.insert(id, Constraint::IsType(Type::void()));
+                infer_map.insert(lhs, Constraint::SameAs(rhs.into()));
+            },
+            _ => {},
+        }
+    }
 }
 
 fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Option<TypeSpec> {
@@ -400,7 +403,6 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
                     gen_params,
                     method_of,
                 } => {
-                    // TODO: do something with method_of
                     for (param_index, param) in gen_params.iter().enumerate() {
                         if !type_of_inferable(param, hlr).is_unknown() {
                             continue;
@@ -482,7 +484,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
         let func_info = hlr.tree.unique_func_info_of_call(&node_data);
 
         if func_info.relation.is_method() {
-            let NodeData::Call { a, .. } = node_data else { unreachable!() };
+            let HNodeData::Call { a, .. } = node_data else { unreachable!() };
             let first_arg = hlr.tree.get(*a.first().unwrap());
             let method_of = first_arg.ret_type();
 
@@ -495,7 +497,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                 };
 
                 if fill_in_call(infer_map, hlr, dereffed_func_info.clone(), id, doing_deref) {
-                    let NodeData::Call { relation: ref mut og_call_relation, .. } = hlr.tree.get_mut(*id) else { unreachable!() };
+                    let HNodeData::Call { relation: ref mut og_call_relation, .. } = hlr.tree.get_mut(*id) else { unreachable!() };
                     *og_call_relation = dereffed_func_info.relation;
                     break;
                 }
@@ -528,10 +530,10 @@ fn fill_in_call(
 
         let code = hlr.comp_data.func_code.get(&decl_info).unwrap();
 
-        let NodeData::Call { a, .. } = hlr.tree.get(*id) else { unreachable!() };
+        let HNodeData::Call { a, .. } = hlr.tree.get(*id) else { unreachable!() };
 
         {
-            let NodeData::Call {
+            let HNodeData::Call {
                         ref mut generics, ..
                     } = hlr.tree.get_mut(*id) else { unreachable!() };
             generics.resize(code.generic_count as usize, Type::unknown());

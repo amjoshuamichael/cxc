@@ -2,6 +2,7 @@ use crate::lex::{indent_parens, TypeName, VarName};
 use crate::parse::*;
 use crate::Type;
 use std::fmt::{Debug, Formatter};
+use subenum::subenum;
 
 mod expr_tree_helper;
 mod quick;
@@ -46,7 +47,7 @@ new_key_type! {
 #[derive(Clone)]
 struct ExprNode {
     parent: ExprID,
-    data: NodeData,
+    data: HNodeData,
 }
 
 impl ToString for ExprNode {
@@ -64,7 +65,7 @@ impl ToString for ExprNode {
                 format!("{parts:?}")
             },
             Call { f, a, .. } => format!("{f:?}({a:?})"),
-            FirstClassCall { f, a, .. } => format!("{f:?}({a:?})"),
+            IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { name, .. } => format!("{name}"),
             MakeVar { name, rhs, .. } => format!("{name} = {rhs:?}"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
@@ -86,7 +87,7 @@ impl ToString for ExprNode {
 }
 
 #[derive(Clone, Debug)]
-pub enum NodeData {
+pub enum HNodeData {
     Number {
         lit_type: Type,
         value: u64,
@@ -129,7 +130,7 @@ pub enum NodeData {
         a: Vec<ExprID>,
         relation: TypeRelation,
     },
-    FirstClassCall {
+    IndirectCall {
         ret_type: Type,
         f: ExprID,
         a: Vec<ExprID>,
@@ -181,9 +182,9 @@ pub enum NodeData {
 }
 
 use slotmap::{new_key_type, SlotMap};
-use NodeData::*;
+use HNodeData::*;
 
-impl NodeData {
+impl HNodeData {
     pub fn ret_type(&self) -> Type {
         match self {
             Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
@@ -200,7 +201,7 @@ impl NodeData {
             | IfThenElse { ret_type, .. }
             | Set { ret_type, .. }
             | Call { ret_type, .. }
-            | FirstClassCall { ret_type, .. }
+            | IndirectCall { ret_type, .. }
             | Block { ret_type, .. }
             | Index { ret_type, .. }
             | Member { ret_type, .. } => ret_type.clone(),
@@ -250,7 +251,7 @@ impl NodeData {
             | Call {
                 ref mut ret_type, ..
             }
-            | FirstClassCall {
+            | IndirectCall {
                 ref mut ret_type, ..
             }
             | Block {
@@ -372,7 +373,7 @@ impl NodeData {
                 call += ")";
                 call
             },
-            FirstClassCall { f, a: args, .. } => {
+            IndirectCall { f, a: args, .. } => {
                 let mut call = "(".into();
                 call += &*tree.get(*f).to_string(tree);
                 call += ")";

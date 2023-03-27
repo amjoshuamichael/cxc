@@ -585,3 +585,30 @@ fn bool_mmm_v3() {
         BoolMMM::V11
     )
 }
+
+// TODO: this doesn't work
+#[derive(Debug, PartialEq, Eq)]
+enum BSBBBB {
+    // BIG small BIG BIG BIG BIG
+    Some(i32, i32, i32, i32, i32, bool),
+    None,
+}
+
+//#[test]
+//fn bsbbbbso() {
+//    xc_test!(
+//        use StdLib;
+//        "
+//            BSBBBB = {
+//                Some: { i32, i32, i32, i32, i32, bool } /
+//                None: {}
+//            }
+//
+//            main(); BSBBBB {
+//                output: BSBBBB = BSBBBB.Some { 17, 39, 0, 43, 0, true }
+//                ; output
+//            }
+//        ";
+//        BSBBBB::Some(17, 39, 0, 43, 0, true)
+//    )
+//}

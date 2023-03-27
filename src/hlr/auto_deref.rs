@@ -3,12 +3,12 @@ use crate::{
     TypeRelation, UniqueFuncInfo, errors::CResultMany,
 };
 
-use super::{expr_tree::NodeData, hlr_data::FuncRep};
+use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
 pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many(
         |memberlit, member_data, hlr| {
-            let NodeData::Member { ref mut object, field, .. } = member_data 
+            let HNodeData::Member { ref mut object, field, .. } = member_data 
                 else { return  Ok(()) };
             let object_type = hlr.tree.get(*object).ret_type();
 
@@ -24,7 +24,7 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
 
                         *object = hlr.insert_quick(
                             memberlit,
-                            NodeData::UnarOp {
+                            HNodeData::UnarOp {
                                 ret_type: object_type.get_auto_deref(&hlr.comp_data)?.clone(),
                                 op: Opcode::Deref,
                                 hs: *object,
@@ -41,7 +41,7 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
 
     hlr.modify_many_infallible(
         |callid, call_data, hlr| {
-            let NodeData::Call { ref mut a, .. } = call_data else { return };
+            let HNodeData::Call { ref mut a, .. } = call_data else { return };
             let unique_func_info = hlr.tree.unique_func_info_of_call(&hlr.tree.get(callid));
 
             if !unique_func_info.relation.is_method() {
@@ -68,7 +68,7 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
 
                 *last_arg = hlr.insert_quick(
                     callid,
-                    NodeData::UnarOp {
+                    HNodeData::UnarOp {
                         ret_type: deref_chain[d + 1].clone(),
                         op: Opcode::Deref,
                         hs: *last_arg,

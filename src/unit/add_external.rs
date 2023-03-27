@@ -108,13 +108,14 @@ impl Unit {
 
         let ink_func_type = func_type_inner.llvm_func_type(self.context);
 
-        // TODO: Check if function already exists, and update gen if nescssary
         let func_info = UniqueFuncInfo {
             name: name.into(),
             relation: ext_add.relation.clone(),
             generics: ext_add.generics,
             ..Default::default()
         };
+
+        self.comp_data.update_func_info(func_info.clone(), &self.module);
 
         let mut function =
             self.module

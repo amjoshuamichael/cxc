@@ -1,7 +1,7 @@
 use crate::{Type, TypeEnum, UniqueFuncInfo, VarName};
 
 use super::{
-    expr_tree::{CallGen, NodeData, StructLitGen},
+    expr_tree::{CallGen, HNodeData, StructLitGen},
     hlr_data::FuncRep,
 };
 
@@ -10,23 +10,25 @@ pub fn variant_literals(hlr: &mut FuncRep) {
         |struct_id, mut struct_data, hlr| {
             let mut struct_data_clone = struct_data.clone();
 
-            let NodeData::StructLit { ref mut var_type, ref mut fields, ref mut initialize } = 
+            let HNodeData::StructLit { ref mut var_type, ref mut fields, ref mut initialize } = 
                 &mut struct_data else { return };
 
             let TypeEnum::Variant(variant_type) = var_type.as_type_enum() else { return };
-            let TypeEnum::Sum(sum_type) = variant_type.parent.as_type_enum() else { panic!() };
             let struct_parent = hlr.tree.parent(struct_id);
 
-            if sum_type.has_internal_discriminant() {
+            if variant_type.parent.has_internal_discriminant() {
                 let variant_data = if variant_type.variant_type == Type::empty() {
+                    let largest_variant = variant_type.parent.largest_variant_index();
+
                     let invalid_state_index =
-                        if sum_type.largest_variant_index() as u32 > variant_type.tag {
+                        if largest_variant as u32 > variant_type.tag {
                             variant_type.tag
                         } else {
                             variant_type.tag - 1
                         };
 
-                    hlr.insert_quick(struct_parent, sum_type.tag_data(invalid_state_index))
+                    let data = variant_type.parent.tag_data(invalid_state_index);
+                    hlr.insert_quick(struct_parent, data)
                 } else {
                     let castable_data = if fields.len() == 1 {
                         hlr.tree.get(fields[0].1)
@@ -43,7 +45,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                                 name: "cast".into(),
                                 generics: vec![
                                     variant_type.variant_type.clone(),
-                                    variant_type.parent.clone(),
+                                    variant_type.parent_type(),
                                 ],
                                 ..Default::default()
                             },
@@ -62,7 +64,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                             fields: vec![
                                 (
                                     "tag".into(),
-                                    box NodeData::Number {
+                                    box HNodeData::Number {
                                         value: variant_type.tag as u64,
                                         lit_type: Type::i(32),
                                     },
@@ -75,7 +77,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                 } else {
                     let tag = hlr.insert_quick(
                         struct_parent,
-                        NodeData::Number {
+                        HNodeData::Number {
                             lit_type: Type::i(8),
                             value: variant_type.tag as u64,
                         },
@@ -85,7 +87,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
 
                     hlr.tree.insert(
                         struct_parent,
-                        NodeData::StructLit {
+                        HNodeData::StructLit {
                             var_type: variant_type.as_struct(),
                             fields: fields.clone(),
                             initialize: *initialize,
@@ -100,7 +102,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                             name: VarName::from("cast"),
                             generics: vec![
                                 variant_type.as_struct(),
-                                variant_type.parent.clone(),
+                                variant_type.parent_type(),
                             ],
                             ..Default::default()
                         },

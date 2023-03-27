@@ -224,7 +224,7 @@ impl CompData {
         for decl in possible_decls {
             if let Some(found_relation) = decl.relation.inner_type() && 
                 let Some(looking_for_relation) = info.relation.inner_type() {
-                if looking_for_relation.could_come_from(found_relation, self) 
+                if looking_for_relation.could_come_from(found_relation, self).unwrap()
                 {
                     return Some(decl.clone());
                 }
@@ -255,7 +255,6 @@ impl CompData {
             v.disable_pointer();
             self.compiled.insert(info.clone(), v.clone());
 
-            // TODO: set fn pointer
             self.compiled.insert(info_made_old.clone(), Func::new_compiled(info_made_old, v.typ()));
 
             true
@@ -378,7 +377,7 @@ impl CompData {
 use std::{
     hash::Hash,
     num::NonZeroU32,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock}, ptr::NonNull,
 };
 
 use super::*;
@@ -533,7 +532,7 @@ impl Func {
     pub(super) fn set_pointer(&self, pointer: *const usize) {
         let mut inner = self.inner.write().unwrap();
         inner.code = FuncCodeInfo::Compiled {
-            pointer: Some(pointer),
+            pointer: NonNull::new(pointer as *mut _),
         };
     }
 
@@ -545,10 +544,7 @@ impl Func {
     pub(super) fn get_pointer(&self) -> *const usize {
         let inner = self.inner.read().unwrap();
 
-        match inner.code {
-            FuncCodeInfo::Compiled { pointer } => pointer.unwrap(),
-            FuncCodeInfo::External { pointer, .. } => pointer,
-        }
+        inner.code.pointer().unwrap()
     }
 }
 
@@ -561,9 +557,8 @@ struct FuncInner {
 #[derive(Clone, Debug, XcReflectMac)]
 #[xc_opaque] // TODO: we shouldn't have to do this
 pub enum FuncCodeInfo {
-    // TODO: use NonNull here
     Compiled {
-        pointer: Option<*const usize>,
+        pointer: Option<NonNull<usize>>,
     },
     External {
         pointer: *const usize,
@@ -573,7 +568,7 @@ pub enum FuncCodeInfo {
 impl FuncCodeInfo {
     pub fn pointer(&self) -> Option<*const usize> {
         match self {
-            FuncCodeInfo::Compiled { pointer } => *pointer,
+            FuncCodeInfo::Compiled { ref pointer } => pointer.map(|x| x.as_ptr() as *const _),
             FuncCodeInfo::External { pointer, .. } => Some(*pointer),
         }
     }

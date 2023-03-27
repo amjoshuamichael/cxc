@@ -5,11 +5,17 @@ use crate::{
     Type, UniqueFuncInfo,
 };
 
-use super::{ExprID, NodeData};
+use super::{ExprID, HNodeData};
 
 impl<'a> FuncRep<'a> {
     pub fn insert_quick(&mut self, parent: ExprID, gen: impl NodeDataGen) -> ExprID {
         gen.add_to_expr_tree(self, parent)
+    }
+
+    pub fn replace_quick(&mut self, replacee: ExprID, gen: impl NodeDataGen) {
+        let parent = self.tree.parent(replacee);
+        let new = gen.add_to_expr_tree(self, parent);
+        self.tree.replace(replacee, self.tree.get(new));
     }
 }
 
@@ -23,7 +29,7 @@ impl NodeDataGen for Box<dyn NodeDataGen> {
     }
 }
 
-impl NodeDataGen for NodeData {
+impl NodeDataGen for HNodeData {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(parent, self.clone())
     }
@@ -33,7 +39,7 @@ impl NodeDataGen for usize {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(
             parent,
-            NodeData::Number {
+            HNodeData::Number {
                 value: *self as u64,
                 lit_type: Type::i(std::mem::size_of::<usize>() as u32),
             },
@@ -45,7 +51,7 @@ impl NodeDataGen for VarName {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(
             parent,
-            NodeData::Ident {
+            HNodeData::Ident {
                 name: self.clone(),
                 var_type: hlr.data_flow.get(self).unwrap().typ.clone(),
             },
@@ -55,7 +61,7 @@ impl NodeDataGen for VarName {
 
 impl Default for Box<dyn NodeDataGen> {
     fn default() -> Self {
-        box NodeData::Number {
+        box HNodeData::Number {
             value: 0,
             lit_type: Type::i(32),
         }
@@ -86,7 +92,7 @@ impl NodeDataGen for MakeVarGen {
 
         hlr.tree.replace(
             space,
-            NodeData::MakeVar {
+            HNodeData::MakeVar {
                 name: self.set.clone(),
                 var_type: self.var_type.clone(),
                 rhs,
@@ -112,7 +118,7 @@ impl NodeDataGen for SetVarGen {
 
         hlr.tree.replace(
             space,
-            NodeData::Set {
+            HNodeData::Set {
                 lhs,
                 rhs,
                 ret_type: hlr.tree.get_ref(lhs).ret_type(),
@@ -140,7 +146,7 @@ impl NodeDataGen for BinOpGen {
 
         hlr.tree.replace(
             space,
-            NodeData::BinOp {
+            HNodeData::BinOp {
                 lhs,
                 rhs,
                 op: self.op,
@@ -167,7 +173,7 @@ impl NodeDataGen for UnarOpGen {
 
         hlr.tree.replace(
             space,
-            NodeData::UnarOp {
+            HNodeData::UnarOp {
                 op: self.op,
                 hs,
                 ret_type: self.ret_type.clone(),
@@ -198,7 +204,7 @@ impl NodeDataGen for CallGen {
 
         hlr.tree.replace(
             space,
-            NodeData::Call {
+            HNodeData::Call {
                 f: self.info.name.clone(),
                 generics: self.info.generics.clone(),
                 relation: self.info.relation.clone(),
@@ -217,7 +223,7 @@ impl NodeDataGen for UniqueFuncInfo {
 
         hlr.tree.insert(
             parent,
-            NodeData::Call {
+            HNodeData::Call {
                 f: self.name.clone(),
                 generics: self.generics.clone(),
                 relation: self.relation.clone(),
@@ -247,7 +253,7 @@ impl NodeDataGen for StructLitGen {
 
         hlr.tree.replace(
             space,
-            NodeData::StructLit {
+            HNodeData::StructLit {
                 var_type: self.var_type.clone(),
                 fields: added_fields,
                 initialize: self.initialize,
@@ -277,7 +283,7 @@ impl NodeDataGen for ArrayLitGen {
 
         hlr.tree.replace(
             space,
-            NodeData::ArrayLit {
+            HNodeData::ArrayLit {
                 var_type: self.var_type.clone(),
                 parts,
                 initialize: self.initialize,
@@ -303,7 +309,7 @@ impl NodeDataGen for MemberGen {
 
         hlr.tree.replace(
             space,
-            NodeData::Member {
+            HNodeData::Member {
                 object,
                 field: self.field.clone(),
                 ret_type: self.ret_type.clone(),
@@ -330,7 +336,7 @@ impl NodeDataGen for IndexGen {
 
         hlr.tree.replace(
             space,
-            NodeData::Index {
+            HNodeData::Index {
                 object,
                 index,
                 ret_type: self.ret_type.clone(),

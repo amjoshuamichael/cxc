@@ -102,6 +102,8 @@ impl Unit {
             context,
         };
 
+        new.comp_data.new_generation();
+
         let comp_data_ptr = &mut *new.comp_data as *mut _;
         new.add_global("comp_data".into(), comp_data_ptr);
 
@@ -121,8 +123,7 @@ impl Unit {
     }
 
     pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
-        // TODO: make sure that ONLY ONE script is being pushed at a time, and that the Unit 
-        // global can only be accessed from a compilation script
+        // TODO: make sure the global can only be accessed from a compilation script
 
         let lexed = lex(script);
 

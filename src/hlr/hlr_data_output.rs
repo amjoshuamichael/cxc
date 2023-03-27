@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use crate::{lex::VarName, unit::UniqueFuncInfo, Type};
 
 use super::{
-    expr_tree::{ExprTree, NodeData},
+    expr_tree::{ExprTree, HNodeData},
     hlr_data::DataFlow,
 };
 
@@ -23,7 +23,7 @@ impl FuncOutput {
         let tree = self.tree_ref();
 
         for (_, node_data) in tree.iter() {
-            let NodeData::Call { .. } = node_data
+            let HNodeData::Call { .. } = node_data
                 else { continue; };
 
             let func_info = tree.unique_func_info_of_call(node_data);

@@ -1,11 +1,11 @@
 use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName};
 
-use super::{expr_tree::NodeData, hlr_data::FuncRep};
+use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
 pub fn op_overloading(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |op_id, op_data, hlr| {
-            let NodeData::UnarOp { hs, op, ret_type } = op_data.clone() 
+            let HNodeData::UnarOp { hs, op, ret_type } = op_data.clone() 
                 else { return };
             let hs_type = hlr.tree.get(hs).ret_type();
 
@@ -13,13 +13,13 @@ pub fn op_overloading(hlr: &mut FuncRep) {
                 Opcode::Deref if !matches!(hs_type.as_type_enum(), TypeEnum::Ref(_)) => {
                     let reffed_hs = hlr.insert_quick(
                         op_id,
-                        NodeData::UnarOp {
+                        HNodeData::UnarOp {
                             op: Opcode::Ref,
                             hs,
                             ret_type: hs_type.get_ref(),
                         },
                     );
-                    *op_data = NodeData::Call {
+                    *op_data = HNodeData::Call {
                         ret_type: ret_type.clone(),
                         f: VarName::from("deref"),
                         generics: hs_type.generics().clone(),

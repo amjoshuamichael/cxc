@@ -1,23 +1,23 @@
 use crate::errors::{CResultMany};
-use crate::hlr::hlr_data::FuncRep;
-use crate::{Type, UniqueFuncInfo};
+use crate::hlr::hlr_data::{FuncRep, DataFlowInfo};
+use crate::{Type, UniqueFuncInfo, VarName};
 
-use super::{ExprID, ExprTree, NodeData, NodeDataGen};
-use super::{ExprNode, NodeData::*};
+use super::{ExprID, ExprTree, HNodeData, NodeDataGen, MakeVarGen};
+use super::{ExprNode, HNodeData::*};
 
 impl ExprTree {
     pub fn iter_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item = (ExprID, &mut NodeData)> + 'a> {
+    ) -> Box<dyn Iterator<Item = (ExprID, &mut HNodeData)> + 'a> {
         box self.nodes.iter_mut().map(|(id, node)| (id, &mut node.data))
     }
 
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (ExprID, &NodeData)> + 'a> {
+    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (ExprID, &HNodeData)> + 'a> {
         box self.nodes.iter().map(|(id, node)| (id, &node.data))
     }
 
     pub fn ids_in_order(&self) -> Vec<ExprID> {
-        use NodeData::*;
+        use HNodeData::*;
 
         fn ids_of(tree: &ExprTree, id: ExprID) -> Vec<ExprID> {
             let rest = match tree.get(id) {
@@ -31,7 +31,7 @@ impl ExprTree {
                 | Block { stmts: many, .. } => {
                     many.iter().flat_map(|id| ids_of(tree, *id)).collect()
                 },
-                FirstClassCall {
+                IndirectCall {
                     f: one, a: many, ..
                 } => many
                     .iter()
@@ -73,29 +73,29 @@ impl ExprTree {
         ids_of(self, self.root)
     }
 
-    pub fn insert(&mut self, parent: ExprID, data: NodeData) -> ExprID {
+    pub fn insert(&mut self, parent: ExprID, data: HNodeData) -> ExprID {
         self.nodes.insert(ExprNode { parent, data })
     }
 
-    pub fn replace(&mut self, at: ExprID, with: NodeData) {
+    pub fn replace(&mut self, at: ExprID, with: HNodeData) {
         self.nodes.get_mut(at).unwrap().data = with;
     }
 
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
         self.nodes.insert(ExprNode {
             parent,
-            data: NodeData::Number {
+            data: HNodeData::Number {
                 value: 0,
                 lit_type: Type::i(32),
             },
         })
     }
 
-    pub fn get(&self, at: ExprID) -> NodeData { self.nodes[at].data.clone() }
+    pub fn get(&self, at: ExprID) -> HNodeData { self.nodes[at].data.clone() }
 
-    pub fn get_ref(&self, at: ExprID) -> &NodeData { &self.nodes[at].data }
+    pub fn get_ref(&self, at: ExprID) -> &HNodeData { &self.nodes[at].data }
 
-    pub fn get_mut(&mut self, at: ExprID) -> &mut NodeData { &mut self.nodes[at].data }
+    pub fn get_mut(&mut self, at: ExprID) -> &mut HNodeData { &mut self.nodes[at].data }
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of].parent }
     pub fn set_parent(&mut self, of: ExprID, to: ExprID) { self.nodes[of].parent = to }
@@ -117,7 +117,7 @@ impl ExprTree {
     pub fn with_space(
         &mut self,
         parent: ExprID,
-        closure: impl Fn(ExprID, &mut Self) -> NodeData,
+        closure: impl Fn(ExprID, &mut Self) -> HNodeData,
     ) -> ExprID {
         let new_space = self.make_one_space(parent);
         let new_data = closure(new_space, self);
@@ -127,8 +127,8 @@ impl ExprTree {
 
     pub fn return_type(&self) -> Type { self.get(self.root).ret_type() }
 
-    pub fn unique_func_info_of_call(&self, call: &NodeData) -> UniqueFuncInfo {
-        let NodeData::Call { f, generics, relation, .. } = call.clone()
+    pub fn unique_func_info_of_call(&self, call: &HNodeData) -> UniqueFuncInfo {
+        let HNodeData::Call { f, generics, relation, .. } = call.clone()
             else { panic!() };
 
         UniqueFuncInfo {
@@ -143,28 +143,28 @@ impl ExprTree {
 impl<'a> FuncRep<'a> {
     pub fn modify_many(
         &mut self,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep) -> CResultMany<()>,
+        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         self.modify_many_inner(self.tree.ids_in_order().drain(..), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_rev(
         &mut self,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep) -> CResultMany<()>,
+        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_infallible(
         &mut self,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
+        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep),
     ) {
         self.modify_many(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
 
     pub fn modify_many_infallible_rev(
         &mut self,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep),
+        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep),
     ) {
         self.modify_many_rev(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
@@ -172,7 +172,7 @@ impl<'a> FuncRep<'a> {
     fn modify_many_inner(
         &mut self,
         id_iterator: impl Iterator<Item = ExprID>,
-        modifier: impl Fn(ExprID, &mut NodeData, &mut FuncRep) -> CResultMany<()>,
+        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         for index in id_iterator {
             let mut data_copy = self.tree.get(index);
@@ -213,13 +213,63 @@ impl<'a> FuncRep<'a> {
 
         let new = self.insert_quick(block, new_data);
 
-        let NodeData::Block { ref mut stmts, .. } = self.tree.get_mut(block)
+        let HNodeData::Block { ref mut stmts, .. } = self.tree.get_mut(block)
             else { unreachable!() };
 
         let block_pos = stmts.iter().position(|s_id| *s_id == statement).unwrap() + offset;
         stmts.insert(block_pos, new);
 
         new
+    }
+
+    pub fn add_argument(&mut self, name: &str, typ: Type) -> VarName { 
+        self.add_variable_inner(name, typ, true) 
+    }
+
+    pub fn add_variable(&mut self, name: &str, typ: &Type) -> (VarName, MakeVarGen) { 
+        let name = self.add_variable_inner(name, typ.clone(), false);
+
+        (
+            name.clone(), 
+            MakeVarGen {
+                set: name,
+                var_type: typ.clone(),
+                ..Default::default()
+            }
+        )
+    }
+
+    pub fn add_variable_inner(
+        &mut self,
+        name: &str,
+        typ: Type,
+        add_as_arg: bool,
+    ) -> VarName {
+        let new_name = self.uniqueify_varname(name);
+
+        self.identifiers.push(new_name.clone());
+
+        if add_as_arg {
+            self.data_flow.insert(new_name.clone(), DataFlowInfo {
+                typ,
+                arg_index: add_as_arg.then_some(self.arg_count() + 1),
+            });
+        }
+
+        new_name
+    }
+
+    fn uniqueify_varname(&mut self, name: &str) -> VarName {
+        let name = VarName::from(name);
+        let mut uniqueified = name.clone();
+        let mut unique_id = 0;
+
+        while self.identifiers.contains(&uniqueified) {
+            uniqueified = VarName::from(&*format!("{name}{unique_id}"));
+            unique_id += 1;
+        }
+
+        uniqueified
     }
 }
 

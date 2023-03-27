@@ -30,7 +30,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
     let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
     let output_var_name = VarName::from("casted_ret");
-    let output_var_node_data = box NodeData::Ident {
+    let output_var_node_data = box HNodeData::Ident {
         var_type: i32i64.clone(),
         name: output_var_name.clone(),
     };
@@ -45,7 +45,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
 
     hlr.modify_many_infallible(
         |return_id, mut data, hlr| {
-            let NodeData::Return { to_return: Some(ref mut to_return), .. } = &mut data
+            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = &mut data
                 else { return };
 
             let to_return_data = hlr.tree.get(*to_return);
@@ -114,7 +114,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
     hlr.modify_many_infallible(
         |return_id, data, hlr| {
-            let NodeData::Return { ref mut to_return, .. } = data
+            let HNodeData::Return { ref mut to_return, .. } = data
                 else { return };
 
             let Some(ref mut to_return_inner) = to_return else { return };
@@ -130,7 +130,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                     },
                     args: vec![
                         box UnarOpGen {
-                            hs: box NodeData::Ident {
+                            hs: box HNodeData::Ident {
                                 var_type: output_var_typ.clone(),
                                 name: output_var.clone(),
                             },
@@ -151,7 +151,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
     for call_id in hlr.tree.ids_in_order().drain(..).rev() {
         let data = hlr.tree.get(call_id);
 
-        if let NodeData::Call { ref f, .. } = data && !hlr.comp_data.name_is_intrinsic(f) {
+        if let HNodeData::Call { ref f, .. } = data && !hlr.comp_data.name_is_intrinsic(f) {
             match data.ret_type().return_style() {
                 ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::MoveIntoI64I64 => todo!(),
@@ -170,25 +170,22 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let og_call_data = hlr.tree.get(og_call);
 
-    let raw_ret_var_name = hlr.uniqueify_varname("raw_call_out");
-    let raw_ret_var_type = og_call_data.ret_type().raw_return_type();
-    let casted_var_name = hlr.uniqueify_varname("casted_call_out");
     let casted_var_type = og_call_data.ret_type();
+    let (casted_var_name, make_casted) = 
+        hlr.add_variable("casted_call_out", &casted_var_type);
+
+    let raw_ret_var_type = casted_var_type.raw_return_type();
+    let (raw_ret_var_name, make_raw_ret) = 
+        hlr.add_variable("raw_call_out", &raw_ret_var_type);
 
     hlr.insert_statement_before(
         og_call,
         MakeVarGen {
-            set: raw_ret_var_name.clone(),
             to: box og_call_data.clone(),
-            var_type: raw_ret_var_type.clone(),
-            ..Default::default()
+            ..make_raw_ret
         },
     )
-    .after_that(MakeVarGen {
-        set: casted_var_name.clone(),
-        var_type: casted_var_type.clone(),
-        ..Default::default()
-    })
+    .after_that(make_casted)
     .after_that(CallGen {
         info: UniqueFuncInfo {
             name: VarName::from("memcpy"),
@@ -200,7 +197,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
             box UnarOpGen {
                 ret_type: raw_ret_var_type.get_ref(),
                 op: Opcode::Ref,
-                hs: box NodeData::Ident {
+                hs: box HNodeData::Ident {
                     var_type: raw_ret_var_type.clone(),
                     name: raw_ret_var_name,
                 },
@@ -208,21 +205,18 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
             box UnarOpGen {
                 ret_type: raw_ret_var_type.get_ref(),
                 op: Opcode::Ref,
-                hs: box NodeData::Ident {
+                hs: box HNodeData::Ident {
                     var_type: casted_var_type.clone(),
                     name: casted_var_name.clone(),
                 },
             },
-            box NodeData::Number {
-                lit_type: Type::i(32),
-                value: raw_ret_var_type.size() as u64,
-            },
+            box raw_ret_var_type.size()
         ],
     });
 
     hlr.tree.replace(
         og_call,
-        NodeData::Ident {
+        HNodeData::Ident {
             var_type: casted_var_type,
             name: casted_var_name,
         },
@@ -232,10 +226,10 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let data = hlr.tree.get(og_call_id);
 
-    let NodeData::Call { a: old_args, f, generics, relation, ret_type: call_ret_type } = 
+    let HNodeData::Call { a: old_args, f, generics, relation, ret_type: call_ret_type } = 
         data.clone() else { panic!(); };
 
-    let call_var = hlr.uniqueify_varname("call_out");
+    let call_var = hlr.add_argument("call_out", data.ret_type());
 
     hlr.insert_statement_before(
         og_call_id,
@@ -250,7 +244,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
 
     new_args.push(box UnarOpGen {
         op: Opcode::Ref,
-        hs: box NodeData::Ident {
+        hs: box HNodeData::Ident {
             var_type: call_ret_type.clone(),
             name: call_var.clone(),
         },
@@ -274,11 +268,5 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         },
     );
 
-    hlr.tree.replace(
-        og_call_id,
-        NodeData::Ident {
-            var_type: call_ret_type,
-            name: call_var,
-        },
-    );
+    hlr.replace_quick(og_call_id, call_var);
 }

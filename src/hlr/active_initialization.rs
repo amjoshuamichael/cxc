@@ -1,8 +1,8 @@
 use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, UniqueFuncInfo};
 
 use super::{
-    expr_tree::{CallGen, IndexGen, MakeVarGen, MemberGen, NodeData, SetVarGen},
-    hlr_data::{DataFlowInfo, FuncRep},
+    expr_tree::{CallGen, IndexGen, MakeVarGen, MemberGen, HNodeData, SetVarGen},
+    hlr_data::FuncRep,
 };
 
 pub fn active_initialization(hlr: &mut FuncRep) {
@@ -13,7 +13,7 @@ pub fn active_initialization(hlr: &mut FuncRep) {
 fn handle_struct_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |structlit_id, structlit_data, hlr| {
-            let NodeData::StructLit { var_type, fields: field_ids, initialize } = 
+            let HNodeData::StructLit { var_type, fields: field_ids, initialize } = 
                 structlit_data else { return };
 
             if *initialize != InitOpts::Default {
@@ -23,13 +23,12 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
                 else { todo!("This literal can only use a struct type") };
 
-            let new_default_var_name = hlr.uniqueify_varname("default");
+            let (new_default, make_new_default) = 
+                hlr.add_variable("default", &var_type);
 
             hlr.insert_statement_before(
                 structlit_id,
                 MakeVarGen {
-                    set: new_default_var_name.clone(),
-                    var_type: var_type.clone(),
                     to: box CallGen {
                         info: UniqueFuncInfo {
                             name: VarName::from("default"),
@@ -38,7 +37,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                         },
                         ..Default::default()
                     },
-                    ..Default::default()
+                    ..make_new_default
                 },
             );
 
@@ -52,10 +51,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                 let initialized = hlr.insert_quick(
                     structlit_id,
                     MemberGen {
-                        object: box NodeData::Ident {
-                            var_type: var_type.clone(),
-                            name: new_default_var_name.clone(),
-                        },
+                        object: box new_default.clone(),
                         field: field_name.clone(),
                         ret_type: field_type.clone(),
                     },
@@ -70,7 +66,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
 fn handle_array_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |arraylit_id, arraylit_data, hlr| {
-            let NodeData::ArrayLit { var_type, parts: part_ids, initialize } = 
+            let HNodeData::ArrayLit { var_type, parts: part_ids, initialize } = 
                 arraylit_data.clone() else { return };
 
             if initialize != InitOpts::Default {
@@ -80,24 +76,15 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Array(array_type) = var_type.as_type_enum() 
                 else { panic!() };
 
-            let defaulted_array = hlr.uniqueify_varname("defaulted_array");
-
-            hlr.data_flow.insert(
-                defaulted_array.clone(),
-                DataFlowInfo {
-                    typ: var_type.clone(),
-                    ..Default::default()
-                },
-            );
+            let (defaulted_array, make_defaulted_array) = 
+                hlr.add_variable("defaulted_array", &var_type);
 
             let set_default_array = hlr
                 .insert_statement_before(
                     arraylit_id,
                     MakeVarGen {
-                        set: defaulted_array.clone(),
-                        var_type: var_type.clone(),
                         to: box arraylit_data.clone(),
-                        ..Default::default()
+                        ..make_defaulted_array
                     },
                 )
                 .inserted_id();
@@ -122,7 +109,7 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                 );
             }
 
-            *arraylit_data = NodeData::Ident {
+            *arraylit_data = HNodeData::Ident {
                 name: defaulted_array,
                 var_type: var_type.clone(),
             };

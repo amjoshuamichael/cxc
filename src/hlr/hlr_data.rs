@@ -42,7 +42,7 @@ impl<'a> FuncRep<'a> {
         let mut new = FuncRep {
             tree: ExprTree::default(),
             ret_type: comp_data
-                .get_spec(&code.ret_type, &info.generics())
+                .get_spec(&code.ret_type, &info)
                 .unwrap(),
             comp_data,
             identifiers: Vec::new(),
@@ -124,38 +124,23 @@ impl<'a> FuncRep<'a> {
         }
     }
 
-    pub fn uniqueify_varname(&mut self, name: &str) -> VarName {
-        let name = VarName::from(name);
-        let mut uniqueified = name.clone();
-        let mut unique_id = 0;
-
-        while self.identifiers.contains(&uniqueified) {
-            uniqueified = VarName::from(&*format!("{name}{unique_id}"));
-            unique_id += 1;
-        }
-
-        self.identifiers.push(uniqueified.clone());
-
-        uniqueified
-    }
-
     fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
         match expr {
             Expr::Number(value) => self.tree.insert(
                 parent,
-                NodeData::Number {
+                HNodeData::Number {
                     value,
                     lit_type: Type::i(32),
                 },
             ),
             Expr::Float(value) => self.tree.insert(
                 parent,
-                NodeData::Float {
+                HNodeData::Float {
                     lit_type: Type::f32(),
                     value,
                 },
             ),
-            Expr::Bool(value) => self.tree.insert(parent, NodeData::Bool { value }),
+            Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value }),
             Expr::Strin(value) => {
                 let call_space = self.tree.make_one_space(parent);
                 let ref_space = self.tree.make_one_space(call_space);
@@ -165,7 +150,7 @@ impl<'a> FuncRep<'a> {
                 for b in value.bytes() {
                     let byte_id = self.tree.insert(
                         array_space,
-                        NodeData::Number {
+                        HNodeData::Number {
                             lit_type: Type::i(8),
                             value: b as u64,
                         },
@@ -178,7 +163,7 @@ impl<'a> FuncRep<'a> {
 
                 self.tree.replace(
                     array_space,
-                    NodeData::ArrayLit {
+                    HNodeData::ArrayLit {
                         var_type: arr_type.clone(),
                         parts: byte_ids.clone(),
                         initialize: InitOpts::NoFill,
@@ -186,7 +171,7 @@ impl<'a> FuncRep<'a> {
                 );
                 self.tree.replace(
                     ref_space,
-                    NodeData::UnarOp {
+                    HNodeData::UnarOp {
                         ret_type: arr_type.get_ref(),
                         op: Opcode::Ref,
                         hs: array_space,
@@ -195,7 +180,7 @@ impl<'a> FuncRep<'a> {
 
                 let len_arg = self.tree.insert(
                     call_space,
-                    NodeData::Number {
+                    HNodeData::Number {
                         lit_type: Type::i(64),
                         value: byte_ids.len() as u64,
                     },
@@ -203,7 +188,7 @@ impl<'a> FuncRep<'a> {
 
                 let string_type = self.comp_data.get_by_name(&"String".into()).unwrap();
 
-                let call_data = NodeData::Call {
+                let call_data = HNodeData::Call {
                     ret_type: string_type.clone(),
                     f: "from_bytes".into(),
                     a: vec![ref_space, len_arg],
@@ -225,7 +210,7 @@ impl<'a> FuncRep<'a> {
                         .clone(),
                 };
 
-                self.tree.insert(parent, NodeData::Ident { var_type, name })
+                self.tree.insert(parent, HNodeData::Ident { var_type, name })
             },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
@@ -245,7 +230,7 @@ impl<'a> FuncRep<'a> {
                 };
 
                 let statement = if !self.identifiers.contains(&decl.name) {
-                    NodeData::MakeVar {
+                    HNodeData::MakeVar {
                         var_type,
                         name: decl.name,
                         rhs: self.add_expr(*e, space),
@@ -253,13 +238,13 @@ impl<'a> FuncRep<'a> {
                 } else {
                     let lhs = self.tree.insert(
                         space,
-                        NodeData::Ident {
+                        HNodeData::Ident {
                             var_type: var_type.clone(),
                             name: decl.name,
                         },
                     );
 
-                    NodeData::Set {
+                    HNodeData::Set {
                         ret_type: var_type,
                         lhs,
                         rhs: self.add_expr(*e, space),
@@ -273,7 +258,7 @@ impl<'a> FuncRep<'a> {
             Expr::Set(lhs, rhs) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_set = NodeData::Set {
+                let new_set = HNodeData::Set {
                     ret_type: Type::unknown(),
                     lhs: self.add_expr(*lhs, space),
                     rhs: self.add_expr(*rhs, space),
@@ -286,7 +271,7 @@ impl<'a> FuncRep<'a> {
             Expr::UnarOp(op, hs) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = NodeData::UnarOp {
+                let new_binop = HNodeData::UnarOp {
                     ret_type: Type::unknown(),
                     op,
                     hs: self.add_expr(*hs, space),
@@ -298,7 +283,7 @@ impl<'a> FuncRep<'a> {
             Expr::BinOp(op, lhs, rhs) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = NodeData::BinOp {
+                let new_binop = HNodeData::BinOp {
                     ret_type: Type::unknown(),
                     lhs: self.add_expr(*lhs, space),
                     op,
@@ -311,7 +296,7 @@ impl<'a> FuncRep<'a> {
             Expr::IfThen(i, t) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = NodeData::IfThen {
+                let new_binop = HNodeData::IfThen {
                     ret_type: Type::void(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
@@ -323,7 +308,7 @@ impl<'a> FuncRep<'a> {
             Expr::IfThenElse(i, t, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = NodeData::IfThenElse {
+                let new_binop = HNodeData::IfThenElse {
                     ret_type: Type::unknown(),
                     i: self.add_expr(*i, space),
                     t: self.add_expr(*t, space),
@@ -336,7 +321,7 @@ impl<'a> FuncRep<'a> {
             Expr::ForWhile(w, d) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = NodeData::While {
+                let new_binop = HNodeData::While {
                     w: self.add_expr(*w, space),
                     d: self.add_expr(*d, space),
                 };
@@ -353,7 +338,7 @@ impl<'a> FuncRep<'a> {
                     statment_ids.push(self.add_expr(stmt, space));
                 }
 
-                let new_binop = NodeData::Block {
+                let new_binop = HNodeData::Block {
                     ret_type: Type::unknown(),
                     stmts: statment_ids,
                 };
@@ -387,7 +372,7 @@ impl<'a> FuncRep<'a> {
                         TypeRelation::Unrelated
                     };
 
-                    NodeData::Call {
+                    HNodeData::Call {
                         ret_type: Type::unknown(),
                         f: func_name.clone(),
                         generics,
@@ -397,7 +382,7 @@ impl<'a> FuncRep<'a> {
                 } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *name {
                     let type_origin = self.get_type_spec(type_spec).unwrap_or(Type::unknown());
 
-                    NodeData::Call {
+                    HNodeData::Call {
                         ret_type: Type::unknown(),
                         f: func_name.clone(),
                         generics,
@@ -406,7 +391,7 @@ impl<'a> FuncRep<'a> {
                     }
                 } else {
                     let f = self.add_expr(*name, space);
-                    NodeData::FirstClassCall {
+                    HNodeData::IndirectCall {
                         ret_type: Type::unknown(),
                         f,
                         a: arg_ids,
@@ -419,7 +404,7 @@ impl<'a> FuncRep<'a> {
             Expr::Member(object, field) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_member = NodeData::Member {
+                let new_member = HNodeData::Member {
                     ret_type: Type::unknown(),
                     object: self.add_expr(*object, space),
                     field,
@@ -437,7 +422,7 @@ impl<'a> FuncRep<'a> {
                     fields.push((field.0, self.add_expr(field.1, space)));
                 }
 
-                let new_struct = NodeData::StructLit {
+                let new_struct = HNodeData::StructLit {
                     var_type: Type::unknown(),
                     fields,
                     initialize,
@@ -455,7 +440,7 @@ impl<'a> FuncRep<'a> {
                     fields.push((VarName::TupleIndex(index as _), self.add_expr(expr, space)));
                 }
 
-                let new_struct = NodeData::StructLit {
+                let new_struct = HNodeData::StructLit {
                     var_type: Type::unknown(),
                     fields,
                     initialize,
@@ -467,7 +452,7 @@ impl<'a> FuncRep<'a> {
             Expr::Return(to_return) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_return = NodeData::Return {
+                let new_return = HNodeData::Return {
                     ret_type: Type::unknown(),
                     to_return: Some(self.add_expr(*to_return, space)),
                 };
@@ -484,7 +469,7 @@ impl<'a> FuncRep<'a> {
                     parts.push(self.add_expr(part, space));
                 }
 
-                let new_array = NodeData::ArrayLit {
+                let new_array = HNodeData::ArrayLit {
                     var_type: Type::unknown(),
                     parts,
                     initialize,
@@ -496,7 +481,7 @@ impl<'a> FuncRep<'a> {
             Expr::Index(object, index) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_index = NodeData::Index {
+                let new_index = HNodeData::Index {
                     ret_type: Type::unknown(),
                     object: self.add_expr(*object, space),
                     index: self.add_expr(*index, space),

@@ -8,6 +8,16 @@ Rc<T> = {
     inner: &RcBox<T>,
 }
 
+<T> &RcBox<T>:. {
+    inc_strong() {
+        self.strong = self.strong + 1
+    }
+
+    dec_strong() {
+        self.strong = self.strong - 1
+    }
+}
+
 <T> Rc<T>:: { 
     new(value: T); Rc<T> {
         box: &RcBox<T> = alloc< RcBox<T> >( 1 )
@@ -34,5 +44,29 @@ Rc<T> = {
 
     to_string(); String {
         ; (*self.deref()).to_string()
+    }
+
+    clone(); *Me {
+        self.inner.inc_strong()
+        ; self
+    }
+}
+
+<T> &Rc<T>:. {
+    drop() {
+        self.inner.dec_strong()
+
+        ? self.inner.strong == 0 {
+            # destroy the contained object
+            self.inner.drop()
+
+            # TODO: remove the implicit "strong weak" pointer now that we've
+            # destroyed the contents.
+            # self.inner().dec_weak();
+
+            # if self.inner().weak() == 0 {
+            #     Global.deallocate(self.ptr.cast(), Layout::for_value(self.ptr.as_ref()));
+            # }
+        }
     }
 }
