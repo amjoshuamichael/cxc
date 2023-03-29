@@ -4,10 +4,11 @@ use crate::{
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation, UniqueFuncInfo,
     VarName,
 };
+use std::fmt::Debug;
 
-pub trait GenericTable {
-    fn get_at_index(&self, index: u8) -> Option<Type>;
-    fn get_self(&self) -> Option<Type>;
+pub trait GenericTable: Debug {
+    fn get_at_index(&self, _: u8) -> Option<Type> { None }
+    fn get_self(&self) -> Option<Type> { None }
 
     fn all_generics(&self) -> Vec<Type> {
         let mut all = Vec::new();
@@ -25,14 +26,12 @@ pub trait GenericTable {
 }
 
 impl GenericTable for Vec<Type> {
-    fn get_at_index(&self, index: u8) -> Option<Type> { self.get(index as usize).cloned() }
-    fn get_self(&self) -> Option<Type> { None }
+    fn get_at_index(&self, index: u8) -> Option<Type> { 
+        self.get(index as usize).cloned()
+    }
 }
 
-impl GenericTable for () {
-    fn get_at_index(&self, _: u8) -> Option<Type> { None }
-    fn get_self(&self) -> Option<Type> { None }
-}
+impl GenericTable for () { }
 
 impl<T: GenericTable> GenericTable for (T, Type) {
     fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
@@ -96,7 +95,8 @@ impl CompData {
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
             TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_auto_deref(&*self)?,
             TypeSpec::StructMember(struct_type, field_name) => {
-                let deref_chain = self.get_spec(struct_type, generics)?.deref_chain(self);
+                let struct_type = self.get_spec(struct_type, generics)?;
+                let deref_chain = struct_type.deref_chain(self);
 
                 let mut member = None;
 

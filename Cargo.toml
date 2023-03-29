@@ -20,7 +20,7 @@ lazy_static = "1.4.0"
 rand = "0.8.5"
 subenum = "1.0.1"
 
-cxc_derive = { path = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
+cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
 
 # these libraries are re-exported into cxc
 

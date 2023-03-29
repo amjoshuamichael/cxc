@@ -13,23 +13,22 @@ use crate::Type;
 pub struct FuncRep<'a> {
     pub tree: ExprTree,
     pub comp_data: &'a CompData,
-    pub identifiers: Vec<VarName>,
     pub info: UniqueFuncInfo,
     pub ret_type: Type,
 
     // used to find where variables are declared.
-    pub data_flow: DataFlow,
+    pub variables: Variables,
 }
 
-pub type DataFlow = HashMap<VarName, DataFlowInfo>;
+pub type Variables = HashMap<VarName, VariableInfo>;
 
 #[derive(Default, Debug, Clone)]
-pub struct DataFlowInfo {
+pub struct VariableInfo {
     pub typ: Type,
     pub arg_index: Option<u32>,
 }
 
-impl DataFlowInfo {
+impl VariableInfo {
     pub fn is_arg(&self) -> bool { self.arg_index.is_some() }
 }
 
@@ -45,30 +44,34 @@ impl<'a> FuncRep<'a> {
                 .get_spec(&code.ret_type, &info)
                 .unwrap(),
             comp_data,
-            identifiers: Vec::new(),
             info,
-            data_flow: HashMap::new(),
+            variables: HashMap::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
-            new.identifiers.push(arg.name.clone());
-
             let typ = new.comp_data.get_spec(&arg.type_spec, &new.info)?;
 
-            new.data_flow.insert(
+            new.variables.insert(
                 arg.name.clone(),
-                DataFlowInfo {
+                VariableInfo {
                     typ,
                     arg_index: Some(a as u32),
                 },
             );
         }
 
-        for expr in code.code.iter() {
-            if let Expr::Ident(name) = expr {
-                if !new.data_flow.contains_key(name) {
-                    new.data_flow.insert(name.clone(), DataFlowInfo::default());
-                }
+        for expr in code.code.into_iter() {
+            let (var_name, typ) = match expr {
+                Expr::SetVar(VarDecl { name, type_spec }, _) => 
+                    (name, comp_data.get_spec(type_spec, &new.info)?),
+                _ => continue,
+            };
+
+            if !new.variables.contains_key(var_name) {
+                new.variables.insert(var_name.clone(), VariableInfo {
+                    typ,
+                    arg_index: None,
+                });
             }
         }
 
@@ -78,9 +81,9 @@ impl<'a> FuncRep<'a> {
         Ok(new)
     }
 
-    fn args(&self) -> Vec<(VarName, DataFlowInfo)> {
+    fn args(&self) -> Vec<(VarName, VariableInfo)> {
         let mut names_and_flow = self
-            .data_flow
+            .variables
             .iter()
             .map(|(n, d)| (n.clone(), d.clone()))
             .filter(|f| f.1.is_arg())
@@ -119,7 +122,7 @@ impl<'a> FuncRep<'a> {
             func_type: self.ret_type.clone().func_with_args(func_arg_types),
             arg_names: Some(self.arg_names()),
             tree: Some(self.tree),
-            data_flow: Some(self.data_flow),
+            data_flow: Some(self.variables),
             info: Some(self.info),
         }
     }
@@ -199,8 +202,8 @@ impl<'a> FuncRep<'a> {
                 call_space
             },
             Expr::Ident(name) => {
-                let var_type = match self.data_flow.get(&name) {
-                    Some(data_flow) => data_flow.typ.clone(),
+                let var_type = match self.variables.get(&name) {
+                    Some(variables) => variables.typ.clone(),
                     None => self
                         .comp_data
                         .globals
@@ -215,40 +218,12 @@ impl<'a> FuncRep<'a> {
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let var_type = if self.data_flow.contains_key(&decl.name) {
-                    self.data_flow.get(&decl.name).unwrap().typ.clone()
-                } else {
-                    let var_type = self.get_type_spec(&decl.type_spec).unwrap();
+                let var_type = self.variables[&decl.name].typ.clone() ;
 
-                    let new_data_flow_info = DataFlowInfo {
-                        typ: var_type.clone(),
-                        arg_index: None,
-                    };
-
-                    self.data_flow.insert(decl.name.clone(), new_data_flow_info);
-                    var_type
-                };
-
-                let statement = if !self.identifiers.contains(&decl.name) {
-                    HNodeData::MakeVar {
-                        var_type,
-                        name: decl.name,
-                        rhs: self.add_expr(*e, space),
-                    }
-                } else {
-                    let lhs = self.tree.insert(
-                        space,
-                        HNodeData::Ident {
-                            var_type: var_type.clone(),
-                            name: decl.name,
-                        },
-                    );
-
-                    HNodeData::Set {
-                        ret_type: var_type,
-                        lhs,
-                        rhs: self.add_expr(*e, space),
-                    }
+                let statement = HNodeData::MakeVar {
+                    var_type,
+                    name: decl.name,
+                    rhs: self.add_expr(*e, space),
                 };
 
                 self.tree.replace(space, statement);

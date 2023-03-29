@@ -19,6 +19,7 @@ mod string;
 mod to_string;
 mod type_helpers;
 mod unit_lib;
+mod drop_lib;
 use atomic_lib::AtomicLib;
 use bit_array::BitArrayLib;
 use default::DefaultLib;
@@ -27,10 +28,14 @@ use string::StringLib;
 use to_string::ToStringLib;
 use type_helpers::TypeHelperLib;
 use unit_lib::UnitLib;
+use drop_lib::DropLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_static_deriver("len".into(), derive_array_len);
+
+        unit.push_script(include_str!("drop.cxc")).unwrap();
+        unit.add_lib(DropLib);
 
         unit.push_script(include_str!("vec.cxc")).unwrap();
         unit.push_script(include_str!("hashmap.cxc")).unwrap();

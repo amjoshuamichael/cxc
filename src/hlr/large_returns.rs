@@ -1,5 +1,5 @@
 use super::struct_literals::struct_literals;
-use super::hlr_data::DataFlowInfo;
+use super::hlr_data::VariableInfo;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
 use crate::lex::VarName;
@@ -35,9 +35,9 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
         name: output_var_name.clone(),
     };
 
-    hlr.data_flow.insert(
+    hlr.variables.insert(
         output_var_name.clone(),
-        DataFlowInfo {
+        VariableInfo {
             typ: i64i64.clone(),
             arg_index: None,
         },
@@ -96,7 +96,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
 fn return_by_pointer(hlr: &mut FuncRep) {
     let output_var = VarName::from("Sret");
 
-    for (_, flow) in hlr.data_flow.iter_mut() {
+    for (_, flow) in hlr.variables.iter_mut() {
         if let Some(arg_index) = &mut flow.arg_index {
             *arg_index += 1;
         }
@@ -104,9 +104,9 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
     let output_var_typ = hlr.ret_type.clone().get_ref();
 
-    hlr.data_flow.insert(
+    hlr.variables.insert(
         output_var.clone(),
-        DataFlowInfo {
+        VariableInfo {
             typ: output_var_typ.clone(),
             arg_index: Some(0),
         },
@@ -229,16 +229,9 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let HNodeData::Call { a: old_args, f, generics, relation, ret_type: call_ret_type } = 
         data.clone() else { panic!(); };
 
-    let call_var = hlr.add_argument("call_out", data.ret_type());
+    let (call_var, make_call_var) = hlr.add_variable("_call_out", &data.ret_type());
 
-    hlr.insert_statement_before(
-        og_call_id,
-        MakeVarGen {
-            set: call_var.clone(),
-            var_type: data.ret_type(),
-            ..Default::default()
-        },
-    );
+    hlr.insert_statement_before(og_call_id, make_call_var);
 
     let mut new_args: Vec<Box<dyn NodeDataGen>> = Vec::new();
 

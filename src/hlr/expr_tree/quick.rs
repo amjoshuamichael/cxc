@@ -1,5 +1,5 @@
 use crate::{
-    hlr::hlr_data::{DataFlowInfo, FuncRep},
+    hlr::hlr_data::FuncRep,
     lex::VarName,
     parse::{InitOpts, Opcode},
     Type, UniqueFuncInfo,
@@ -53,7 +53,7 @@ impl NodeDataGen for VarName {
             parent,
             HNodeData::Ident {
                 name: self.clone(),
-                var_type: hlr.data_flow.get(self).unwrap().typ.clone(),
+                var_type: hlr.variables.get(self).unwrap().typ.clone(),
             },
         )
     }
@@ -71,7 +71,6 @@ impl Default for Box<dyn NodeDataGen> {
 #[derive(Debug, Default)]
 pub struct MakeVarGen {
     pub set: VarName,
-    pub arg_index: Option<u32>,
     pub to: Box<dyn NodeDataGen>,
     pub var_type: Type,
 }
@@ -81,14 +80,6 @@ impl NodeDataGen for MakeVarGen {
         let space = hlr.tree.make_one_space(parent);
 
         let rhs = self.to.add_to_expr_tree(hlr, space);
-
-        hlr.data_flow.insert(
-            self.set.clone(),
-            DataFlowInfo {
-                typ: self.var_type.clone(),
-                arg_index: self.arg_index,
-            },
-        );
 
         hlr.tree.replace(
             space,

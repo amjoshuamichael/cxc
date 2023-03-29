@@ -1,11 +1,13 @@
 use inkwell::values::BasicMetadataValueEnum;
 
+use crate::parse::TypeSpec;
 use crate::to_llvm::add_sret_attribute_to_call_site;
 use crate::{
     to_llvm::add_sret_attribute_to_func, typ::ReturnStyle, FuncType, Kind, Type, TypeEnum,
     TypeRelation, UniqueFuncInfo, Unit, XcReflect,
 };
 
+use super::FuncDeclInfo;
 use super::functions::Func;
 
 pub struct ExternalFuncAdd {
@@ -157,10 +159,15 @@ impl Unit {
         self.comp_data.compiled.insert(
             func_info.clone(),
             Func::new_external(
-                func_info,
+                func_info.clone(),
                 func_type_inner.clone(),
                 function_ptr,
             ),
         );
+
+        self.comp_data.append_type_for_name(&FuncDeclInfo {
+            name: func_info.name.clone(),
+            relation: func_info.relation.map_inner_type(TypeSpec::from),
+        });
     }
 }

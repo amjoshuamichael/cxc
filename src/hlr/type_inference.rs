@@ -87,7 +87,7 @@ fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
 
     match inferable {
         Expr(id) => hlr.tree.get(*id).ret_type(),
-        Var(name) => hlr.data_flow.get(name).unwrap().typ.clone(),
+        Var(name) => hlr.variables.get(name).unwrap().typ.clone(),
         Relation(id) => {
             let HNodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
             relation.inner_type().unwrap()
@@ -111,7 +111,7 @@ fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
                 *typ = to
             }
         },
-        Var(name) => hlr.data_flow.get_mut(name).unwrap().typ = to,
+        Var(name) => hlr.variables.get_mut(name).unwrap().typ = to,
         Relation(id) => {
             let HNodeData::Call { ref mut relation, .. } = hlr.tree.get_mut(*id) else { panic!() };
             *relation.inner_type_mut().unwrap() = to

@@ -1,0 +1,9 @@
+&i8:.drop() {}
+&i16:.drop() {}
+&i32:.drop() {}
+&i64:.drop() {}
+&u8:.drop() {}
+&u16:.drop() {}
+&u32:.drop() {}
+&u64:.drop() {}
+&bool:.drop() {}

@@ -48,7 +48,7 @@ Rc<T> = {
 
     clone(); *Me {
         self.inner.inc_strong()
-        ; self
+        ; *self
     }
 }
 
@@ -58,7 +58,7 @@ Rc<T> = {
 
         ? self.inner.strong == 0 {
             # destroy the contained object
-            self.inner.drop()
+            self.inner.value.drop()
 
             # TODO: remove the implicit "strong weak" pointer now that we've
             # destroyed the contents.

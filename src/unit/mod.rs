@@ -6,7 +6,7 @@ pub use self::functions::{Func, FuncDowncasted};
 pub use self::value_api::XcValue;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
-use crate::hlr::hlr_data::DataFlow;
+use crate::hlr::hlr_data::Variables;
 use crate::hlr::hlr_data_output::FuncOutput;
 use crate::hlr::prelude::*;
 use crate::lex::*;
@@ -311,7 +311,7 @@ impl Unit {
     fn new_func_comp_state(
         &self,
         tree: ExprTree,
-        data_flow: DataFlow,
+        data_flow: Variables,
         function: FunctionValue<'static>,
         arg_names: Vec<VarName>,
     ) -> FunctionCompilationState {

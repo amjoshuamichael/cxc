@@ -33,7 +33,8 @@ impl Library for ToStringLib {
 
         unit.add_rust_func_explicit(
             "to_string",
-            String::clone as *const usize,
+            //String::clone as *const usize,
+            clone_string as *const usize,
             ExternalFuncAdd {
                 ret_type: string_type.clone(),
                 arg_types: vec![string_type.get_ref()],
@@ -44,6 +45,10 @@ impl Library for ToStringLib {
 
         unit.push_script(include_str!("to_string.cxc")).unwrap();
     }
+}
+
+fn clone_string(s: &String) -> String {
+    s.clone()
 }
 
 fn add_to_string<T: ToString + XcReflect>(unit: &mut Unit) {

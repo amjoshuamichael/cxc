@@ -55,3 +55,16 @@ Vec<T> = {
         ; Vec<T>:new()
     }
 }
+
+<T> &Vec<T>:. {
+    drop() {
+        index = i64 0
+
+        @ index < self.len {
+            self.get_ref(index).drop()
+            index = index + 1
+        }
+
+        free<T>(self.data_loc)
+    }
+}

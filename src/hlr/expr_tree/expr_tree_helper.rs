@@ -1,5 +1,5 @@
 use crate::errors::{CResultMany};
-use crate::hlr::hlr_data::{FuncRep, DataFlowInfo};
+use crate::hlr::hlr_data::{FuncRep, VariableInfo};
 use crate::{Type, UniqueFuncInfo, VarName};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen, MakeVarGen};
@@ -247,14 +247,10 @@ impl<'a> FuncRep<'a> {
     ) -> VarName {
         let new_name = self.uniqueify_varname(name);
 
-        self.identifiers.push(new_name.clone());
-
-        if add_as_arg {
-            self.data_flow.insert(new_name.clone(), DataFlowInfo {
-                typ,
-                arg_index: add_as_arg.then_some(self.arg_count() + 1),
-            });
-        }
+        self.variables.insert(new_name.clone(), VariableInfo {
+            typ,
+            arg_index: add_as_arg.then_some(self.arg_count() + 1),
+        });
 
         new_name
     }
@@ -264,7 +260,7 @@ impl<'a> FuncRep<'a> {
         let mut uniqueified = name.clone();
         let mut unique_id = 0;
 
-        while self.identifiers.contains(&uniqueified) {
+        while self.variables.contains_key(&uniqueified) {
             uniqueified = VarName::from(&*format!("{name}{unique_id}"));
             unique_id += 1;
         }

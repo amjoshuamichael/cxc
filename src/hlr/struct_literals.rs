@@ -9,11 +9,12 @@ pub fn struct_literals(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_rev(
         |structlit, struct_data, hlr| {
             let struct_type = struct_data.ret_type();
-            let (new_struct, make_new_struct) = 
-                hlr.add_variable("struct", &struct_type);
 
             let HNodeData::StructLit { fields: field_exprs, .. } = struct_data 
                 else { return Ok(()) };
+
+            let (new_struct, make_new_struct) = 
+                hlr.add_variable("struct", &struct_type);
 
             let mut current_statement = hlr
                 .insert_statement_before(

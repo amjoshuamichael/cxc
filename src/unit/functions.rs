@@ -361,8 +361,8 @@ impl CompData {
 
     pub fn get_by_name(&self, name: &TypeName) -> TResult<Type> {
         let alias = self.get_alias_for(name)?;
-        let realized_type = self.get_spec(alias, &vec![])?;
-        Ok(realized_type.with_name(name.clone()))
+        let realized_type = self.get_spec(alias, &())?;
+        Ok(realized_type.with_name(name.clone()).with_generics(&Vec::new()))
     }
 
     pub fn get_alias_for(&self, name: &TypeName) -> TResult<&TypeSpec> {

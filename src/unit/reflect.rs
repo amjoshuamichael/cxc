@@ -168,7 +168,8 @@ fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {
             comp_data
                 .get_spec(&decl.typ, &Vec::new())
                 .unwrap()
-                .with_name(decl.name),
+                .with_name(decl.name)
+                .with_generics(&Vec::new()),
         )
     } else {
         None

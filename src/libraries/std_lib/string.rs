@@ -44,6 +44,16 @@ impl Library for StringLib {
                 ..ExternalFuncAdd::empty()
             },
         );
+
+        unit.add_rust_func_explicit(
+            "drop",
+            drop_string as *const usize,
+            ExternalFuncAdd {
+                arg_types: vec![string_type.get_ref()],
+                relation: TypeRelation::MethodOf(string_type.get_ref()),
+                ..ExternalFuncAdd::empty()
+            },
+        );
     }
 }
 
@@ -53,3 +63,7 @@ fn string_from_bytes(buf: *mut u8, length: usize) -> String {
 }
 
 fn push_string(this: &mut String, other: &String) { *this += &**other; }
+
+fn drop_string(string: &mut String) {
+    unsafe { std::ptr::drop_in_place(string) }
+}

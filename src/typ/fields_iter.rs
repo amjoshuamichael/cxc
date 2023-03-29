@@ -131,6 +131,10 @@ impl Iterator for FieldsIter {
     }
 }
 
+impl Type {
+    pub fn fields_iter(&self) -> FieldsIter { FieldsIter::new(self.clone()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

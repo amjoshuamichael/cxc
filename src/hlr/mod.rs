@@ -9,6 +9,7 @@ pub mod hlr_data;
 pub mod hlr_data_output;
 mod large_returns;
 mod type_inference;
+mod add_drops;
 
 use crate::errors::CResultMany;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
@@ -31,6 +32,7 @@ use self::struct_literals::struct_literals;
 use self::variant_literals::variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::large_returns;
+use self::add_drops::add_drops;
 
 pub fn hlr(
     info: UniqueFuncInfo,
@@ -58,6 +60,7 @@ pub fn hlr(
     struct_literals(&mut output)?;
     large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
+    add_drops(&mut output);
 
     if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());

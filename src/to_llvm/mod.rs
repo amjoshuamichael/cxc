@@ -1,5 +1,5 @@
 use crate::hlr::expr_tree::{ExprID, HNodeData::*};
-use crate::hlr::hlr_data::DataFlow;
+use crate::hlr::hlr_data::Variables;
 use crate::hlr::prelude::*;
 use crate::lex::VarName;
 use crate::parse::Opcode::{self, *};
@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 pub struct FunctionCompilationState<'a> {
     pub tree: ExprTree,
-    pub data_flow: DataFlow,
+    pub data_flow: Variables,
     pub variables: HashMap<VarName, PointerValue<'static>>,
     pub used_functions: HashMap<UniqueFuncInfo, FunctionValue<'static>>,
     pub function: FunctionValue<'static>,
@@ -83,7 +83,7 @@ pub fn compile_routine(
 fn build_stack_allocas(
     variables: &mut HashMap<VarName, PointerValue<'static>>,
     tree: &ExprTree,
-    data_flow: &DataFlow,
+    data_flow: &Variables,
     builder: &mut Builder<'static>,
     context: &'static Context,
 ) {
@@ -188,6 +188,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             }
 
             let val = *fcs.variables.get(name).unwrap();
+
             let loaded = fcs.builder.build_load(
                 var_type.to_basic_type(fcs.context),
                 val,

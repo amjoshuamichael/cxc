@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, iter::once, sync::Arc};
+use std::{fmt::Debug, hash::Hash, iter::{once, empty}, sync::Arc};
 
 use crate::{
     unit::{CompData, FuncDeclInfo, Gen, UniqueFuncInfo},
@@ -54,40 +54,51 @@ impl Default for Expr {
     fn default() -> Self { Self::Block(Vec::new()) }
 }
 
-impl Expr {
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &Expr> + 'a> {
+impl<'a> IntoIterator for &'a Expr {
+    type Item = &'a Expr;
+
+    type IntoIter = Box<dyn Iterator<Item = &'a Expr> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
         use Expr::*;
 
-        match self {
+        let me = once(self);
+
+        let rest: Box<dyn Iterator<Item = &Expr>> = match self {
             Number(_)
             | Float(_)
             | Bool(_)
             | Strin(_)
             | Ident(_)
             | StaticMethodPath(..)
-            | Error { .. } => box once(self),
-            Struct(fields, _) => box fields.iter().map(|(_, expr)| expr),
-            Tuple(exprs, _) => box exprs.iter(),
-            Array(exprs, _) => box exprs.iter(),
-            Index(a, i) => box [&**a, &**i].into_iter(),
-            SetVar(_, rhs) => box once(&**rhs),
-            Set(lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
+            | Error { .. } => box empty(),
+            Struct(fields, _) 
+                => box fields.iter().map(|(_, expr)| expr).flatten(),
+            Tuple(exprs, _) => box exprs.iter().flatten(),
+            Array(exprs, _) => box exprs.iter().flatten(),
+            Index(a, i) => box [&**a, &**i].into_iter().flatten(),
+            SetVar(_, rhs) => box once(&**rhs).flatten(),
+            Set(lhs, rhs) => box [&**lhs, &**rhs].into_iter().flatten(),
             Call {
                 func: name, args, ..
             } => box once(&**name).chain(args.iter()),
-            UnarOp(_, hs) => box once(&**hs),
-            BinOp(_, lhs, rhs) => box [&**lhs, &**rhs].into_iter(),
-            Member(o, _) => box once(&**o),
-            IfThen(i, t) => box [&**i, &**t].into_iter(),
-            IfThenElse(i, t, e) => box [&**i, &**t, &**e].into_iter(),
-            ForWhile(f, w) => box [&**f, &**w].into_iter(),
-            Block(stmts) => box stmts.iter(),
-            Return(r) => box once(&**r),
-            Enclosed(expr) => box once(&**expr),
-            TypedValue(_, expr) => box once(&**expr),
-        }
-    }
+            UnarOp(_, hs) => box once(&**hs).flatten(),
+            BinOp(_, lhs, rhs) => box [&**lhs, &**rhs].into_iter().flatten(),
+            Member(o, _) => box o.into_iter(),
+            IfThen(i, t) => box [&**i, &**t].into_iter().flatten(),
+            IfThenElse(i, t, e) => box [&**i, &**t, &**e].into_iter().flatten(),
+            ForWhile(f, w) => box [&**f, &**w].into_iter().flatten(),
+            Block(stmts) => box stmts.iter().flatten(),
+            Return(r) => box once(&**r).flatten(),
+            Enclosed(expr) => box once(&**expr).flatten(),
+            TypedValue(_, expr) => box once(&**expr).flatten(),
+            _ => todo!(),
+        };
 
+        box me.chain(rest)
+    }
+}
+impl Expr {
     pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, box self.clone()) }
 
     pub fn wrap_in_block(self) -> Expr {

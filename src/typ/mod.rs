@@ -335,6 +335,10 @@ impl Type {
     pub fn is_known(&self) -> bool { !self.is_unknown() }
     pub fn is_void(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Void) }
     pub fn is_empty(&self) -> bool { self == &Type::empty() }
+
+    pub fn is_shallow(&self) -> bool {
+        !self.fields_iter().any(|field| matches!(field.as_type_enum(), TypeEnum::Ref(_)))
+    }
 }
 
 impl From<Type> for TypeSpec {
