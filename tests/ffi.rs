@@ -238,6 +238,187 @@ fn external_function() {
 }
 
 #[test]
+fn return_from_external_4byte() {
+    pub fn ext() -> i32 {
+        1
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::i(32),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); i32 { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), i32>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_8byte() {
+    pub fn ext() -> i64 {
+        (i32::MAX as i64) + 20938
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::i(64),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); i64 { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), i64>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_8byte_sep() {
+    pub fn ext() -> (i32, i32) {
+        (4325, 3948)
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::new_tuple(vec![Type::i(32), Type::i(32)]),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); {i32, i32} { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32)>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_12byte_2sep() {
+    pub fn ext() -> (i64, i32) {
+        ((i32::MAX as i64) + 98543, 43829)
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::new_tuple(vec![Type::i(64), Type::i(32)]),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); {i64, i32} { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i32)>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_12byte_3sep() {
+    pub fn ext() -> (i32, i32, i32) {
+        (4325, 3948, 43829)
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::new_tuple(vec![Type::i(32); 3]),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); {i32, i32, i32} { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32, i32)>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_16byte_4sep() {
+    pub fn ext() -> (i32, i32, i32, i32) {
+        (4325, 3948, 43829, 645089)
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::new_tuple(vec![Type::i(32); 4]),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); {i32, i32, i32, i32} { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32, i32, i32)>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_16byte_2sep() {
+    pub fn ext() -> (i64, i64) {
+        ((i32::MAX as i64) + 98543, (i32::MAX as i64) + 57458)
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::new_tuple(vec![Type::i(64); 2]),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); {i64, i64} { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i64)>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
+fn return_from_external_32byte() {
+    pub fn ext() -> (i64, i64, i64, i64) {
+        (
+            (i32::MAX as i64) + 98543, 
+            (i32::MAX as i64) + 57458, 
+            (i32::MAX as i64) + 23903, 
+            (i32::MAX as i64) + 10948,
+        )
+    }
+
+    let mut unit = Unit::new();
+
+    unit.add_rust_func_explicit(
+        "ext",
+        ext as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::new_tuple(vec![Type::i(64); 4]),
+            ..ExternalFuncAdd::empty()
+        }
+    );
+
+    unit.push_script("main(); {i64, i64, i64, i64} { ; ext() }");
+    let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i64, i64, i64)>();
+    assert_eq!(main(), ext());
+}
+
+#[test]
 fn strings() {
     xc_test!(
         use StdLib;

@@ -17,6 +17,7 @@ fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
+        | ReturnStyle::ThroughI32I32
         | ReturnStyle::ThroughI64I32
         | ReturnStyle::ThroughI64I64 => {},
         ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
@@ -157,6 +158,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 ReturnStyle::MoveIntoI64I64 => todo!(),
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
+                | ReturnStyle::ThroughI32I32
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64 => {
                     format_call_returning_struct(hlr, call_id);

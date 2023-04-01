@@ -15,14 +15,12 @@ use super::UniqueFuncInfo;
 
 pub type ExternFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 
-#[derive(Default, Debug)]
+use crate as cxc;
+
+#[derive(Default, Debug, XcReflect)]
 pub struct XcValue {
     typ: Type,
     data: Vec<u8>,
-}
-
-impl XcReflect for XcValue {
-    fn alias_code() -> String { "XcValue = { typ: Type, data: Vec<u8> }".to_string() }
 }
 
 // This MAX_BYTES static is used as an output for functions that return a value
@@ -150,7 +148,7 @@ impl Unit {
         let mut fcs = {
             let TypeEnum::Func(func_type) = func_rep.func_type.as_type_enum()
                 else { unreachable!() };
-            let ink_func_type = func_type.llvm_func_type(self.context);
+            let ink_func_type = func_type.llvm_func_type(self.context, false);
 
             let mut function = self.module.add_function(temp_name, ink_func_type, None);
             add_sret_attribute_to_func(&mut function, self.context, &func_type.ret);
@@ -187,7 +185,8 @@ impl Unit {
                     let out: [u8; 8] = new_func(()).to_ne_bytes();
                     XcValue::new_from_arr(ret_type.clone(), out)
                 },
-                ReturnStyle::ThroughI64I32
+                ReturnStyle::ThroughI32I32
+                | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64
                 | ReturnStyle::MoveIntoI64I64 => {
                     let new_func: ExternFunc<(), (i64, i64)> = transmute(func_addr);

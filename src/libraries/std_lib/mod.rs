@@ -32,6 +32,9 @@ use drop_lib::DropLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
+        // TODO: this is a hack
+        unit.push_script("str = u8").unwrap();
+
         unit.add_static_deriver("len".into(), derive_array_len);
 
         unit.push_script(include_str!("drop.cxc")).unwrap();
@@ -51,10 +54,11 @@ impl Library for StdLib {
         unit.add_lib(PrintLib);
         unit.add_lib(BitArrayLib);
         unit.add_lib(TypeHelperLib);
-        unit.add_lib(UnitLib);
 
         unit.add_lib(AtomicLib);
         unit.push_script(include_str!("arc.cxc")).unwrap();
+
+        unit.add_lib(UnitLib);
 
         unit.add_external_default::<bool>();
     }

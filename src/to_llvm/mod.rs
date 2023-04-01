@@ -41,6 +41,7 @@ impl<'a> FunctionCompilationState<'a> {
     }
 }
 
+// ONLY adds if nescessary
 pub fn add_sret_attribute_to_func(
     function: &mut FunctionValue<'static>,
     context: &'static Context,
@@ -53,16 +54,15 @@ pub fn add_sret_attribute_to_func(
     }
 }
 
+// Adds no matter what
 pub fn add_sret_attribute_to_call_site(
     callsite: &mut CallSiteValue<'static>,
     context: &'static Context,
     ret: &Type,
 ) {
-    if ret.return_style() == ReturnStyle::Sret {
-        let sret_id = Attribute::get_named_enum_kind_id("sret");
-        let sret_attribute = context.create_type_attribute(sret_id, ret.to_any_type(context));
-        callsite.add_attribute(AttributeLoc::Param(0), sret_attribute);
-    }
+    let sret_id = Attribute::get_named_enum_kind_id("sret");
+    let sret_attribute = context.create_type_attribute(sret_id, ret.to_any_type(context));
+    callsite.add_attribute(AttributeLoc::Param(0), sret_attribute);
 }
 
 pub fn compile_routine(
@@ -417,7 +417,9 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
                 let mut callsite = fcs.builder.build_direct_call(function, &arg_vals, "call");
 
-                add_sret_attribute_to_call_site(&mut callsite, fcs.context, &function_type.ret);
+                if function_type.ret.return_style() == ReturnStyle::Sret {
+                    add_sret_attribute_to_call_site(&mut callsite, fcs.context, &function_type.ret);
+                }
 
                 Some(match callsite.try_as_basic_value() {
                     Either::Left(basic) => basic.as_any_value_enum(),
@@ -442,7 +444,7 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
             let func_type = fcs.tree.get(*f).ret_type();
             let TypeEnum::Func(func_type) = func_type.as_type_enum() else { unreachable!() };
-            let llvm_func_type = func_type.llvm_func_type(&fcs.context);
+            let llvm_func_type = func_type.llvm_func_type(&fcs.context, false);
 
             let output = fcs
                 .builder

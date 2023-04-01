@@ -34,6 +34,8 @@ macro_rules! impl_externalize {
             type Output = R;
 
             extern "rust-call" fn call_once(self, args: ($($t,)*)) -> Self::Output {
+                // TODO: this gets set off if a function that returns a value doesn't have a 
+                // return statement. I'm not sure why, it's something to look into
                 let fn_ptr = self.inner.code().pointer().expect("function has not been initialized!");
                 unsafe { <($($t,)*)>::call(fn_ptr, args) }
             }

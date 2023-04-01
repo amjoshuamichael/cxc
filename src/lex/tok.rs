@@ -12,7 +12,9 @@ use crate::{XcReflect, xc_opaque};
 
 use crate as cxc;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, XcReflect)]
+#[repr(C)]
+#[xc_opaque]
 pub enum VarName {
     Other(Arc<str>),
     TupleIndex(u32),
@@ -235,7 +237,7 @@ pub enum Tok {
     #[regex(
         "[A-Z][A-Za-z0-9]+|\
         [A-Z]|\
-        u[0-9]*|i[0-9]*|usize|isize|f16|f32|f64|f128|bool",
+        u[0-9]*|i[0-9]*|usize|isize|f16|f32|f64|f128|bool|str",
         TypeName::from_tok,
         priority = 2
     )]

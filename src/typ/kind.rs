@@ -79,15 +79,17 @@ impl Kind for FuncType {
     }
 
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        self.llvm_func_type(context)
+        self.llvm_func_type(context, false)
             .ptr_type(AddressSpace::default())
             .as_any_type_enum()
     }
 }
 
 impl FuncType {
-    pub fn llvm_func_type<'f>(&self, context: &'static Context) -> FunctionType<'f> {
-        if self.ret.return_style() != ReturnStyle::Sret {
+    pub fn llvm_func_type<'f>(&self, context: &'static Context, as_rust: bool) -> FunctionType<'f> {
+        let return_style = if as_rust { self.ret.rust_return_style() } else { self.ret.return_style() };
+
+        if return_style != ReturnStyle::Sret {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
@@ -97,8 +99,9 @@ impl FuncType {
             if self.ret.is_void() {
                 context.void_type().fn_type(&args[..], false)
             } else {
-                let return_type = self.ret.raw_return_type().to_basic_type(context);
-                return_type.fn_type(&args, false)
+                let return_type = if as_rust { self.ret.rust_raw_return_type() } else { self.ret.raw_return_type() };
+
+                return_type.to_basic_type(context).fn_type(&args, false)
             }
         } else {
             let args: Vec<BasicMetadataTypeEnum> = once(&self.ret.clone().get_ref())

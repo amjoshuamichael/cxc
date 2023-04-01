@@ -146,8 +146,8 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(comp_data.get_fn_by_ptr(add_two))
-        functions.push(comp_data.get_fn_by_ptr(fifty_four))
+        functions.push(comp_data.get_fn_by_ptr(add_two).1)
+        functions.push(comp_data.get_fn_by_ptr(fifty_four).1)
         "#
     ).unwrap();
 

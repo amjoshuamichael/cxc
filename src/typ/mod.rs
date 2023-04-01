@@ -21,6 +21,7 @@ use cxc_derive::{XcReflect};
 use inkwell::types::FunctionType;
 use invalid_state::InvalidState;
 pub use kind::Kind;
+use crate::xc_opaque;
 
 use crate as cxc;
 
@@ -40,6 +41,7 @@ pub enum ReturnStyle {
     Direct,
     ThroughI32,
     ThroughI64,
+    ThroughI32I32,
     ThroughI64I32,
     ThroughI64I64,
     MoveIntoI64I64,
@@ -47,10 +49,42 @@ pub enum ReturnStyle {
     Void,
 }
 
+pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
+    match return_style {
+        ReturnStyle::ThroughI32 => Type::i(32),
+        ReturnStyle::ThroughI64 => Type::i(64),
+        ReturnStyle::ThroughI32I32 => Type::new_tuple(vec![Type::i(32); 2]),
+        ReturnStyle::ThroughI64I32 => 
+            Type::new_tuple(vec![Type::i(64), Type::i(32)]),
+        ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => 
+            Type::new_tuple(vec![Type::i(64), Type::i(64)]),
+        ReturnStyle::Sret | ReturnStyle::Void => Type::void(),
+        ReturnStyle::Direct => on.clone(),
+    }
+}
+
 impl Type {
     pub fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
     pub fn size(&self) -> usize { size::size_of_type(self.clone()) as usize }
+
+    pub fn rust_return_style(&self) -> ReturnStyle {
+        if self.is_void() {
+            return ReturnStyle::Void;
+        }
+
+        let size = self.size();
+        let fields = self.primitive_fields_iter().take(4).collect::<Vec<_>>();
+
+        if size > 4 && size <= 8 && fields.len() == 2 && 
+            fields[0].size() <= 4 && fields[1].size() <= 4 {
+            ReturnStyle::ThroughI32I32
+        } else if fields.len() >= 3 {
+            ReturnStyle::Sret
+        } else {
+            self.return_style()
+        }
+    }
 
     pub fn return_style(&self) -> ReturnStyle {
         use TypeEnum::*;
@@ -124,20 +158,11 @@ impl Type {
     }
 
     pub fn raw_return_type(&self) -> Type {
-        match self.return_style() {
-            ReturnStyle::ThroughI32 => Type::i(32),
-            ReturnStyle::ThroughI64 => Type::i(64),
-            ReturnStyle::ThroughI64I32 => Type::new_struct(vec![
-                (VarName::from("0"), Type::i(64)),
-                (VarName::from("1"), Type::i(32)),
-            ]),
-            ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => Type::new_struct(vec![
-                (VarName::from("0"), Type::i(64)),
-                (VarName::from("1"), Type::i(64)),
-            ]),
-            ReturnStyle::Sret | ReturnStyle::Void => Type::void(),
-            ReturnStyle::Direct => self.clone(),
-        }
+        realize_return_style(self.return_style(), self)
+    }
+
+    pub fn rust_raw_return_type(&self) -> Type {
+        realize_return_style(self.rust_return_style(), self)
     }
 
     pub fn id(&self) -> u64 {
@@ -346,6 +371,7 @@ impl From<Type> for TypeSpec {
 }
 
 #[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord, XcReflect)]
+#[xc_opaque]
 pub struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,

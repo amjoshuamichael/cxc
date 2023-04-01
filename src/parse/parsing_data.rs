@@ -2,7 +2,7 @@ use std::{fmt::Debug, hash::Hash, iter::{once, empty}, sync::Arc};
 
 use crate::{
     unit::{CompData, FuncDeclInfo, Gen, UniqueFuncInfo},
-    Type,
+    Type, XcReflect,
 };
 
 use super::*;
@@ -140,6 +140,12 @@ pub enum TypeRelationGeneric<T> {
 
 pub type TypeSpecRelation = TypeRelationGeneric<TypeSpec>;
 pub type TypeRelation = TypeRelationGeneric<Type>;
+
+impl XcReflect for TypeRelationGeneric<Type> {
+    fn alias_code() -> String {
+        "TypeRelation = { Static: { Type } / MethodOf: { Type } / Unrelated: {} }".into()
+    }
+}
 
 impl<T: Clone> TypeRelationGeneric<T> {
     pub fn map_inner_type<U>(self, closure: impl FnOnce(T) -> U) -> TypeRelationGeneric<U> {

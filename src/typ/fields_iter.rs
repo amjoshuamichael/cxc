@@ -133,6 +133,7 @@ impl Iterator for FieldsIter {
 
 impl Type {
     pub fn fields_iter(&self) -> FieldsIter { FieldsIter::new(self.clone()) }
+    pub fn primitive_fields_iter(&self) -> PrimitiveFieldsIter { PrimitiveFieldsIter::new(self.clone()) }
 }
 
 #[cfg(test)]

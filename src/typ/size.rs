@@ -28,7 +28,7 @@ pub(super) fn size_of_type(typ: Type) -> u64 {
         let opt_borrow = opt.borrow();
         if let Some((context, target_data)) = opt_borrow.as_ref() {
             target_data
-                .get_bit_size(&typ.to_basic_type(&context))
+                .get_bit_size(&typ.to_any_type(&context))
                 .div_ceil(8)
         } else {
             std::mem::drop(opt_borrow);
@@ -49,7 +49,7 @@ pub(super) fn size_of_type(typ: Type) -> u64 {
             let context = make_context();
 
             let size = target_data
-                .get_bit_size(&typ.to_basic_type(&context))
+                .get_bit_size(&typ.to_any_type(&context))
                 .div_ceil(8);
 
             *opt.borrow_mut() = Some((context, target_data));

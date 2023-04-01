@@ -557,7 +557,7 @@ fn fill_in_call(
             }
 
             infer_map.insert(
-                a[arg_index],
+                a[arg_index], // TODO: if this fails, func has too few / too many args
                 Constraint::RelatedTo {
                     spec: arg.type_spec.clone(),
                     gen_params: call_generic_inferables.clone(),

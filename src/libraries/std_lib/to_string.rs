@@ -17,19 +17,19 @@ impl Library for ToStringLib {
 
         let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
 
-        add_to_string::<i8>(unit);
-        add_to_string::<i16>(unit);
-        add_to_string::<i32>(unit);
-        add_to_string::<i64>(unit);
-        add_to_string::<i128>(unit);
-        add_to_string::<u8>(unit);
-        add_to_string::<u16>(unit);
-        add_to_string::<u32>(unit);
-        add_to_string::<u64>(unit);
-        add_to_string::<u128>(unit);
-        add_to_string::<f32>(unit);
-        add_to_string::<f64>(unit);
-        add_to_string::<bool>(unit);
+        unit.add_external_to_string::<i8>();
+        unit.add_external_to_string::<i16>();
+        unit.add_external_to_string::<i32>();
+        unit.add_external_to_string::<i64>();
+        unit.add_external_to_string::<i128>();
+        unit.add_external_to_string::<u8>();
+        unit.add_external_to_string::<u16>();
+        unit.add_external_to_string::<u32>();
+        unit.add_external_to_string::<u64>();
+        unit.add_external_to_string::<u128>();
+        unit.add_external_to_string::<f32>();
+        unit.add_external_to_string::<f64>();
+        unit.add_external_to_string::<bool>();
 
         unit.add_rust_func_explicit(
             "to_string",
@@ -49,21 +49,6 @@ impl Library for ToStringLib {
 
 fn clone_string(s: &String) -> String {
     s.clone()
-}
-
-fn add_to_string<T: ToString + XcReflect>(unit: &mut Unit) {
-    let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();
-    let typ = unit.get_reflect_type::<T>().unwrap();
-    unit.add_rust_func_explicit(
-        "to_string",
-        to_string::<T> as *const usize,
-        ExternalFuncAdd {
-            ret_type: string_type,
-            arg_types: vec![typ.get_ref()],
-            relation: TypeRelation::MethodOf(typ.get_ref()),
-            ..ExternalFuncAdd::empty()
-        },
-    );
 }
 
 pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {

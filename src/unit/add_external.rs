@@ -1,4 +1,5 @@
-use inkwell::values::BasicMetadataValueEnum;
+use inkwell::AddressSpace;
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, InstructionOpcode};
 
 use crate::parse::TypeSpec;
 use crate::to_llvm::add_sret_attribute_to_call_site;
@@ -79,16 +80,17 @@ impl Unit {
     }
 
     pub fn add_external_to_string<T: ToString + XcReflect>(&mut self) {
+        let string_type = self.comp_data.get_by_name(&"String".into()).unwrap();
         let typ = self.get_reflect_type::<T>().unwrap();
+
         self.add_rust_func_explicit(
             "to_string",
             T::to_string as *const usize,
             ExternalFuncAdd {
-                arg_types: vec![typ.get_ref()],
-                ret_type: typ.clone(),
-                relation: TypeRelation::MethodOf(typ.get_ref()),
+                ret_type: string_type,
                 ..ExternalFuncAdd::empty()
-            },
+            }
+            .method_of(typ.get_ref()),
         );
     }
 
@@ -106,9 +108,10 @@ impl Unit {
             func_type.as_type_enum() else { panic!() };
         let ret_type = func_type_inner.ret.clone();
 
-        let ink_func_ptr_type = func_type.to_any_type(self.context).into_pointer_type();
+        let calling_func_type = func_type_inner.llvm_func_type(self.context, true);
+        let calling_func_ptr_type = calling_func_type.ptr_type(AddressSpace::default());
 
-        let ink_func_type = func_type_inner.llvm_func_type(self.context);
+        let outer_func_type = func_type_inner.llvm_func_type(self.context, false);
 
         let func_info = UniqueFuncInfo {
             name: name.into(),
@@ -121,7 +124,7 @@ impl Unit {
 
         let mut function =
             self.module
-                .add_function(&func_info.to_string(), ink_func_type, None);
+                .add_function(&func_info.to_string(), outer_func_type, None);
 
         add_sret_attribute_to_func(&mut function, self.context, &ret_type);
 
@@ -136,22 +139,52 @@ impl Unit {
             .context
             .i64_type()
             .const_int(function_ptr as u64, false)
-            .const_to_pointer(ink_func_ptr_type);
+            .const_to_pointer(calling_func_ptr_type);
 
-        let arg_vals: Vec<BasicMetadataValueEnum> =
+        let mut arg_vals: Vec<BasicMetadataValueEnum> =
             function.get_params().iter().map(|p| (*p).into()).collect();
 
         if ret_type.return_style() == ReturnStyle::Sret {
             let mut out =
-                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &arg_vals, "call");
+                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
             add_sret_attribute_to_call_site(&mut out, self.context, &ret_type);
             builder.build_return(None);
+        } else if ret_type.rust_return_style() == ReturnStyle::Sret {
+            let i64i64 = Type::new_tuple(vec![Type::i(64); 2]).to_basic_type(self.context);
+
+            let call_out = builder.build_alloca(i64i64, "call_out");
+
+            arg_vals.insert(0, call_out.as_basic_value_enum().into());
+
+            let mut call = 
+                builder.build_indirect_call(
+                    calling_func_type, 
+                    llvm_func_ptr, 
+                    &arg_vals, 
+                    "call"
+                );
+            add_sret_attribute_to_call_site(&mut call, self.context, &ret_type);
+
+            builder.build_return(Some(&builder.build_load(i64i64, call_out, "load")));
         } else if ret_type.is_void() {
-            builder.build_indirect_call(ink_func_type, llvm_func_ptr, &arg_vals, "call");
+            builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
             builder.build_return(None);
+        } else if ret_type.return_style() != ret_type.rust_return_style() {
+            let xc_ret = ret_type.raw_return_type().to_basic_type(self.context);
+            let rust_ret = ret_type.rust_raw_return_type().to_basic_type(self.context);
+
+            let out_var = builder.build_alloca(rust_ret, "out_var");
+
+            let out =
+                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call").try_as_basic_value().unwrap_left();
+            builder.build_store(out_var, out);
+
+            let casted = builder.build_load(xc_ret, out_var, "load");
+
+            builder.build_return(Some(&casted));
         } else {
             let out =
-                builder.build_indirect_call(ink_func_type, llvm_func_ptr, &arg_vals, "call");
+                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
             let out = out.try_as_basic_value().unwrap_left();
             builder.build_return(Some(&out));
         }

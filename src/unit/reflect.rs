@@ -1,4 +1,5 @@
 use std::{rc::Rc, sync::Arc};
+use crate::errors::TResult;
 
 use crate::{
     lex::lex,
@@ -17,7 +18,7 @@ pub trait XcReflect {
 
         if is_named {
             parse::file(&mut lexer)
-                .expect("error in type decl")
+                .expect(&*format!("error in type decl {alias_code}"))
                 .types.iter()
                 .next()
                 .expect("error in type decl")
@@ -127,6 +128,12 @@ impl Unit {
         self.add_type_with_decl::<T>(decl)
     }
 
+    pub fn add_many_reflect_types(&mut self, type_decls: &[TypeDecl]) {
+        for decl in type_decls {
+            self.comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
+        }
+    }
+
     pub fn add_type_with_decl<T>(&mut self, decl: TypeDecl) -> Option<Type> {
         self.comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
 
@@ -134,33 +141,55 @@ impl Unit {
 
         #[cfg(feature = "ffi-assertions")]
         {
-            fn do_size_assertion<T>(with: &Type, ex_err: &str) {
-                assert_eq!(
-                    std::mem::size_of::<T>(),
-                    with.size(),
-                    "Improper reflection. {:?} in cxc has size {},
-                        and {} in rust has size {}. {}",
-                    with,
-                    with.size(),
-                    std::any::type_name::<T>(),
-                    std::mem::size_of::<T>(),
-                    ex_err
-                );
-            }
-
-            do_size_assertion::<T>(&typ, "");
+            Self::do_size_assertion::<T>(&typ, "");
 
             if let Ok(xc_opt) = self
                 .comp_data
                 .get_spec(&"Option<T>".into(), &vec![typ.clone()])
             {
-                do_size_assertion::<Option<T>>(&xc_opt, "This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.");
-            }
+                Self::do_size_assertion::<Option<T>>(&xc_opt, "This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.");
+            }        
         }
 
         Some(typ)
     }
+
+    #[cfg(feature = "ffi-assertions")]
+    fn do_size_assertion<T>(with: &Type, ex_err: &str) {
+        assert_eq!(
+            std::mem::size_of::<T>(),
+            with.size(),
+            "Improper reflection. {:?} in cxc has size {},
+                and {} in rust has size {}. {}",
+            with,
+            with.size(),
+            std::any::type_name::<T>(),
+            std::mem::size_of::<T>(),
+            ex_err
+        );
+    }
+
+    #[cfg(feature = "ffi-assertions")]
+    pub fn assert_size_of<T>(&self) -> TResult<()> {
+        let name = std::any::type_name::<T>();
+        let last_colon = name.rfind(":").unwrap_or(0);
+
+        self.assert_size_of_with_name::<T>(&name[(last_colon + 1)..])
+    }
+
+    #[cfg(feature = "ffi-assertions")]
+    pub fn assert_size_of_with_name<T>(&self, name: &str) -> TResult<()> {
+        Self::do_size_assertion::<T>(
+            &self.comp_data.get_by_name(&name.into())?, 
+            ""
+        );
+
+        Ok(())
+
+    }
 }
+
+
 
 fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {
     if !decl.contains_generics {

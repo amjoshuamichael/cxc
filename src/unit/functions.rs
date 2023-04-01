@@ -272,7 +272,7 @@ impl CompData {
         let function_type = self.get_func_type(info)?;
 
         let mut empty_function =
-            module.add_function(&info.to_string(), function_type.llvm_func_type(context), None);
+            module.add_function(&info.to_string(), function_type.llvm_func_type(context, false), None);
 
         add_sret_attribute_to_func(&mut empty_function, context, &function_type.ret);
 
@@ -369,8 +369,9 @@ impl CompData {
         self.aliases.get(name).ok_or(TErr::Unknown(name.clone()))
     }
 
-    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Func {
-        self.compiled.values().find(|func| func.get_pointer() == ptr).unwrap().clone()
+    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> (UniqueFuncInfo, Func) {
+        let (info, func) = self.compiled.iter().find(|(_, func)| func.get_pointer() == ptr).unwrap();
+        (info.clone(), func.clone())
     }
 }
 
@@ -388,7 +389,8 @@ pub struct FuncDeclInfo {
     pub relation: TypeSpecRelation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
+#[repr(C)] // TODO: this shouldn't have to be here
 pub struct UniqueFuncInfo {
     pub name: VarName,
     pub relation: TypeRelation,
@@ -575,6 +577,7 @@ impl FuncCodeInfo {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
+#[xc_opaque] // TODO: NonZeroU32 in cxc
 pub enum Gen {
     #[default]
     Latest,
