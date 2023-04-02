@@ -208,7 +208,10 @@ impl<'a> FuncRep<'a> {
                         .comp_data
                         .globals
                         .get(&name.clone())
-                        .unwrap_or_else(|| panic!("could not find identifier {name}"))
+                        .unwrap_or_else(|| {
+                            dbg!(&self.variables); 
+                            panic!("could not find identifier {name}") // TODO: throw error
+                        })
                         .0
                         .clone(),
                 };

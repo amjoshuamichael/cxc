@@ -28,6 +28,7 @@ use inkwell::values::*;
 use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
 pub use reflect::XcReflect;
+use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -60,6 +61,7 @@ pub struct Unit {
 pub struct CompData {
     aliases: BTreeMap<TypeName, TypeSpec>,
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
+    reflected_types: BTreeMap<TypeId, Type>,
     pub(crate) globals: BTreeMap<VarName, (Type, PointerValue<'static>)>,
     compiled: BTreeMap<UniqueFuncInfo, Func>,
     pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
@@ -377,7 +379,7 @@ impl Unit {
         self.comp_data.type_level_funcs.insert(func_name, func);
     }
 
-    pub fn add_global<T: XcReflect>(&mut self, name: VarName, val: *mut T) {
+    pub fn add_global<T: XcReflect + 'static>(&mut self, name: VarName, val: *mut T) {
         let as_int = val as usize;
 
         let typ = self.get_reflect_type::<T>().unwrap();

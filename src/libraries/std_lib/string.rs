@@ -64,6 +64,4 @@ fn string_from_bytes(buf: *mut u8, length: usize) -> String {
 
 fn push_string(this: &mut String, other: &String) { *this += &**other; }
 
-fn drop_string(string: &mut String) {
-    unsafe { std::ptr::drop_in_place(string) }
-}
+fn drop_string(string: &mut String) { unsafe { std::ptr::drop_in_place(string) } }

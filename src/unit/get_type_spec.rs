@@ -113,7 +113,9 @@ impl CompData {
                 if let Some(member) = member {
                     member
                 } else {
-                    panic!();
+                    let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() 
+                        else { panic!() };
+                    return Err(TErr::FieldNotFound(struct_type.clone(), field_name.clone()));
                 }
             },
             TypeSpec::SumMember(sum_type, type_name) => {

@@ -7,19 +7,27 @@ Vec<T> = {
 <T> &Vec<T>:. {
     push(val: T) {
         ? self.len == 0 {
-            # rust doesn't initialize vecs with a pointer, so if the vec has len 0, 
-            # we should do that.
-            self.write(Vec<T>:new())
+            self.write(Vec<T> {
+                len = i64 0,
+                capacity = i64 4,
+                data_loc = alloc<T>(4)
+            })
         }
 
         ? self.len >= self.capacity {
-
             # reallocate memory
             self.capacity = self.capacity * i64 2
 
             new_ptr: &T = alloc<T>(self.capacity)
             memmove<T>(self.data_loc, new_ptr, self.len * size_of<T>())
-            free<T>(self.data_loc)
+
+            free_index = i64 0
+            @ free_index < self.capacity {
+                free<T>(self.data_loc + free_index)
+
+                free_index = free_index + 1
+            }
+
             self.data_loc = new_ptr
         }
 
@@ -45,7 +53,7 @@ Vec<T> = {
         new_vec: Vec<T> = Vec<T> {
             len = i64 0,
             capacity = i64 4,
-            data_loc = alloc<T>(new_vec.capacity)
+            data_loc = cast<i64, &T>(i64 0),
         }
 
         ; new_vec
@@ -60,11 +68,11 @@ Vec<T> = {
     drop() {
         index = i64 0
 
-        @ index < self.len {
+        @ index < self.capacity {
             self.get_ref(index).drop()
+            free<T>(self.data_loc + index)
+
             index = index + 1
         }
-
-        free<T>(self.data_loc)
     }
 }

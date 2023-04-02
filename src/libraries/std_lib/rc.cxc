@@ -57,8 +57,10 @@ Rc<T> = {
         self.inner.dec_strong()
 
         ? self.inner.strong == 0 {
+            print("AAAAAAAAAAAAAAA")
             # destroy the contained object
             self.inner.value.drop()
+            self.inner.drop()
 
             # TODO: remove the implicit "strong weak" pointer now that we've
             # destroyed the contents.

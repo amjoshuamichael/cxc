@@ -1,4 +1,4 @@
-use std::{rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc, any::TypeId};
 use crate::errors::TResult;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
     CompData, Type, TypeName, Unit, VarName,
 };
 
-pub trait XcReflect {
+pub trait XcReflect: 'static {
     fn alias_code() -> String;
 
     fn type_decl() -> TypeDecl {
@@ -112,7 +112,11 @@ impl_reflect_generic!(Rc);
 impl_reflect_generic!(Arc);
 
 impl Unit {
-    pub fn get_reflect_type<T: XcReflect>(&self) -> Option<Type> {
+    pub fn get_reflect_type<T: XcReflect + 'static>(&self) -> Option<Type> {
+        if let Some(typ) = self.comp_data.reflected_types.get(&TypeId::of::<T>()) {
+            return Some(typ.clone());
+        }
+
         let decl = T::type_decl();
 
         if decl.name == "Reflected".into() {
@@ -120,6 +124,7 @@ impl Unit {
         } else {
             type_from_decl(&self.comp_data, decl)
         }
+
     }
 
     pub fn add_reflect_type<T: XcReflect>(&mut self) -> Option<Type> {
@@ -134,7 +139,7 @@ impl Unit {
         }
     }
 
-    pub fn add_type_with_decl<T>(&mut self, decl: TypeDecl) -> Option<Type> {
+    pub fn add_type_with_decl<T: XcReflect>(&mut self, decl: TypeDecl) -> Option<Type> {
         self.comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
 
         let typ = type_from_decl(&self.comp_data, decl)?;
@@ -150,6 +155,8 @@ impl Unit {
                 Self::do_size_assertion::<Option<T>>(&xc_opt, "This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.");
             }        
         }
+
+        self.comp_data.reflected_types.insert(std::any::TypeId::of::<T>(), typ.clone());
 
         Some(typ)
     }
@@ -170,7 +177,7 @@ impl Unit {
     }
 
     #[cfg(feature = "ffi-assertions")]
-    pub fn assert_size_of<T>(&self) -> TResult<()> {
+    pub fn assert_size_of<T: 'static>(&self) -> TResult<()> {
         let name = std::any::type_name::<T>();
         let last_colon = name.rfind(":").unwrap_or(0);
 
@@ -178,7 +185,7 @@ impl Unit {
     }
 
     #[cfg(feature = "ffi-assertions")]
-    pub fn assert_size_of_with_name<T>(&self, name: &str) -> TResult<()> {
+    pub fn assert_size_of_with_name<T: 'static>(&self, name: &str) -> TResult<()> {
         Self::do_size_assertion::<T>(
             &self.comp_data.get_by_name(&name.into())?, 
             ""

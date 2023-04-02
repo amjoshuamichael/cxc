@@ -637,9 +637,11 @@ fn internal_function(
             )
         },
         "free" => {
-            let ptr = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let ptr: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
+            let free_type = info.generics[0].get_ref().to_basic_type(fcs.context);
+            let casted_ptr = ptr.const_cast(free_type.try_into().unwrap());
 
-            fcs.builder.build_free(ptr);
+            fcs.builder.build_free(casted_ptr);
 
             None
         },
