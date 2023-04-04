@@ -1,0 +1,3 @@
+&String:.drop() {
+    self.0.drop()
+}

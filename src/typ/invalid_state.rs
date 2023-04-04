@@ -82,7 +82,7 @@ impl InvalidState for ArrayType {
 
 impl InvalidState for StructType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
-        if self.repr == Repr::C {
+        if self.repr == Repr::Transparent {
             return None;
         }
 

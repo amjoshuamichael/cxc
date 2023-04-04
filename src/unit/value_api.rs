@@ -186,11 +186,17 @@ impl Unit {
                     XcValue::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::ThroughI32I32
+                | ReturnStyle::ThroughF32F32
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64
                 | ReturnStyle::MoveIntoI64I64 => {
                     let new_func: ExternFunc<(), (i64, i64)> = transmute(func_addr);
                     let out: [u8; 16] = transmute(new_func(()));
+                    XcValue::new_from_arr(ret_type.clone(), out)
+                },
+                ReturnStyle::MoveIntoDouble => {
+                    let new_func: ExternFunc<(), f64> = transmute(func_addr);
+                    let out: [u8; 8] = transmute(new_func(()));
                     XcValue::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::Sret => {

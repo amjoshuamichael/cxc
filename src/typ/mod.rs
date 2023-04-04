@@ -41,7 +41,9 @@ pub enum ReturnStyle {
     Direct,
     ThroughI32,
     ThroughI64,
+    MoveIntoDouble,
     ThroughI32I32,
+    ThroughF32F32,
     ThroughI64I32,
     ThroughI64I64,
     MoveIntoI64I64,
@@ -53,7 +55,9 @@ pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
     match return_style {
         ReturnStyle::ThroughI32 => Type::i(32),
         ReturnStyle::ThroughI64 => Type::i(64),
+        ReturnStyle::MoveIntoDouble => Type::f(64),
         ReturnStyle::ThroughI32I32 => Type::new_tuple(vec![Type::i(32); 2]),
+        ReturnStyle::ThroughF32F32 => Type::new_tuple(vec![Type::f(32); 2]),
         ReturnStyle::ThroughI64I32 => 
             Type::new_tuple(vec![Type::i(64), Type::i(32)]),
         ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => 
@@ -76,9 +80,13 @@ impl Type {
         let size = self.size();
         let fields = self.primitive_fields_iter().take(4).collect::<Vec<_>>();
 
-        if size > 4 && size <= 8 && fields.len() == 2 && 
+        if fields.len() == 2 && size > 4 && size <= 8 &&
             fields[0].size() <= 4 && fields[1].size() <= 4 {
-            ReturnStyle::ThroughI32I32
+            if fields[0] == Type::f(32) && fields[1] == Type::f(32) {
+                ReturnStyle::ThroughF32F32
+            } else {
+                ReturnStyle::ThroughI32I32
+            }
         } else if fields.len() >= 3 {
             ReturnStyle::Sret
         } else {
@@ -359,7 +367,15 @@ impl Type {
     pub fn is_unknown(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Unknown) }
     pub fn is_known(&self) -> bool { !self.is_unknown() }
     pub fn is_void(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Void) }
+    pub fn is_float(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Float { .. }) }
     pub fn is_empty(&self) -> bool { self == &Type::empty() }
+
+    pub fn repr(&self) -> Repr {
+        match self.as_type_enum() {
+            TypeEnum::Struct(StructType { repr, .. }) => *repr,
+            _ => Repr::Rust,
+        }
+    }
 
     pub fn is_shallow(&self) -> bool {
         !self.fields_iter().any(|field| matches!(field.as_type_enum(), TypeEnum::Ref(_)))
@@ -472,11 +488,12 @@ pub struct FuncType {
     pub args: Vec<Type>,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Default, PartialOrd, Ord, Debug, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Default, PartialOrd, Ord, Debug, XcReflect)]
 pub enum Repr {
     #[default]
     Rust,
     C,
+    Transparent,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]

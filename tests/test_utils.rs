@@ -57,7 +57,7 @@ impl Point2D {
 }
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TwoOf<T> {
+pub struct TwoOf<T: 'static> {
     pub one: T,
     pub two: T,
 }

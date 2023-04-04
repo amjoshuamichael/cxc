@@ -18,7 +18,6 @@ indexmap = "1.9.2"
 passable = { git = "https://github.com/amjoshuamichael/passable" }
 lazy_static = "1.4.0"
 rand = "0.8.5"
-subenum = "1.0.1"
 
 cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive", optional = true }
 

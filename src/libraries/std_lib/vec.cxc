@@ -20,13 +20,7 @@ Vec<T> = {
 
             new_ptr: &T = alloc<T>(self.capacity)
             memmove<T>(self.data_loc, new_ptr, self.len * size_of<T>())
-
-            free_index = i64 0
-            @ free_index < self.capacity {
-                free<T>(self.data_loc + free_index)
-
-                free_index = free_index + 1
-            }
+            free<T>(self.data_loc)
 
             self.data_loc = new_ptr
         }
@@ -48,6 +42,15 @@ Vec<T> = {
     }
 }
 
+<T> Vec<T>:. {
+    cast_as_bytes(); Vec<u8> {
+        self.len = self.len * size_of<T>()
+        self.cap = self.cap * size_of<T>()
+
+        cast(self)
+    }
+}
+
 <T> Vec<T>:: {
     new(); Vec<T> {
         new_vec: Vec<T> = Vec<T> {
@@ -66,13 +69,6 @@ Vec<T> = {
 
 <T> &Vec<T>:. {
     drop() {
-        index = i64 0
-
-        @ index < self.capacity {
-            self.get_ref(index).drop()
-            free<T>(self.data_loc + index)
-
-            index = index + 1
-        }
+        free<T>(self.data_loc)
     }
 }

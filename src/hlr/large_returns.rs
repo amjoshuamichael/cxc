@@ -17,13 +17,44 @@ fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
+        | ReturnStyle::ThroughF32F32
         | ReturnStyle::ThroughI32I32
         | ReturnStyle::ThroughI64I32
         | ReturnStyle::ThroughI64I64 => {},
+        ReturnStyle::MoveIntoDouble => return_by_move_into_double(hlr),
         ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
         ReturnStyle::Sret => return_by_pointer(hlr),
         ReturnStyle::Void | ReturnStyle::Direct => {},
     }
+}
+
+fn return_by_move_into_double(hlr: &mut FuncRep) {
+    let f64_ = Type::f(64);
+    let (casted_ret, make_casted_ret) = hlr.add_variable("casted_ret", &f64_);
+
+    hlr.modify_many_infallible(
+        move |return_id, data, hlr| {
+            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = 
+                data else { return };
+
+            hlr.insert_statement_before(return_id, MakeVarGen {
+                to: box CallGen {
+                    info: UniqueFuncInfo {
+                        name: VarName::from("cast"),
+                        generics: vec![hlr.tree.get(*to_return).ret_type(), f64_.clone()],
+                        ..Default::default()
+                    },
+                    args: vec![box hlr.tree.get(*to_return)],
+                },
+                ..MakeVarGen::default()
+            });
+
+            *data = HNodeData::Ident {
+                name: casted_ret.clone(),
+                var_type: f64_.clone(),
+            };
+        }
+    );
 }
 
 fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
@@ -156,9 +187,11 @@ fn handle_other_calls(hlr: &mut FuncRep) {
             match data.ret_type().return_style() {
                 ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::MoveIntoI64I64 => todo!(),
+                ReturnStyle::MoveIntoDouble => {},
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
                 | ReturnStyle::ThroughI32I32
+                | ReturnStyle::ThroughF32F32
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64 => {
                     format_call_returning_struct(hlr, call_id);

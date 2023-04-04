@@ -92,7 +92,6 @@ impl<'a> IntoIterator for &'a Expr {
             Return(r) => box once(&**r).flatten(),
             Enclosed(expr) => box once(&**expr).flatten(),
             TypedValue(_, expr) => box once(&**expr).flatten(),
-            _ => todo!(),
         };
 
         box me.chain(rest)

@@ -1,6 +1,6 @@
 use crate::XcReflect;
 use crate::{library::Library, ExternalFuncAdd, Type, TypeRelation};
-use glam::{Mat2, Mat3, Mat4, Vec2, Vec3, Vec4};
+use glam::{Mat3, Mat4, Vec2, Vec3, Vec4};
 
 pub struct GlamLib;
 
@@ -63,10 +63,10 @@ impl XcReflect for Vec3 {
 
 impl XcReflect for Vec2 {
     fn alias_code() -> String {
-        "Vec2 = {
+        "Vec2 = C({
             x: f32,
             y: f32
-        }"
+        })"
         .into()
     }
 }

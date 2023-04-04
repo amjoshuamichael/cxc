@@ -5,7 +5,7 @@ use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDe
 use crate::typ::{ArrayType, StructType};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
-use crate::{ExternalFuncAdd, TypeEnum, Unit, XcReflect};
+use crate::{ExternalFuncAdd, TypeEnum, Unit};
 
 use crate::libraries::Library;
 
@@ -214,5 +214,3 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
     })
 }
-
-fn to_string<T: ToString>(val: &T) -> String { val.to_string() }

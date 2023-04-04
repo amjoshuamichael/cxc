@@ -1,5 +1,5 @@
 use inkwell::AddressSpace;
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, InstructionOpcode};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue};
 
 use crate::parse::TypeSpec;
 use crate::to_llvm::add_sret_attribute_to_call_site;

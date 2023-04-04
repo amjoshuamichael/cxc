@@ -2,7 +2,6 @@ use crate::lex::{indent_parens, TypeName, VarName};
 use crate::parse::*;
 use crate::Type;
 use std::fmt::{Debug, Formatter};
-use subenum::subenum;
 
 mod expr_tree_helper;
 mod quick;

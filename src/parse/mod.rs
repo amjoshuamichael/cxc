@@ -52,11 +52,11 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
     loop {
         match lexer.peek_tok()? {
             Tok::VarName(_) => {
-                script.funcs.push(parse_func(
+                script.funcs.push(lexer.recover(|lexer| parse_func(
                     lexer,
                     TypeSpecRelation::Unrelated,
                     GenericLabels::new(),
-                )?);
+                ))?);
             },
             Tok::TripleMinus => {
                 lexer.assert_next_tok_is(Tok::TripleMinus)?;
@@ -195,11 +195,20 @@ pub fn parse_func_code(
     let mut args =
         parse_list((Tok::LParen, Tok::RParen), Some(Tok::Comma), parse_var_decl, &mut lexer)?;
 
-    let ret_type = if lexer.peek_tok()? == Tok::Semicolon {
-        lexer.next_tok()?;
-        parse_type_spec(&mut lexer)?
-    } else {
-        TypeSpec::Void
+    let ret_type = match lexer.peek_tok()? {
+        Tok::Semicolon => {
+            lexer.next_tok()?;
+            parse_type_spec(&mut lexer)?
+        },
+        Tok::LCurly => {
+            TypeSpec::Void
+        }
+        got => {
+            Err(ParseError::UnexpectedTok {
+                got,
+                expected: vec![TokName::Semicolon, TokName::LCurly],
+            })?
+        }
     };
 
     let code = parse_block(&mut lexer)?;

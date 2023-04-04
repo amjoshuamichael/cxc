@@ -209,7 +209,7 @@ impl<'a> FuncRep<'a> {
                         .globals
                         .get(&name.clone())
                         .unwrap_or_else(|| {
-                            dbg!(&self.variables); 
+                            println!("variables: {:?}", &self.variables); 
                             panic!("could not find identifier {name}") // TODO: throw error
                         })
                         .0
