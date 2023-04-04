@@ -20,6 +20,7 @@ mod to_string;
 mod type_helpers;
 mod unit_lib;
 mod drop_lib;
+mod value_lib;
 use atomic_lib::AtomicLib;
 use bit_array::BitArrayLib;
 use default::DefaultLib;
@@ -28,6 +29,7 @@ use string::StringLib;
 use to_string::ToStringLib;
 use type_helpers::TypeHelperLib;
 use unit_lib::UnitLib;
+use value_lib::ValueLib;
 use drop_lib::DropLib;
 
 impl Library for StdLib {
@@ -59,6 +61,7 @@ impl Library for StdLib {
         unit.push_script(include_str!("arc.cxc")).unwrap();
 
         unit.add_lib(UnitLib);
+        unit.add_lib(ValueLib);
 
         unit.add_external_default::<bool>();
     }

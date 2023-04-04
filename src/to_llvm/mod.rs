@@ -12,7 +12,7 @@ use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-use inkwell::types::*;
+use inkwell::{types::*, AddressSpace};
 use inkwell::values::*;
 use inkwell::FloatPredicate;
 use inkwell::IntPredicate;
@@ -696,6 +696,22 @@ fn internal_function(
 
             Some(casted_loaded.as_any_value_enum())
         },
+        "typeobj" => {
+            let typ = info.generics()[0].clone();
+            let typusize: u64 = unsafe { std::mem::transmute(typ) };
+
+            Some(
+                fcs.context
+                     .i64_type()
+                     .const_int(typusize, false)
+                     .const_to_pointer(
+                         fcs.context
+                             .i64_type()
+                             .ptr_type(AddressSpace::default())
+                     )
+                     .as_any_value_enum()
+            )
+        }
         _ => return None,
     };
 

@@ -26,7 +26,7 @@ pub use typ::{
     TypeData, TypeEnum,
 };
 pub use unit::{
-    CompData, ExternalFuncAdd, Func, FuncDowncasted, UniqueFuncInfo, Unit, XcReflect, XcValue,
+    CompData, ExternalFuncAdd, Func, FuncDowncasted, UniqueFuncInfo, Unit, XcReflect, Value,
 };
 
 pub mod library {

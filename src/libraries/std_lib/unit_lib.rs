@@ -1,4 +1,4 @@
-use crate::{CompData, libraries::Library, ExternalFuncAdd, Func, unit::{FuncCodeInfo, Gen}, FuncType, Type, XcValue, XcReflect, IntType, FloatType, StructType, typ::{SumType, VariantType}, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
+use crate::{CompData, libraries::Library, ExternalFuncAdd, Func, unit::{FuncCodeInfo, Gen}, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, typ::{SumType, VariantType}, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
 
 pub struct UnitLib;
 
@@ -23,7 +23,7 @@ impl Library for UnitLib {
                 FuncCodeInfo::type_decl(),
                 UniqueFuncInfo::type_decl(),
                 TypeRelation::type_decl(),
-                XcValue::type_decl(),
+                Value::type_decl(),
                 Func::type_decl(),
                 Gen::type_decl(),
                 VarName::type_decl(),

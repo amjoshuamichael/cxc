@@ -18,7 +18,7 @@ pub type ExternFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
 use crate as cxc;
 
 #[derive(Default, Debug, XcReflect)]
-pub struct XcValue {
+pub struct Value {
     typ: Type,
     data: Vec<u8>,
 }
@@ -28,7 +28,7 @@ pub struct XcValue {
 // passed as an argument, but on ARM machines, this pointer has its own special
 // register, so we need rust to put the pointer into this register. This could
 // be done through inline assmebly, but it's difficult to target arm assembly on
-// rust. Therefore, we use this static as a workaround.
+// rust. Therefore, we use this static as a workaround, passing a pointer to it.
 const MAX_VALUE_SIZE: usize = 4096;
 type MaxBytes = [u8; MAX_VALUE_SIZE];
 
@@ -36,7 +36,7 @@ lazy_static::lazy_static! {
     static ref MAX_BYTES: Mutex<MaxBytes> = Mutex::new([0; MAX_VALUE_SIZE]);
 }
 
-impl XcValue {
+impl Value {
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
         let size = typ.size();
         let data = data[0..size].to_vec();
@@ -96,17 +96,13 @@ impl XcValue {
     /// # Safety
     ///
     /// Ensure the generic type 'T' is the same as the type of the value.
-    pub unsafe fn consume<T>(mut self) -> T {
-        let capacity = self.data.capacity();
+    pub unsafe fn consume<T: std::fmt::Debug>(mut self) -> Box<T> {
         let data_ptr = self.data.as_mut_ptr();
-        let mut casted_vec =
-            Vec::from_raw_parts(data_ptr as *mut T, std::mem::size_of::<T>(), capacity);
-        let mut drained_vec = casted_vec.drain(..);
 
-        // self needs to stay around until the end of the function
-        std::mem::forget(self);
+        // Prevent data from being dropped
+        let _: (u64, u64, u64) = std::mem::transmute(self.data);
 
-        drained_vec.next().unwrap()
+        Box::from_raw(data_ptr as *mut T)
     }
 
     pub fn const_ptr(&self) -> *const usize { &*self.data as *const [u8] as *const usize }
@@ -117,9 +113,9 @@ impl XcValue {
 }
 
 impl Unit {
-    pub fn get_value(&mut self, of: &str) -> CResultMany<XcValue> {
+    pub fn get_value(&mut self, of: &str) -> CResultMany<Value> {
         if of.is_empty() {
-            return Ok(XcValue::default());
+            return Ok(Value::default());
         }
 
         let temp_name = "Newfunc";
@@ -183,7 +179,7 @@ impl Unit {
                 ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
                     let new_func: ExternFunc<(), i64> = transmute(func_addr);
                     let out: [u8; 8] = new_func(()).to_ne_bytes();
-                    XcValue::new_from_arr(ret_type.clone(), out)
+                    Value::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::ThroughI32I32
                 | ReturnStyle::ThroughF32F32
@@ -192,12 +188,12 @@ impl Unit {
                 | ReturnStyle::MoveIntoI64I64 => {
                     let new_func: ExternFunc<(), (i64, i64)> = transmute(func_addr);
                     let out: [u8; 16] = transmute(new_func(()));
-                    XcValue::new_from_arr(ret_type.clone(), out)
+                    Value::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::MoveIntoDouble => {
                     let new_func: ExternFunc<(), f64> = transmute(func_addr);
                     let out: [u8; 8] = transmute(new_func(()));
-                    XcValue::new_from_arr(ret_type.clone(), out)
+                    Value::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::Sret => {
                     let new_func: ExternFunc<(), MaxBytes> = transmute(func_addr);
@@ -208,7 +204,7 @@ impl Unit {
                         bytes_lock[..ret_type.size()].to_vec()
                     };
 
-                    XcValue::new_from_vec(ret_type.clone(), data_vec)
+                    Value::new_from_vec(ret_type.clone(), data_vec)
                 },
                 ReturnStyle::Void => {
                     panic!("value returns none!")
@@ -226,14 +222,14 @@ impl Unit {
     }
 }
 
-impl<'a> IntoIterator for &'a XcValue {
+impl<'a> IntoIterator for &'a Value {
     type Item = &'a u8;
     type IntoIter = std::slice::Iter<'a, u8>;
 
     fn into_iter(self) -> Self::IntoIter { self.data.iter() }
 }
 
-impl IntoIterator for XcValue {
+impl IntoIterator for Value {
     type Item = u8;
     type IntoIter = std::vec::IntoIter<u8>;
 

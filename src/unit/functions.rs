@@ -153,6 +153,14 @@ impl CompData {
             ..Default::default()
         });
 
+        out.insert_intrinsic(FuncCode {
+            name: VarName::from("typeobj"),
+            args: vec![],
+            ret_type: "Type".into(),
+            generic_count: 1,
+            ..Default::default()
+        });
+
         out.aliases.insert("Type".into(), TypeSpec::Int(64));
 
         out

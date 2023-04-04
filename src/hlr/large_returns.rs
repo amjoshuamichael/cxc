@@ -38,6 +38,8 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
                 data else { return };
 
             hlr.insert_statement_before(return_id, MakeVarGen {
+                set: make_casted_ret.set.clone(),
+                var_type: make_casted_ret.var_type.clone(),
                 to: box CallGen {
                     info: UniqueFuncInfo {
                         name: VarName::from("cast"),
@@ -46,7 +48,6 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
                     },
                     args: vec![box hlr.tree.get(*to_return)],
                 },
-                ..MakeVarGen::default()
             });
 
             *data = HNodeData::Ident {

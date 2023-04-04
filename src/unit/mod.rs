@@ -3,7 +3,7 @@ use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
 pub use self::functions::{Func, FuncDowncasted};
-pub use self::value_api::XcValue;
+pub use self::value_api::Value;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::Variables;
@@ -210,7 +210,7 @@ impl Unit {
 
         while !set.is_empty() {
             all_func_infos.extend(set.clone().into_iter());
-
+            
             let func_reps: Vec<FuncOutput> = { set }
                 .drain(..)
                 .map(|info| {
@@ -248,12 +248,10 @@ impl Unit {
             all_funcs_to_compile.extend(func_reps.into_iter());
         }
 
-        {
-            for func in &all_funcs_to_compile {
-                for depends_on in func.get_func_dependencies() {
-                    let calling_set = self.comp_data.dependencies.entry(depends_on).or_default();
-                    calling_set.insert(func.info_ref().clone());
-                }
+        for func in &all_funcs_to_compile {
+            for depends_on in func.get_func_dependencies() {
+                let calling_set = self.comp_data.dependencies.entry(depends_on).or_default();
+                calling_set.insert(func.info_ref().clone());
             }
         }
 

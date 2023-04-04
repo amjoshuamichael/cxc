@@ -18,7 +18,13 @@ impl Library for TypeInterfaceLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_method_deriver(VarName::from("type_field_count"), field_count);
         unit.add_static_deriver(VarName::from("size_in_bytes"), size_in_bytes);
+
+        unit.add_type_level_func("EraseDataU8".into(), erase_data_u8);
     }
+}
+
+fn erase_data_u8(input: Vec<Type>, _: &CompData) -> Type {
+    Type::u(8).get_array(input[0].size() as u32)
 }
 
 fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
