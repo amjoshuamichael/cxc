@@ -244,33 +244,6 @@ impl CompData {
         None
     }
 
-    pub fn update_func_info(&mut self, info: UniqueFuncInfo, module: &Module<'static>) -> bool {
-        assert_eq!(info.gen, Gen::Latest);
-
-        let info_made_old = UniqueFuncInfo {
-            gen: *self.generations.last().unwrap(),
-            ..info.clone()
-        };
-
-        if !self.compiled.contains_key(&info_made_old) && 
-            let Some(v) = self.compiled.remove(&info) {
-            module
-                .get_function(&info.to_string())
-                .unwrap()
-                .as_global_value()
-                .set_name(&info_made_old.to_string());
-
-            v.disable_pointer();
-            self.compiled.insert(info.clone(), v.clone());
-
-            self.compiled.insert(info_made_old.clone(), Func::new_compiled(info_made_old, v.typ()));
-
-            true
-        } else { false }
-    }
-
-    pub fn new_generation(&mut self) { self.generations.push(Gen::random()) }
-
     pub fn create_func_placeholder(
         &mut self,
         info: &UniqueFuncInfo,
@@ -280,7 +253,11 @@ impl CompData {
         let function_type = self.get_func_type(info)?;
 
         let mut empty_function =
-            module.add_function(&info.to_string(), function_type.llvm_func_type(context, false), None);
+            module.add_function(
+                &info.to_string(&self.generations), 
+                function_type.llvm_func_type(context, false), 
+                None
+            );
 
         add_sret_attribute_to_func(&mut empty_function, context, &function_type.ret);
 
@@ -383,11 +360,7 @@ impl CompData {
     }
 }
 
-use std::{
-    hash::Hash,
-    num::NonZeroU32,
-    sync::{Arc, RwLock}, ptr::NonNull,
-};
+use std::{hash::Hash, sync::{Arc, RwLock}, ptr::NonNull};
 
 use super::*;
 
@@ -403,15 +376,12 @@ pub struct UniqueFuncInfo {
     pub name: VarName,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
-    pub gen: Gen,
 }
 
-impl ToString for UniqueFuncInfo {
-    fn to_string(&self) -> String {
-        let gen_suffix = match self.gen {
-            Gen::Latest => String::new(),
-            Gen::Specific(n) => format!("{n:x}"),
-        };
+impl UniqueFuncInfo {
+    pub fn to_string(&self, generations: &Generations) -> String {
+        let gen = generations.get_gen_of(self);
+        let gen_suffix = format!("{gen:x}");
 
         match &self.relation {
             TypeRelation::Static(typ) => {
@@ -440,7 +410,6 @@ impl UniqueFuncInfo {
             name: og_name.clone(),
             relation: relation.clone(),
             generics,
-            gen: Gen::Latest,
         }
     }
 
@@ -546,11 +515,6 @@ impl Func {
         };
     }
 
-    pub(super) fn disable_pointer(&self) {
-        let mut inner = self.inner.write().unwrap();
-        inner.code = FuncCodeInfo::Compiled { pointer: None };
-    }
-
     pub(super) fn get_pointer(&self) -> *const usize {
         let inner = self.inner.read().unwrap();
 
@@ -582,17 +546,4 @@ impl FuncCodeInfo {
             FuncCodeInfo::External { pointer, .. } => Some(*pointer),
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
-#[xc_opaque] // TODO: NonZeroU32 in cxc
-pub enum Gen {
-    #[default]
-    Latest,
-
-    Specific(NonZeroU32),
-}
-
-impl Gen {
-    pub fn random() -> Gen { Gen::Specific(NonZeroU32::new(rand::random::<u32>()).unwrap()) }
 }

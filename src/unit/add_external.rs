@@ -120,11 +120,15 @@ impl Unit {
             ..Default::default()
         };
 
-        self.comp_data.update_func_info(func_info.clone(), &self.module);
+        self.comp_data.generations.update(func_info.clone());
 
         let mut function =
             self.module
-                .add_function(&func_info.to_string(), outer_func_type, None);
+                .add_function(
+                    &func_info.to_string(&self.comp_data.generations), 
+                    outer_func_type, 
+                    None
+                );
 
         add_sret_attribute_to_func(&mut function, self.context, &ret_type);
 

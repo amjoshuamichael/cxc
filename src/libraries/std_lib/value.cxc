@@ -1,0 +1,19 @@
+value<T>(data: T); Value {
+    typeobj = typeobj<T>()
+
+    bytes_arr: EraseDataU8(T) = cast(data)
+
+    bytes_vec = Vec<u8>:new()
+
+    b = 0
+    @ b < EraseDataU8(T):len() {
+        bytes_vec.push(bytes_arr[b]) 
+
+        b = b + 1
+    }
+
+    ; Value {
+        typ = typeobj,
+        data = bytes_vec,
+    }
+}

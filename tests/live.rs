@@ -143,3 +143,23 @@ fn get_fn_by_ptr_1() {
 
     assert_eq!(add_two(fifty_four()), 56);
 }
+
+#[test]
+#[serial]
+fn hot_reload_many_times() {
+    let mut unit = Unit::new();
+    unit.push_script("the_best_num(); i32 { ; 200 } ").unwrap();
+    let cached_func = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
+    assert_eq!(cached_func(), 200);
+
+    for n in 0..20 {
+        let new_code = format!("the_best_num(); i32 {{ ; {n} }}");
+        unit.push_script(&*new_code).unwrap();
+
+        // we should be able to get the func using get_fn, but the cached_func should still work as
+        // well
+        let reloaded_func = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
+        assert_eq!(reloaded_func(), n);
+        assert_eq!(cached_func(), n);
+    }
+}

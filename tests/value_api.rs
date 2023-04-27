@@ -87,6 +87,15 @@ fn values_24() {
 }
 
 #[test]
+fn value_4_no_depedency() {
+    let mut unit = Unit::new();
+
+    let value = unit.get_value("4");
+    let out_point = unsafe { *value.unwrap().consume::<i32>() };
+    assert_eq!(out_point, 4);
+}
+
+#[test]
 fn basic_value_func() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);

@@ -136,9 +136,12 @@ impl Unit {
             ..Default::default()
         };
 
-        let mut func_rep = hlr(info, &self.comp_data, code)?;
+        let mut func_rep = hlr(info.clone(), &self.comp_data, code)?;
 
-        let dependencies = func_rep.get_func_dependencies().into_iter().collect();
+        let mut dependencies: Vec<_> = func_rep.get_func_dependencies().into_iter().collect();
+        dependencies = dependencies.into_iter()
+            .filter(|f| !self.comp_data.has_been_compiled(f))
+            .collect();
         self.compile_func_set(dependencies)?;
 
         let mut fcs = {
@@ -146,7 +149,11 @@ impl Unit {
                 else { unreachable!() };
             let ink_func_type = func_type.llvm_func_type(self.context, false);
 
-            let mut function = self.module.add_function(temp_name, ink_func_type, None);
+            let mut function = self.module.add_function(
+                "HEEELO", 
+                ink_func_type, 
+                None
+            );
             add_sret_attribute_to_func(&mut function, self.context, &func_type.ret);
 
             self.new_func_comp_state(
@@ -165,10 +172,11 @@ impl Unit {
             println!("{}", self.module.print_to_string().to_string());
         }
 
+        //self.module.get_function(&*info.to_string(&self.comp_data.generations)).unwrap();
         let func_addr = self
             .execution_engine
             .borrow()
-            .get_function_address(temp_name)
+            .get_function_address("HEEELO")
             .unwrap();
 
         let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 

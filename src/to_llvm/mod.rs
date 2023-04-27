@@ -76,7 +76,7 @@ pub fn compile_routine(
         &mut fcs.builder,
         fcs.context,
     );
-    get_used_functions(&mut fcs.used_functions, &fcs.tree, module);
+    get_used_functions(&mut fcs.used_functions, &fcs.tree, module, &fcs.comp_data.generations);
     compile(fcs, fcs.tree.root)
 }
 
@@ -107,6 +107,7 @@ fn get_used_functions(
     used_functions: &mut HashMap<UniqueFuncInfo, FunctionValue<'static>>,
     tree: &ExprTree,
     module: &Module<'static>,
+    generations: &Generations,
 ) {
     for (_, call) in tree.iter() {
         if !matches!(call, HNodeData::Call { .. }) {
@@ -114,7 +115,7 @@ fn get_used_functions(
         }
 
         let unique_info = tree.unique_func_info_of_call(call);
-        if let Some(function_value) = module.get_function(&unique_info.to_string()) {
+        if let Some(function_value) = module.get_function(&unique_info.to_string(generations)) {
             used_functions.insert(unique_info, function_value);
         }
     }

@@ -2,6 +2,7 @@ use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
+pub use self::generations::Generations;
 pub use self::functions::{Func, FuncDowncasted};
 pub use self::value_api::Value;
 use crate::errors::CErr;
@@ -19,7 +20,7 @@ use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
 use crate::TypeEnum;
 pub use add_external::ExternalFuncAdd;
-pub use functions::{Gen, UniqueFuncInfo};
+pub use functions::UniqueFuncInfo;
 use inkwell::context::Context;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::module::Module;
@@ -44,6 +45,7 @@ pub mod get_type_spec;
 mod reflect;
 mod rust_type_name_conversion;
 mod value_api;
+mod generations;
 
 pub(crate) use functions::FuncCodeInfo;
 
@@ -68,7 +70,7 @@ pub struct CompData {
     decl_names: BTreeMap<VarName, Vec<FuncDeclInfo>>,
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncDeclInfo>,
-    generations: Vec<Gen>,
+    pub generations: Generations,
     dependencies: BTreeMap<UniqueFuncInfo, BTreeSet<UniqueFuncInfo>>,
 }
 
@@ -103,8 +105,6 @@ impl Unit {
             module,
             context,
         };
-
-        new.comp_data.new_generation();
 
         let comp_data_ptr = &mut *new.comp_data as *mut _;
         new.add_global("comp_data".into(), comp_data_ptr);
@@ -142,8 +142,6 @@ impl Unit {
         let has_comp_script = parsed.comp_script.is_some();
 
         let funcs_to_process = {
-            self.comp_data.new_generation();
-
             for decl in parsed.types.iter().cloned() {
                 self.comp_data.add_type_alias(decl.name, decl.typ);
             }
@@ -178,7 +176,7 @@ impl Unit {
                         ..Default::default()
                     };
 
-                    self.comp_data.update_func_info(func_info.clone(), &self.module);
+                    self.comp_data.generations.update(func_info.clone());
 
                     func_info
                 })
@@ -197,8 +195,6 @@ impl Unit {
     }
 
     pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) -> CResultMany<()> {
-        set.retain(|info| !self.comp_data.has_been_compiled(info));
-
         if set.is_empty() {
             return Ok(());
         }
@@ -226,23 +222,21 @@ impl Unit {
             set = func_reps
                 .iter()
                 .flat_map(|f| f.get_func_dependencies().into_iter())
-                .filter(|f| !self.comp_data.has_been_compiled(f))
+                .filter(|f| !self.comp_data.has_been_compiled(f) )
                 .collect();
 
-            {
-                for func in func_reps.iter() {
-                    let depended_on_by = self.comp_data
-                        .dependencies
-                        .get(func.info_ref())
-                        .cloned()
-                        .unwrap_or_default();
+            for func in func_reps.iter() {
+                let depended_on_by = self.comp_data
+                    .dependencies
+                    .get(func.info_ref())
+                    .cloned()
+                    .unwrap_or_default();
 
-                    let depended_on_by = depended_on_by
-                        .into_iter()
-                        .filter(|f| self.comp_data.update_func_info(f.clone(), &self.module));
+                let depended_on_by = depended_on_by
+                    .into_iter()
+                    .filter(|f| self.comp_data.generations.update(f.clone()));
 
-                    set.extend(depended_on_by);
-                }
+                set.extend(depended_on_by);
             }
 
             all_funcs_to_compile.extend(func_reps.into_iter());
@@ -263,7 +257,7 @@ impl Unit {
             self.comp_data.compiled.get(func_info).unwrap().set_pointer(
                 self.execution_engine
                     .borrow()
-                    .get_function_address(&func_info.to_string())
+                    .get_function_address(&func_info.to_string(&self.comp_data.generations))
                     .expect("unable to get function address") as *const usize,
             );
         }
@@ -296,7 +290,7 @@ impl Unit {
         let func = self.execution_engine.borrow().get_function_address(&*UniqueFuncInfo {
             name: VarName::None,
             ..Default::default()
-        }.to_string()).unwrap();
+        }.to_string(&self.comp_data.generations)).unwrap();
 
         unsafe {
             let func: unsafe extern "C" fn() = std::mem::transmute(func);
@@ -305,7 +299,7 @@ impl Unit {
     }
 
     fn get_func_value(&self, func_info: &UniqueFuncInfo) -> Option<FunctionValue<'static>> {
-        self.module.get_function(&func_info.to_string())
+        self.module.get_function(&func_info.to_string(&self.comp_data.generations))
     }
 
     fn new_func_comp_state(
@@ -338,7 +332,7 @@ impl Unit {
             assert!(
                 self.
                     module
-                    .get_function(&info.to_string())?
+                    .get_function(&info.to_string(&self.comp_data.generations))?
                     .get_param_iter()
                     .all(|param_type| !param_type.is_array_value()),
                 "Cannot run function that has array value as parameter. Pass in an array pointer instead."
