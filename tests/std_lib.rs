@@ -126,7 +126,7 @@ fn big_rc() {
 }
 
 #[test]
-fn big_rc_to_string() {
+fn big_rc_sum() {
     xc_test!(
         use StdLib;
         "
@@ -140,7 +140,22 @@ fn big_rc_to_string() {
             ; rcx.sum()
         }
         ";
-        String::default()
+        180
+    )
+}
+
+#[test]
+fn big_rc_to_string() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); String {
+            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
+
+            ; rcx.to_string()
+        }
+        ";
+        String::from("{0 = 90, 1 = 90}")
     )
 }
 

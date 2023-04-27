@@ -64,12 +64,14 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
     let expr = match typ.clone().get_deref().unwrap().as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
-            let prefix = typ
-                .clone()
-                .complete_deref()
-                .name()
-                .to_string_zero_if_anonymous()
-                + " {";
+            let prefix = {
+                let mut type_name = 
+                    typ.clone().complete_deref().name() .to_string_zero_if_anonymous();
+
+                if type_name != "" { type_name += " "; }
+
+                type_name + "{"
+            };
 
             let output_var = VarName::from("output");
             let output_var_expr = Expr::Ident(output_var.clone());

@@ -253,6 +253,11 @@ impl Unit {
             self.compile(func_output);
         }
 
+        if crate::LLVM_DEBUG {
+            println!("compiled these: ");
+            println!("{}", self.module.print_to_string().to_string());
+        }
+
         for func_info in &all_func_infos {
             self.comp_data.compiled.get(func_info).unwrap().set_pointer(
                 self.execution_engine
@@ -260,11 +265,6 @@ impl Unit {
                     .get_function_address(&func_info.to_string(&self.comp_data.generations))
                     .expect("unable to get function address") as *const usize,
             );
-        }
-
-        if crate::LLVM_DEBUG {
-            println!("compiled these: ");
-            println!("{}", self.module.print_to_string().to_string());
         }
 
         Ok(())

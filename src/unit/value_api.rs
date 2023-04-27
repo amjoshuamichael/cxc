@@ -96,6 +96,12 @@ impl Value {
     /// # Safety
     ///
     /// Ensure the generic type 'T' is the same as the type of the value.
+    pub unsafe fn get_data(self) -> Box<[u8]> { self.data.into_boxed_slice() }
+
+
+    /// # Safety
+    ///
+    /// Ensure the generic type 'T' is the same as the type of the value.
     pub unsafe fn consume<T: std::fmt::Debug>(mut self) -> Box<T> {
         let data_ptr = self.data.as_mut_ptr();
 
