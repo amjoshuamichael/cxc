@@ -88,24 +88,33 @@ fn get_fn_by_ptr_0() {
     unit.push_script(
         r#"
         add_two(x: i32); i32 { ; x + 2 }
-        fifty_four(); i32 { ; 54 }
 
         ---
 
         functions.push(comp_data.get_fn_by_ptr(add_two).1)
-        functions.push(comp_data.get_fn_by_ptr(fifty_four).1)
         "#
     ).unwrap();
 
-    let [add_two, fifty_four] = &*functions else { panic!() };
+    unit.push_script(
+        r#"
+        ninety(); i32 { ; 90 }
+
+        ---
+
+        functions.push(comp_data.get_fn_by_ptr(ninety).1)
+        "#
+    ).unwrap();
+
+    let [add_two, ninety] = &*functions else { panic!() };
 
     assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
-    assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });
+    assert_eq!(ninety.typ(), FuncType { args: vec![], ret: Type::i(32) });
 
     let add_two = add_two.downcast::<(i32,), i32,>();
-    let fifty_four = fifty_four.downcast::<(), i32>();
+    let ninety = ninety.downcast::<(), i32>();
 
-    assert_eq!(add_two(fifty_four()), 56);
+    assert_eq!(add_two(20), 22);
+    assert_eq!(ninety(), 90);
 }
 
 //TODO: this doesn't work
@@ -162,4 +171,22 @@ fn hot_reload_many_times() {
         assert_eq!(reloaded_func(), n);
         assert_eq!(cached_func(), n);
     }
+}
+
+#[test]
+#[serial]
+fn get_previous() {
+    let mut unit = Unit::new();
+    unit.push_script("func_one(); i32 { ; 1 } ").unwrap();
+    let func_one = unit.get_fn("func_one").unwrap().downcast::<(), i32>();
+
+    unit.push_script("func_two(); i32 { ; 2 } ").unwrap();
+    assert_eq!(func_one(), 1);
+
+    let func_two = unit.get_fn("func_two").unwrap().downcast::<(), i32>();
+    assert_eq!(func_two(), 2);
+    assert_eq!(func_one(), 1);
+
+    let func_one_again = unit.get_fn("func_one").unwrap().downcast::<(), i32>();
+    assert_eq!(func_one_again(), 1);
 }

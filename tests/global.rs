@@ -16,7 +16,7 @@ fn basic_global() {
     unit.push_script(
         r#"
         main() {
-            x.write(50)
+            *x = 50
         }
         "#,
     )

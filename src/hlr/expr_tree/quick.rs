@@ -337,3 +337,67 @@ impl NodeDataGen for IndexGen {
         space
     }
 }
+
+#[derive(Debug, Default)]
+pub struct RefGen {
+    pub object: Box<dyn NodeDataGen>,
+}
+
+impl NodeDataGen for RefGen {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let object = self.object.add_to_expr_tree(hlr, space);
+        let obj_typ = hlr.tree.get(object).ret_type();
+        let obj_typ_ref = obj_typ.get_ref();
+        
+        hlr.tree.replace(
+            space, 
+            HNodeData::UnarOp {
+                ret_type: obj_typ_ref,
+                op: Opcode::Ref,
+                hs: object,
+            }
+        );
+
+        space
+    }
+}
+
+pub fn get_ref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<RefGen> {
+    Box::new(RefGen {
+        object: box node_data_gen,
+    })
+}
+
+#[derive(Debug, Default)]
+pub struct DerefGen<T: NodeDataGen> {
+    pub object: T,
+}
+
+impl<T: NodeDataGen> NodeDataGen for DerefGen<T> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let object = self.object.add_to_expr_tree(hlr, space);
+        let obj_typ = hlr.tree.get(object).ret_type();
+        let obj_typ_deref = obj_typ.get_deref().unwrap();
+
+        hlr.tree.replace(
+            space,
+            HNodeData::UnarOp {
+                ret_type: obj_typ_deref,
+                op: Opcode::Deref,
+                hs: object,
+            }
+        );
+
+        space
+    }
+}
+
+pub fn get_deref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<DerefGen<T>> {
+    Box::new(DerefGen {
+        object: node_data_gen,
+    })
+}

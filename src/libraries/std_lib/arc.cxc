@@ -17,13 +17,11 @@ ArcInner<T> = {
     new(data: T); Arc<T> {
         inner: &ArcInner<T> = alloc< ArcInner<T> >( 1 )
 
-        inner.write< ArcInner<T> > (
-            ArcInner<T> { 
-                strong = AtomicUsize:new(1), 
-                weak = AtomicUsize:new(1), 
-                data = data 
-            }
-        )
+        *inner = ArcInner<T> { 
+            strong = AtomicUsize:new(1), 
+            weak = AtomicUsize:new(1), 
+            data = data 
+        }
         
         arc: Arc<T> = Arc<T> { ptr = inner }
 

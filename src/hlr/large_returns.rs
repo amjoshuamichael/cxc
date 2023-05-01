@@ -154,24 +154,12 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
             hlr.insert_statement_before(
                 return_id,
-                CallGen {
-                    info: UniqueFuncInfo {
-                        name: VarName::from("write"),
-                        relation: TypeRelationGeneric::MethodOf(output_var_typ.get_ref()),
-                        generics: vec![hlr.ret_type.clone()],
-                        ..Default::default()
-                    },
-                    args: vec![
-                        box UnarOpGen {
-                            hs: box HNodeData::Ident {
-                                var_type: output_var_typ.clone(),
-                                name: output_var.clone(),
-                            },
-                            op: Opcode::Ref,
-                            ret_type: output_var_typ.get_ref(),
-                        },
-                        box hlr.tree.get(*to_return_inner),
-                    ],
+                SetVarGen {
+                    lhs: get_deref(HNodeData::Ident {
+                        var_type: output_var_typ.clone(),
+                        name: output_var.clone(),
+                    }),
+                    rhs: box hlr.tree.get(*to_return_inner),
                 },
             );
 
@@ -230,22 +218,14 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
             ..Default::default()
         },
         args: vec![
-            box UnarOpGen {
-                ret_type: raw_ret_var_type.get_ref(),
-                op: Opcode::Ref,
-                hs: box HNodeData::Ident {
-                    var_type: raw_ret_var_type.clone(),
-                    name: raw_ret_var_name,
-                },
-            },
-            box UnarOpGen {
-                ret_type: raw_ret_var_type.get_ref(),
-                op: Opcode::Ref,
-                hs: box HNodeData::Ident {
-                    var_type: casted_var_type.clone(),
-                    name: casted_var_name.clone(),
-                },
-            },
+            get_ref(HNodeData::Ident {
+                var_type: raw_ret_var_type.clone(),
+                name: raw_ret_var_name,
+            }),
+            get_ref(HNodeData::Ident {
+                var_type: casted_var_type.clone(),
+                name: casted_var_name.clone(),
+            }),
             box raw_ret_var_type.size()
         ],
     });

@@ -258,7 +258,7 @@ impl Unit {
             println!("{}", self.module.print_to_string().to_string());
         }
 
-        for func_info in &all_func_infos {
+        for func_info in self.comp_data.compiled.keys() {
             self.comp_data.compiled.get(func_info).unwrap().set_pointer(
                 self.execution_engine
                     .borrow()

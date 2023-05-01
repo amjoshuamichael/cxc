@@ -45,7 +45,7 @@ fn basic_pointer() {
     unit.push_script(
         "
         square(num: &i32) {
-            num.write<i32>(*num * *num)
+            *num = *num * *num
         }
         ",
     );

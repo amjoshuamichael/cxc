@@ -670,21 +670,6 @@ fn internal_function(
 
             Some(size)
         },
-        "write" => {
-            let src: BasicValueEnum = compile(fcs, args[1]).unwrap().try_into().unwrap();
-
-            let dest: PointerValue = compile(fcs, args[0]).unwrap().try_into().unwrap();
-            let load_ty = info.generics[0].clone();
-            let dest_loaded: PointerValue = fcs
-                .builder
-                .build_load(load_ty.get_ref().to_basic_type(fcs.context), dest, "loaddest")
-                .try_into()
-                .unwrap();
-
-            fcs.builder.build_store(dest_loaded, src);
-
-            None
-        },
         "cast" => {
             let src = compile_as_ptr(fcs, args[0]);
             let dest_type = info.generics()[1].to_basic_type(fcs.context);

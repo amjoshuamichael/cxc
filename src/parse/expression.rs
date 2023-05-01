@@ -75,6 +75,20 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
             Expr::Member(box previous, field).into()
         } else if let Ok(opcode) = next.get_bin_opcode() {
+            if opcode == Opcode::Multiplier {
+                // this might be a dereference just before an assignment. for example,
+                //
+                // x: u32 = alloc(0)
+                // *x = 5
+
+                let mut detached = lexer.detach();
+
+                if let Ok(_actually_lhs) = parse_expr(&mut detached) && 
+                    detached.peek_tok()? == Tok::Assignment {
+                    break;
+                }
+            }
+
             lexer.next_tok()?;
 
             Atom::Op(opcode)

@@ -21,9 +21,29 @@ macro_rules! impl_externalize {
 
             #[inline(always)]
             unsafe fn call(addr: *const usize, args: Self) -> R {
+                #[cfg(feature = "ffi-assertions")]
+                {
+                    let mem_region = region::query(addr).unwrap();
+
+                    if !mem_region.is_executable() {
+                        panic!("Woah! The memory region of a function is not executable! That shouldn't happen. This error occured while calling a cxc function at address '{addr:?}'. If the issue persists, please submit an issue at https://github.com/amjoshuamichael/cxc/issues/new.");
+                        //let protection_guard = protect_with_handle(addr, mem_region.len(), Protection::READ_EXECUTE).unwrap();
+
+                        //#[allow(non_snake_case)]
+                        //let ($($t,)*) = args;
+                        //let out = Self::externalize(addr)($($t),*);
+
+                        //std::mem::drop(protection_guard);
+
+                        //return out;
+                    }
+                }
+
                 #[allow(non_snake_case)]
                 let ($($t,)*) = args;
-                Self::externalize(addr)($($t),*)
+                let out = Self::externalize(addr)($($t),*);
+
+                out
             }
         }
 

@@ -125,24 +125,6 @@ impl CompData {
         });
 
         out.insert_intrinsic(FuncCode {
-            name: VarName::from("write"),
-            ret_type: TypeSpec::Void,
-            args: vec![
-                VarDecl {
-                    name: VarName::None,
-                    type_spec: "&&T".into(),
-                },
-                VarDecl {
-                    name: VarName::None,
-                    type_spec: "T".into(),
-                },
-            ],
-            generic_count: 1,
-            relation: TypeSpecRelation::MethodOf("&&T".into()),
-            ..Default::default()
-        });
-
-        out.insert_intrinsic(FuncCode {
             name: VarName::from("cast"),
             args: vec![VarDecl {
                 name: VarName::None,
@@ -355,7 +337,8 @@ impl CompData {
     }
 
     pub fn get_fn_by_ptr(&self, ptr: *const usize) -> (UniqueFuncInfo, Func) {
-        let (info, func) = self.compiled.iter().find(|(_, func)| func.get_pointer() == ptr).unwrap();
+        let (info, func): (&UniqueFuncInfo, &Func) = self.compiled.iter().find(|(_, func)| func.get_pointer() == ptr).unwrap();
+
         (info.clone(), func.clone())
     }
 }
