@@ -1,4 +1,4 @@
-use crate::{typ::StructType, TypeEnum, errors::{CResultMany, UErr}};
+use crate::errors::CResultMany;
 
 use super::{
     expr_tree::{MemberGen, HNodeData, SetVarGen},
@@ -23,15 +23,7 @@ pub fn struct_literals(hlr: &mut FuncRep) -> CResultMany<()> {
                 )
                 .inserted_id();
 
-            let TypeEnum::Struct(StructType { fields: field_types, .. }) = 
-                struct_type.as_type_enum() else { Err(UErr::BadTypeOfStructLit(structlit))? };
-
             for (field_name, field_expr) in field_exprs {
-                let (_, field_type) = field_types
-                    .iter()
-                    .find(|(name, _)| name == field_name)
-                    .unwrap();
-
                 current_statement = hlr
                     .insert_statement_after(
                         current_statement,
@@ -39,7 +31,6 @@ pub fn struct_literals(hlr: &mut FuncRep) -> CResultMany<()> {
                             lhs: box MemberGen {
                                 object: box new_struct.clone(),
                                 field: field_name.clone(),
-                                ret_type: field_type.clone(),
                             },
                             rhs: box hlr.tree.get(*field_expr),
                         },

@@ -1,4 +1,4 @@
-use crate::errors::{CResultMany};
+use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo};
 use crate::{Type, UniqueFuncInfo, VarName};
 
@@ -247,9 +247,17 @@ impl<'a> FuncRep<'a> {
     ) -> VarName {
         let new_name = self.uniqueify_varname(name);
 
+        if add_as_arg {
+            for (_, var_info) in self.variables.iter_mut() {
+                if let Some(arg_index) = &mut var_info.arg_index {
+                    *arg_index += 1;
+                }
+            }
+        }
+
         self.variables.insert(new_name.clone(), VariableInfo {
             typ,
-            arg_index: add_as_arg.then_some(self.arg_count() + 1),
+            arg_index: if add_as_arg { Some(0) } else { None },
         });
 
         new_name

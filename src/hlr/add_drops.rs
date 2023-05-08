@@ -5,9 +5,9 @@ use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen}};
 pub fn add_drops(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |make_id, make_lit, hlr| {
-            let HNodeData::MakeVar { name: var_name, .. } = make_lit else { return };
+            let HNodeData::MakeVar { name: ref var_name, .. } = make_lit else { return };
             
-            let var_type = hlr.variables[&var_name].typ.clone();
+            let var_type = hlr.variables[var_name].typ.clone();
 
             if var_type.is_shallow() || 
                 matches!(var_type.as_type_enum(), TypeEnum::Ref(_)) ||

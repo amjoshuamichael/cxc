@@ -419,6 +419,35 @@ fn return_from_external_32byte() {
 }
 
 #[test]
+fn pass_to_4byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script("add_59(x: i32); i32 { ; x + 59 }").unwrap();
+    let add_59 = unit.get_fn("add_59").unwrap().downcast::<(i32,), i32>();
+    assert_eq!(add_59(41), 100);
+}
+
+#[test]
+fn pass_to_20byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script("take_5(nums: {i32, i32, i32, i32, i32}); i32 { ; nums.3 + 2 }").unwrap();
+    let take_5 = 
+        unit.get_fn("take_5").unwrap().downcast::<((i32, i32, i32, i32, i32),), i32>();
+    assert_eq!(take_5((439, 435, 102, 4, 100)), 6);
+}
+
+#[test]
+fn pass_20byte_return_20byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script("take_5(nums: {i32, i32, i32, i32, i32}); { i32, i32, i32, i32, i32 } { ; nums }").unwrap();
+    let take_5 = 
+        unit.get_fn("take_5").unwrap().downcast::<((i32, i32, i32, i32, i32),), (i32, i32, i32, i32, i32)>();
+    assert_eq!(take_5((439, 435, 102, 4, 100)), (439, 435, 102, 4, 100));
+}
+
+#[test]
 fn strings() {
     xc_test!(
         use StdLib;

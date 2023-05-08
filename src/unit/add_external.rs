@@ -130,7 +130,7 @@ impl Unit {
                     None
                 );
 
-        add_sret_attribute_to_func(&mut function, self.context, &ret_type);
+        add_sret_attribute_to_func(&mut function, self.context, &func_type_inner);
 
         let builder = self.context.create_builder();
 

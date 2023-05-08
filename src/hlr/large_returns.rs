@@ -1,5 +1,4 @@
 use super::struct_literals::struct_literals;
-use super::hlr_data::VariableInfo;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
 use crate::lex::VarName;
@@ -29,13 +28,12 @@ fn handle_own_return(hlr: &mut FuncRep) {
 }
 
 fn return_by_move_into_double(hlr: &mut FuncRep) {
-    let f64_ = Type::f(64);
-    let (casted_ret, make_casted_ret) = hlr.add_variable("casted_ret", &f64_);
+    let f64 = Type::f(64);
+    let (casted_ret, make_casted_ret) = hlr.add_variable("casted_ret", &f64);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
-            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = 
-                data else { return };
+            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
 
             hlr.insert_statement_before(return_id, MakeVarGen {
                 set: make_casted_ret.set.clone(),
@@ -43,7 +41,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
                 to: box CallGen {
                     info: UniqueFuncInfo {
                         name: VarName::from("cast"),
-                        generics: vec![hlr.tree.get(*to_return).ret_type(), f64_.clone()],
+                        generics: vec![hlr.tree.get(*to_return).ret_type(), f64.clone()],
                         ..Default::default()
                     },
                     args: vec![box hlr.tree.get(*to_return)],
@@ -52,7 +50,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
 
             *data = HNodeData::Ident {
                 name: casted_ret.clone(),
-                var_type: f64_.clone(),
+                var_type: f64.clone(),
             };
         }
     );
@@ -62,19 +60,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
     let i32i64 = Type::new_tuple(vec![Type::i(32), Type::i(64)]);
     let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
-    let output_var_name = VarName::from("casted_ret");
-    let output_var_node_data = box HNodeData::Ident {
-        var_type: i32i64.clone(),
-        name: output_var_name.clone(),
-    };
-
-    hlr.variables.insert(
-        output_var_name.clone(),
-        VariableInfo {
-            typ: i64i64.clone(),
-            arg_index: None,
-        },
-    );
+    let (output_var_name, make_output_var) = hlr.add_variable("casted_ret", &i32i64);
 
     hlr.modify_many_infallible(
         |return_id, mut data, hlr| {
@@ -86,10 +72,9 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
             hlr.insert_statement_before(
                 return_id,
                 MakeVarGen {
-                    var_type: i32i64.clone(),
                     set: output_var_name.clone(),
                     to: box to_return_data.clone(),
-                    ..Default::default()
+                    var_type: make_output_var.var_type.clone(),
                 },
             );
 
@@ -97,25 +82,16 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
                 return_id,
                 StructLitGen {
                     var_type: i64i64.clone(),
-                    fields: vec![
-                        (
-                            0.into(),
-                            box MemberGen {
-                                object: output_var_node_data.clone(),
-                                field: 0.into(),
-                                ret_type: Type::i(32),
-                            },
-                        ),
-                        (
-                            1.into(),
-                            box MemberGen {
-                                object: output_var_node_data.clone(),
-                                field: 1.into(),
-                                ret_type: Type::i(64),
-                            },
-                        ),
-                    ],
-                    ..Default::default()
+                    ..StructLitGen::tuple(vec![
+                        box MemberGen {
+                            object: box output_var_name.clone(),
+                            field: 0.into(),
+                        },
+                        box MemberGen {
+                            object: box output_var_name.clone(),
+                            field: 1.into(),
+                        }
+                    ])
                 },
             );
 
@@ -127,38 +103,18 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
-    let output_var = VarName::from("Sret");
-
-    for (_, flow) in hlr.variables.iter_mut() {
-        if let Some(arg_index) = &mut flow.arg_index {
-            *arg_index += 1;
-        }
-    }
-
-    let output_var_typ = hlr.ret_type.clone().get_ref();
-
-    hlr.variables.insert(
-        output_var.clone(),
-        VariableInfo {
-            typ: output_var_typ.clone(),
-            arg_index: Some(0),
-        },
-    );
+    let output_var = hlr.add_argument("Sret", hlr.ret_type.clone().get_ref());
 
     hlr.modify_many_infallible(
         |return_id, data, hlr| {
-            let HNodeData::Return { ref mut to_return, .. } = data
-                else { return };
+            let HNodeData::Return { ref mut to_return, .. } = data else { return };
 
             let Some(ref mut to_return_inner) = to_return else { return };
 
             hlr.insert_statement_before(
                 return_id,
                 SetVarGen {
-                    lhs: get_deref(HNodeData::Ident {
-                        var_type: output_var_typ.clone(),
-                        name: output_var.clone(),
-                    }),
+                    lhs: get_deref(output_var.clone()),
                     rhs: box hlr.tree.get(*to_return_inner),
                 },
             );

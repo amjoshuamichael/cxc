@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 
 use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
@@ -8,6 +7,7 @@ use crate::parse::*;
 use crate::typ::ReturnStyle;
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
+use indexmap::IndexMap;
 
 #[derive(Debug)]
 pub struct FuncRep<'a> {
@@ -20,7 +20,7 @@ pub struct FuncRep<'a> {
     pub variables: Variables,
 }
 
-pub type Variables = HashMap<VarName, VariableInfo>;
+pub type Variables = IndexMap<VarName, VariableInfo>;
 
 #[derive(Default, Debug, Clone)]
 pub struct VariableInfo {
@@ -45,7 +45,7 @@ impl<'a> FuncRep<'a> {
                 .unwrap(),
             comp_data,
             info,
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
@@ -81,29 +81,28 @@ impl<'a> FuncRep<'a> {
         Ok(new)
     }
 
-    fn args(&self) -> Vec<(VarName, VariableInfo)> {
-        let mut names_and_flow = self
+    pub fn args<'b>(&'b mut self) -> Box<dyn Iterator<Item = (&VarName, &VariableInfo)> + 'b> {
+        self.variables
+            .sort_by(|_, df, _, df2| df.arg_index.cmp(&df2.arg_index));
+
+        let names_and_flow = self
             .variables
             .iter()
-            .map(|(n, d)| (n.clone(), d.clone()))
-            .filter(|f| f.1.is_arg())
-            .collect::<Vec<_>>();
+            .map(|(name, v_info)| (name, v_info))
+            .filter(|(_, v_info)| v_info.is_arg());
 
-        names_and_flow
-            .sort_by(|(_, df), (_, df2)| df.arg_index.unwrap().cmp(&df2.arg_index.unwrap()));
-
-        names_and_flow
+        box names_and_flow
     }
 
-    pub fn arg_types(&self) -> Vec<Type> {
-        self.args().drain(..).map(|f| f.1.typ).collect::<Vec<_>>()
+    pub fn arg_types(&mut self) -> Vec<Type> {
+        self.args().map(|(_, v_info)| v_info.typ.clone()).collect::<Vec<_>>()
     }
 
-    pub fn arg_names(&self) -> Vec<VarName> {
-        self.args().drain(..).map(|f| f.0).collect::<Vec<_>>()
+    pub fn arg_names(&mut self) -> Vec<VarName> {
+        self.args().map(|(name, _)| name).cloned().collect::<Vec<_>>()
     }
 
-    pub fn arg_count(&self) -> u32 { self.args().len() as u32 }
+    pub fn arg_count(&mut self) -> u32 { self.args().count() as u32 }
 
     pub fn get_type_spec(&self, alias: &TypeSpec) -> TResult<Type> {
         self.comp_data.get_spec(alias, &self.info)
@@ -111,7 +110,7 @@ impl<'a> FuncRep<'a> {
 
     pub fn comp_data(&self) -> &CompData { self.comp_data }
 
-    pub fn output(self) -> FuncOutput {
+    pub fn output(mut self) -> FuncOutput {
         let mut func_arg_types = self.arg_types();
 
         if self.ret_type.return_style() == ReturnStyle::Sret {

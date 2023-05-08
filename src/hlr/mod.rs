@@ -8,6 +8,7 @@ mod variant_literals;
 pub mod hlr_data;
 pub mod hlr_data_output;
 mod large_returns;
+mod large_args;
 mod type_inference;
 mod add_drops;
 
@@ -32,6 +33,7 @@ use self::struct_literals::struct_literals;
 use self::variant_literals::variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::large_returns;
+use self::large_args::large_args;
 use self::add_drops::add_drops;
 
 pub fn hlr(
@@ -61,10 +63,12 @@ pub fn hlr(
     large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
     add_drops(&mut output);
+    large_args(&mut output);
 
     if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());
+        println!("{:?}", &output.variables);
     }
-
+  
     Ok(output.output())
 }

@@ -41,7 +41,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                 },
             );
 
-            for (field_name, field_type) in &struct_type.fields {
+            for (field_name, _) in &struct_type.fields {
                 if field_ids.iter().any(|(name, _)| name == field_name) {
                     // struct already has this field, it does not need to be set
                     // to its default value
@@ -53,7 +53,6 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                     MemberGen {
                         object: box new_default.clone(),
                         field: field_name.clone(),
-                        ret_type: field_type.clone(),
                     },
                 );
 

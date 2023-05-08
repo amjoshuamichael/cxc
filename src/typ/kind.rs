@@ -93,7 +93,7 @@ impl FuncType {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
-                .map(|t| t.to_basic_type(context).into())
+                .map(|t| t.raw_arg_type().to_basic_type(context).into())
                 .collect();
 
             if self.ret.is_void() {
@@ -106,7 +106,7 @@ impl FuncType {
         } else {
             let args: Vec<BasicMetadataTypeEnum> = once(&self.ret.clone().get_ref())
                 .chain(self.args.iter())
-                .map(|t| t.to_basic_type(context).into())
+                .map(|t| t.raw_arg_type().to_basic_type(context).into())
                 .collect();
 
             context.void_type().fn_type(&args[..], false)

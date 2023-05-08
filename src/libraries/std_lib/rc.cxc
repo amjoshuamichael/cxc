@@ -55,7 +55,6 @@ Rc<T> = {
         self.inner.dec_strong()
 
         ? self.inner.strong == 0 {
-            print("AAAAAAAAAAAAAAA")
             # destroy the contained object
             self.inner.value.drop()
             self.inner.drop()

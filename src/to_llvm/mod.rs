@@ -3,7 +3,7 @@ use crate::hlr::hlr_data::Variables;
 use crate::hlr::prelude::*;
 use crate::lex::VarName;
 use crate::parse::Opcode::{self, *};
-use crate::typ::{Kind, ReturnStyle};
+use crate::typ::{Kind, FuncType, ReturnStyle, ArgStyle};
 use crate::unit::*;
 use crate::{Type, TypeEnum};
 use core::cell::RefCell;
@@ -45,12 +45,37 @@ impl<'a> FunctionCompilationState<'a> {
 pub fn add_sret_attribute_to_func(
     function: &mut FunctionValue<'static>,
     context: &'static Context,
-    ret: &Type,
+    func_type: &FuncType,
 ) {
-    if ret.return_style() == ReturnStyle::Sret {
+    if func_type.ret.return_style() == ReturnStyle::Sret {
         let sret_id = Attribute::get_named_enum_kind_id("sret");
-        let sret_attribute = context.create_type_attribute(sret_id, ret.to_any_type(context));
+        let sret_attribute = context.create_type_attribute(
+            sret_id, 
+            func_type.ret.to_any_type(context)
+        );
         function.add_attribute(AttributeLoc::Param(0), sret_attribute);
+    }
+
+    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
+    for (a, arg) in func_type.args.iter().enumerate() {
+        if arg.arg_style() == ArgStyle::Pointer {
+            let byval_id = Attribute::get_named_enum_kind_id("byval");
+            let byval_attribute = context.create_type_attribute(
+                byval_id, 
+                arg.to_any_type(context)
+            );
+
+            let arg_pos_offset = if func_type.ret.return_style() == ReturnStyle::Sret {
+                1
+            } else { 
+                0 
+            };
+
+            function.add_attribute(
+                AttributeLoc::Param(a as u32 + arg_pos_offset), 
+                byval_attribute
+            );
+        }
     }
 }
 
@@ -81,7 +106,7 @@ pub fn compile_routine(
 }
 
 fn build_stack_allocas(
-    variables: &mut HashMap<VarName, PointerValue<'static>>,
+    variable_ptrs: &mut HashMap<VarName, PointerValue<'static>>,
     tree: &ExprTree,
     data_flow: &Variables,
     builder: &mut Builder<'static>,
@@ -89,16 +114,16 @@ fn build_stack_allocas(
 ) {
     for expr in tree.iter() {
         if let MakeVar { ref name, .. } = expr.1 {
-            if variables.contains_key(name) {
+            if variable_ptrs.contains_key(name) {
                 continue;
             }
 
-            let var_type = &data_flow.get(name).unwrap().typ;
+            let var_type = &data_flow[name].typ;
 
             let var_ptr: PointerValue<'static> =
                 builder.build_alloca(var_type.to_basic_type(context), &*name.to_string());
 
-            variables.insert(name.clone(), var_ptr);
+            variable_ptrs.insert(name.clone(), var_ptr);
         }
     }
 }
@@ -177,11 +202,24 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
             ref name,
         } => {
             if let Some(param_index) = fcs.arg_names.iter().position(|arg| arg == name) {
-                let param = fcs
-                    .function
-                    .get_nth_param(param_index.try_into().unwrap())
-                    .unwrap();
-                return Some(param.into());
+                if var_type.arg_style() != ArgStyle::Pointer {
+                    let param = fcs
+                        .function
+                        .get_nth_param(param_index.try_into().unwrap())
+                        .unwrap();
+                    return Some(param.into());
+                } else {
+                    let param = fcs
+                        .function
+                        .get_nth_param(param_index.try_into().unwrap()).unwrap();
+                    // TODO: put arg_by_pointer variables in the variables hashmap?
+                    let loaded = fcs.builder.build_load(
+                        var_type.to_basic_type(fcs.context),
+                        param.try_into().unwrap(),
+                        &fcs.new_uuid(),
+                    );
+                    return Some(loaded.into());
+                }
             }
 
             if let Some(global) = fcs.comp_data.globals.get(name) {
@@ -543,9 +581,18 @@ fn compile(fcs: &FunctionCompilationState, expr_id: ExprID) -> Option<AnyValueEn
 
 fn compile_as_ptr(fcs: &FunctionCompilationState, expr_id: ExprID) -> PointerValue<'static> {
     match fcs.tree.get(expr_id) {
-        Ident { name, .. } => match fcs.variables.get(&name) {
+        Ident { name, var_type } => match fcs.variables.get(&name) {
             Some(var) => *var,
             None => {
+                if let Some(param_index) = fcs.arg_names.iter().position(|arg| arg == &name) 
+                    && var_type.arg_style() == ArgStyle::Pointer {
+                    let param = fcs
+                        .function
+                        .get_nth_param(param_index.try_into().unwrap())
+                        .unwrap();
+                    return param.try_into().unwrap();
+                }
+
                 let ident_no_ptr: BasicValueEnum =
                     compile(fcs, expr_id).unwrap().try_into().unwrap();
 

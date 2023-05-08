@@ -241,7 +241,7 @@ impl CompData {
                 None
             );
 
-        add_sret_attribute_to_func(&mut empty_function, context, &function_type.ret);
+        add_sret_attribute_to_func(&mut empty_function, context, &function_type);
 
         self.compiled
             .entry(info.clone())

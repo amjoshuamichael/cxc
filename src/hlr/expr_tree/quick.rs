@@ -1,7 +1,7 @@
 use crate::{
     hlr::hlr_data::FuncRep,
     lex::VarName,
-    parse::{InitOpts, Opcode},
+    parse::{InitOpts, Opcode, TypeSpec},
     Type, UniqueFuncInfo,
 };
 
@@ -255,6 +255,18 @@ impl NodeDataGen for StructLitGen {
     }
 }
 
+impl StructLitGen {
+    pub fn tuple(elems: Vec<Box<dyn NodeDataGen>>) -> StructLitGen {
+        StructLitGen {
+            fields: elems.into_iter()
+                .enumerate()
+                .map(|(i, e)| ((i as u32).into(), e))
+                .collect(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ArrayLitGen {
     pub var_type: Type,
@@ -289,7 +301,6 @@ impl NodeDataGen for ArrayLitGen {
 pub struct MemberGen {
     pub object: Box<dyn NodeDataGen>,
     pub field: VarName,
-    pub ret_type: Type,
 }
 
 impl NodeDataGen for MemberGen {
@@ -297,13 +308,18 @@ impl NodeDataGen for MemberGen {
         let space = hlr.tree.make_one_space(parent);
 
         let object = self.object.add_to_expr_tree(hlr, space);
+        let object_type = hlr.tree.get(object).ret_type();
+        let member_type = 
+            hlr.get_type_spec(&TypeSpec::StructMember(box object_type.into(), self.field.clone()))
+                .unwrap();
 
         hlr.tree.replace(
             space,
             HNodeData::Member {
                 object,
                 field: self.field.clone(),
-                ret_type: self.ret_type.clone(),
+                ret_type: member_type,
+
             },
         );
 

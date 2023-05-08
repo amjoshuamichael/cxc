@@ -62,7 +62,6 @@ fn type_level_functions() {
     unit.add_lib(StdLib);
 
     unit.add_type_level_func("AddAnI32".into(), add_an_i32);
-    println!("HERE");
 
     unit.push_script(
         r#"

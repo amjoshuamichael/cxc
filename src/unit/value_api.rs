@@ -160,7 +160,7 @@ impl Unit {
                 ink_func_type, 
                 None
             );
-            add_sret_attribute_to_func(&mut function, self.context, &func_type.ret);
+            add_sret_attribute_to_func(&mut function, self.context, &func_type);
 
             self.new_func_comp_state(
                 func_rep.take_tree(),
