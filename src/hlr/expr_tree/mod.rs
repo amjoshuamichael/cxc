@@ -28,9 +28,9 @@ impl Debug for ExprTree {
         for expr in &self.nodes {
             writeln!(
                 fmt,
-                "{:?} : {} : {:?}",
+                "{:?} : {:?} : {:?}",
                 expr.0,
-                expr.1.data.to_string(self).replace('\n', ""),
+                expr.1.data,
                 expr.1.data.ret_type()
             )?
         }
@@ -118,7 +118,6 @@ pub enum HNodeData {
         rhs: ExprID,
     },
     Set {
-        ret_type: Type,
         lhs: ExprID,
         rhs: ExprID,
     },
@@ -188,7 +187,7 @@ impl HNodeData {
         match self {
             Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
             Bool { .. } => Type::bool(),
-            While { .. } => Type::void(),
+            While { .. } | Set { .. } => Type::void(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }
             | ArrayLit { var_type, .. }
@@ -198,7 +197,6 @@ impl HNodeData {
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
-            | Set { ret_type, .. }
             | Call { ret_type, .. }
             | IndirectCall { ret_type, .. }
             | Block { ret_type, .. }
@@ -216,7 +214,7 @@ impl HNodeData {
                 ref mut lit_type, ..
             } => Some(lit_type),
             Bool { .. } => None,
-            While { .. } => None,
+            While { .. } | Set { .. } => None,
             Ident {
                 ref mut var_type, ..
             }
@@ -242,9 +240,6 @@ impl HNodeData {
                 ref mut ret_type, ..
             }
             | IfThenElse {
-                ref mut ret_type, ..
-            }
-            | Set {
                 ref mut ret_type, ..
             }
             | Call {

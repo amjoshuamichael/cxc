@@ -10,6 +10,9 @@
 #![feature(fn_traits)]
 #![feature(tuple_trait)]
 
+#![allow(unused_variables)]
+#![allow(dead_code)]
+
 // HOW DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
 // 2. llvm-debug: enables debug printing for the LLVM IR
@@ -48,10 +51,12 @@ pub use cxc_derive::{XcReflect, xc_opaque};
 pub mod bytesof;
 mod errors;
 mod hlr;
+mod mir;
 mod lex;
 mod libraries;
 mod parse;
 #[cfg(feature = "backend-llvm")]
 mod to_llvm;
+mod llvm_backend;
 mod typ;
 mod unit;

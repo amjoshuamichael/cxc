@@ -23,13 +23,14 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
                 else { todo!("This literal can only use a struct type") };
 
-            let (new_default, make_new_default) = 
+            let (new_default, _) = 
                 hlr.add_variable("default", &var_type);
 
             hlr.insert_statement_before(
                 structlit_id,
-                MakeVarGen {
-                    to: box CallGen {
+                SetVarGen {
+                    lhs: box new_default.clone(),
+                    rhs: box CallGen {
                         info: UniqueFuncInfo {
                             name: VarName::from("default"),
                             relation: TypeRelation::Static(var_type.clone()),
@@ -37,7 +38,6 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                         },
                         ..Default::default()
                     },
-                    ..make_new_default
                 },
             );
 
@@ -81,9 +81,9 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
             let set_default_array = hlr
                 .insert_statement_before(
                     arraylit_id,
-                    MakeVarGen {
-                        to: box arraylit_data.clone(),
-                        ..make_defaulted_array
+                    SetVarGen {
+                        lhs: box defaulted_array.clone(),
+                        rhs: box arraylit_data.clone(),
                     },
                 )
                 .inserted_id();

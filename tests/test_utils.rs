@@ -23,11 +23,20 @@ macro_rules! xc_test {
             unit.push_script(&*format!("main() {code}")).unwrap();
         }
 
+
         #[allow(unused_assignments)]
         // this is just so output uses the expected output's type
         let mut output = $expected_output;
 
-        output = unit.get_fn("main").unwrap().downcast::<(), _>()();
+        #[cfg(feature = "llvm-debug")]
+        println!("--getting function--");
+
+        let function = unit.get_fn("main").unwrap().downcast::<(), _>();
+
+        #[cfg(feature = "llvm-debug")]
+        println!("--running function--");
+
+        output = function();
 
         #[cfg(feature = "show-bytes")]
         cxc::bytesof::print_binary_two(&$expected_output, &output);

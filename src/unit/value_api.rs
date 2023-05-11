@@ -3,9 +3,10 @@ use crate::{
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, Expr, FuncCode, TypeRelation},
-    to_llvm::{add_sret_attribute_to_func, compile_routine},
+    to_llvm::add_sret_attribute_to_func,
+    llvm_backend::compile_routine,
     typ::{FuncType, ReturnStyle},
-    TypeEnum, Unit, XcReflect,
+    TypeEnum, Unit, XcReflect, mir::mir,
 };
 use std::{collections::HashMap, mem::transmute, sync::Mutex};
 
@@ -142,32 +143,28 @@ impl Unit {
             ..Default::default()
         };
 
-        let mut func_rep = hlr(info.clone(), &self.comp_data, code)?;
+        let func_rep = hlr(info.clone(), &self.comp_data, code)?;
+        let mir = mir(func_rep, &self.comp_data);
 
-        let mut dependencies: Vec<_> = func_rep.get_func_dependencies().into_iter().collect();
-        dependencies = dependencies.into_iter()
+        let dependencies: Vec<_> = mir.dependencies
+            .iter()
             .filter(|f| !self.comp_data.has_been_compiled(f))
+            .cloned()
             .collect();
+
         self.compile_func_set(dependencies)?;
 
         let mut fcs = {
-            let TypeEnum::Func(func_type) = func_rep.func_type.as_type_enum()
-                else { unreachable!() };
-            let ink_func_type = func_type.llvm_func_type(self.context, false);
+            let ink_func_type = mir.func_type.llvm_func_type(self.context, false);
 
             let mut function = self.module.add_function(
-                "HEEELO", 
+                "$value", 
                 ink_func_type, 
                 None
             );
-            add_sret_attribute_to_func(&mut function, self.context, &func_type);
+            add_sret_attribute_to_func(&mut function, self.context, &mir.func_type);
 
-            self.new_func_comp_state(
-                func_rep.take_tree(),
-                func_rep.take_data_flow(),
-                function,
-                func_rep.take_arg_names(),
-            )
+            self.new_func_comp_state(mir, function)
         };
 
         let block = fcs.context.append_basic_block(fcs.function, "");
@@ -185,9 +182,7 @@ impl Unit {
             .get_function_address("HEEELO")
             .unwrap();
 
-        let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 
-            func_rep.func_type.as_type_enum() else { panic!() };
-
+        let ret_type = fcs.mir.func_type.ret;
         let value = unsafe {
             match ret_type.return_style() {
                 ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {

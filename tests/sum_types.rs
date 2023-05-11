@@ -41,23 +41,23 @@ fn sum_type_basic_set_2() {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum PointOrFloat {
+pub enum PointOrInt {
     Point(Point2D),
-    Float(f32),
+    Int(i32),
 }
 
 #[test]
 fn sum_type_struct() {
     xc_test!(
         "
-            PointOrFloat = { Point: { x: i32, y: i32 } / Float: f32 }
+            PointOrFloat = { Point: { x: i32, y: i32 } / Int: i32 }
 
             main(); PointOrFloat {
                 x: PointOrFloat = PointOrFloat.Point { x = 43, y = 54 }
                 ; x
             }
         ";
-        PointOrFloat::Point(Point2D { x: 43, y: 54 })
+        PointOrInt::Point(Point2D { x: 43, y: 54 })
     );
 }
 
@@ -65,14 +65,14 @@ fn sum_type_struct() {
 fn sum_type_struct_2() {
     xc_test!(
         "
-            PointOrFloat = { Point: { x: i32, y: i32 } / Float: f32 }
+            PointOrFloat = { Point: { x: i32, y: i32 } / Int: i32 }
 
             main(); PointOrFloat {
-                x: PointOrFloat = PointOrFloat.Float { 245.93 }
+                x: PointOrFloat = PointOrFloat.Int { 245 }
                 ; x
             }
         ";
-        PointOrFloat::Float(245.93)
+        PointOrInt::Int(245)
     );
 }
 

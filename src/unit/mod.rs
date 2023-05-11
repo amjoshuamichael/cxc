@@ -7,14 +7,16 @@ pub use self::functions::{Func, FuncDowncasted};
 pub use self::value_api::Value;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
-use crate::hlr::hlr_data::Variables;
-use crate::hlr::hlr_data_output::FuncOutput;
+use crate::to_llvm::add_sret_attribute_to_func;
 use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::libraries::Library;
+use crate::llvm_backend::compile_routine;
+use crate::mir::MIR;
+use crate::mir::mir;
 use crate::parse;
 use crate::parse::*;
-use crate::to_llvm::*;
+use crate::llvm_backend::FunctionCompilationState;
 use crate::Kind;
 use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
@@ -33,7 +35,6 @@ use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -207,30 +208,33 @@ impl Unit {
         while !set.is_empty() {
             all_func_infos.extend(set.clone().into_iter());
             
-            let func_reps: Vec<FuncOutput> = { set }
+            let func_reps: Vec<MIR> = { set }
                 .drain(..)
                 .map(|info| {
                     let code = self.comp_data.get_code(info.clone()).unwrap();
-                    let hlr = hlr(info.clone(), &self.comp_data, code);
+                    let hlr = hlr(info.clone(), &self.comp_data, code)?;
+                    let mir = mir(hlr, &self.comp_data);
 
                     self.comp_data.create_func_placeholder(&info, self.context, &self.module)?;
 
-                    hlr
+                    Ok(mir)
                 })
-                .collect::<CResultMany<Vec<FuncOutput>>>()?;
+                .collect::<CResultMany<Vec<MIR>>>()?;
 
             set = func_reps
                 .iter()
-                .flat_map(|f| f.get_func_dependencies().into_iter())
+                .flat_map(|f| f.dependencies.clone().into_iter())
                 .filter(|f| !self.comp_data.has_been_compiled(f) )
+                .filter(|f| !all_func_infos.contains(&f) )
                 .collect();
 
             for func in func_reps.iter() {
                 let depended_on_by = self.comp_data
                     .dependencies
-                    .get(func.info_ref())
+                    .get(&func.info)
                     .cloned()
-                    .unwrap_or_default();
+                    .unwrap_or_default(); // if dependencies aren't listed, assume 
+                                          // there aren't any
 
                 let depended_on_by = depended_on_by
                     .into_iter()
@@ -243,42 +247,44 @@ impl Unit {
         }
 
         for func in &all_funcs_to_compile {
-            for depends_on in func.get_func_dependencies() {
-                let calling_set = self.comp_data.dependencies.entry(depends_on).or_default();
-                calling_set.insert(func.info_ref().clone());
+            for depends_on in &func.dependencies {
+                let calling_set = self.comp_data.dependencies.entry(depends_on.clone()).or_default();
+                calling_set.insert(func.info.clone());
             }
         }
 
-        for func_output in &mut all_funcs_to_compile {
-            self.compile(func_output);
+        for mir in all_funcs_to_compile {
+            self.compile(mir);
         }
 
-        if crate::LLVM_DEBUG {
+        #[cfg(feature = "llvm-debug")]
+        {
             println!("compiled these: ");
             println!("{}", self.module.print_to_string().to_string());
         }
 
         for func_info in self.comp_data.compiled.keys() {
+            let name = func_info.to_string(&self.comp_data.generations);
+
             self.comp_data.compiled.get(func_info).unwrap().set_pointer(
                 self.execution_engine
                     .borrow()
-                    .get_function_address(&func_info.to_string(&self.comp_data.generations))
+                    .get_function_address(&name)
                     .expect("unable to get function address") as *const usize,
             );
         }
 
+        #[cfg(feature = "llvm-debug")]
+        println!("--finished all compilation--");
+        
+
         Ok(())
     }
 
-    fn compile(&mut self, output: &mut FuncOutput) {
-        let function = self.get_func_value(output.info_ref()).unwrap();
+    fn compile(&mut self, mir: MIR) {
+        let function = self.get_func_value(&mir.info).unwrap();
 
-        let mut fcs = self.new_func_comp_state(
-            output.take_tree(),
-            output.take_data_flow(),
-            function,
-            output.take_arg_names(),
-        );
+        let mut fcs = self.new_func_comp_state(mir, function);
 
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
@@ -304,23 +310,19 @@ impl Unit {
 
     fn new_func_comp_state(
         &self,
-        tree: ExprTree,
-        data_flow: Variables,
+        mir: MIR,
         function: FunctionValue<'static>,
-        arg_names: Vec<VarName>,
     ) -> FunctionCompilationState {
         FunctionCompilationState {
-            ret_type: tree.return_type(),
-            tree,
-            data_flow,
-            variables: HashMap::new(),
-            used_functions: HashMap::new(),
+            mir,
+            memlocs: BTreeMap::new(),
+            addresses: BTreeMap::new(),
+            blocks: Vec::new(),
+            used_functions: BTreeMap::new(),
             function,
             builder: self.context.create_builder(),
             context: self.context,
             comp_data: &self.comp_data,
-            llvm_ir_uuid: RefCell::new(0),
-            arg_names,
         }
     }
 

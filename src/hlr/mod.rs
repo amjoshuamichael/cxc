@@ -2,6 +2,9 @@ mod add_void_return;
 pub mod expr_tree;
 mod active_initialization;
 mod auto_deref;
+mod deref_members;
+mod ref_assignments;
+mod remove_redundant_derefs;
 mod op_overloading;
 mod struct_literals;
 mod variant_literals;
@@ -35,6 +38,9 @@ use self::hlr_data_output::FuncOutput;
 use self::large_returns::large_returns;
 use self::large_args::large_args;
 use self::add_drops::add_drops;
+use self::deref_members::deref_members;
+use self::ref_assignments::ref_assignments;
+use self::remove_redundant_derefs::remove_redundant_derefs;
 
 pub fn hlr(
     info: UniqueFuncInfo,
@@ -62,8 +68,12 @@ pub fn hlr(
     struct_literals(&mut output)?;
     large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
+        println!("{}", &output.tree.to_string());
     add_drops(&mut output);
     large_args(&mut output);
+    //deref_members(&mut output);
+    //ref_assignments(&mut output);
+    remove_redundant_derefs(&mut output);
 
     if crate::XC_DEBUG {
         println!("{}", &output.tree.to_string());

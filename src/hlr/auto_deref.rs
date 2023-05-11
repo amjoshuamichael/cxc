@@ -17,22 +17,17 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
                 &()
             )?;
 
-            match report.deref_count {
-                1.. => {
-                    for _ in 0..report.deref_count {
-                        let object_type = hlr.tree.get(*object).ret_type();
+            for _ in 0..report.deref_count {
+                let object_type = hlr.tree.get(*object).ret_type();
 
-                        *object = hlr.insert_quick(
-                            memberlit,
-                            HNodeData::UnarOp {
-                                ret_type: object_type.get_auto_deref(&hlr.comp_data)?.clone(),
-                                op: Opcode::Deref,
-                                hs: *object,
-                            },
-                        );
-                    }
-                },
-                _ => {},
+                *object = hlr.insert_quick(
+                    memberlit,
+                    HNodeData::UnarOp {
+                        ret_type: object_type.get_auto_deref(&hlr.comp_data)?.clone(),
+                        op: Opcode::Deref,
+                        hs: *object,
+                    },
+                );
             }
 
             Ok(())

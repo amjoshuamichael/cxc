@@ -16,16 +16,11 @@ pub fn struct_literals(hlr: &mut FuncRep) -> CResultMany<()> {
             let (new_struct, make_new_struct) = 
                 hlr.add_variable("struct", &struct_type);
 
-            let mut current_statement = hlr
-                .insert_statement_before(
-                    structlit,
-                    make_new_struct,
-                )
-                .inserted_id();
+            let mut current_statement = structlit;
 
-            for (field_name, field_expr) in field_exprs {
+            for (field_name, field_expr) in field_exprs.iter().rev() {
                 current_statement = hlr
-                    .insert_statement_after(
+                    .insert_statement_before(
                         current_statement,
                         SetVarGen {
                             lhs: box MemberGen {

@@ -2,7 +2,7 @@ use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo};
 use crate::{Type, UniqueFuncInfo, VarName};
 
-use super::{ExprID, ExprTree, HNodeData, NodeDataGen, MakeVarGen};
+use super::{ExprID, ExprTree, HNodeData, NodeDataGen, MakeVarGen, SetVarGen};
 use super::{ExprNode, HNodeData::*};
 
 impl ExprTree {
@@ -179,6 +179,7 @@ impl<'a> FuncRep<'a> {
 
             modifier(index, &mut data_copy, self)?;
 
+            // TODO: remove this??
             self.tree.replace(index, data_copy);
         }
 
@@ -226,14 +227,13 @@ impl<'a> FuncRep<'a> {
         self.add_variable_inner(name, typ, true) 
     }
 
-    pub fn add_variable(&mut self, name: &str, typ: &Type) -> (VarName, MakeVarGen) { 
+    pub fn add_variable(&mut self, name: &str, typ: &Type) -> (VarName, SetVarGen) { 
         let name = self.add_variable_inner(name, typ.clone(), false);
 
         (
             name.clone(), 
-            MakeVarGen {
-                set: name,
-                var_type: typ.clone(),
+            SetVarGen {
+                lhs: box name,
                 ..Default::default()
             }
         )

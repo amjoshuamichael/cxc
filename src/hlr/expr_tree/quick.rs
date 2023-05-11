@@ -112,7 +112,6 @@ impl NodeDataGen for SetVarGen {
             HNodeData::Set {
                 lhs,
                 rhs,
-                ret_type: hlr.tree.get_ref(lhs).ret_type(),
             },
         );
 

@@ -1,44 +1,33 @@
 use std::collections::BTreeSet;
 
-use crate::{lex::VarName, unit::UniqueFuncInfo, Type};
+use crate::{lex::VarName, unit::UniqueFuncInfo, Type, FuncType};
 
 use super::{
     expr_tree::{ExprTree, HNodeData},
     hlr_data::Variables,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FuncOutput {
-    pub(super) tree: Option<ExprTree>,
-    pub(super) data_flow: Option<Variables>,
-    pub(super) arg_names: Option<Vec<VarName>>,
-    pub(super) info: Option<UniqueFuncInfo>,
-    pub func_type: Type,
+    pub tree: ExprTree,
+    pub data_flow: Variables,
+    pub arg_names: Vec<VarName>,
+    pub info: UniqueFuncInfo,
+    pub func_type: FuncType,
 }
 
 impl FuncOutput {
     pub fn get_func_dependencies(&self) -> BTreeSet<UniqueFuncInfo> {
         let mut output = BTreeSet::<UniqueFuncInfo>::new();
 
-        let tree = self.tree_ref();
-
-        for (_, node_data) in tree.iter() {
+        for (_, node_data) in self.tree.iter() {
             let HNodeData::Call { .. } = node_data
                 else { continue; };
 
-            let func_info = tree.unique_func_info_of_call(node_data);
+            let func_info = self.tree.unique_func_info_of_call(node_data);
             output.insert(func_info);
         }
 
         output
     }
-
-    pub fn tree_ref(&self) -> &ExprTree { self.tree.as_ref().unwrap() }
-    pub fn arg_names_ref(&self) -> &Vec<VarName> { self.arg_names.as_ref().unwrap() }
-    pub fn info_ref(&self) -> &UniqueFuncInfo { self.info.as_ref().unwrap() }
-
-    pub fn take_tree(&mut self) -> ExprTree { self.tree.take().unwrap() }
-    pub fn take_arg_names(&mut self) -> Vec<VarName> { self.arg_names.take().unwrap() }
-    pub fn take_info(&mut self) -> UniqueFuncInfo { self.info.take().unwrap() }
-    pub fn take_data_flow(&mut self) -> Variables { self.data_flow.take().unwrap() }
 }
