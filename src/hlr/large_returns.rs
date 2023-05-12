@@ -29,8 +29,8 @@ fn handle_own_return(hlr: &mut FuncRep) {
     }
 }
 
-fn return_by_cast(hlr: &mut FuncRep, cast_to: Type) {
-    let (casted_ret, set_casted_ret) = hlr.add_variable("casted_ret", &cast_to);
+fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
+    let (casted_ret, _) = hlr.add_variable("casted_ret", &load_as);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -38,14 +38,7 @@ fn return_by_cast(hlr: &mut FuncRep, cast_to: Type) {
 
             hlr.insert_statement_before(return_id, SetVarGen {
                 lhs: box casted_ret.clone(),
-                rhs: box CallGen {
-                    info: UniqueFuncInfo {
-                        name: VarName::from("cast"),
-                        generics: vec![hlr.tree.get(*to_return).ret_type(), cast_to.clone()],
-                        ..Default::default()
-                    },
-                    args: vec![box hlr.tree.get(*to_return)],
-                },
+                rhs: box hlr.tree.get(*to_return),
             });
 
             hlr.replace_quick(*to_return, casted_ret.clone());
@@ -123,7 +116,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
         },
     );
 
-    struct_literals(hlr).unwrap();
+    struct_literals(hlr)
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {

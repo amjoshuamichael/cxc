@@ -154,11 +154,13 @@ impl Unit {
 
         self.compile_func_set(dependencies)?;
 
+        let value_function_name = format!("$value{:x}", rand::random::<u32>());
+
         let mut fcs = {
             let ink_func_type = mir.func_type.llvm_func_type(self.context, false);
 
             let mut function = self.module.add_function(
-                "$value", 
+                &*&value_function_name, 
                 ink_func_type, 
                 None
             );
@@ -175,11 +177,10 @@ impl Unit {
             println!("{}", self.module.print_to_string().to_string());
         }
 
-        //self.module.get_function(&*info.to_string(&self.comp_data.generations)).unwrap();
         let func_addr = self
             .execution_engine
             .borrow()
-            .get_function_address("HEEELO")
+            .get_function_address(&*value_function_name)
             .unwrap();
 
         let ret_type = fcs.mir.func_type.ret;

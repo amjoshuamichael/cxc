@@ -65,14 +65,11 @@ pub fn hlr(
     op_overloading(&mut output);
     variant_literals(&mut output);
     active_initialization(&mut output);
-    struct_literals(&mut output)?;
+    struct_literals(&mut output);
     large_returns(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
-        println!("{}", &output.tree.to_string());
     add_drops(&mut output);
     large_args(&mut output);
-    //deref_members(&mut output);
-    //ref_assignments(&mut output);
     remove_redundant_derefs(&mut output);
 
     if crate::XC_DEBUG {

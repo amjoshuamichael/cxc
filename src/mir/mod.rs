@@ -1,6 +1,6 @@
 use std::{collections::{BTreeSet, BTreeMap}, fmt::{Display, Formatter}};
 
-use crate::{VarName, parse::Opcode, UniqueFuncInfo, Type, CompData, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::{Variables, VariableInfo}}, FuncType, TypeEnum, ArrayType, typ::ReturnStyle};
+use crate::{VarName, parse::Opcode, UniqueFuncInfo, Type, CompData, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::{Variables, VariableInfo}}, FuncType, TypeEnum, ArrayType};
 
 #[derive(Debug)]
 pub struct MIR {
@@ -32,7 +32,7 @@ impl MIR {
         MAddrReg(current_reg)
     }
 
-    pub fn new_variable(&mut self, mut base_name: &str, typ: Type) -> VarName {
+    pub fn new_variable(&mut self, base_name: &str, typ: Type) -> VarName {
         let mut base_name = String::from(base_name);
         let mut var_name = VarName::from(&*base_name);
 
@@ -60,6 +60,11 @@ pub enum MLine {
         l: MAddr,
         val: MOperand,
     },
+    MemCpy {
+        from: MAddr,
+        to: MAddr,
+        len: MOperand,
+    },
     Return(Option<MOperand>),
     Marker(u32),
     Goto(u32),
@@ -84,6 +89,7 @@ impl std::fmt::Debug for MLine {
             Goto(id) => write!(f, "goto {}", id),
             Expr(expr) => write!(f, "{:?}", expr),
             Branch { if_, yes, no } => write!(f, "if {:?} goto {} else {}", if_, yes, no),
+            MemCpy { from, to, len } => write!(f, "mcpy {from:?} to {to:?}; {len:?} bytes"),
         }
     }
 }
@@ -180,10 +186,15 @@ pub enum MExpr {
     BinOp { ret_type: Type, op: Opcode, l: MOperand, r: MOperand, },
     UnarOp { ret_type: Type, op: Opcode, hs: MOperand },
     Array { elem_type: Type, elems: Vec<MOperand> },
-    Call { typ: FuncType, f: UniqueFuncInfo, a: Vec<MOperand> },
-    Cast { to: Type, from: MOperand },
+    Call { typ: FuncType, f: MCallable, a: Vec<MOperand> },
     Ref { on: MAddr },
     Deref { to: Type, on: MOperand },
+}
+
+#[derive(Debug)]
+pub enum MCallable {
+    Func(UniqueFuncInfo),
+    FirstClass(MMemLoc),
 }
 
 #[derive(Debug)]
@@ -409,6 +420,21 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
                 },
             }
         },
+        HNodeData::Call { ref f, ref a, ref generics, .. } if &*f.to_string() == "cast" => {
+            let from_type = generics[0].clone();
+            let to_type = generics[1].clone();
+
+            let val = build_as_addr(tree.get(a[0]), tree, mir);
+            let new_cast_out = mir.new_variable("cast_out", to_type.clone());
+
+            mir.lines.push(MLine::MemCpy { 
+                from: val, 
+                to: MAddr::Var(new_cast_out.clone()), 
+                len: MOperand::Lit(MLit::Int { size: 32, val: from_type.size() as u64 }),
+            });
+
+            MExpr::MemLoc(MMemLoc::Var(new_cast_out))
+        },
         HNodeData::Call { ref f, ref a, ref ret_type, .. } => {
             let info = tree.unique_func_info_of_call(&node);
             let typ = FuncType {
@@ -417,7 +443,17 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             };
             let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
 
-            MExpr::Call { typ, f: info, a }
+            MExpr::Call { typ, f: MCallable::Func(info), a }
+        },
+        HNodeData::IndirectCall { ref f, ref a, ref ret_type, .. } => {
+            let f = build_as_memloc(tree.get(*f), tree, mir);
+            let typ = FuncType {
+                ret: ret_type.clone(),
+                args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
+            };
+            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
+
+            MExpr::Call { typ, f: MCallable::FirstClass(f), a }
         },
         HNodeData::ArrayLit { var_type, parts, initialize } => {
             let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() else { unreachable!() };
@@ -465,7 +501,11 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
 
             MAddrExpr::Index { array_type, element_type, object, index }
         }
-        HNodeData::ArrayLit { .. } => {
+        HNodeData::ArrayLit { .. } 
+        | HNodeData::Number { .. } 
+        | HNodeData::Float { .. } 
+        | HNodeData::Bool { .. } 
+        | HNodeData::Call { .. } => {
             let new_var = mir.new_variable("temp_storage", node.ret_type());
             let addr = MAddr::Var(new_var);
 

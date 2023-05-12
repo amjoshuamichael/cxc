@@ -496,13 +496,23 @@ impl VariantType {
         Type::new(TypeEnum::Sum(self.parent.clone()))
     }
 
-    pub fn as_struct_no_parent(parent: &SumType, variant_type: &Type) -> Type {
-        let tag = ("tag".into(), Type::i(8));
-
-        let mut fields = match variant_type.as_type_enum() {
+    pub fn as_struct_no_parent(parent: &SumType, variant_data: &Type) -> Type {
+        let mut fields = match variant_data.as_type_enum() {
             TypeEnum::Struct(StructType { fields, .. }) => fields.clone(),
-            _ => vec![("data".into(), variant_type.clone())],
+            _ => vec![("data".into(), variant_data.clone())],
         };
+
+        // TODO: add ability to get alignment of a type
+        let tag_should_copy_alignment_of = match fields.get(0) {
+            Some(field) => field.1.clone(),
+            None => parent.largest_variant_data(),
+        };
+        let tag_size = match tag_should_copy_alignment_of.size() {
+            0..=1 => 8,
+            2..4 => 16,
+            _ => 32,
+        };
+        let tag = ("tag".into(), Type::i(tag_size));
 
         if !parent.has_internal_discriminant() {
             fields.insert(0, tag);
@@ -510,7 +520,7 @@ impl VariantType {
 
         let as_struct_no_padding = Type::new_struct(fields.clone());
 
-        let padding_amount = if &parent.largest_variant_data() != variant_type {
+        let padding_amount = if &parent.largest_variant_data() != variant_data {
             parent.largest_variant_as_struct().size() - as_struct_no_padding.size()
         } else {
             0

@@ -152,7 +152,7 @@ impl Unit {
                 .comp_data
                 .get_spec(&"Option<T>".into(), &vec![typ.clone()])
             {
-                Self::do_size_assertion::<Option<T>>(&xc_opt, "This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608/what-is-the-null-pointer-optimization-in-rust.");
+                Self::do_size_assertion::<Option<T>>(&xc_opt, "This is likely because the rust version contains a pointer that the cxc version does not, or vise versa. See https://stackoverflow.com/questions/46557608.");
             }        
         }
 

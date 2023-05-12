@@ -9,6 +9,7 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 #![feature(tuple_trait)]
+#![feature(exclusive_range_pattern)]
 
 #![allow(unused_variables)]
 #![allow(dead_code)]

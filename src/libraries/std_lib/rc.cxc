@@ -22,7 +22,7 @@ Rc<T> = {
     new(value: T); Rc<T> {
         box: &RcBox<T> = alloc< RcBox<T> >( 1 )
 
-        *box = RcBox<T> { strong = 1, weak = 0, value = value }
+        *box = RcBox<T> { strong = i64 1, weak = i64 0, value = value }
         
         rc: Rc<T> = Rc<T> { inner = box }
 

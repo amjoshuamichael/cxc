@@ -57,6 +57,10 @@ pub struct FieldsIter {
 
 impl FieldsIter {
     pub fn new(from: Type) -> FieldsIter {
+        if matches!(from.as_type_enum(), TypeEnum::Variant { .. }) {
+            panic!();
+        }
+
         FieldsIter {
             over: from,
             index: 0,

@@ -19,7 +19,7 @@ pub fn compile_bin_op(
     let reg = &*reg.to_string();
 
     match math_type.as_type_enum() {
-        TypeEnum::Int(_) => {
+        TypeEnum::Int(_) | TypeEnum::Bool(_) => {
             use IntPredicate::*;
 
             let l = l.into_int_value();

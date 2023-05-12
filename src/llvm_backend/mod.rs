@@ -1,5 +1,5 @@
 use crate::hlr::hlr_data::VariableInfo;
-use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg};
+use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
 use crate::typ::{Kind, ReturnStyle};
 use crate::{unit::*, Type, FuncType};
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -177,6 +177,13 @@ pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
                 fcs.blocks[*no as usize]
             );
         },
+        MLine::MemCpy { from, to, len } => {
+            let from = get_addr(fcs, from);
+            let to = get_addr(fcs, to);
+            let len = compile_operand(fcs, len).into_int_value();
+            
+            fcs.builder.build_memcpy(to, 1, from, 1, len).unwrap();
+        }
         _ => todo!(),
     }
 }
@@ -227,7 +234,7 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 reg_name,
             ))
         }
-        MExpr::Call { typ, f, a } => {
+        MExpr::Call { typ, f: MCallable::Func(f), a } => {
             match &*f.name.to_string() {
                 "memcpy" => {
                     let src = compile_operand(fcs, &a[0]).into_pointer_value();
@@ -331,6 +338,29 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
                     callsite.try_as_basic_value().left()
                 }
             }
+        },
+        MExpr::Call { typ, f: MCallable::FirstClass(loc), a } => {
+            let func = load_memloc(fcs, loc).into_pointer_value();
+
+            let arg_vals = a.into_iter()
+                .map(|arg| {
+                    let basic_arg = compile_operand(fcs, arg);
+                    BasicMetadataValueEnum::try_from(basic_arg).unwrap()
+                })
+                .collect::<Vec<_>>();
+
+            let mut callsite = fcs.builder.build_indirect_call(
+                typ.llvm_func_type(fcs.context, false),
+                func, 
+                &*arg_vals,
+                &*reg.map(MReg::to_string).unwrap_or_default(),
+            );
+
+            if typ.ret.return_style() == ReturnStyle::Sret {
+                add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
+            }
+
+            callsite.try_as_basic_value().left()
         },
         _ => todo!("{:?}", expr),
     }

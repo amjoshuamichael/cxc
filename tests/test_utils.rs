@@ -41,7 +41,7 @@ macro_rules! xc_test {
         #[cfg(feature = "show-bytes")]
         cxc::bytesof::print_binary_two(&$expected_output, &output);
 
-        assert_eq!(output, $expected_output);
+        assert_eq!($expected_output, output);
     }};
 }
 
