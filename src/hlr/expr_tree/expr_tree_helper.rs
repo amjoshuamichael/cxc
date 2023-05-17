@@ -2,7 +2,7 @@ use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo};
 use crate::{Type, UniqueFuncInfo, VarName};
 
-use super::{ExprID, ExprTree, HNodeData, NodeDataGen, MakeVarGen, SetVarGen};
+use super::{ExprID, ExprTree, HNodeData, NodeDataGen, SetVarGen};
 use super::{ExprNode, HNodeData::*};
 
 impl ExprTree {

@@ -1,7 +1,7 @@
 use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, UniqueFuncInfo};
 
 use super::{
-    expr_tree::{CallGen, IndexGen, MakeVarGen, MemberGen, HNodeData, SetVarGen},
+    expr_tree::{CallGen, IndexGen, MemberGen, HNodeData, SetVarGen},
     hlr_data::FuncRep,
 };
 

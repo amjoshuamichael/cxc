@@ -1,7 +1,7 @@
 use inkwell::{values::BasicValueEnum, IntPredicate};
-use crate::Kind;
 use inkwell::{values::*, FloatPredicate};
 use crate::llvm_backend::compile_operand;
+use crate::llvm_backend::to_llvm_type::ToLLVMType;
 use crate::mir::MOperand;
 use crate::{TypeEnum, Type};
 use crate::{parse::Opcode, llvm_backend::FunctionCompilationState};

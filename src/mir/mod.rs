@@ -1,218 +1,12 @@
-use std::{collections::{BTreeSet, BTreeMap}, fmt::{Display, Formatter}};
+use std::collections::BTreeMap;
 
-use crate::{VarName, parse::Opcode, UniqueFuncInfo, Type, CompData, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::{Variables, VariableInfo}}, FuncType, TypeEnum, ArrayType};
+use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::VariableInfo}, FuncType, TypeEnum, ArrayType};
 
-#[derive(Debug)]
-pub struct MIR {
-    pub lines: Vec<MLine>,
-    pub variables: Variables,
-    pub dependencies: BTreeSet<UniqueFuncInfo>,
-    pub info: UniqueFuncInfo,
-    pub func_type: FuncType,
-    pub block_count: u32,
-    pub reg_count: u32,
-    pub addr_reg_count: u32,
-    pub reg_types: BTreeMap<MReg, Type>,
-}
+pub use self::mir_data::*;
 
-impl MIR {
-    pub fn new_reg(&mut self, typ: Type) -> MReg {
-        let current_reg = self.reg_count;
-        self.reg_count += 1;
-        let reg = MReg(current_reg);
+mod mir_data;
 
-        self.reg_types.insert(reg, typ);
-
-        reg
-    }
-
-    pub fn new_addr_reg(&mut self) -> MAddrReg {
-        let current_reg = self.addr_reg_count;
-        self.addr_reg_count += 1;
-        MAddrReg(current_reg)
-    }
-
-    pub fn new_variable(&mut self, base_name: &str, typ: Type) -> VarName {
-        let mut base_name = String::from(base_name);
-        let mut var_name = VarName::from(&*base_name);
-
-        while self.variables.contains_key(&var_name) {
-            base_name += "_";
-            var_name = VarName::from(&*base_name);
-        }
-
-        self.variables.insert(var_name, VariableInfo { typ, arg_index: None, });
-
-        VarName::from(&*base_name)
-    }
-}
-
-pub enum MLine {
-    Set {
-        l: MReg,
-        r: MExpr,
-    },
-    SetAddr {
-        l: MAddrReg,
-        r: MAddrExpr,
-    },
-    Store {
-        l: MAddr,
-        val: MOperand,
-    },
-    MemCpy {
-        from: MAddr,
-        to: MAddr,
-        len: MOperand,
-    },
-    Return(Option<MOperand>),
-    Marker(u32),
-    Goto(u32),
-    Expr(MExpr),
-    Branch {
-        if_: MOperand,
-        yes: u32,
-        no: u32,
-    },
-}
-
-impl std::fmt::Debug for MLine {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use MLine::*;
-
-        match self {
-            Set { l, r } => write!(f, "rset {:?} <- {:?}", l, r),
-            SetAddr { l, r } => write!(f, "aset {:?} <- {:?}", l, r),
-            Store { l, val } => write!(f, "stor {:?} <- {:?}", l, val),
-            Return(val) => write!(f, "; {:?}", val),
-            Marker(id) => write!(f, "marker {}", id),
-            Goto(id) => write!(f, "goto {}", id),
-            Expr(expr) => write!(f, "{:?}", expr),
-            Branch { if_, yes, no } => write!(f, "if {:?} goto {} else {}", if_, yes, no),
-            MemCpy { from, to, len } => write!(f, "mcpy {from:?} to {to:?}; {len:?} bytes"),
-        }
-    }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MReg(u32);
-
-impl ToString for MReg {
-    fn to_string(&self) -> String { format!("{self}") }
-}
-impl Display for MReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "_{}", self.0) }
-}
-impl std::fmt::Debug for MReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "%{self}") }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MAddrReg(u32);
-
-impl ToString for MAddrReg {
-    fn to_string(&self) -> String { format!("{self}") }
-}
-impl Display for MAddrReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "-{}", self.0) }
-}
-impl std::fmt::Debug for MAddrReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "%{self}") }
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub enum MMemLoc {
-    Reg(MReg),
-    Var(VarName),
-}
-
-impl std::fmt::Debug for MMemLoc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use MMemLoc::*;
-
-        match self {
-            Reg(reg) => write!(f, "{:?}", reg),
-            Var(var) => write!(f, "{}", var),
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum MAddr {
-    Reg(MAddrReg),
-    Var(VarName),
-}
-
-impl std::fmt::Debug for MAddr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use MAddr::*;
-
-        match self {
-            Reg(reg) => write!(f, "{:?}", reg),
-            Var(var) => write!(f, "@{}", var),
-        }
-    }
-}
-
-pub enum MLit {
-    Int { size: u32, val: u64 },
-    Float { size: u32, val: f64 },
-    Bool(bool),
-}
-
-impl std::fmt::Debug for MLit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use MLit::*;
-
-        match self {
-            Int { size, val } => write!(f, "{}i{}", val, size),
-            Float { size, val } => write!(f, "{}f{}", val, size),
-            Bool(val) => write!(f, "{}", val),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum MOperand {
-    MemLoc(MMemLoc),
-    Lit(MLit),
-}
-
-#[derive(Debug)]
-pub enum MExpr {
-    MemLoc(MMemLoc),
-    Lit(MLit),
-    Addr(MAddr),
-    BinOp { ret_type: Type, op: Opcode, l: MOperand, r: MOperand, },
-    UnarOp { ret_type: Type, op: Opcode, hs: MOperand },
-    Array { elem_type: Type, elems: Vec<MOperand> },
-    Call { typ: FuncType, f: MCallable, a: Vec<MOperand> },
-    Ref { on: MAddr },
-    Deref { to: Type, on: MOperand },
-}
-
-#[derive(Debug)]
-pub enum MCallable {
-    Func(UniqueFuncInfo),
-    FirstClass(MMemLoc),
-}
-
-#[derive(Debug)]
-pub enum MAddrExpr {
-    Expr(MExpr),
-    Addr(MAddr),
-    Member { object_type: Type, object: MAddr, field_index: u32 },
-    Index { array_type: Type, element_type: Type, object: MAddr, index: MOperand },
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum MathType {
-    Int,
-    Float,
-    Bool,
-}
-
-pub fn mir(hlr: FuncOutput, comp_data: &CompData) -> MIR {
+pub fn mir(hlr: FuncOutput) -> MIR {
     let mut mir = MIR { 
         dependencies: hlr.get_func_dependencies(),
         lines: Vec::new(), 
@@ -394,6 +188,15 @@ fn build_as_addr_reg(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrRe
     l
 }
 
+fn build_as_addr_reg_with_normal_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrReg {
+    let l = mir.new_addr_reg();
+    let r = build_as_expr(node, tree, mir);
+
+    mir.lines.push(MLine::SetAddr { l, r: MAddrExpr::Expr(r), });
+
+    l
+}
+
 pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
     let ret_type = node.ret_type();
 
@@ -427,13 +230,26 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let val = build_as_addr(tree.get(a[0]), tree, mir);
             let new_cast_out = mir.new_variable("cast_out", to_type.clone());
 
-            mir.lines.push(MLine::MemCpy { 
+            mir.lines.push(MLine::MemCpy {
                 from: val, 
                 to: MAddr::Var(new_cast_out.clone()), 
                 len: MOperand::Lit(MLit::Int { size: 32, val: from_type.size() as u64 }),
             });
 
             MExpr::MemLoc(MMemLoc::Var(new_cast_out))
+        },
+        HNodeData::Call { ref f, ref a, ref generics, .. } if &*f.to_string() == "memcpy" => {
+            let from = build_as_addr_reg_with_normal_expr(tree.get(a[0]), tree, mir);
+            let to = build_as_addr_reg_with_normal_expr(tree.get(a[1]), tree, mir);
+            let len = build_as_operand(tree.get(a[2]), tree, mir);
+
+            mir.lines.push(MLine::MemCpy {
+                from: MAddr::Reg(from), 
+                to: MAddr::Reg(to), 
+                len,
+            });
+
+            MExpr::Void
         },
         HNodeData::Call { ref f, ref a, ref ret_type, .. } => {
             let info = tree.unique_func_info_of_call(&node);

@@ -1,7 +1,7 @@
 use crate::hlr::hlr_data::VariableInfo;
 use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
-use crate::typ::{Kind, ReturnStyle};
-use crate::{unit::*, Type, FuncType};
+use crate::typ::ReturnStyle;
+use crate::{unit::*, Type, FuncType, VarName};
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -14,6 +14,7 @@ use operations::compile_bin_op;
 
 use self::inkwell_utils::const_array;
 use self::operations::compile_unar_op;
+use self::to_llvm_type::ToLLVMType;
 
 pub struct FunctionCompilationState<'a> {
     pub mir: MIR,
@@ -24,14 +25,40 @@ pub struct FunctionCompilationState<'a> {
     pub function: FunctionValue<'static>,
     pub builder: Builder<'static>,
     pub context: &'static Context,
-    pub comp_data: &'a CompData,
+    pub globals: &'a BTreeMap<VarName, (Type, PointerValue<'static>)>,
+    pub generations: &'a Generations,
 }
 
 mod operations;
 mod inkwell_utils;
+mod backend;
+mod to_llvm_type;
+
+pub use backend::LLVMBackend;
+
+impl LLVMBackend {
+    fn new_func_comp_state(
+        &self,
+        mir: MIR,
+        function: FunctionValue<'static>,
+    ) -> FunctionCompilationState {
+        FunctionCompilationState {
+            mir,
+            memlocs: BTreeMap::new(),
+            addresses: BTreeMap::new(),
+            blocks: Vec::new(),
+            used_functions: BTreeMap::new(),
+            function,
+            builder: self.context.create_builder(),
+            context: self.context,
+            globals: &self.globals,
+            generations: &self.generations,
+        }
+    }
+}
 
 // ONLY adds if nescessary
-pub fn add_sret_attribute_to_func(
+pub fn add_nescessary_attributes_to_func(
     function: &mut FunctionValue<'static>,
     context: &'static Context,
     func_type: &FuncType,
@@ -113,7 +140,7 @@ fn get_used_functions(
 ) {
     for info in fcs.mir.dependencies.iter() {
         if let Some(function_value) = 
-            module.get_function(&info.to_string(&fcs.comp_data.generations)) {
+            module.get_function(&info.to_string(&fcs.generations)) {
 
             fcs.used_functions.insert(info.clone(), function_value);
         }
@@ -184,7 +211,6 @@ pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
             
             fcs.builder.build_memcpy(to, 1, from, 1, len).unwrap();
         }
-        _ => todo!(),
     }
 }
 
@@ -362,7 +388,7 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
 
             callsite.try_as_basic_value().left()
         },
-        _ => todo!("{:?}", expr),
+        MExpr::Void => None,
     }
 }
 
@@ -409,7 +435,6 @@ pub fn compile_addr_expr(
         }
         MAddrExpr::Expr(expr) => compile_expr(fcs, expr, None).unwrap().into_pointer_value(),
         MAddrExpr::Addr(addr) => get_addr(fcs, addr),
-        _ => todo!("{:?}", expr),
     }
 }
 
@@ -451,7 +476,7 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
         MMemLoc::Var(name) => {
             match fcs.mir.variables.get(name) {
                 None =>  {
-                    let global = &fcs.comp_data.globals[&name];
+                    let global = &fcs.globals[&name];
                     BasicValueEnum::PointerValue(global.1)
                 }
                 Some(VariableInfo { arg_index: Some(arg_index), .. }) => {

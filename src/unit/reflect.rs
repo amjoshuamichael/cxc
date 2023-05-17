@@ -25,10 +25,20 @@ pub trait XcReflect: 'static {
                 .clone()
         } else {
             let mut spec_lexer = lexer.split(VarName::None, GenericLabels::default());
+
+            let name = if let Ok(possible_name) = spec_lexer.peek_tok()
+                       && let Ok(name) = possible_name.type_name()
+                       && matches!(name, TypeName::Other(_))
+                       && spec_lexer.peek_by(1).is_err() {
+                name
+            } else {
+                TypeName::Anonymous
+            };
+
             let spec = parse::parse_type_spec(&mut spec_lexer).expect("error in type spec");
 
             TypeDecl {
-                name: TypeName::Anonymous,
+                name,
                 typ: spec,
                 contains_generics: false,
             }
@@ -98,7 +108,13 @@ macro_rules! impl_reflect_generic {
                 let mut code = String::from("Reflected = ");
                 code += stringify!($arg);
                 code += "<";
-                code += &*T::type_decl().name.to_string();
+
+                if T::type_decl().name == TypeName::Anonymous {
+                    code += &*T::alias_code();
+                } else {
+                    code += &*T::type_decl().name.to_string();
+                }
+
                 code += ">";
                 code
             }
@@ -219,25 +235,35 @@ mod tests {
 
     #[test]
     fn reflect_basic() {
-        let mut unit = Unit::new();
+        let unit = Unit::new();
 
-        let typ = unit.add_reflect_type::<i32>().unwrap();
+        let typ = unit.get_reflect_type::<i32>().unwrap();
         assert_eq!(typ, Type::i(32));
     }
 
     #[test]
     fn reflect_tuple() {
-        let mut unit = Unit::new();
+        let unit = Unit::new();
 
-        let typ = unit.add_reflect_type::<(i32, f32)>().unwrap();
+        let typ = unit.get_reflect_type::<(i32, f32)>().unwrap();
         assert_eq!(typ, Type::new_tuple(vec![Type::i(32), Type::f(32)]));
     }
 
     #[test]
     fn reflect_func() {
+        let unit = Unit::new();
+
+        let typ = unit.get_reflect_type::<fn(i32, f32) -> i32>().unwrap();
+        assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)]));
+    }
+
+    #[test]
+    fn reflect_vec() {
         let mut unit = Unit::new();
 
-        let typ = unit.add_reflect_type::<fn(i32, f32) -> i32>().unwrap();
-        assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)]));
+
+        unit.push_script("Vec<T> = { len: u64, cap: u64, loc: &T }").unwrap();
+        let typ = unit.get_reflect_type::<Vec<u64>>().unwrap();
+        assert_eq!(typ, unit.comp_data.get_spec(&"Vec<u64>".into(), &()).unwrap());
     }
 }

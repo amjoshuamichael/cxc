@@ -1,43 +1,33 @@
+use self::backends::IsBackend;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
 pub use self::generations::Generations;
-pub use self::functions::{Func, FuncDowncasted};
 pub use self::value_api::Value;
+use crate::FuncType;
+use crate::TypeEnum;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
-use crate::to_llvm::add_sret_attribute_to_func;
 use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::libraries::Library;
-use crate::llvm_backend::compile_routine;
 use crate::mir::MIR;
 use crate::mir::mir;
 use crate::parse;
 use crate::parse::*;
-use crate::llvm_backend::FunctionCompilationState;
-use crate::Kind;
 use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
-use crate::TypeEnum;
 pub use add_external::ExternalFuncAdd;
 pub use functions::UniqueFuncInfo;
-use inkwell::context::Context;
-use inkwell::execution_engine::ExecutionEngine;
-use inkwell::module::Module;
-use inkwell::types::BasicType;
-use inkwell::values::*;
-use inkwell::AddressSpace;
-use inkwell::OptimizationLevel;
 pub use reflect::XcReflect;
 use std::any::TypeId;
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::pin::Pin;
-use std::rc::Rc;
+use crate::backend::Backend;
+pub use backends::function::*;
 
 mod add_external;
 pub mod callable;
@@ -47,16 +37,13 @@ mod reflect;
 mod rust_type_name_conversion;
 mod value_api;
 mod generations;
-
-pub(crate) use functions::FuncCodeInfo;
+pub mod backends;
 
 use crate as cxc;
 
 pub struct Unit {
     pub comp_data: Pin<Box<CompData>>,
-    pub(crate) execution_engine: Rc<RefCell<ExecutionEngine<'static>>>,
-    pub(crate) module: Module<'static>,
-    pub(crate) context: &'static Context,
+    pub(crate) backend: Backend,
 }
 
 #[derive(Clone, Default, XcReflectMac)]
@@ -65,14 +52,14 @@ pub struct CompData {
     aliases: BTreeMap<TypeName, TypeSpec>,
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     reflected_types: BTreeMap<TypeId, Type>,
-    pub(crate) globals: BTreeMap<VarName, (Type, PointerValue<'static>)>,
-    compiled: BTreeMap<UniqueFuncInfo, Func>,
     pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
     decl_names: BTreeMap<VarName, Vec<FuncDeclInfo>>,
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncDeclInfo>,
     pub generations: Generations,
     dependencies: BTreeMap<UniqueFuncInfo, BTreeSet<UniqueFuncInfo>>,
+    pub func_types: BTreeMap<UniqueFuncInfo, FuncType>,
+    pub globals: BTreeMap<VarName, Type>,
 }
 
 impl Debug for CompData {
@@ -85,44 +72,17 @@ impl Default for Unit {
     fn default() -> Self { Self::new() }
 }
 
-pub(crate) fn make_context() -> &'static Context {
-    unsafe { std::mem::transmute(Box::leak(box Context::create())) }
-}
-
 impl Unit {
     pub fn new() -> Self {
-        let context: &'static _ = make_context();
-
-        let random_module_name = format!("cxc_{:x}", rand::random::<u64>());
-        let module = Context::create_module(context, &random_module_name);
-
-        let execution_engine = module
-            .create_jit_execution_engine(OptimizationLevel::None)
-            .expect("unable to create execution engine");
-
         let mut new = Self {
             comp_data: Pin::new(Box::new(CompData::new())),
-            execution_engine: Rc::new(RefCell::new(execution_engine)),
-            module,
-            context,
+            backend: Backend::create(),
         };
 
         let comp_data_ptr = &mut *new.comp_data as *mut _;
         new.add_global("comp_data".into(), comp_data_ptr);
 
         new
-    }
-
-    pub fn reset_execution_engine(&self) {
-        self.execution_engine
-            .borrow()
-            .remove_module(&self.module)
-            .expect("unable to remove execution engine");
-        self.execution_engine.replace(
-            self.module
-                .create_jit_execution_engine(OptimizationLevel::None)
-                .expect("unable to recreate execution engine"),
-        );
     }
 
     pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
@@ -200,7 +160,7 @@ impl Unit {
             return Ok(());
         }
 
-        self.reset_execution_engine();
+        self.backend.begin_compilation_round();
 
         let mut all_funcs_to_compile = Vec::new();
         let mut all_func_infos = Vec::new();
@@ -213,9 +173,13 @@ impl Unit {
                 .map(|info| {
                     let code = self.comp_data.get_code(info.clone()).unwrap();
                     let hlr = hlr(info.clone(), &self.comp_data, code)?;
-                    let mir = mir(hlr, &self.comp_data);
+                    let mir = mir(hlr);
 
-                    self.comp_data.create_func_placeholder(&info, self.context, &self.module)?;
+                    self.backend.register_function(info.clone(), mir.func_type.clone());
+                    self.comp_data.globals.insert(
+                        info.name, 
+                        Type::new(TypeEnum::Func(mir.func_type.clone()))
+                    );
 
                     Ok(mir)
                 })
@@ -224,7 +188,7 @@ impl Unit {
             set = func_reps
                 .iter()
                 .flat_map(|f| f.dependencies.clone().into_iter())
-                .filter(|f| !self.comp_data.has_been_compiled(f) )
+                .filter(|f| !self.has_been_compiled(f) )
                 .filter(|f| !all_func_infos.contains(&f) )
                 .collect();
 
@@ -251,28 +215,15 @@ impl Unit {
                 let calling_set = self.comp_data.dependencies.entry(depends_on.clone()).or_default();
                 calling_set.insert(func.info.clone());
             }
+
+            self.comp_data.func_types.insert(func.info.clone(), func.func_type.clone());
         }
 
         for mir in all_funcs_to_compile {
-            self.compile(mir);
+            self.backend.compile_function(mir);
         }
 
-        #[cfg(feature = "llvm-debug")]
-        {
-            println!("compiled these: ");
-            println!("{}", self.module.print_to_string().to_string());
-        }
-
-        for func_info in self.comp_data.compiled.keys() {
-            let name = func_info.to_string(&self.comp_data.generations);
-
-            self.comp_data.compiled.get(func_info).unwrap().set_pointer(
-                self.execution_engine
-                    .borrow()
-                    .get_function_address(&name)
-                    .expect("unable to get function address") as *const usize,
-            );
-        }
+        self.backend.end_compilation_round();
 
         #[cfg(feature = "llvm-debug")]
         println!("--finished all compilation--");
@@ -280,68 +231,30 @@ impl Unit {
 
         Ok(())
     }
-
-    fn compile(&mut self, mir: MIR) {
-        let function = self.get_func_value(&mir.info).unwrap();
-
-        let mut fcs = self.new_func_comp_state(mir, function);
-
-        let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
-        fcs.builder.position_at_end(basic_block);
-
-        compile_routine(&mut fcs, &self.module);
-    }
     
     fn run_comp_script(&self) {
-        let func = self.execution_engine.borrow().get_function_address(&*UniqueFuncInfo {
+        let func = self.backend.get_function(UniqueFuncInfo {
             name: VarName::None,
             ..Default::default()
-        }.to_string(&self.comp_data.generations)).unwrap();
+        }).unwrap();
 
-        unsafe {
-            let func: unsafe extern "C" fn() = std::mem::transmute(func);
-            func()
-        }
-    }
-
-    fn get_func_value(&self, func_info: &UniqueFuncInfo) -> Option<FunctionValue<'static>> {
-        self.module.get_function(&func_info.to_string(&self.comp_data.generations))
-    }
-
-    fn new_func_comp_state(
-        &self,
-        mir: MIR,
-        function: FunctionValue<'static>,
-    ) -> FunctionCompilationState {
-        FunctionCompilationState {
-            mir,
-            memlocs: BTreeMap::new(),
-            addresses: BTreeMap::new(),
-            blocks: Vec::new(),
-            used_functions: BTreeMap::new(),
-            function,
-            builder: self.context.create_builder(),
-            context: self.context,
-            comp_data: &self.comp_data,
-        }
+        func.downcast::<(), ()>()();
     }
 
     pub fn get_fn(&self, with: impl Into<UniqueFuncInfo>) -> Option<&Func> {
-        let info = with.into();
+        self.backend.get_function(with)
+    }
 
-        #[cfg(feature = "ffi-assertions")]
-        {
-            assert!(
-                self.
-                    module
-                    .get_function(&info.to_string(&self.comp_data.generations))?
-                    .get_param_iter()
-                    .all(|param_type| !param_type.is_array_value()),
-                "Cannot run function that has array value as parameter. Pass in an array pointer instead."
-            );
-        }
+    pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
+        let is_intrinsic = if let Some(decl) = self.comp_data.get_declaration_of(info) {
+            self.comp_data.intrinsics.contains(&decl)
+        } else {
+            false
+        };
 
-        self.comp_data.compiled.get(&info)
+        let is_compiled_as_function = self.backend.has_been_compiled(&info);
+
+        is_intrinsic || is_compiled_as_function
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {
@@ -374,19 +287,17 @@ impl Unit {
     }
 
     pub fn add_global<T: XcReflect + 'static>(&mut self, name: VarName, val: *mut T) {
-        let as_int = val as usize;
-
         let typ = self.get_reflect_type::<T>().unwrap();
 
-        let as_ptr_val = self
-            .context
-            .i64_type()
-            .const_int(as_int as u64, false)
-            .const_to_pointer(
-                typ.to_basic_type(self.context)
-                    .ptr_type(AddressSpace::default()),
-            );
+        self.comp_data.globals.insert(name.clone(), typ.get_ref());
 
-        self.comp_data.globals.insert(name, (typ.get_ref(), as_ptr_val));
+        self.backend.add_global(name, typ.get_ref(), val as _);
+    }
+
+    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Option<(UniqueFuncInfo, Func)> {
+        dbg!(&self.backend.compiled_iter().count());
+        let (info, func): (&UniqueFuncInfo, &Func) = self.backend.compiled_iter().find(|(_, func)| dbg!(func.get_pointer()) == ptr)?;
+
+        Some((info.clone(), func.clone()))
     }
 }

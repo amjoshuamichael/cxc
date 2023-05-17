@@ -38,8 +38,6 @@ use self::hlr_data_output::FuncOutput;
 use self::large_returns::large_returns;
 use self::large_args::large_args;
 use self::add_drops::add_drops;
-use self::deref_members::deref_members;
-use self::ref_assignments::ref_assignments;
 use self::remove_redundant_derefs::remove_redundant_derefs;
 
 pub fn hlr(

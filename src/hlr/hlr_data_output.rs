@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::{lex::VarName, unit::UniqueFuncInfo, Type, FuncType};
+use crate::{lex::VarName, unit::UniqueFuncInfo, FuncType};
 
 use super::{
     expr_tree::{ExprTree, HNodeData},

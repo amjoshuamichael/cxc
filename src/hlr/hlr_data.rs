@@ -214,7 +214,6 @@ impl<'a> FuncRep<'a> {
                             println!("variables: {:?}", &self.variables); 
                             panic!("could not find identifier {name}") // TODO: throw error
                         })
-                        .0
                         .clone(),
                 };
 

@@ -1,15 +1,11 @@
-use inkwell::AddressSpace;
-use inkwell::values::{BasicMetadataValueEnum, BasicValue};
-
 use crate::parse::TypeSpec;
-use crate::to_llvm::add_sret_attribute_to_call_site;
 use crate::{
-    to_llvm::add_sret_attribute_to_func, typ::ReturnStyle, FuncType, Kind, Type, TypeEnum,
+    FuncType, Type, TypeEnum,
     TypeRelation, UniqueFuncInfo, Unit, XcReflect,
 };
 
 use super::FuncDeclInfo;
-use super::functions::Func;
+use super::backends::IsBackend;
 
 pub struct ExternalFuncAdd {
     pub ret_type: Type,
@@ -100,108 +96,29 @@ impl Unit {
         function_ptr: *const usize,
         ext_add: ExternalFuncAdd,
     ) {
+        let func_info = UniqueFuncInfo {
+            name: name.into(),
+            relation: ext_add.relation.clone(),
+            generics: ext_add.generics.clone(),
+            ..Default::default()
+        };
+
         let func_type = ext_add
             .ret_type
             .clone()
             .func_with_args(ext_add.arg_types.clone());
-        let TypeEnum::Func(func_type_inner) = 
-            func_type.as_type_enum() else { panic!() };
-        let ret_type = func_type_inner.ret.clone();
+        let TypeEnum::Func(func_type) = func_type.as_type_enum() else { panic!() };
 
-        let calling_func_type = func_type_inner.llvm_func_type(self.context, true);
-        let calling_func_ptr_type = calling_func_type.ptr_type(AddressSpace::default());
+        self.comp_data.func_types.insert(func_info.clone(), func_type.clone());
 
-        let outer_func_type = func_type_inner.llvm_func_type(self.context, false);
-
-        let func_info = UniqueFuncInfo {
-            name: name.into(),
-            relation: ext_add.relation.clone(),
-            generics: ext_add.generics,
-            ..Default::default()
-        };
-
-        self.comp_data.generations.update(func_info.clone());
-
-        let mut function =
-            self.module
-                .add_function(
-                    &func_info.to_string(&self.comp_data.generations), 
-                    outer_func_type, 
-                    None
-                );
-
-        add_sret_attribute_to_func(&mut function, self.context, &func_type_inner);
-
-        let builder = self.context.create_builder();
-
-        {
-            let block = self.context.append_basic_block(function, "link");
-            builder.position_at_end(block);
-        }
-
-        let llvm_func_ptr = self
-            .context
-            .i64_type()
-            .const_int(function_ptr as u64, false)
-            .const_to_pointer(calling_func_ptr_type);
-
-        let mut arg_vals: Vec<BasicMetadataValueEnum> =
-            function.get_params().iter().map(|p| (*p).into()).collect();
-
-        if ret_type.return_style() == ReturnStyle::Sret {
-            let mut out =
-                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
-            add_sret_attribute_to_call_site(&mut out, self.context, &ret_type);
-            builder.build_return(None);
-        } else if ret_type.rust_return_style() == ReturnStyle::Sret {
-            let i64i64 = Type::new_tuple(vec![Type::i(64); 2]).to_basic_type(self.context);
-
-            let call_out = builder.build_alloca(i64i64, "call_out");
-
-            arg_vals.insert(0, call_out.as_basic_value_enum().into());
-
-            let mut call = 
-                builder.build_indirect_call(
-                    calling_func_type, 
-                    llvm_func_ptr, 
-                    &arg_vals, 
-                    "call"
-                );
-            add_sret_attribute_to_call_site(&mut call, self.context, &ret_type);
-
-            builder.build_return(Some(&builder.build_load(i64i64, call_out, "load")));
-        } else if ret_type.is_void() {
-            builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
-            builder.build_return(None);
-        } else if ret_type.return_style() != ret_type.rust_return_style() {
-            let xc_ret = ret_type.raw_return_type().to_basic_type(self.context);
-            let rust_ret = ret_type.rust_raw_return_type().to_basic_type(self.context);
-
-            let out_var = builder.build_alloca(rust_ret, "out_var");
-
-            let out =
-                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call").try_as_basic_value().unwrap_left();
-            builder.build_store(out_var, out);
-
-            let casted = builder.build_load(xc_ret, out_var, "load");
-
-            builder.build_return(Some(&casted));
-        } else {
-            let out =
-                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
-            let out = out.try_as_basic_value().unwrap_left();
-            builder.build_return(Some(&out));
-        }
-
-        self.comp_data.compiled.insert(
-            func_info.clone(),
-            Func::new_external(
-                func_info.clone(),
-                func_type_inner.clone(),
-                function_ptr,
-            ),
+        self.backend.add_external_func(
+            func_info.clone(), 
+            function_ptr, 
+            func_type.clone(), 
+            ext_add,
         );
 
+        // TODO: figure out what this does and put it somewhere else
         self.comp_data.append_type_for_name(&FuncDeclInfo {
             name: func_info.name.clone(),
             relation: func_info.relation.map_inner_type(TypeSpec::from),
