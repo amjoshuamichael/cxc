@@ -1,5 +1,3 @@
-use super::functions::FuncDowncasted;
-use crate::unit::Func;
 use std::marker::Tuple;
 
 pub trait CallInput<R>: Tuple + Sized {
@@ -9,7 +7,7 @@ pub trait CallInput<R>: Tuple + Sized {
     unsafe fn call(addr: *const usize, args: Self) -> R;
 }
 
-macro_rules! impl_externalize {
+macro_rules! impl_call_input {
     ($($t:ident)*) => {
         impl<$($t,)* R> CallInput<R> for ($($t,)*) {
             type CFunc = unsafe extern "C" fn($($t,)*) -> R;
@@ -27,15 +25,6 @@ macro_rules! impl_externalize {
 
                     if !mem_region.is_executable() {
                         panic!("Woah! The memory region of a function is not executable! That shouldn't happen. This error occured while calling a cxc function at address '{addr:?}'. If the issue persists, please submit an issue at https://github.com/amjoshuamichael/cxc/issues/new.");
-                        //let protection_guard = protect_with_handle(addr, mem_region.len(), Protection::READ_EXECUTE).unwrap();
-
-                        //#[allow(non_snake_case)]
-                        //let ($($t,)*) = args;
-                        //let out = Self::externalize(addr)($($t),*);
-
-                        //std::mem::drop(protection_guard);
-
-                        //return out;
                     }
                 }
 
@@ -47,61 +36,17 @@ macro_rules! impl_externalize {
             }
         }
 
-        impl<$($t,)* R> FnOnce<($($t,)*)> for FuncDowncasted<($($t,)*), R>
-        where
-            ($($t,)*): CallInput<R>,
-        {
-            type Output = R;
-
-            extern "rust-call" fn call_once(self, args: ($($t,)*)) -> Self::Output {
-                // TODO: this gets set off if a function that returns a value doesn't have a 
-                // return statement. I'm not sure why, it's something to look into
-                let fn_ptr = self.inner.code().pointer().expect("function has not been initialized!");
-                unsafe { <($($t,)*)>::call(fn_ptr, args) }
-            }
-        }
-
-        impl<$($t,)* R> FnMut<($($t,)*)> for FuncDowncasted<($($t,)*), R>
-        where
-            ($($t,)*): CallInput<R>,
-        {
-            extern "rust-call" fn call_mut(&mut self, args: ($($t,)*)) -> Self::Output {
-                let fn_ptr = self.inner.code().pointer().expect("function has not been initialized!");
-                unsafe { <($($t,)*)>::call(fn_ptr, args) }
-            }
-        }
-
-        impl<$($t,)* R> Fn<($($t,)*)> for FuncDowncasted<($($t,)*), R>
-        where
-            ($($t,)*): CallInput<R>,
-        {
-            extern "rust-call" fn call(&self, args: ($($t,)*)) -> Self::Output {
-                let fn_ptr = self.inner.code().pointer().expect("function has not been initialized!");
-                unsafe { <($($t,)*)>::call(fn_ptr, args) }
-            }
-        }
+        
     }
 }
 
-impl_externalize!();
-impl_externalize!(A);
-impl_externalize!(A B);
-impl_externalize!(A B C);
-impl_externalize!(A B C D);
-impl_externalize!(A B C D E);
-impl_externalize!(A B C D E F G);
-impl_externalize!(A B C D E F G H);
-impl_externalize!(A B C D E F G H I);
-impl_externalize!(A B C D E F G H I J);
-
-impl Func {
-    pub fn downcast<A, R>(&self) -> FuncDowncasted<A, R>
-    where
-        A: CallInput<R>,
-    {
-        FuncDowncasted {
-            inner: self.clone(),
-            _phantoms: (std::marker::PhantomData, std::marker::PhantomData),
-        }
-    }
-}
+impl_call_input!();
+impl_call_input!(A);
+impl_call_input!(A B);
+impl_call_input!(A B C);
+impl_call_input!(A B C D);
+impl_call_input!(A B C D E);
+impl_call_input!(A B C D E F G);
+impl_call_input!(A B C D E F G H);
+impl_call_input!(A B C D E F G H I);
+impl_call_input!(A B C D E F G H I J);

@@ -18,8 +18,19 @@ fn handle_own_args(hlr: &mut FuncRep) {
     }
 }
 
-fn arg_by_pointer(hlr: &mut FuncRep, name: VarName) {
-    hlr.variables[&name].typ = hlr.variables[&name].typ.get_ref();
+fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
+    hlr.variables[&arg_name].typ = hlr.variables[&arg_name].typ.get_ref();
+
+    hlr.modify_many_infallible_rev(
+        move |var_id, var_data, hlr| {
+            if !matches!(var_data, HNodeData::Ident { name, .. } if name == &arg_name) {
+                return;
+            }
+
+            hlr.replace_quick(var_id, DerefGen { object: arg_name.clone() });
+            *var_data = hlr.tree.get(var_id);
+        }
+    );
 }
 
 fn handle_other_calls(hlr: &mut FuncRep) {

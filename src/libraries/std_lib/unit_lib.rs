@@ -1,4 +1,4 @@
-use crate::{CompData, libraries::Library, ExternalFuncAdd, Func, unit::FuncCodeInfo, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, typ::{SumType, VariantType}, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
+use crate::{libraries::Library, Func, unit::backends::function::FuncCodePtr, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, typ::{SumType, VariantType}, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
 
 pub struct UnitLib;
 
@@ -20,7 +20,7 @@ impl Library for UnitLib {
                 FuncType::type_decl(),
                 ArrayType::type_decl(),
                 BoolType::type_decl(),
-                FuncCodeInfo::type_decl(),
+                FuncCodePtr::type_decl(),
                 UniqueFuncInfo::type_decl(),
                 TypeRelation::type_decl(),
                 Value::type_decl(),
@@ -33,21 +33,5 @@ impl Library for UnitLib {
         unit.assert_size_of_with_name::<TypeRelation>("TypeRelation").unwrap();
         unit.assert_size_of::<UniqueFuncInfo>().unwrap();
         unit.assert_size_of::<Func>().unwrap();
-
-        let func = unit.get_reflect_type::<Func>().unwrap();
-
-        let unique_func_info = unit.get_reflect_type::<UniqueFuncInfo>().unwrap();
-        let comp_data = unit.add_reflect_type::<CompData>().unwrap();
-
-        unit.add_rust_func_explicit(
-            "get_fn_by_ptr", 
-            CompData::get_fn_by_ptr as *const usize, 
-            ExternalFuncAdd { 
-                arg_types: vec![ Type::u(64) ], 
-                ret_type: Type::new_tuple(vec![unique_func_info, func]),
-                ..ExternalFuncAdd::empty() 
-            }
-            .method_of(comp_data.get_ref()),
-       );
     }
 }

@@ -3,17 +3,14 @@ use crate::{
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, Expr, FuncCode, TypeRelation},
-    to_llvm::{add_sret_attribute_to_func, compile_routine},
-    typ::{FuncType, ReturnStyle},
-    TypeEnum, Unit, XcReflect,
+    typ::ReturnStyle,
+    Unit, XcReflect, mir::mir,
 };
 use std::{collections::HashMap, mem::transmute, sync::Mutex};
 
 use crate::Type;
 
-use super::UniqueFuncInfo;
-
-pub type ExternFunc<I, O> = unsafe extern "C" fn(_: I, ...) -> O;
+use super::{UniqueFuncInfo, backends::IsBackend};
 
 use crate as cxc;
 
@@ -124,10 +121,6 @@ impl Unit {
             return Ok(Value::default());
         }
 
-        let temp_name = "Newfunc";
-
-        self.reset_execution_engine();
-
         let expr = {
             let mut lexed = lex(of);
             let mut context = lexed.split(VarName::None, HashMap::new());
@@ -137,62 +130,37 @@ impl Unit {
 
         let code = FuncCode::from_expr(expr);
 
-        let info = UniqueFuncInfo {
-            name: VarName::from(temp_name),
+        let value_function_name = VarName::from(format!("$val{:x}", rand::random::<u32>()));
+        let value_function_info = UniqueFuncInfo {
+            name: value_function_name,
             ..Default::default()
         };
 
-        let mut func_rep = hlr(info.clone(), &self.comp_data, code)?;
+        let hlr = hlr(value_function_info.clone(), &self.comp_data, code)?;
+        let mir = mir(hlr);
 
-        let mut dependencies: Vec<_> = func_rep.get_func_dependencies().into_iter().collect();
-        dependencies = dependencies.into_iter()
-            .filter(|f| !self.comp_data.has_been_compiled(f))
+        let dependencies: Vec<_> = mir.dependencies
+            .iter()
+            .filter(|f| !self.has_been_compiled(f))
+            .cloned()
             .collect();
+
         self.compile_func_set(dependencies)?;
 
-        let mut fcs = {
-            let TypeEnum::Func(func_type) = func_rep.func_type.as_type_enum()
-                else { unreachable!() };
-            let ink_func_type = func_type.llvm_func_type(self.context, false);
+        let ret_type = mir.func_type.ret.clone();
 
-            let mut function = self.module.add_function(
-                "HEEELO", 
-                ink_func_type, 
-                None
-            );
-            add_sret_attribute_to_func(&mut function, self.context, &func_type);
+        self.backend.begin_compilation_round();
+        self.backend.register_function(value_function_info.clone(), mir.func_type.clone());
+        self.backend.compile_function(mir);
+        self.backend.end_compilation_round();
 
-            self.new_func_comp_state(
-                func_rep.take_tree(),
-                func_rep.take_data_flow(),
-                function,
-                func_rep.take_arg_names(),
-            )
-        };
-
-        let block = fcs.context.append_basic_block(fcs.function, "");
-        fcs.builder.position_at_end(block);
-        compile_routine(&mut fcs, &self.module);
-
-        if crate::LLVM_DEBUG {
-            println!("{}", self.module.print_to_string().to_string());
-        }
-
-        //self.module.get_function(&*info.to_string(&self.comp_data.generations)).unwrap();
-        let func_addr = self
-            .execution_engine
-            .borrow()
-            .get_function_address("HEEELO")
-            .unwrap();
-
-        let TypeEnum::Func(FuncType { ret: ret_type, .. }) = 
-            func_rep.func_type.as_type_enum() else { panic!() };
+        let func_addr = self.backend.get_function(value_function_info).unwrap();
 
         let value = unsafe {
             match ret_type.return_style() {
                 ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
-                    let new_func: ExternFunc<(), i64> = transmute(func_addr);
-                    let out: [u8; 8] = new_func(()).to_ne_bytes();
+                    let new_func = func_addr.downcast::<(), i64>();
+                    let out: [u8; 8] = new_func().to_ne_bytes();
                     Value::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::ThroughI32I32
@@ -200,21 +168,21 @@ impl Unit {
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64
                 | ReturnStyle::MoveIntoI64I64 => {
-                    let new_func: ExternFunc<(), (i64, i64)> = transmute(func_addr);
-                    let out: [u8; 16] = transmute(new_func(()));
+                    let new_func = func_addr.downcast::<(), (i64, i64)>();
+                    let out: [u8; 16] = transmute(new_func());
                     Value::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::MoveIntoDouble => {
-                    let new_func: ExternFunc<(), f64> = transmute(func_addr);
-                    let out: [u8; 8] = transmute(new_func(()));
+                    let new_func = func_addr.downcast::<(), f64>();
+                    let out: [u8; 8] = transmute(new_func());
                     Value::new_from_arr(ret_type.clone(), out)
                 },
                 ReturnStyle::Sret => {
-                    let new_func: ExternFunc<(), MaxBytes> = transmute(func_addr);
+                    let new_func = func_addr.downcast::<(), MaxBytes>();
 
                     let data_vec = {
                         let mut bytes_lock = MAX_BYTES.lock().unwrap();
-                        *bytes_lock = new_func(());
+                        *bytes_lock = new_func();
                         bytes_lock[..ret_type.size()].to_vec()
                     };
 
@@ -226,11 +194,7 @@ impl Unit {
             }
         };
 
-        self.execution_engine
-            .borrow()
-            .free_fn_machine_code(fcs.function);
-
-        unsafe { fcs.function.delete() };
+        // TODO: free function machine code
 
         Ok(value)
     }

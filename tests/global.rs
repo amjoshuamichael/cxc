@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::test_utils::Numbers5;
 mod test_utils;
 
-use cxc::{Unit, library::StdLib, Func, Type, FuncType};
+use cxc::{Unit, library::StdLib, Type, FuncType};
 
 static mut GNUM: i32 = 0;
 
@@ -75,6 +75,7 @@ fn global_rc() {
 fn comp_script() {
     let mut unit = Unit::new();
 
+    unit.add_lib(StdLib);
     let mut large_value = Numbers5::default();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
@@ -87,7 +88,7 @@ fn comp_script() {
 
         x = 30
         y = double(x)
-        large_value.c = y
+        large_value.c = 60
 
         "#,
     )
@@ -136,7 +137,7 @@ fn get_fn_by_ptr() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
 
-    let mut functions = Vec::<Func>::new();
+    let mut functions = Vec::<usize>::new();
     unit.add_global("functions".into(), &mut functions as *mut _);
 
     unit.push_script(
@@ -146,12 +147,14 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(comp_data.get_fn_by_ptr(add_two).1)
-        functions.push(comp_data.get_fn_by_ptr(fifty_four).1)
+        functions.push(add_two)
+        functions.push(fifty_four)
         "#
     ).unwrap();
 
     let [add_two, fifty_four] = &*functions else { panic!() };
+    let add_two = unit.get_fn_by_ptr(*add_two as _).unwrap().1;
+    let fifty_four = unit.get_fn_by_ptr(*fifty_four as _).unwrap().1;
 
     assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
     assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });

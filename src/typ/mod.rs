@@ -18,7 +18,6 @@ mod size;
 mod abi_styles;
 
 use cxc_derive::XcReflect;
-use inkwell::types::FunctionType;
 use invalid_state::InvalidState;
 pub use kind::Kind;
 pub use abi_styles::{ReturnStyle, realize_return_style, realize_arg_style, ArgStyle};
@@ -40,7 +39,7 @@ impl Default for Type {
 impl Type {
     pub fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
-    pub fn size(&self) -> usize { size::size_of_type(self.clone()) as usize }
+    pub fn size(&self) -> usize { size::size_of_type(self.clone()) }
 
     pub fn is_subtype_of(&self, of: &Type) -> bool {
         match self.as_type_enum() {
@@ -414,6 +413,18 @@ impl StructType {
     }
 
     pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].0, VarName::TupleIndex(0)) }
+
+    pub fn largest_field(&self) -> Option<Type> {
+        if self.fields.len() == 0 {
+            return None
+        }
+
+        let mut types = self.fields.iter().map(|(_, typ)| typ).collect::<Vec<_>>();
+        types.sort_by(|a, b| b.size().cmp(&a.size()));
+        types.reverse();
+
+        Some(types[0].clone())
+    }
 }
 
 // TODO: is not interroperable with a rust sum type with 0 variants.
@@ -496,13 +507,23 @@ impl VariantType {
         Type::new(TypeEnum::Sum(self.parent.clone()))
     }
 
-    pub fn as_struct_no_parent(parent: &SumType, variant_type: &Type) -> Type {
-        let tag = ("tag".into(), Type::i(8));
-
-        let mut fields = match variant_type.as_type_enum() {
+    pub fn as_struct_no_parent(parent: &SumType, variant_data: &Type) -> Type {
+        let mut fields = match variant_data.as_type_enum() {
             TypeEnum::Struct(StructType { fields, .. }) => fields.clone(),
-            _ => vec![("data".into(), variant_type.clone())],
+            _ => vec![("data".into(), variant_data.clone())],
         };
+
+        // TODO: add ability to get alignment of a type
+        let tag_should_copy_alignment_of = match fields.get(0) {
+            Some(field) => field.1.clone(),
+            None => parent.largest_variant_data(),
+        };
+        let tag_size = match tag_should_copy_alignment_of.size() {
+            0..=1 => 8,
+            2..4 => 16,
+            _ => 32,
+        };
+        let tag = ("tag".into(), Type::i(tag_size));
 
         if !parent.has_internal_discriminant() {
             fields.insert(0, tag);
@@ -510,7 +531,8 @@ impl VariantType {
 
         let as_struct_no_padding = Type::new_struct(fields.clone());
 
-        let padding_amount = if &parent.largest_variant_data() != variant_type {
+        let padding_amount = if &parent.largest_variant_data() != variant_data {
+            dbg!(&parent.largest_variant_as_struct(), &as_struct_no_padding);
             parent.largest_variant_as_struct().size() - as_struct_no_padding.size()
         } else {
             0

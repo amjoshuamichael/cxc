@@ -185,25 +185,6 @@ impl CompData {
 
     pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
 
-    pub fn unique_func_info_iter(&self) -> impl Iterator<Item = &UniqueFuncInfo> {
-        self.compiled.keys()
-    }
-
-    pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
-        let is_intrinsic = if let Some(decl) = self.get_declaration_of(info) {
-            self.intrinsics.contains(&decl)
-        } else {
-            false
-        };
-
-        if let Some(func) = self.compiled.get(info) && 
-            func.code().pointer().is_some() {
-            return true;
-        }
-
-        is_intrinsic
-    }
-
     pub fn name_is_intrinsic(&self, name: &VarName) -> bool {
         self.intrinsics.iter().any(|decl| &decl.name == name)
     }
@@ -214,8 +195,7 @@ impl CompData {
         for decl in possible_decls {
             if let Some(found_relation) = decl.relation.inner_type() && 
                 let Some(looking_for_relation) = info.relation.inner_type() {
-                if looking_for_relation.could_come_from(found_relation, self).unwrap()
-                {
+                if looking_for_relation.could_come_from(found_relation, self).unwrap() {
                     return Some(decl.clone());
                 }
             } else if decl.relation.inner_type().is_none() && info.relation.inner_type().is_none() {
@@ -226,41 +206,9 @@ impl CompData {
         None
     }
 
-    pub fn create_func_placeholder(
-        &mut self,
-        info: &UniqueFuncInfo,
-        context: &'static Context,
-        module: &Module<'static>,
-    ) -> CResult<()> {
-        let function_type = self.get_func_type(info)?;
-
-        let mut empty_function =
-            module.add_function(
-                &info.to_string(&self.generations), 
-                function_type.llvm_func_type(context, false), 
-                None
-            );
-
-        add_sret_attribute_to_func(&mut empty_function, context, &function_type);
-
-        self.compiled
-            .entry(info.clone())
-            .or_insert_with(|| Func::new_compiled(info.clone(), function_type.clone()));
-
-        self.globals.insert(
-            info.name.clone(),
-            (
-                Type::new(TypeEnum::Func(function_type)),
-                empty_function.as_global_value().as_pointer_value(),
-            ),
-        );
-
-        Ok(())
-    }
-
     pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<FuncType> {
-        if let Some(compiled) = self.compiled.get(info) {
-            return Ok(compiled.typ());
+        if let Some(func_type) = self.func_types.get(info) {
+            return Ok(func_type.clone());
         }
 
         let code = self.get_code(info.clone())?;
@@ -292,6 +240,7 @@ impl CompData {
     // TODO: return pointer from this function
     pub fn get_code(&self, info: UniqueFuncInfo) -> CResult<FuncCode> {
         let decl_info = self.get_declaration_of(&info);
+
         if let Some(decl_info) = decl_info {
             return Ok(self.func_code.get(&decl_info).unwrap().clone());
         };
@@ -335,15 +284,9 @@ impl CompData {
     pub fn get_alias_for(&self, name: &TypeName) -> TResult<&TypeSpec> {
         self.aliases.get(name).ok_or(TErr::Unknown(name.clone()))
     }
-
-    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> (UniqueFuncInfo, Func) {
-        let (info, func): (&UniqueFuncInfo, &Func) = self.compiled.iter().find(|(_, func)| func.get_pointer() == ptr).unwrap();
-
-        (info.clone(), func.clone())
-    }
 }
 
-use std::{hash::Hash, sync::{Arc, RwLock}, ptr::NonNull};
+use std::hash::Hash;
 
 use super::*;
 
@@ -427,106 +370,6 @@ impl From<VarName> for UniqueFuncInfo {
         UniqueFuncInfo {
             name,
             ..Default::default()
-        }
-    }
-}
-
-#[derive(Clone, Debug, XcReflectMac)]
-#[xc_opaque] // TODO: add RwLock to cxc
-pub struct Func {
-    inner: Arc<RwLock<FuncInner>>,
-}
-
-pub struct FuncDowncasted<A, R> {
-    pub inner: Func,
-    pub _phantoms: (std::marker::PhantomData<A>, std::marker::PhantomData<R>),
-}
-
-impl<A, R> Debug for FuncDowncasted<A, R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.inner.code().pointer())
-    }
-}
-
-impl<A, R> Clone for FuncDowncasted<A, R> {
-    fn clone(&self) -> Self {
-        FuncDowncasted {
-            inner: self.inner.clone(),
-            _phantoms: Default::default(),
-        }
-    }
-}
-
-// TODO: include name, relation, and generics in FuncInner
-impl Func {
-    fn new(inner: FuncInner) -> Func {
-        Self {
-            inner: Arc::new(RwLock::new(inner)),
-        }
-    }
-
-    pub fn new_compiled(_: UniqueFuncInfo, typ: FuncType) -> Func {
-        Self::new(FuncInner {
-            typ,
-            code: FuncCodeInfo::Compiled { pointer: None },
-        })
-    }
-
-    pub fn new_external(
-        _: UniqueFuncInfo,
-        typ: FuncType,
-        pointer: *const usize,
-    ) -> Func {
-        Self::new(FuncInner {
-            typ,
-            code: FuncCodeInfo::External {
-                pointer,
-            },
-        })
-    }
-
-    pub fn typ(&self) -> FuncType { self.inner.read().unwrap().typ.clone() }
-    pub fn code(&self) -> FuncCodeInfo {
-        let inner = self.inner.read().unwrap();
-        inner.code.clone()
-    }
-
-    pub(super) fn set_pointer(&self, pointer: *const usize) {
-        let mut inner = self.inner.write().unwrap();
-        inner.code = FuncCodeInfo::Compiled {
-            pointer: NonNull::new(pointer as *mut _),
-        };
-    }
-
-    pub(super) fn get_pointer(&self) -> *const usize {
-        let inner = self.inner.read().unwrap();
-
-        inner.code.pointer().unwrap()
-    }
-}
-
-#[derive(Debug, XcReflectMac)]
-struct FuncInner {
-    typ: FuncType,
-    code: FuncCodeInfo,
-}
-
-#[derive(Clone, Debug, XcReflectMac)]
-#[xc_opaque] // TODO: we shouldn't have to do this
-pub enum FuncCodeInfo {
-    Compiled {
-        pointer: Option<NonNull<usize>>,
-    },
-    External {
-        pointer: *const usize,
-    },
-}
-
-impl FuncCodeInfo {
-    pub fn pointer(&self) -> Option<*const usize> {
-        match self {
-            FuncCodeInfo::Compiled { ref pointer } => pointer.map(|x| x.as_ptr() as *const _),
-            FuncCodeInfo::External { pointer, .. } => Some(*pointer),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, UniqueFuncInfo};
 
 use super::{
-    expr_tree::{CallGen, IndexGen, MakeVarGen, MemberGen, HNodeData, SetVarGen},
+    expr_tree::{CallGen, IndexGen, MemberGen, HNodeData, SetVarGen},
     hlr_data::FuncRep,
 };
 
@@ -23,13 +23,14 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
                 else { todo!("This literal can only use a struct type") };
 
-            let (new_default, make_new_default) = 
+            let new_default = 
                 hlr.add_variable("default", &var_type);
 
             hlr.insert_statement_before(
                 structlit_id,
-                MakeVarGen {
-                    to: box CallGen {
+                SetVarGen {
+                    lhs: box new_default.clone(),
+                    rhs: box CallGen {
                         info: UniqueFuncInfo {
                             name: VarName::from("default"),
                             relation: TypeRelation::Static(var_type.clone()),
@@ -37,7 +38,6 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                         },
                         ..Default::default()
                     },
-                    ..make_new_default
                 },
             );
 
@@ -75,15 +75,15 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Array(array_type) = var_type.as_type_enum() 
                 else { panic!() };
 
-            let (defaulted_array, make_defaulted_array) = 
+            let defaulted_array = 
                 hlr.add_variable("defaulted_array", &var_type);
 
             let set_default_array = hlr
                 .insert_statement_before(
                     arraylit_id,
-                    MakeVarGen {
-                        to: box arraylit_data.clone(),
-                        ..make_defaulted_array
+                    SetVarGen {
+                        lhs: box defaulted_array.clone(),
+                        rhs: box arraylit_data.clone(),
                     },
                 )
                 .inserted_id();

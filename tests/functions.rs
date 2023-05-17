@@ -2,7 +2,7 @@ mod test_utils;
 use test_utils::xc_test;
 
 #[test]
-fn call_test() {
+fn call_test_1() {
     xc_test!(
         "
         mul_by_two(num: i32); i32 {

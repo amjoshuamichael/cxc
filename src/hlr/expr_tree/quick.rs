@@ -69,32 +69,6 @@ impl Default for Box<dyn NodeDataGen> {
 }
 
 #[derive(Debug, Default)]
-pub struct MakeVarGen {
-    pub set: VarName,
-    pub to: Box<dyn NodeDataGen>,
-    pub var_type: Type,
-}
-
-impl NodeDataGen for MakeVarGen {
-    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
-        let space = hlr.tree.make_one_space(parent);
-
-        let rhs = self.to.add_to_expr_tree(hlr, space);
-
-        hlr.tree.replace(
-            space,
-            HNodeData::MakeVar {
-                name: self.set.clone(),
-                var_type: self.var_type.clone(),
-                rhs,
-            },
-        );
-
-        space
-    }
-}
-
-#[derive(Debug, Default)]
 pub struct SetVarGen {
     pub lhs: Box<dyn NodeDataGen>,
     pub rhs: Box<dyn NodeDataGen>,
@@ -112,7 +86,6 @@ impl NodeDataGen for SetVarGen {
             HNodeData::Set {
                 lhs,
                 rhs,
-                ret_type: hlr.tree.get_ref(lhs).ret_type(),
             },
         );
 

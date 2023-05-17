@@ -9,6 +9,7 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 #![feature(tuple_trait)]
+#![feature(exclusive_range_pattern)]
 
 // HOW DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
@@ -48,10 +49,18 @@ pub use cxc_derive::{XcReflect, xc_opaque};
 pub mod bytesof;
 mod errors;
 mod hlr;
+mod mir;
 mod lex;
 mod libraries;
 mod parse;
+
 #[cfg(feature = "backend-llvm")]
-mod to_llvm;
+mod llvm_backend;
+
+pub mod backend {
+    #[cfg(feature = "backend-llvm")]
+    pub use super::llvm_backend::LLVMBackend as Backend;
+}
+
 mod typ;
 mod unit;

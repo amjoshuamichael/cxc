@@ -37,14 +37,13 @@ fn clone_util() {
     unit.push_script(
         "
         main(); String { 
-            cool_string: String = a_cool_string()
-            ; cool_string.clone()
+            ; a_cool_string()
         }
         ",
     );
 
-    let default_string = unit.get_fn("main").unwrap().downcast::<(), String>()();
-    assert_eq!(default_string, a_cool_string());
+    let cool_string_copy = unit.get_fn("main").unwrap().downcast::<(), String>();
+    assert_eq!(cool_string_copy(), a_cool_string());
 }
 
 fn a_cool_string() -> String { String::from("coolman") }

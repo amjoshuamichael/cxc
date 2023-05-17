@@ -3,7 +3,7 @@ use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
 use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
-use crate::parse::*;
+use crate::{parse::*, TypeEnum};
 use crate::typ::ReturnStyle;
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
@@ -117,12 +117,15 @@ impl<'a> FuncRep<'a> {
             func_arg_types.remove(0);
         }
 
+        let func_type = self.ret_type.clone().func_with_args(func_arg_types);
+        let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
+
         FuncOutput {
-            func_type: self.ret_type.clone().func_with_args(func_arg_types),
-            arg_names: Some(self.arg_names()),
-            tree: Some(self.tree),
-            data_flow: Some(self.variables),
-            info: Some(self.info),
+            func_type,
+            arg_names: self.arg_names(),
+            tree: self.tree,
+            data_flow: self.variables,
+            info: self.info,
         }
     }
 
@@ -211,7 +214,6 @@ impl<'a> FuncRep<'a> {
                             println!("variables: {:?}", &self.variables); 
                             panic!("could not find identifier {name}") // TODO: throw error
                         })
-                        .0
                         .clone(),
                 };
 
@@ -220,11 +222,18 @@ impl<'a> FuncRep<'a> {
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let var_type = self.variables[&decl.name].typ.clone() ;
+                let ret_type = self.variables[&decl.name].typ.clone();
 
-                let statement = HNodeData::MakeVar {
-                    var_type,
-                    name: decl.name,
+                let ident = self.tree.insert(
+                    space,
+                    HNodeData::Ident {
+                        var_type: ret_type.clone(),
+                        name: decl.name,
+                    },
+                );
+
+                let statement = HNodeData::Set {
+                    lhs: ident,
                     rhs: self.add_expr(*e, space),
                 };
 
@@ -236,7 +245,6 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_set = HNodeData::Set {
-                    ret_type: Type::unknown(),
                     lhs: self.add_expr(*lhs, space),
                     rhs: self.add_expr(*rhs, space),
                 };

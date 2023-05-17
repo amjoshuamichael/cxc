@@ -28,9 +28,9 @@ impl Debug for ExprTree {
         for expr in &self.nodes {
             writeln!(
                 fmt,
-                "{:?} : {} : {:?}",
+                "{:?} : {:?} : {:?}",
                 expr.0,
-                expr.1.data.to_string(self).replace('\n', ""),
+                expr.1.data,
                 expr.1.data.ret_type()
             )?
         }
@@ -66,7 +66,6 @@ impl ToString for ExprNode {
             Call { f, a, .. } => format!("{f:?}({a:?})"),
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { name, .. } => format!("{name}"),
-            MakeVar { name, rhs, .. } => format!("{name} = {rhs:?}"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => format!("{object:?}.{field}"),
             Index { object, index, .. } => format!("{object:?}[{index:?}]"),
@@ -112,13 +111,7 @@ pub enum HNodeData {
         var_type: Type,
         name: VarName,
     },
-    MakeVar {
-        var_type: Type,
-        name: VarName,
-        rhs: ExprID,
-    },
     Set {
-        ret_type: Type,
         lhs: ExprID,
         rhs: ExprID,
     },
@@ -188,17 +181,15 @@ impl HNodeData {
         match self {
             Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
             Bool { .. } => Type::bool(),
-            While { .. } => Type::void(),
+            While { .. } | Set { .. } => Type::void(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }
-            | ArrayLit { var_type, .. }
-            | MakeVar { var_type, .. } => var_type.clone(),
+            | ArrayLit { var_type, .. } => var_type.clone(),
             BinOp { ret_type, .. }
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
-            | Set { ret_type, .. }
             | Call { ret_type, .. }
             | IndirectCall { ret_type, .. }
             | Block { ret_type, .. }
@@ -216,7 +207,7 @@ impl HNodeData {
                 ref mut lit_type, ..
             } => Some(lit_type),
             Bool { .. } => None,
-            While { .. } => None,
+            While { .. } | Set { .. } => None,
             Ident {
                 ref mut var_type, ..
             }
@@ -224,9 +215,6 @@ impl HNodeData {
                 ref mut var_type, ..
             }
             | ArrayLit {
-                ref mut var_type, ..
-            }
-            | MakeVar {
                 ref mut var_type, ..
             } => Some(var_type),
             BinOp {
@@ -242,9 +230,6 @@ impl HNodeData {
                 ref mut ret_type, ..
             }
             | IfThenElse {
-                ref mut ret_type, ..
-            }
-            | Set {
                 ref mut ret_type, ..
             }
             | Call {
@@ -324,14 +309,6 @@ impl HNodeData {
             },
             Set { lhs, rhs, .. } => {
                 let mut lit = tree.get(*lhs).to_string(tree);
-                lit += " = ";
-                lit += &*tree.get(*rhs).to_string(tree);
-                lit
-            },
-            MakeVar { name, rhs, .. } => {
-                let mut lit = name.to_string();
-                lit += ": ";
-                lit += &*format!("{:?}", tree.get(*rhs).ret_type());
                 lit += " = ";
                 lit += &*tree.get(*rhs).to_string(tree);
                 lit

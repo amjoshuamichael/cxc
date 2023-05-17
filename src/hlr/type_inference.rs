@@ -156,6 +156,12 @@ pub fn infer_types(hlr: &mut FuncRep) {
             println!("{:?}", inferable);
         }
 
+        for id in hlr.tree.ids_in_order() {
+            if hlr.tree.get(id).ret_type().is_unknown() {
+                println!("{:?}", hlr.tree.get(id));
+            }
+        }
+
         println!("---UKNOWN CALLS---");
         for call_id in &infer_map.calls {
             let call_data = hlr.tree.get(*call_id);
@@ -168,10 +174,14 @@ pub fn infer_types(hlr: &mut FuncRep) {
 }
 
 fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
+    for (var, info) in &hlr.variables {
+        infer_map.insert(Inferable::Var(var.clone()), Constraint::IsType(info.typ.clone()));
+    }
+
     for id in hlr.tree.ids_in_order().into_iter().rev() {
         let node_data = hlr.tree.get(id);
 
-        if !node_data.ret_type().is_unknown() && !matches!(node_data, HNodeData::MakeVar { .. })
+        if node_data.ret_type().is_known() && !matches!(node_data, HNodeData::Set { .. })
         {
             continue;
         }
@@ -302,22 +312,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     method_of: None,
                 },
             ),
-            HNodeData::MakeVar {
-                ref name,
-                rhs,
-                var_type,
-            } => {
-                if var_type.is_known() {
-                    infer_map.insert(name, Constraint::IsType(var_type.clone()));
-                    infer_map.insert(rhs, Constraint::IsType(var_type.clone()));
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                } else {
-                    infer_map.insert(name, Constraint::SameAs(rhs.into()));
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                }
-            },
             HNodeData::Set { lhs, rhs, .. } => {
-                infer_map.insert(id, Constraint::IsType(Type::void()));
                 infer_map.insert(lhs, Constraint::SameAs(rhs.into()));
             },
             _ => {},

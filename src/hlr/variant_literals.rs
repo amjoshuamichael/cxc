@@ -1,4 +1,4 @@
-use crate::{Type, TypeEnum, UniqueFuncInfo, VarName};
+use crate::{Type, TypeEnum, UniqueFuncInfo, VarName, StructType};
 
 use super::{
     expr_tree::{CallGen, HNodeData, StructLitGen},
@@ -56,17 +56,30 @@ pub fn variant_literals(hlr: &mut FuncRep) {
 
                 *struct_data = hlr.tree.get(variant_data);
             } else {
+                let variant_type_as_struct = variant_type.as_struct();
+                let tag_type = {
+                    let TypeEnum::Struct(StructType { ref fields, .. }) = 
+                        variant_type_as_struct.as_type_enum() else { unreachable!() };
+
+                    fields
+                        .iter()
+                        .find(|(name, _)| &*name.to_string() == "tag")
+                        .unwrap()
+                        .1
+                        .clone()
+                };
+
                 let new_struct = if fields.len() == 1 {
                     hlr.insert_quick(
                         struct_parent,
                         StructLitGen {
-                            var_type: variant_type.as_struct(),
+                            var_type: variant_type_as_struct.clone(),
                             fields: vec![
                                 (
                                     "tag".into(),
                                     box HNodeData::Number {
                                         value: variant_type.tag as u64,
-                                        lit_type: Type::i(32),
+                                        lit_type: tag_type,
                                     },
                                 ),
                                 ("data".into(), box hlr.tree.get(fields[0].1)),
@@ -78,7 +91,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                     let tag = hlr.insert_quick(
                         struct_parent,
                         HNodeData::Number {
-                            lit_type: Type::i(8),
+                            lit_type: tag_type,
                             value: variant_type.tag as u64,
                         },
                     );
@@ -88,7 +101,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                     hlr.tree.insert(
                         struct_parent,
                         HNodeData::StructLit {
-                            var_type: variant_type.as_struct(),
+                            var_type: variant_type_as_struct.clone(),
                             fields: fields.clone(),
                             initialize: *initialize,
                         },
@@ -101,7 +114,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                         info: crate::UniqueFuncInfo {
                             name: VarName::from("cast"),
                             generics: vec![
-                                variant_type.as_struct(),
+                                variant_type_as_struct,
                                 variant_type.parent_type(),
                             ],
                             ..Default::default()

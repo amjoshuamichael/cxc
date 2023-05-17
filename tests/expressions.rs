@@ -6,7 +6,7 @@ fn i() { xc_test!("{ ; 1 }"; 1) }
 #[test]
 fn f() { xc_test!("{ ; 1.0 }"; 1.0f32) }
 #[test]
-fn bool() { xc_test!("{ ; true }"; true) }
+fn bool_basic() { xc_test!("{ ; true }"; true) }
 
 #[test]
 fn addi() { xc_test!("{ ; 1 + 2 }"; 3) }
