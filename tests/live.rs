@@ -1,4 +1,4 @@
-use cxc::{Unit, library::StdLib, FuncType, Func, Type, UniqueFuncInfo};
+use cxc::{Unit, library::StdLib, FuncType, Type};
 use serial_test::serial;
 
 #[test]

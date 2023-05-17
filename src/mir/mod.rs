@@ -43,7 +43,6 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
     for stmt in stmts {
         match tree.get(stmt) {
             HNodeData::Number { .. } | HNodeData::Float { .. } | HNodeData::Bool { .. } | HNodeData::Ident { .. } => {},
-            HNodeData::MakeVar { name, rhs, .. } => panic!(),
             HNodeData::Set { lhs, rhs, .. } => {
                 let lhs = build_as_addr(tree.get(lhs), &tree, mir);
                 let rhs = build_as_operand(tree.get(rhs), &tree, mir);
@@ -140,7 +139,7 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
                 MAddr::Var(name)
             }
         },
-        HNodeData::UnarOp { ret_type, op, hs } if op == Opcode::Deref => {
+        HNodeData::UnarOp { op, hs, .. } if op == Opcode::Deref => {
             let load = build_as_memloc(tree.get(hs), tree, mir);
             let new_areg = mir.new_addr_reg();
 
@@ -238,7 +237,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::MemLoc(MMemLoc::Var(new_cast_out))
         },
-        HNodeData::Call { ref f, ref a, ref generics, .. } if &*f.to_string() == "memcpy" => {
+        HNodeData::Call { ref f, ref a, .. } if &*f.to_string() == "memcpy" => {
             let from = build_as_addr_reg_with_normal_expr(tree.get(a[0]), tree, mir);
             let to = build_as_addr_reg_with_normal_expr(tree.get(a[1]), tree, mir);
             let len = build_as_operand(tree.get(a[2]), tree, mir);
@@ -251,7 +250,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Void
         },
-        HNodeData::Call { ref f, ref a, ref ret_type, .. } => {
+        HNodeData::Call { ref a, ref ret_type, .. } => {
             let info = tree.unique_func_info_of_call(&node);
             let typ = FuncType {
                 ret: ret_type.clone(),
@@ -271,7 +270,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Call { typ, f: MCallable::FirstClass(f), a }
         },
-        HNodeData::ArrayLit { var_type, parts, initialize } => {
+        HNodeData::ArrayLit { var_type, parts, .. } => {
             let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() else { unreachable!() };
             let parts = parts.into_iter().map(|part| build_as_operand(tree.get(part), tree, mir)).collect();
 
@@ -291,10 +290,8 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 }
 
 pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrExpr {
-    let ret_type = node.ret_type();
-
     match node {
-        HNodeData::Member { ret_type, object, field, .. } => {
+        HNodeData::Member { object, field, .. } => {
             let object_node = tree.get(object);
             let object_type = object_node.ret_type().complete_deref();
             let object = build_as_addr(object_node, tree, mir);

@@ -312,20 +312,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     method_of: None,
                 },
             ),
-            HNodeData::MakeVar {
-                ref name,
-                rhs,
-                var_type,
-            } => {
-                if var_type.is_known() {
-                    infer_map.insert(name, Constraint::IsType(var_type.clone()));
-                    infer_map.insert(rhs, Constraint::IsType(var_type.clone()));
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                } else {
-                    infer_map.insert(name, Constraint::SameAs(rhs.into()));
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                }
-            },
             HNodeData::Set { lhs, rhs, .. } => {
                 infer_map.insert(lhs, Constraint::SameAs(rhs.into()));
             },

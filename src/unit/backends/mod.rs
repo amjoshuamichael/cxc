@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{FuncType, UniqueFuncInfo, mir::MIR, VarName, Type, ExternalFuncAdd};
+use crate::{FuncType, UniqueFuncInfo, mir::MIR, VarName, Type};
 
 use super::callable::CallInput;
 
@@ -23,7 +23,7 @@ pub trait IsBackend: Sized {
         Box<dyn Iterator<Item = (&UniqueFuncInfo, &Self::LowerableFuncRef)> + 'a>;
 
     fn add_global(&mut self, name: VarName, typ: Type, address: *mut usize);
-    fn add_external_func(&mut self, info: UniqueFuncInfo, ptr: *const usize, func_type: FuncType, ext_add: ExternalFuncAdd);
+    fn add_external_func(&mut self, info: UniqueFuncInfo, func_type: FuncType, ptr: *const usize);
 }
 
 pub trait CallableFunc<A, R> where A: CallInput<R> { }

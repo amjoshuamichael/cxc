@@ -113,9 +113,8 @@ impl Unit {
 
         self.backend.add_external_func(
             func_info.clone(), 
-            function_ptr, 
             func_type.clone(), 
-            ext_add,
+            function_ptr, 
         );
 
         // TODO: figure out what this does and put it somewhere else

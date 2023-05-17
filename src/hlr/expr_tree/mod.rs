@@ -66,7 +66,6 @@ impl ToString for ExprNode {
             Call { f, a, .. } => format!("{f:?}({a:?})"),
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { name, .. } => format!("{name}"),
-            MakeVar { name, rhs, .. } => format!("{name} = {rhs:?}"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => format!("{object:?}.{field}"),
             Index { object, index, .. } => format!("{object:?}[{index:?}]"),
@@ -111,11 +110,6 @@ pub enum HNodeData {
     Ident {
         var_type: Type,
         name: VarName,
-    },
-    MakeVar {
-        var_type: Type,
-        name: VarName,
-        rhs: ExprID,
     },
     Set {
         lhs: ExprID,
@@ -190,8 +184,7 @@ impl HNodeData {
             While { .. } | Set { .. } => Type::void(),
             Ident { var_type, .. }
             | StructLit { var_type, .. }
-            | ArrayLit { var_type, .. }
-            | MakeVar { var_type, .. } => var_type.clone(),
+            | ArrayLit { var_type, .. } => var_type.clone(),
             BinOp { ret_type, .. }
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
@@ -222,9 +215,6 @@ impl HNodeData {
                 ref mut var_type, ..
             }
             | ArrayLit {
-                ref mut var_type, ..
-            }
-            | MakeVar {
                 ref mut var_type, ..
             } => Some(var_type),
             BinOp {
@@ -319,14 +309,6 @@ impl HNodeData {
             },
             Set { lhs, rhs, .. } => {
                 let mut lit = tree.get(*lhs).to_string(tree);
-                lit += " = ";
-                lit += &*tree.get(*rhs).to_string(tree);
-                lit
-            },
-            MakeVar { name, rhs, .. } => {
-                let mut lit = name.to_string();
-                lit += ": ";
-                lit += &*format!("{:?}", tree.get(*rhs).ret_type());
                 lit += " = ";
                 lit += &*tree.get(*rhs).to_string(tree);
                 lit

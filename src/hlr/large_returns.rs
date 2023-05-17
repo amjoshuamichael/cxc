@@ -30,7 +30,7 @@ fn handle_own_return(hlr: &mut FuncRep) {
 }
 
 fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
-    let (casted_ret, _) = hlr.add_variable("casted_ret", &load_as);
+    let casted_ret = hlr.add_variable("casted_ret", &load_as);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -48,7 +48,7 @@ fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
 
 fn return_by_move_into_double(hlr: &mut FuncRep) {
     let f64 = Type::f(64);
-    let (casted_ret, set_casted_ret) = hlr.add_variable("casted_ret", &f64);
+    let casted_ret = hlr.add_variable("casted_ret", &f64);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -78,7 +78,7 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
     let i32i64 = Type::new_tuple(vec![Type::i(32), Type::i(64)]);
     let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
-    let (output_var_name, make_output_var) = hlr.add_variable("casted_ret", &i32i64);
+    let output_var_name = hlr.add_variable("casted_ret", &i32i64);
 
     hlr.modify_many_infallible(
         |return_id, mut data, hlr| {
@@ -168,18 +168,18 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
-    let (casted_var_name, set_casted) = 
+    let casted_var_name = 
         hlr.add_variable("casted_call_out", &casted_var_type);
 
     let raw_ret_var_type = casted_var_type.raw_return_type();
-    let (raw_ret_var_name, set_raw_ret) = 
+    let raw_ret_var_name = 
         hlr.add_variable("raw_call_out", &raw_ret_var_type);
 
     hlr.insert_statement_before(
         og_call,
         SetVarGen {
+            lhs: box raw_ret_var_name.clone(),
             rhs: box og_call_data.clone(),
-            ..set_raw_ret
         },
     )
     .after_that(CallGen {
@@ -213,10 +213,10 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let mut new_data = hlr.tree.get(og_call_id);
-    let HNodeData::Call { ref mut a, f, generics, relation, ret_type } = 
+    let HNodeData::Call { ref mut a, ret_type, .. } = 
         &mut new_data else { unreachable!(); };
 
-    let (call_var, _) = hlr.add_variable("_call_out", &ret_type);
+    let call_var = hlr.add_variable("_call_out", &ret_type);
 
     let new_arg = hlr.insert_quick(og_call_id, RefGen {
         object: box call_var.clone(),

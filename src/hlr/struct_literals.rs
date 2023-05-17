@@ -16,8 +16,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                     else { unreachable!() };
 
                 let type_is_not_accurate =  field_exprs.iter()
-                    .enumerate()
-                    .any(|(index, (name, id))| {
+                    .any(|(name, id)| {
                         let typed_field = &struct_type.get_field_type(name).unwrap();
                         let expr_field = hlr.tree.get(*id).ret_type();
 
@@ -38,7 +37,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
 
             *var_type = new_struct_type.clone();
 
-            let (new_struct, make_new_struct) = 
+            let new_struct = 
                 hlr.add_variable("struct", &new_struct_type);
 
             let mut current_statement = structlit;

@@ -27,7 +27,7 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
                 return;
             }
 
-            let new_deref = hlr.replace_quick(var_id, DerefGen { object: arg_name.clone() });
+            hlr.replace_quick(var_id, DerefGen { object: arg_name.clone() });
             *var_data = hlr.tree.get(var_id);
         }
     );

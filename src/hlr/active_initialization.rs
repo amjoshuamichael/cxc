@@ -23,7 +23,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
                 else { todo!("This literal can only use a struct type") };
 
-            let (new_default, _) = 
+            let new_default = 
                 hlr.add_variable("default", &var_type);
 
             hlr.insert_statement_before(
@@ -75,7 +75,7 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Array(array_type) = var_type.as_type_enum() 
                 else { panic!() };
 
-            let (defaulted_array, make_defaulted_array) = 
+            let defaulted_array = 
                 hlr.add_variable("defaulted_array", &var_type);
 
             let set_default_array = hlr

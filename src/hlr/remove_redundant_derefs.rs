@@ -4,7 +4,7 @@ use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
 pub fn remove_redundant_derefs(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
-        |ref_id, ref_data, hlr| {
+        |_, ref_data, hlr| {
             let HNodeData::UnarOp { op, hs, .. } = &ref_data else { return };
             match op {
                 Opcode::Deref => {

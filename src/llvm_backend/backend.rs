@@ -5,7 +5,7 @@ use inkwell::types::BasicType;
 use inkwell::values::{BasicMetadataValueEnum, BasicValue};
 use inkwell::{values::{PointerValue, FunctionValue}, context::Context, module::Module, execution_engine::ExecutionEngine, AddressSpace};
 
-use crate::{TypeEnum, ExternalFuncAdd};
+use crate::TypeEnum;
 use crate::typ::ReturnStyle;
 use crate::unit::Generations;
 use crate::{VarName, Type, unit::backends::IsBackend, mir::MIR, UniqueFuncInfo, FuncType};
@@ -166,9 +166,8 @@ impl IsBackend for LLVMBackend {
     fn add_external_func(
         &mut self, 
         func_info: UniqueFuncInfo, 
-        function_ptr: *const usize,
         func_type: FuncType, 
-        ext_add: ExternalFuncAdd
+        function_ptr: *const usize,
     ) {
         let ret_type = func_type.ret.clone();
 

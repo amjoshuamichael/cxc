@@ -121,9 +121,6 @@ impl Unit {
             return Ok(Value::default());
         }
 
-        let temp_name = "Newfunc";
-
-
         let expr = {
             let mut lexed = lex(of);
             let mut context = lexed.split(VarName::None, HashMap::new());

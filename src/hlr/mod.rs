@@ -2,8 +2,6 @@ mod add_void_return;
 pub mod expr_tree;
 mod active_initialization;
 mod auto_deref;
-mod deref_members;
-mod ref_assignments;
 mod remove_redundant_derefs;
 mod op_overloading;
 mod struct_literals;

@@ -1,4 +1,4 @@
-use crate::{CompData, libraries::Library, Func, unit::backends::function::FuncCodePtr, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, typ::{SumType, VariantType}, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
+use crate::{libraries::Library, Func, unit::backends::function::FuncCodePtr, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, typ::{SumType, VariantType}, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
 
 pub struct UnitLib;
 
@@ -33,10 +33,5 @@ impl Library for UnitLib {
         unit.assert_size_of_with_name::<TypeRelation>("TypeRelation").unwrap();
         unit.assert_size_of::<UniqueFuncInfo>().unwrap();
         unit.assert_size_of::<Func>().unwrap();
-
-        let func = unit.get_reflect_type::<Func>().unwrap();
-
-        let unique_func_info = unit.get_reflect_type::<UniqueFuncInfo>().unwrap();
-        let comp_data = unit.add_reflect_type::<CompData>().unwrap();
     }
 }

@@ -484,7 +484,7 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
                 }
                 Some(VariableInfo { typ: var_type, .. }) => {
                     fcs.builder.build_load(
-                        fcs.mir.variables[name].typ.to_basic_type(fcs.context), 
+                        var_type.to_basic_type(fcs.context), 
                         fcs.addresses[&MAddr::Var(name.clone())], 
                         &*name.to_string()
                     )
