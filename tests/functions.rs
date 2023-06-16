@@ -113,16 +113,17 @@ fn basic_first_class() {
             ; (function)(5, false)
         }
 
-        main() {
+        main(); i32 {
             double: (i32, bool); i32 = get_a_function(2)
             ten: i32 = run_with_5(double)
-            assert_eq<i32>(ten, 10)
 
             triple: (i32, bool); i32 = get_a_function(3)
             fifteen: i32 = run_with_5(triple)
-            assert_eq<i32>(fifteen, 15)
+
+            ; ten + fifteen
         }
-        "
+        ";
+        25
     )
 }
 
@@ -150,15 +151,16 @@ fn store_first_class() {
             ; Operation { func = triple } 
         }
 
-        main() {
+        main(); i32 {
             double_operation: Operation = get_operation(2)
             ten: i32 = double_operation.run(5)
-            assert_eq<i32>(ten, 10)
 
             triple_operation: Operation = get_operation(3)
             sixty: i32 = triple_operation.run(20)
-            assert_eq<i32>(sixty, 60)
+
+            ; ten + sixty
         }
-        "
+        ";
+        70
     )
 }

@@ -130,10 +130,14 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
             hlr.insert_statement_before(
                 return_id,
-                SetVarGen {
-                    lhs: get_deref(output_var.clone()),
-                    rhs: box hlr.tree.get(*to_return_inner),
-                },
+                MemCpyGen {
+                    from: get_ref(hlr.tree.get(*to_return_inner)),
+                    to: output_var.clone(),
+                    size: HNodeData::Number {
+                        lit_type: Type::i(64),
+                        value: hlr.ret_type.size() as u64 - 16,
+                    }
+                }
             );
 
             *to_return = None;

@@ -15,7 +15,7 @@ pub trait IsBackend: Sized {
     fn begin_compilation_round(&self);
     fn register_function(&mut self, info: UniqueFuncInfo, func_type: FuncType);
     fn compile_function(&mut self, mir: MIR);
-    fn end_compilation_round(&self);
+    fn end_compilation_round(&mut self);
 
     fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool;
     fn get_function(&self, info: impl Into<UniqueFuncInfo>) -> Option<&Self::LowerableFuncRef>;

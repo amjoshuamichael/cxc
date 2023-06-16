@@ -9,7 +9,11 @@ logos = "0.12.0"
 
 llvm-sys = { version = "150", optional = true }
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm15-0"], optional = true }
-either = "1.8.1" # for use with inkwell
+
+cranelift = { version = "0.95.0", optional = true }
+cranelift-jit = { version = "0.95.0", optional = true }
+cranelift-module = { version = "0.95.0", optional = true }
+cranelift-native = { version = "0.95.0", optional = true }
 
 memoize = "0.3.1"
 slotmap = "1.0.6"
@@ -31,10 +35,11 @@ glam = { version = "0.22.0", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["cxc_derive", "backend-llvm", "ffi-assertions"]
+default = ["cxc_derive", "backend-cranelift", "ffi-assertions"]
 xc-debug = []
-llvm-debug = []
+backend-debug = []
 backend-llvm = ["llvm-sys", "inkwell"]
+backend-cranelift = ["cranelift", "cranelift-jit", "cranelift-module", "cranelift-native"]
 ffi-assertions = ["region"]
 show-bytes = []
 

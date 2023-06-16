@@ -5,6 +5,9 @@ use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree
 pub use self::mir_data::*;
 
 mod mir_data;
+mod remove_post_return_statements;
+
+use remove_post_return_statements::remove_post_return_statements;
 
 pub fn mir(hlr: FuncOutput) -> MIR {
     let mut mir = MIR { 
@@ -21,11 +24,12 @@ pub fn mir(hlr: FuncOutput) -> MIR {
 
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
 
-    if crate::XC_DEBUG {
-        for (l, line) in mir.lines.iter().enumerate() {
-            // print the index with three digits of space
-            println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
-        }
+    remove_post_return_statements(&mut mir);
+
+    #[cfg(feature = "xc-debug")]
+    for (l, line) in mir.lines.iter().enumerate() {
+        // print the index with three digits of space
+        println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
     }
 
     mir
@@ -284,6 +288,9 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let addr = build_as_addr(node, tree, mir);
 
             MExpr::Addr(addr)
+        }
+        HNodeData::Ident { name, .. } => {
+            MExpr::MemLoc(MMemLoc::Var(name))
         }
         _ => todo!("{:?}", node),
     }

@@ -85,7 +85,7 @@ impl fmt::Debug for MLine {
             SetAddr { l, r } => write!(f, "aset {:?} <- {:?}", l, r),
             Store { l, val } => write!(f, "stor {:?} <- {:?}", l, val),
             Return(val) => write!(f, "; {:?}", val),
-            Marker(id) => write!(f, "marker {}", id),
+            Marker(id) => write!(f, "mark {}", id),
             Goto(id) => write!(f, "goto {}", id),
             Expr(expr) => write!(f, "{:?}", expr),
             Branch { if_, yes, no } => write!(f, "if {:?} goto {} else {}", if_, yes, no),

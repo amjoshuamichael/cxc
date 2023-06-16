@@ -54,7 +54,7 @@ fn global_rc() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
 
-    let mut large_value = Rc::new(Numbers5::default());
+    let mut large_value = Rc::new(Numbers5 { b: 80, ..Default::default() });
     unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 

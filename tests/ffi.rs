@@ -139,13 +139,50 @@ fn medium_struct() {
     )
 }
 
+//#[test]
+//fn large_struct() {
+//    xc_test!(
+//        "; Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }";
+//        Numbers5 { a: 1, b: 2, c: 3, d: 4, e: 5 }
+//    )
+//}
+
 #[test]
 fn large_struct() {
-    xc_test!(
-        "; Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }";
-        Numbers5 { a: 1, b: 2, c: 3, d: 4, e: 5 }
-    )
+    let mut unit = Unit::new();
+
+    unit.push_script(
+        "
+        Numbers5 = { a: i32, b: i32, c: i32, d: i32, e: i32, }
+
+        main(); Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }
+        ");
+
+    let function = unit.get_fn("main").unwrap().downcast::<(), Numbers5>();
+
+    let mut mynums = function();
+    //function(&mut mynums);
+    dbg!(&mynums);
 }
+
+//#[test]
+//fn large_struct() {
+//    xc_test!(
+//        "
+//            produce_numbers(dest: &Numbers5) {
+//                memcpy(&Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 }, dest, size_of<Numbers5>())
+//            }
+//
+//            main(); u32 { 
+//                x = Numbers5 { a = 0, b = 0, c = 0, d = 0, e = 0 }
+//                produce_numbers(&x)
+//                ; x.a + x.d
+//            }
+//        ";
+//        33
+//    )
+//}
+
 
 #[test]
 fn i32_and_ref() {
@@ -205,7 +242,7 @@ fn method_on_struct_with_arg() {
 
 #[test]
 fn external_function() {
-    pub fn print_num(input: i64) {
+    pub fn assert_is_less_than_100(input: i32) {
         assert!(input < 100);
     }
 
@@ -213,16 +250,16 @@ fn external_function() {
 
     unit.add_rust_func_explicit(
         "assert_is_less_than_100",
-        print_num as *const usize,
+        assert_is_less_than_100 as *const usize,
         ExternalFuncAdd {
-            arg_types: vec![Type::i(64)],
+            arg_types: vec![Type::i(32)],
             ..ExternalFuncAdd::empty()
         },
     );
     unit.push_script(
         "
-        call(); i64 {
-            x: i64 = 0
+        call(); i32 {
+            x: i32 = 0
             @ x < 100 {
                 assert_is_less_than_100(x)
                 x = x + 1

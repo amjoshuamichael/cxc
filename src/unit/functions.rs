@@ -37,7 +37,7 @@ impl CompData {
             name: VarName::from("alloc"),
             args: vec![VarDecl {
                 name: VarName::None,
-                type_spec: TypeSpec::Int(32),
+                type_spec: TypeSpec::Int(64),
             }],
             ret_type: TypeSpec::Ref(box TypeSpec::GenParam(0)),
             generic_count: 1,

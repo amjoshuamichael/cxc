@@ -13,12 +13,9 @@
 
 // HOW DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
-// 2. llvm-debug: enables debug printing for the LLVM IR
+// 2. backend-debug: enables debug printing for backend, like LLVM or Cranelift
 // 3. show-bytes: enables debug printing for the bytes of each type, during
 // tests using the xc_test! macro
-
-pub static XC_DEBUG: bool = cfg!(feature = "xc-debug");
-pub static LLVM_DEBUG: bool = cfg!(feature = "llvm-debug");
 
 pub use lex::{TypeName, VarName};
 pub use parse::{TypeDecl, TypeRelation};
@@ -57,9 +54,15 @@ mod parse;
 #[cfg(feature = "backend-llvm")]
 mod llvm_backend;
 
+#[cfg(feature = "backend-cranelift")]
+mod cranelift_backend;
+
 pub mod backend {
     #[cfg(feature = "backend-llvm")]
     pub use super::llvm_backend::LLVMBackend as Backend;
+
+    #[cfg(feature = "backend-cranelift")]
+    pub use super::cranelift_backend::CraneliftBackend as Backend;
 }
 
 mod typ;

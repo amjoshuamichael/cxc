@@ -37,6 +37,8 @@ pub(super) fn size_of_type(typ: Type) -> usize {
 
 // TODO: make a function that converts a type to a struct type if it can be, and use that 
 // in "to llvm type" and here.
+//
+// note: this wouldn't work because of large arrays??? sometimes i worry about past josh
 fn size_of_largest_field_in(typ: &Type) -> usize {
     match typ.as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
@@ -54,3 +56,15 @@ fn size_of_largest_field_in(typ: &Type) -> usize {
         _ => typ.size(),
     }
 }
+
+impl StructType {
+    pub fn field_offset_in_bytes(&self, field_index: usize) -> usize {
+        let nescessary_fields = &self.fields[0..(field_index as usize)];
+        let size_sum: usize = nescessary_fields.iter().map(|(_, typ)| typ.size()).sum();
+        // TODO: make size_of_largest_field a trait? That way we wouldn't have to do this 
+        // Type::new_struct hack
+        let alignment = size_of_largest_field_in(&Type::new_struct(self.fields.clone()));
+        size_sum.next_multiple_of(alignment)
+    }   
+}
+

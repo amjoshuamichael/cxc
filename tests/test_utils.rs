@@ -28,12 +28,12 @@ macro_rules! xc_test {
         // this is just so output uses the expected output's type
         let mut output = $expected_output;
 
-        #[cfg(feature = "llvm-debug")]
+        #[cfg(feature = "backend-debug")]
         println!("--getting function--");
 
         let function = unit.get_fn("main").unwrap().downcast::<(), _>();
 
-        #[cfg(feature = "llvm-debug")]
+        #[cfg(feature = "backend-debug")]
         println!("--running function--");
 
         output = function();

@@ -57,7 +57,6 @@ impl LLVMBackend {
     }
 }
 
-// ONLY adds if nescessary
 pub fn add_nescessary_attributes_to_func(
     function: &mut FunctionValue<'static>,
     context: &'static Context,
@@ -148,9 +147,8 @@ fn get_used_functions(
 }
 
 pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'static>) {
-    if crate::LLVM_DEBUG {
-        println!("Compiling: {}", fcs.mir.info.name);
-    }
+    #[cfg(feature = "backend-debug")]
+    println!("Compiling: {}", fcs.mir.info.name);
 
     build_stack_allocas(fcs);
     create_blocks(fcs);
@@ -165,7 +163,7 @@ pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'stat
 }
 
 pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
-    #[cfg(feature = "llvm-debug")]
+    #[cfg(feature = "backend-debug")]
     println!("{:?}", fcs.mir.lines[index]);
 
     match &fcs.mir.lines[index] {
@@ -214,8 +212,11 @@ pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
     }
 }
 
-pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&MReg>) 
-    -> Option<BasicValueEnum<'static>> {
+pub fn compile_expr(
+    fcs: &FunctionCompilationState, 
+    expr: &MExpr, 
+    reg: Option<&MReg>
+) -> Option<BasicValueEnum<'static>> {
     let reg_name = &*reg.map(MReg::to_string).unwrap_or_default(); 
     match expr {
         MExpr::MemLoc(memloc) => { Some(load_memloc(fcs, memloc)) },

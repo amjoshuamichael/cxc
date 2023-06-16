@@ -1,7 +1,7 @@
 use crate::{
     hlr::hlr_data::FuncRep,
     lex::VarName,
-    parse::{InitOpts, Opcode, TypeSpec},
+    parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
     Type, UniqueFuncInfo,
 };
 
@@ -24,6 +24,12 @@ pub trait NodeDataGen: std::fmt::Debug {
 }
 
 impl NodeDataGen for Box<dyn NodeDataGen> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        self.as_ref().add_to_expr_tree(hlr, parent)
+    }
+}
+
+impl<T: NodeDataGen> NodeDataGen for Box<T> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         self.as_ref().add_to_expr_tree(hlr, parent)
     }
@@ -378,6 +384,38 @@ impl<T: NodeDataGen> NodeDataGen for DerefGen<T> {
                 ret_type: obj_typ_deref,
                 op: Opcode::Deref,
                 hs: object,
+            }
+        );
+
+        space
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct MemCpyGen<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> {
+    pub from: T,
+    pub to: U,
+    pub size: V,
+}
+
+impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T, U, V> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let from = self.from.add_to_expr_tree(hlr, space);
+        let to = self.to.add_to_expr_tree(hlr, space);
+        let size = self.size.add_to_expr_tree(hlr, space);
+
+        let generic = hlr.tree.get_ref(from).ret_type().get_deref().unwrap();
+
+        hlr.tree.replace(
+            space,
+            HNodeData::Call {
+                f: "memcpy".into(),
+                relation: TypeRelationGeneric::Unrelated,
+                generics: vec![generic],
+                ret_type: Type::void(),
+                a: vec![from, to, size],
             }
         );
 

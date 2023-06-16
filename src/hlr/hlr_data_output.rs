@@ -21,8 +21,7 @@ impl FuncOutput {
         let mut output = BTreeSet::<UniqueFuncInfo>::new();
 
         for (_, node_data) in self.tree.iter() {
-            let HNodeData::Call { .. } = node_data
-                else { continue; };
+            let HNodeData::Call { .. } = node_data else { continue; };
 
             let func_info = self.tree.unique_func_info_of_call(node_data);
             output.insert(func_info);

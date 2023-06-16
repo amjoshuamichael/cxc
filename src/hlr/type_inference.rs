@@ -142,7 +142,8 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
     }
 
-    if crate::XC_DEBUG {
+    #[cfg(feature = "xc-debug")]
+    {
         println!("{}", indent_parens(format!("{infer_map:?}").replace('\n', "")));
         println!("{:?}", &hlr.tree);
         println!("{}", &hlr.tree.to_string());

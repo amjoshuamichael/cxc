@@ -10,6 +10,21 @@ fn basic_struct() {
     xc_test!(
         "
         ; i32 {
+            x: Point2D = Point2D { -- }
+            x.x = 30
+            x.y = 90
+            ; x.x + x.y
+        }
+        ";
+        120
+    )
+}
+
+#[test]
+fn struct_lit() {
+    xc_test!(
+        "
+        ; i32 {
             x: Point2D = Point2D { x = 30, y = 90 }
             ; x.x + x.y
         }

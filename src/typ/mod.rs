@@ -272,6 +272,16 @@ impl Type {
     pub fn is_shallow(&self) -> bool {
         !self.fields_iter().any(|field| matches!(field.as_type_enum(), TypeEnum::Ref(_)))
     }
+
+    pub fn is_primitive(&self) -> bool {
+        !matches!(
+            self.as_type_enum(), 
+            TypeEnum::Struct(_) | 
+            TypeEnum::Array(_) | 
+            TypeEnum::Sum(_) | 
+            TypeEnum::Variant(_)
+        )
+    }
 }
 
 impl From<Type> for TypeSpec {
