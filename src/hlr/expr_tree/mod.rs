@@ -115,17 +115,22 @@ pub enum HNodeData {
         lhs: ExprID,
         rhs: ExprID,
     },
+    // TODO: combine Call and IndirectCall, making Call take a UniqueFuncInfo and 
+    // abstracting over the differences between ExprID and a UniqueFuncInfo using an 
+    // HCallable enum
     Call {
         ret_type: Type,
         f: VarName,
         generics: Vec<Type>,
         a: Vec<ExprID>,
+        sret: Option<ExprID>,
         relation: TypeRelation,
     },
     IndirectCall {
         ret_type: Type,
         f: ExprID,
         a: Vec<ExprID>,
+        sret: Option<ExprID>,
     },
     Member {
         ret_type: Type,
@@ -252,8 +257,8 @@ impl HNodeData {
 
     pub fn to_string(&self, tree: &ExprTree) -> String {
         match self {
-            Number { value, .. } => value.to_string(),
-            Float { value, .. } => value.to_string(),
+            Number { value, lit_type } => format!("{value}{lit_type:?}"),
+            Float { value, lit_type } => format!("{value}{lit_type:?}"),
             Bool { value, .. } => value.to_string(),
             Ident { name, .. } => name.to_string(),
             StructLit {

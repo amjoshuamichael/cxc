@@ -1,4 +1,5 @@
 use crate::hlr::hlr_data::VariableInfo;
+use crate::hlr::hlr_data::ArgIndex;
 use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
 use crate::typ::ReturnStyle;
 use crate::{unit::*, Type, FuncType, VarName};
@@ -109,7 +110,7 @@ fn build_stack_allocas(
     fcs: &mut FunctionCompilationState,
 ) {
     for (name, info) in fcs.mir.variables.iter() {
-        if info.arg_index.is_some() {
+        if info.arg_index != ArgIndex::None {
             continue;
         }
 
@@ -261,7 +262,7 @@ pub fn compile_expr(
                 reg_name,
             ))
         }
-        MExpr::Call { typ, f: MCallable::Func(f), a } => {
+        MExpr::Call { typ, f: MCallable::Func(f), a, sret } => {
             match &*f.name.to_string() {
                 "memcpy" => {
                     let src = compile_operand(fcs, &a[0]).into_pointer_value();
@@ -345,12 +346,16 @@ pub fn compile_expr(
                 _ => {
                     let func = fcs.used_functions.get(f).unwrap();
 
-                    let arg_vals = a.into_iter()
+                    let mut arg_vals = a.into_iter()
                         .map(|arg| {
                             let basic_arg = compile_operand(fcs, arg);
                             BasicMetadataValueEnum::try_from(basic_arg).unwrap()
                         })
                         .collect::<Vec<_>>();
+
+                    if let Some(sret) = sret {
+                        arg_vals.insert(0, load_memloc(fcs, sret).into());
+                    }
 
                     let mut callsite = fcs.builder.build_call(
                         *func, 
@@ -366,15 +371,19 @@ pub fn compile_expr(
                 }
             }
         },
-        MExpr::Call { typ, f: MCallable::FirstClass(loc), a } => {
+        MExpr::Call { typ, f: MCallable::FirstClass(loc), a, sret } => {
             let func = load_memloc(fcs, loc).into_pointer_value();
 
-            let arg_vals = a.into_iter()
+            let mut arg_vals = a.into_iter()
                 .map(|arg| {
                     let basic_arg = compile_operand(fcs, arg);
                     BasicMetadataValueEnum::try_from(basic_arg).unwrap()
                 })
                 .collect::<Vec<_>>();
+
+            if let Some(sret) = sret {
+                arg_vals.insert(0, load_memloc(fcs, sret).into());
+            }
 
             let mut callsite = fcs.builder.build_indirect_call(
                 typ.llvm_func_type(fcs.context, false),
@@ -480,8 +489,18 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
                     let global = &fcs.globals[&name];
                     BasicValueEnum::PointerValue(global.1)
                 }
-                Some(VariableInfo { arg_index: Some(arg_index), .. }) => {
-                    fcs.function.get_nth_param(*arg_index).unwrap().into()
+                Some(VariableInfo { arg_index: ArgIndex::Some(arg_index), .. }) => {
+                    let param_index = 
+                        if fcs.mir.func_type.ret.return_style() == ReturnStyle::Sret {
+                            *arg_index + 1
+                        } else {
+                            *arg_index
+                        };
+
+                    fcs.function.get_nth_param(param_index as u32).unwrap().into()
+                }
+                Some(VariableInfo { arg_index: ArgIndex::SRet, .. }) => {
+                    fcs.function.get_nth_param(0).unwrap().into()
                 }
                 Some(VariableInfo { typ: var_type, .. }) => {
                     fcs.builder.build_load(

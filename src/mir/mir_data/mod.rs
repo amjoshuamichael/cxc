@@ -1,6 +1,6 @@
 use std::{collections::{BTreeSet, BTreeMap}, fmt::{Formatter, Display}, fmt};
 
-use crate::{hlr::hlr_data::{Variables, VariableInfo}, UniqueFuncInfo, FuncType, Type, VarName, parse::Opcode, };
+use crate::{hlr::hlr_data::{Variables, VariableInfo, ArgIndex}, UniqueFuncInfo, FuncType, Type, VarName, parse::Opcode, };
 
 #[derive(Debug)]
 pub struct MIR {
@@ -41,7 +41,7 @@ impl MIR {
             var_name = VarName::from(&*base_name);
         }
 
-        self.variables.insert(var_name, VariableInfo { typ, arg_index: None, });
+        self.variables.insert(var_name, VariableInfo { typ, arg_index: ArgIndex::None, });
 
         VarName::from(&*base_name)
     }
@@ -185,8 +185,9 @@ pub enum MExpr {
     BinOp { ret_type: Type, op: Opcode, l: MOperand, r: MOperand, },
     UnarOp { ret_type: Type, op: Opcode, hs: MOperand },
     Array { elem_type: Type, elems: Vec<MOperand> },
-    Call { typ: FuncType, f: MCallable, a: Vec<MOperand> },
+    Call { typ: FuncType, f: MCallable, a: Vec<MOperand>, sret: Option<MMemLoc> },
     Ref { on: MAddr },
+    // TODO: replace operand with memloc here?
     Deref { to: Type, on: MOperand },
     Void,
 }

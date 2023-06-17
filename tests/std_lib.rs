@@ -48,47 +48,47 @@ fn vec_push_and_check() {
         two_nums_from_one(in: i64); TwoNums {
             two_nums: TwoNums = TwoNums { 
                 num_one = in,
-                num_two = in + 42,
+                num_two = in + i64 42,
             }
 
             ; two_nums
         }
 
         main() {
-            number_of_checks: i32 = 128
+            number_of_checks: i64 = i64 40
 
-            num_vec: Vec<i32> = Vec<i32>:new()
+            num_vec: Vec<i64> = Vec<i64>:new()
             two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new()
-
-            current_index: i32 = 0
+            
+            current_index: i64 = i64 0
             @ current_index < number_of_checks {
                 num_vec.push(current_index)
 
-                current_index = current_index + 1
+                current_index = current_index + i64 1
             }
 
-            current_index = 0
+            current_index = i64 0
             @ current_index < number_of_checks {
-                assert_eq<i32>(num_vec.get<i32>(current_index), current_index)
+                assert_eq<i64>(num_vec.get<i64>(current_index), current_index)
 
-                current_index = current_index + 1
+                current_index = current_index + i64 1
             }
 
-            current_index: i64 = 0
+            current_index = i64 0
             @ current_index < number_of_checks {
                 two_num_vec.push(two_nums_from_one(current_index))
 
-                current_index = current_index + 1
+                current_index = current_index + i64 1
             }
 
-            current_index = 0
-            @ current_index < 1 {
+            current_index = i64 0
+            @ current_index < i64 1 {
                 in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
                 corresponding: TwoNums = two_nums_from_one(current_index)
 
                 assert_eq<i64>(in_vec.num_two, corresponding.num_two)
 
-                current_index = current_index + 1
+                current_index = current_index + i64 1
             }
         }"
     )

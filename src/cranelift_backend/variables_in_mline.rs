@@ -4,7 +4,16 @@ use crate::{mir::{MLine, MExpr, MMemLoc, MAddr, MOperand, MCallable, MAddrExpr},
 // fill in cranelift-ir block parameters. also, this code does not remove duplicates.
 //
 // https://www.reddit.com/r/ProgrammingLanguages/comments/9z8qu3/a_new_compiler_backend_called_cranelift_uses/
-pub fn variables_in(mline: &MLine) -> Vec<VarName> {
+
+#[derive(PartialEq, Eq, Hash)]
+pub struct VarInMIR {
+    pub name: VarName,
+    // variables that are referenced need to be placed on the stack, and can't be 
+    // allocated in cranelift registered
+    pub is_referenced: bool,
+}
+
+pub fn variables_in(mline: &MLine) -> Vec<VarInMIR> {
     match mline {
         MLine::Set { r, .. } => variables_in_expr(r),
         MLine::SetAddr { r, .. } => variables_in_addr_expr(r),
@@ -23,7 +32,7 @@ pub fn variables_in(mline: &MLine) -> Vec<VarName> {
     }
 }
 
-fn variables_in_expr(mexpr: &MExpr) -> Vec<VarName> {
+fn variables_in_expr(mexpr: &MExpr) -> Vec<VarInMIR> {
     match mexpr {
         MExpr::MemLoc(memloc) => variables_in_memloc(memloc),
         MExpr::Addr(addr) => variables_in_addr(addr),
@@ -45,31 +54,37 @@ fn variables_in_expr(mexpr: &MExpr) -> Vec<VarName> {
     }
 }
 
-fn variables_in_operand(moperand: &MOperand) -> Vec<VarName> {
+fn variables_in_operand(moperand: &MOperand) -> Vec<VarInMIR> {
     match moperand {
         MOperand::MemLoc(memloc) => variables_in_memloc(memloc),
         MOperand::Lit(_) => Vec::new(),
     }
 }
 
-fn variables_in_memloc(memloc: &MMemLoc) -> Vec<VarName> {
+fn variables_in_memloc(memloc: &MMemLoc) -> Vec<VarInMIR> {
     match memloc {
         MMemLoc::Reg(_) => Vec::new(),
-        MMemLoc::Var(name) => vec![name.clone()],
+        MMemLoc::Var(name) => vec![VarInMIR {
+            name: name.clone(),
+            is_referenced: false,
+        }],
     }
 }
 
-fn variables_in_addr(addr: &MAddr) -> Vec<VarName> {
+fn variables_in_addr(addr: &MAddr) -> Vec<VarInMIR> {
     match addr {
         MAddr::Reg(_) => Vec::new(),
-        MAddr::Var(name) => vec![name.clone()],
+        MAddr::Var(name) => vec![VarInMIR {
+            name: name.clone(),
+            is_referenced: true,
+        }],
     }
 }
 
-fn variables_in_addr_expr(expr: &MAddrExpr) -> Vec<VarName> {
+fn variables_in_addr_expr(expr: &MAddrExpr) -> Vec<VarInMIR> {
     match expr {
         MAddrExpr::Expr(expr) => variables_in_expr(expr),
-        MAddrExpr::Addr(_) => Vec::new(),
+        MAddrExpr::Addr(addr) => variables_in_addr(addr),
         MAddrExpr::Member { object, .. } => variables_in_addr(object),
         MAddrExpr::Index { object, index, .. } => {
             let object = variables_in_addr(object);
@@ -79,7 +94,7 @@ fn variables_in_addr_expr(expr: &MAddrExpr) -> Vec<VarName> {
     }
 }
 
-fn variables_in_callable(callable: &MCallable) -> Vec<VarName> {
+fn variables_in_callable(callable: &MCallable) -> Vec<VarInMIR> {
     match callable {
         MCallable::Func(_) => Vec::new(),
         MCallable::FirstClass(memloc) => variables_in_memloc(memloc),

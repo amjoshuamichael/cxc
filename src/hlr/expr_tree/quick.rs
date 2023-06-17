@@ -158,6 +158,7 @@ impl NodeDataGen for UnarOpGen {
 pub struct CallGen {
     pub info: UniqueFuncInfo,
     pub args: Vec<Box<dyn NodeDataGen>>,
+    pub sret: Option<Box<dyn NodeDataGen>>,
 }
 
 impl NodeDataGen for CallGen {
@@ -167,8 +168,10 @@ impl NodeDataGen for CallGen {
         let args = self
             .args
             .iter()
-            .map(|gen| gen.add_to_expr_tree(hlr, space))
+            .map(|arg| arg.add_to_expr_tree(hlr, space))
             .collect();
+
+        let sret = self.sret.as_ref().map(|sret| sret.add_to_expr_tree(hlr, space));
 
         let func_type = hlr.comp_data.get_func_type(&self.info).unwrap();
 
@@ -180,6 +183,7 @@ impl NodeDataGen for CallGen {
                 relation: self.info.relation.clone(),
                 ret_type: func_type.ret,
                 a: args,
+                sret,
             },
         );
 
@@ -187,6 +191,7 @@ impl NodeDataGen for CallGen {
     }
 }
 
+// TODO: is this nescessary
 impl NodeDataGen for UniqueFuncInfo {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let func_type = hlr.comp_data.get_func_type(self).unwrap();
@@ -199,6 +204,7 @@ impl NodeDataGen for UniqueFuncInfo {
                 relation: self.relation.clone(),
                 ret_type: func_type.ret,
                 a: Vec::new(),
+                sret: None,
             },
         )
     }
@@ -406,16 +412,20 @@ impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T
         let to = self.to.add_to_expr_tree(hlr, space);
         let size = self.size.add_to_expr_tree(hlr, space);
 
-        let generic = hlr.tree.get_ref(from).ret_type().get_deref().unwrap();
+        let generics = vec![
+            hlr.tree.get_ref(from).ret_type().get_deref().unwrap(),
+            hlr.tree.get_ref(to).ret_type().get_deref().unwrap(),
+        ];
 
         hlr.tree.replace(
             space,
             HNodeData::Call {
                 f: "memcpy".into(),
                 relation: TypeRelationGeneric::Unrelated,
-                generics: vec![generic],
+                generics,
                 ret_type: Type::void(),
                 a: vec![from, to, size],
+                sret: None,
             }
         );
 

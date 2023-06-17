@@ -59,6 +59,20 @@ impl From<String> for VarName {
     fn from(s: String) -> Self { Self::Other(Arc::from(&*s)) }
 }
 
+impl std::ops::Deref for VarName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            VarName::Other(o) => &**o,
+            VarName::TupleIndex(_) => todo!(),
+            VarName::None => "$none",
+            VarName::Error => "$error",
+            VarName::Sret => "$sret",
+        }
+    }
+}
+
 #[derive(PartialEq, Default, Eq, Clone, Hash, PartialOrd, Ord, XcReflect)]
 #[xc_opaque]
 pub enum TypeName {

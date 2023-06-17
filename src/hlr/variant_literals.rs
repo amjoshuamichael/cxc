@@ -50,6 +50,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                                 ..Default::default()
                             },
                             args: vec![box castable_data],
+                            ..Default::default()
                         },
                     )
                 };
@@ -120,6 +121,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                             ..Default::default()
                         },
                         args: vec![box hlr.tree.get(new_struct)],
+                        ..Default::default()
                     },
                 );
 

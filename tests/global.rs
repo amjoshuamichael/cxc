@@ -152,6 +152,7 @@ fn get_fn_by_ptr() {
         "#
     ).unwrap();
 
+    dbg!(&functions);
     let [add_two, fifty_four] = &*functions else { panic!() };
     let add_two = unit.get_fn_by_ptr(*add_two as _).unwrap().1;
     let fifty_four = unit.get_fn_by_ptr(*fifty_four as _).unwrap().1;

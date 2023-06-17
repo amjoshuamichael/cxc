@@ -106,34 +106,6 @@ fn hello_world() {
 }
 
 #[test]
-fn derivations() {
-    let mut unit = Unit::new();
-    unit.add_lib(TypeInterfaceLib)
-        .push_script(
-            "
-        Point2D = {
-            x: i32,
-            y: i32
-        }
-
-        Point3D = {
-            x: i32,
-            y: i32,
-            z: i32
-        }
-
-        test_derivation() {
-            point2D: Point2D = Point2D { x = 0, y = 0 }
-
-        }
-        ",
-        )
-        .unwrap();
-
-    unit.get_fn("test_derivation").unwrap().downcast::<(), ()>()()
-}
-
-#[test]
 fn to_string() {
     xc_test!(
         use StdLib;

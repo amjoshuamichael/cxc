@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::VariableInfo}, FuncType, TypeEnum, ArrayType};
+use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::{VariableInfo, ArgIndex}}, FuncType, TypeEnum, ArrayType};
 
 pub use self::mir_data::*;
 
@@ -123,7 +123,7 @@ fn build_as_memloc(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MMemLo
 fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
     match node {
         HNodeData::Ident { name, .. } => {
-            if mir.variables[&name].arg_index.is_some() {
+            if let ArgIndex::Some(_) = mir.variables[&name].arg_index {
                 let new_var_name = VarName::from(&*(name.to_string() + "addr"));
 
                 if !mir.variables.contains_key(&new_var_name) {
@@ -134,7 +134,7 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
 
                     mir.variables.insert(new_var_name.clone(), VariableInfo {
                         typ: mir.variables[&name].typ.clone(),
-                        arg_index: None,
+                        arg_index: ArgIndex::None,
                     });
                 }
 
@@ -227,7 +227,6 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             }
         },
         HNodeData::Call { ref f, ref a, ref generics, .. } if &*f.to_string() == "cast" => {
-            let from_type = generics[0].clone();
             let to_type = generics[1].clone();
 
             let val = build_as_addr(tree.get(a[0]), tree, mir);
@@ -236,7 +235,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             mir.lines.push(MLine::MemCpy {
                 from: val, 
                 to: MAddr::Var(new_cast_out.clone()), 
-                len: MOperand::Lit(MLit::Int { size: 32, val: from_type.size() as u64 }),
+                len: MOperand::Lit(MLit::Int { size: 64, val: to_type.size() as u64 }),
             });
 
             MExpr::MemLoc(MMemLoc::Var(new_cast_out))
@@ -254,25 +253,31 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Void
         },
-        HNodeData::Call { ref a, ref ret_type, .. } => {
+        HNodeData::Call { ref a, ref ret_type, ref sret, .. } => {
             let info = tree.unique_func_info_of_call(&node);
+
             let typ = FuncType {
                 ret: ret_type.clone(),
                 args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
             };
-            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
 
-            MExpr::Call { typ, f: MCallable::Func(info), a }
+            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
+            let sret = sret.as_ref().map(|sret| build_as_memloc(tree.get(*sret), tree, mir));
+
+            MExpr::Call { typ, f: MCallable::Func(info), a, sret }
         },
-        HNodeData::IndirectCall { ref f, ref a, ref ret_type, .. } => {
+        HNodeData::IndirectCall { ref f, ref a, ref ret_type, ref sret, .. } => {
             let f = build_as_memloc(tree.get(*f), tree, mir);
+
             let typ = FuncType {
                 ret: ret_type.clone(),
                 args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
             };
-            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
 
-            MExpr::Call { typ, f: MCallable::FirstClass(f), a }
+            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
+            let sret = sret.as_ref().map(|sret| build_as_memloc(tree.get(*sret), tree, mir));
+
+            MExpr::Call { typ, f: MCallable::FirstClass(f), a, sret }
         },
         HNodeData::ArrayLit { var_type, parts, .. } => {
             let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() else { unreachable!() };

@@ -25,6 +25,7 @@ pub fn op_overloading(hlr: &mut FuncRep) {
                         generics: hs_type.generics().clone(),
                         a: vec![reffed_hs],
                         relation: TypeRelation::MethodOf(hs_type.clone().get_ref()),
+                        sret: None,
                     };
                 },
                 _ => {},

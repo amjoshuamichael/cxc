@@ -7,9 +7,13 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
         |set_id, data, hlr| {
             let HNodeData::Set { lhs, rhs } = data else { return };
             
-            let type_of_set = hlr.tree.get_ref(*lhs).ret_type();
+            let lhs_size = hlr.tree.get_ref(*lhs).ret_type().size();
+            let rhs_size = hlr.tree.get_ref(*rhs).ret_type().size();
 
-            if type_of_set.size() <= 8 { return; }
+            let min_set_size = lhs_size.min(rhs_size);
+            let max_set_size = lhs_size.max(rhs_size);
+
+            if max_set_size <= 8 { return; }
 
             let new_data = hlr.insert_quick(
                 hlr.tree.parent(set_id),
@@ -18,7 +22,7 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
                     to: get_ref(hlr.tree.get(*lhs)),
                     size: HNodeData::Number {
                         lit_type: Type::i(64),
-                        value: type_of_set.size() as u64,
+                        value: min_set_size as u64,
                     },
                 },
             );

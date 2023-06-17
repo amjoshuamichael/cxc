@@ -66,6 +66,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
                 hs: box var_name.clone(),
                 ret_type: var_type.get_ref()
             }],
+            ..Default::default()
         });
     }
 }

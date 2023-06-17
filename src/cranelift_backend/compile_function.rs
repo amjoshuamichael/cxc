@@ -1,16 +1,161 @@
 use std::{collections::{BTreeMap, BTreeSet}, iter::once};
 
-use cranelift::{codegen::{Context, ir::{StackSlot, FuncRef, SigRef, Inst}}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
+use cranelift::{codegen::{ir::{StackSlot, FuncRef, SigRef, Inst}, self}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
+use cranelift_module::Module;
 
-use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, UniqueFuncInfo, FuncType, typ::ReturnStyle};
+use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, UniqueFuncInfo, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}};
 
-use super::{to_cl_type::ToCLType, variables_in_mline::variables_in};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend};
 
-struct FunctionCompilationState<'a> {
+
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum VarLocation {
+    Stack,
+    Reg,
+}
+
+pub fn make_fcs<'a>(
+    backend: &'a mut CraneliftBackend,
+    func_builder_context: &'a mut FunctionBuilderContext,
+    context: &'a mut codegen::Context,
+    mir: MIR,
+) -> (FunctionCompilationState<'a>, Vec<MLine>) {
+
+    let used_functions = mir.dependencies.iter().filter_map(|info| {
+        let func_id = 
+            if let Some((_, func_id)) = backend.cl_function_data.get(info) {
+                *func_id
+            } else if matches!(&*info.name, "alloc" | "free") {
+                let intrinsic_name = format!("${}", info.name);
+                let info = UniqueFuncInfo::from(VarName::from(&*intrinsic_name));
+                backend.cl_function_data[&info].1
+            } else {
+                return None
+            };
+
+        let func_ref = backend.module.declare_func_in_func(func_id, &mut context.func);
+        Some((info.clone(), func_ref))
+    }).collect();
+
+    let mut builder = FunctionBuilder::new(&mut context.func, func_builder_context);
+
+    let entry_block = builder.create_block();
+    // get function paramaters into the entry block
+    builder.append_block_params_for_function_params(entry_block);
+    builder.switch_to_block(entry_block);
+    // tell cranelift this block will have no predecessors, because it is the entry
+    builder.seal_block(entry_block);
+
+    let mut used_globals = BTreeMap::<VarName, CLValue>::new();
+    let mut var_locations = BTreeMap::<VarName, (VarLocation, VariableInfo)>::new();
+
+    for line in &mir.lines {
+        for var in &variables_in_mline::variables_in(line) {
+            if let Some(info) = mir.variables.get(&var.name) {
+                let name = var.name.clone();
+                let info = info.clone();
+
+                if var.is_referenced {
+                    var_locations.insert(name, (VarLocation::Stack, info));
+                } else if !var_locations.contains_key(&var.name) {
+                    var_locations.insert(name, (VarLocation::Reg, info));
+                }
+            }
+
+            if used_globals.contains_key(&var.name) {
+                continue;
+            }
+
+            let val = if !mir.variables.contains_key(&var.name) {
+                if let Some((_, ptr)) = backend.globals.get(&var.name) {
+                    builder.ins().iconst(cl_types::I64, *ptr as i64)
+                } else {
+                    // global is a function
+                    let info = UniqueFuncInfo::from(var.name.clone());
+
+                    let (_, func_id) = &backend.cl_function_data[&info];
+
+                    let func_ref = 
+                        backend.module.declare_func_in_func(*func_id, builder.func);
+                    builder.ins().func_addr(cl_types::I64, func_ref)
+                }
+            } else {
+                continue;
+            };
+
+            used_globals.insert(var.name.clone(), val);
+        }
+    }
+
+     for line in &mir.lines {
+        let call_type = match line {
+            MLine::Set { r: MExpr::Call { typ, .. }, .. } => typ,
+            MLine::Expr(MExpr::Call { typ, .. }) => typ,
+            _ => continue,
+        };
+
+        let mut call_sig = backend.module.make_signature();
+        func_type_to_signature(call_type, &mut call_sig, false);
+
+        backend.func_signatures.insert(call_type.clone(), call_sig);
+    }
+
+    let fcs = FunctionCompilationState {
+        builder,
+        entry_block: BlockData {
+            block: entry_block,
+            variables_used: Vec::new(),
+        },
+        other_blocks: Vec::new(),
+        addresses: BTreeMap::new(),
+        variables: BTreeMap::new(),
+        registers: BTreeMap::new(),
+        reg_types: mir.reg_types,
+        used_functions,
+        used_globals,
+        var_locations,
+        function_signatures: &backend.func_signatures,
+        frontend_config: &backend.frontend_config,
+        ret_type: mir.func_type.ret.clone(),
+    };
+
+    (fcs, mir.lines)
+}
+
+pub fn compile(
+    mut fcs: FunctionCompilationState,
+    lines: Vec<MLine>,
+) {
+    make_stack_allocas(&mut fcs);
+    make_blocks(&mut fcs, &lines);
+
+    #[cfg(feature = "xc-debug")]
+    let mut l = 0;
+
+    for line in lines {
+        compile_mline(&mut fcs, line);
+
+        #[cfg(feature = "xc-debug")]
+        {
+            print!("{:03}, ", l);
+            l += 1;
+        }
+    }
+
+    #[cfg(feature = "xc-debug")]
+    println!();
+}
+
+pub struct FunctionCompilationState<'a> {
     builder: FunctionBuilder<'a>,
     addresses: BTreeMap<MAddrReg, CLValue>,
-    registers: BTreeMap<MReg, CLValue>,
+    // functions can return a struct with multiple values over 8 bytes. for example, the 
+    // struct {i64, i32}. in llvm, we return this struct directly as it is, but in 
+    // cranelift, we *actually* just return multiple values from the function. that's why 
+    // we use a vec of CLValues here.
+    registers: BTreeMap<MReg, Vec<CLValue>>,
     variables: BTreeMap<VarName, Writeable>,
+    var_locations: BTreeMap<VarName, (VarLocation, VariableInfo)>,
     entry_block: BlockData,
     other_blocks: Vec<BlockData>,
     reg_types: BTreeMap<MReg, Type>,
@@ -34,30 +179,38 @@ impl<'a> FunctionCompilationState<'a> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 enum Writeable {
     Var(Variable),
-    Slot(StackSlot),
+    Slot(StackSlot, Type),
 }
 
 impl Writeable {
-    fn write(&self, builder: &mut FunctionBuilder, val: CLValue) {
+    fn write(&self, builder: &mut FunctionBuilder, vals: Vec<CLValue>) {
         match self {
             Writeable::Var(var) => {
-                builder.def_var(*var, val)
+                assert_eq!(vals.len(), 1);
+                builder.def_var(*var, vals[0])
             },
-            Writeable::Slot(slot) => {
+            Writeable::Slot(slot, _) => {
                 let slot = builder.ins().stack_addr(cl_types::I64, *slot, 0);
-                builder.ins().store(MemFlags::new(), val, slot, 0);
+                write_vals_to_addr(builder, slot, vals);
             },
+        }
+    }
+
+    fn mark_use(&self, builder: &mut FunctionBuilder) {
+        match self {
+            Writeable::Var(var) => { builder.use_var(*var); },
+            Writeable::Slot(..) => {},
         }
     }
 
     fn load(&self, builder: &mut FunctionBuilder) -> CLValue {
         match self {
             Writeable::Var(var) => builder.use_var(*var),
-            Writeable::Slot(slot) => {
-                builder.ins().stack_load(cl_types::I64, *slot, 0)
+            Writeable::Slot(slot, typ) => {
+                builder.ins().stack_load(one(typ.to_cl_type()), *slot, 0)
             }
         }
     }
@@ -73,7 +226,7 @@ impl Writeable {
                 assert_eq!(offset, 0);
                 builder.use_var(*var)
             },
-            Writeable::Slot(slot) => {
+            Writeable::Slot(slot, _) => {
                 builder.ins().stack_load(typ, *slot, offset as i32)
             }
         }
@@ -82,27 +235,36 @@ impl Writeable {
     fn addr(&self, builder: &mut FunctionBuilder, offset: u32) -> CLValue {
         match self {
             Writeable::Var(_) => panic!(),
-            Writeable::Slot(slot) => {
+            Writeable::Slot(slot, _) => {
                 builder.ins().stack_addr(cl_types::I64, *slot, offset as i32)
             }
         }
     }
 
-    fn is_stack_slot(&self) -> bool { matches!(self, Writeable::Slot(_)) }
+    fn is_stack_slot(&self) -> bool { matches!(self, Writeable::Slot(..)) }
 }
 
-fn make_stack_allocas(fcs: &mut FunctionCompilationState, mir: &MIR) {
-    for (id, (name, info)) in mir.variables.iter().enumerate() {
-        let var = Variable::from_u32(id as u32);
-        let var_type = info.typ.to_cl_type();
+fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
+    let arg_offset = if fcs.ret_type.return_style() == ReturnStyle::Sret { 1 } else { 0 };
 
-        if info.typ.is_primitive() {
+    for (id, (name, (location, VariableInfo { typ, arg_index }))) 
+        in fcs.var_locations.iter().enumerate() {
+        let var = Variable::from_u32(id as u32);
+        let var_type = typ.to_cl_type();
+
+        if *location == VarLocation::Reg {
             assert_eq!(var_type.len(), 1);
             let var_type = var_type[0];
 
-            if let Some(arg_index) = info.arg_index {
-                let arg_index = arg_index as usize;
+            if let ArgIndex::Some(arg_index) = arg_index {
+                let arg_index = *arg_index + arg_offset;
                 let val = fcs.builder.block_params(fcs.entry_block.block)[arg_index];
+
+                // TODO: is declaring the arguments nescessary?
+                fcs.builder.declare_var(var, var_type);
+                fcs.builder.def_var(var, val);
+            } else if *arg_index == ArgIndex::SRet {
+                let val = fcs.builder.block_params(fcs.entry_block.block)[0];
                 fcs.builder.declare_var(var, var_type);
                 fcs.builder.def_var(var, val);
             } else {
@@ -111,15 +273,15 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState, mir: &MIR) {
 
             fcs.variables.insert(name.clone(), Writeable::Var(var));
         } else {
-            if let Some(_arg_index) = info.arg_index {
+            if let ArgIndex::Some(_arg_index) = arg_index {
                 todo!()
             } else {
                 let slot = fcs.builder.create_sized_stack_slot(StackSlotData {
                     kind: StackSlotKind::ExplicitSlot,
-                    size: info.typ.size() as u32,
+                    size: typ.size() as u32,
                 });
 
-                fcs.variables.insert(name.clone(), Writeable::Slot(slot));
+                fcs.variables.insert(name.clone(), Writeable::Slot(slot, typ.clone()));
             }
         }
     }
@@ -131,7 +293,7 @@ struct BlockData {
     variables_used: Vec<Writeable>,
 }
 
-fn make_blocks(fcs: &mut FunctionCompilationState, mir: &MIR) {
+fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
     use BTreeSet as Set;
 
     #[derive(Default, Debug)]
@@ -146,7 +308,7 @@ fn make_blocks(fcs: &mut FunctionCompilationState, mir: &MIR) {
     let mut on_entry_block = true;
     let mut processing_bdata = BData::default();
 
-    for line in mir.lines.iter().chain(once(&MLine::Marker(0))) {
+    for line in lines.iter().chain(once(&MLine::Marker(0))) {
         if matches!(line, MLine::Marker(_)) {
             if on_entry_block {
                 entry_block_data = processing_bdata;
@@ -163,7 +325,11 @@ fn make_blocks(fcs: &mut FunctionCompilationState, mir: &MIR) {
             processing_bdata.goes_to.insert(*yes as usize);
             processing_bdata.goes_to.insert(*no as usize);
         } else {
-            processing_bdata.variables.extend(variables_in(line));
+            processing_bdata.variables.extend(
+                variables_in(line)
+                    .into_iter()
+                    .map(|VarInMIR { name, .. }| name)
+            );
         }
     }
 
@@ -191,7 +357,7 @@ fn make_blocks(fcs: &mut FunctionCompilationState, mir: &MIR) {
         block: fcs.builder.create_block(),
         variables_used: entry_variables
             .into_iter()
-            .filter_map(|name| fcs.variables.get(&name).copied())
+            .filter_map(|name| fcs.variables.get(&name).cloned())
             .collect(),
     };
 
@@ -209,61 +375,14 @@ fn make_blocks(fcs: &mut FunctionCompilationState, mir: &MIR) {
                 block: fcs.builder.create_block(),
                 variables_used: variables
                     .into_iter()
-                    .filter_map(|name| fcs.variables.get(&name).copied())
+                    .filter_map(|name| fcs.variables.get(&name).cloned())
                     .collect(),
             }
         })
         .collect();
 }
 
-pub fn compile(
-    mir: MIR, 
-    entry_block: Block,
-    builder: FunctionBuilder,
-    used_functions: BTreeMap<UniqueFuncInfo, FuncRef>,
-    used_globals: BTreeMap<VarName, CLValue>,
-    function_signatures: &BTreeMap<FuncType, Signature>,
-    frontend_config: &TargetFrontendConfig,
-) {
-    let mut fcs = FunctionCompilationState {
-        builder,
-        entry_block: BlockData {
-            block: entry_block,
-            variables_used: Vec::new(),
-        },
-        other_blocks: Vec::new(),
-        addresses: BTreeMap::new(),
-        variables: BTreeMap::new(),
-        registers: BTreeMap::new(),
-        reg_types: BTreeMap::new(),
-        used_functions,
-        used_globals,
-        function_signatures,
-        frontend_config,
-        ret_type: mir.func_type.ret.clone(),
-    };
 
-    make_stack_allocas(&mut fcs, &mir);
-    make_blocks(&mut fcs, &mir);
-
-    fcs.reg_types = mir.reg_types;
-
-    #[cfg(feature = "xc-debug")]
-    let mut l = 0;
-
-    for line in mir.lines {
-        compile_mline(&mut fcs, line);
-
-        #[cfg(feature = "xc-debug")]
-        {
-            print!("{:03}, ", l);
-            l += 1;
-        }
-    }
-
-    #[cfg(feature = "xc-debug")]
-    println!();
-}
 
 fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
     match &line {
@@ -286,20 +405,22 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
             fcs.addresses.insert(*l, r);
         },
         MLine::Store { l, val } => {
-            let val = compile_operand(fcs, val);
+            let vals = compile_operand(fcs, val);
 
             match l {
-                MAddr::Var(name) => fcs.variables[name].write(&mut fcs.builder, val),
+                MAddr::Var(name) => fcs.variables[name].write(&mut fcs.builder, vals),
                 MAddr::Reg(reg) => {
                     let addr = get_addr(fcs, &MAddr::Reg(*reg), 0);
-                    fcs.builder.ins().store(MemFlags::new(), val, addr, 0);
+
+                    write_vals_to_addr(&mut fcs.builder, addr, vals);
                 }
             }
         },
         MLine::MemCpy { from, to, len } => {
             let from = get_addr(fcs, from, 0);
             let to = get_addr(fcs, to, 0);
-            let len = compile_operand(fcs, len);
+            let len = one(compile_operand(fcs, len));
+
             fcs.builder.call_memcpy(
                 *fcs.frontend_config,
                 to,
@@ -322,7 +443,7 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
             for var in &block.variables_used {
                 // make sure that cranelift knows we're using these variables, and load 
                 // them in the right order, otherwise variables get mixed up
-                var.load(&mut fcs.builder);
+                var.mark_use(&mut fcs.builder);
             }
         },
         MLine::Goto(index) => {
@@ -336,7 +457,7 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
             compile_expr(fcs, expr, None);
         },
         MLine::Branch { if_, yes, no } => {
-            let if_ = compile_operand(fcs, if_);
+            let if_ = one(compile_operand(fcs, if_));
 
             let yes_params = fcs.block_params(*yes as usize);
             let no_params = fcs.block_params(*no as usize);
@@ -352,12 +473,30 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
     }
 }
 
+fn write_vals_to_addr(
+    builder: &mut FunctionBuilder, 
+    mut addr: CLValue, 
+    vals: Vec<CLValue>
+) {
+    let value_count = vals.len();
+
+    for (v, val) in vals.into_iter().enumerate() {
+        builder.ins().store(MemFlags::new(), val, addr, 0);
+        
+        if v != value_count - 1 {
+            let eight = builder.ins().iconst(cl_types::I64, 8);
+
+            addr = builder.ins().iadd(addr, eight);
+        }
+    }
+}
+
 fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand) {
     let return_style = fcs.ret_type.return_style();
 
     if return_style == ReturnStyle::Direct {
         let val = compile_operand(fcs, operand);
-        fcs.builder.ins().return_(&[val]);
+        fcs.builder.ins().return_(&*val);
 
         return;
     } 
@@ -367,7 +506,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
             match memloc {
                 MMemLoc::Reg(_) => todo!(),
                 MMemLoc::Var(var_name) => {
-                    let writeable = fcs.variables[&var_name];
+                    let writeable = fcs.variables[&var_name].clone();
 
                     let fcs = &mut fcs;
                     move |typ: CLType, offset: u32| {
@@ -409,7 +548,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
 
 fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr, l: Option<&MAddrReg>) -> CLValue {
     match r {
-        MAddrExpr::Expr(expr) => compile_expr(fcs, expr, None).unwrap(),
+        MAddrExpr::Expr(expr) => compile_expr(fcs, expr, None).map(one).unwrap(),
         MAddrExpr::Addr(addr) => get_addr(fcs, addr, 0),
         MAddrExpr::Member { object_type, object, field_index } => {
             let TypeEnum::Struct(struct_type) = object_type.as_type_enum() else { panic!() };
@@ -420,53 +559,53 @@ fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr, l: Opti
     }
 }
 
-fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&MReg>) -> Option<CLValue> {
+fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&MReg>) -> Option<Vec<CLValue>> {
     match expr {
         MExpr::BinOp { ret_type, op, l, r } => {
-            let l = compile_operand(fcs, l);
-            let r = compile_operand(fcs, r);
+            let l = one(compile_operand(fcs, l));
+            let r = one(compile_operand(fcs, r));
 
-            Some(compile_binop(fcs, ret_type, *op, l, r,))
+            Some(vec![compile_binop(fcs, ret_type, *op, l, r,)])
         },
         MExpr::Addr(addr) => {
             let addr = get_addr(fcs, addr, 0);
             let typ = fcs.reg_types[reg.unwrap()].to_cl_type()[0];
             let val = fcs.builder.ins().load(typ, MemFlags::new(), addr, 0);
-            Some(val)
+            Some(vec![val])
         }
-        MExpr::Call { f, a, typ } => {
-            let a: Vec<_> = a.into_iter().map(|a| compile_operand(fcs, a)).collect();
+        MExpr::Call { f, a, typ, sret } => {
+            let sret: Vec<_> = 
+                sret.into_iter().map(|sret| one(load_memloc(fcs, sret))).collect();
+            let a = a.into_iter().map(|a| compile_operand(fcs, a)).flatten();
+            let all_args: Vec<CLValue> = sret.into_iter().chain(a).collect();
 
             let call_inst = match f {
                 MCallable::Func(info) => {
                     if let Some(func_ref) = fcs.used_functions.get(&info) {
-                        fcs.builder.ins().call(*func_ref, &*a)
+                        fcs.builder.ins().call(*func_ref, &*all_args)
                     } else {
-                        return build_intrinsic_function(fcs, info, a);
+                        return build_intrinsic_function(fcs, info, all_args);
                     }
                 },
                 MCallable::FirstClass(memloc) => {
-                    let val = load_memloc(fcs, memloc);
+                    let val = one(load_memloc(fcs, memloc));
                     let signature = fcs.function_signatures[&typ].clone();
                     let sigref = fcs.builder.func.stencil.import_signature(signature);
-                    fcs.builder.ins().call_indirect(sigref, val, &*a)
+                    fcs.builder.ins().call_indirect(sigref, val, &*all_args)
                 },
             };
 
-            if let Some(ret) = fcs.builder.inst_results(call_inst).get(0) {
-                Some(*ret)
-            } else {
-                None
-            }
+            let ret = fcs.builder.inst_results(call_inst).to_vec();
+            if ret.len() == 0 { None } else { Some(ret) }
         }
         MExpr::MemLoc(memloc) => Some(load_memloc(fcs, memloc)),
         MExpr::UnarOp { ret_type, op, hs } => todo!(),
         MExpr::Array { elem_type, elems } => todo!(),
-        MExpr::Ref { on } => Some(get_addr(fcs, on, 0)),
+        MExpr::Ref { on } => Some(vec![get_addr(fcs, on, 0)]),
         MExpr::Deref { to, on } => {
-            let ptr = compile_operand(fcs, on);
+            let ptr = one(compile_operand(fcs, on));
             let typ = to.to_cl_type()[0];
-            Some(fcs.builder.ins().load(typ, MemFlags::new(), ptr, 0))
+            Some(vec![fcs.builder.ins().load(typ, MemFlags::new(), ptr, 0)])
         },
         MExpr::Void => None,
     }
@@ -476,17 +615,8 @@ fn build_intrinsic_function(
     fcs: &mut FunctionCompilationState, 
     info: &UniqueFuncInfo, 
     a: Vec<CLValue>
-) -> Option<CLValue> {
+) -> Option<Vec<CLValue>> {
     match &*info.name.to_string() {
-        "memcpy" => {
-            fcs.builder.call_memcpy(
-                fcs.frontend_config.clone(), 
-                a[1],
-                a[0],
-                a[2],
-            );
-            None
-        },
         "memmove" => {
             fcs.builder.call_memmove(
                 fcs.frontend_config.clone(), 
@@ -504,7 +634,7 @@ fn build_intrinsic_function(
             let proper_size = fcs.builder.ins().imul(a[0], size_multiplier);
             let call_inst = fcs.builder.ins().call(func_ref, &[proper_size]);
             let ret = fcs.builder.inst_results(call_inst)[0];
-            Some(ret)
+            Some(vec![ret])
         },
         "free" => {
             let free_info = UniqueFuncInfo::from(VarName::from("$free"));
@@ -515,7 +645,7 @@ fn build_intrinsic_function(
             None
         },
         "size_of" => {
-            Some(fcs.builder.ins().iconst(cl_types::I64, info.generics[0].size() as i64))
+            Some(vec![fcs.builder.ins().iconst(cl_types::I64, info.generics[0].size() as i64)])
         },
         "cast" => {
             todo!()
@@ -524,7 +654,7 @@ fn build_intrinsic_function(
             let typ = info.generics[0].clone();
             let typusize: i64 = unsafe { std::mem::transmute(typ) };
 
-            Some(fcs.builder.ins().iconst(cl_types::I64,typusize))
+            Some(vec![fcs.builder.ins().iconst(cl_types::I64,typusize)])
         },
         _ => panic!(),
     }
@@ -584,10 +714,10 @@ fn compile_binop(
     }
 }
 
-fn compile_operand(fcs: &mut FunctionCompilationState, operand: &MOperand) -> CLValue {
+fn compile_operand(fcs: &mut FunctionCompilationState, operand: &MOperand) -> Vec<CLValue> {
     match operand {
         MOperand::MemLoc(memloc) => load_memloc(fcs, memloc),
-        MOperand::Lit(lit) => compile_lit(fcs, lit),
+        MOperand::Lit(lit) => vec![compile_lit(fcs, lit)],
     }
 }
 
@@ -611,17 +741,17 @@ fn compile_lit(fcs: &mut FunctionCompilationState, lit: &MLit) -> CLValue {
     }
 }
 
-fn load_memloc(fcs: &mut FunctionCompilationState, memloc: &MMemLoc) -> CLValue {
+fn load_memloc(fcs: &mut FunctionCompilationState, memloc: &MMemLoc) -> Vec<CLValue> {
     match memloc {
         MMemLoc::Var(name) => {
             match fcs.variables.get(&name) {
-                Some(var) => var.load(&mut fcs.builder),
+                Some(var) => vec![var.load(&mut fcs.builder)],
                 None => {
-                    fcs.used_globals[&name]
+                    vec![fcs.used_globals[&name]]
                 }
             }
         }
-        MMemLoc::Reg(reg) => fcs.registers[&reg],
+        MMemLoc::Reg(reg) => fcs.registers[&reg].clone(),
     }
 }
 
@@ -639,4 +769,9 @@ fn get_addr(fcs: &mut FunctionCompilationState, addr: &MAddr, offset: u32) -> CL
             }
         }
     }
+}
+
+fn one<T: std::fmt::Debug>(mut vec: Vec<T>) -> T {
+    assert_eq!(vec.len(), 1, "{:?}", vec);
+    vec.remove(0)
 }

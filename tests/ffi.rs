@@ -139,50 +139,13 @@ fn medium_struct() {
     )
 }
 
-//#[test]
-//fn large_struct() {
-//    xc_test!(
-//        "; Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }";
-//        Numbers5 { a: 1, b: 2, c: 3, d: 4, e: 5 }
-//    )
-//}
-
 #[test]
 fn large_struct() {
-    let mut unit = Unit::new();
-
-    unit.push_script(
-        "
-        Numbers5 = { a: i32, b: i32, c: i32, d: i32, e: i32, }
-
-        main(); Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }
-        ");
-
-    let function = unit.get_fn("main").unwrap().downcast::<(), Numbers5>();
-
-    let mut mynums = function();
-    //function(&mut mynums);
-    dbg!(&mynums);
+    xc_test!(
+        "; Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }";
+        Numbers5 { a: 1, b: 2, c: 3, d: 4, e: 5 }
+    )
 }
-
-//#[test]
-//fn large_struct() {
-//    xc_test!(
-//        "
-//            produce_numbers(dest: &Numbers5) {
-//                memcpy(&Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 }, dest, size_of<Numbers5>())
-//            }
-//
-//            main(); u32 { 
-//                x = Numbers5 { a = 0, b = 0, c = 0, d = 0, e = 0 }
-//                produce_numbers(&x)
-//                ; x.a + x.d
-//            }
-//        ";
-//        33
-//    )
-//}
-
 
 #[test]
 fn i32_and_ref() {

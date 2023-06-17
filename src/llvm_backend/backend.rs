@@ -53,7 +53,7 @@ impl IsBackend for LLVMBackend {
         }
     }
 
-    fn begin_compilation_round(&self) {
+    fn begin_compilation_round(&mut self) {
         self.execution_engine
             .borrow()
             .remove_module(&self.module)

@@ -1,3 +1,4 @@
+use cranelift::codegen::ir::ArgumentPurpose;
 use cranelift::prelude::AbiParam;
 use cranelift::prelude::Signature;
 use cranelift::prelude::Type as ClType;
@@ -14,14 +15,31 @@ use crate::typ::VariantType;
 use crate::typ::VoidType;
 use crate::{Type, IntType, FloatType, StructType};
 
-pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
+pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool) {
+    let return_style = if as_rust { 
+        typ.ret.rust_return_style() 
+    } else { 
+        typ.ret.return_style() 
+    };
+
+    if return_style == ReturnStyle::Sret {
+        let sret_abi = AbiParam::special(cl_types::I64, ArgumentPurpose::StructReturn);
+        sig.params.push(sret_abi);
+    }
+
     for typ in &typ.args {
         for cl_type in typ.to_cl_type() {
             sig.params.push(AbiParam::new(cl_type));
         }
     }
 
-    for cl_type in typ.ret.raw_return_type().to_cl_type() {
+    let raw_return = if as_rust {
+        typ.ret.rust_raw_return_type()
+    } else { 
+        typ.ret.raw_return_type()
+    };
+
+    for cl_type in raw_return.to_cl_type() {
         sig.returns.push(AbiParam::new(cl_type));
     }
 }
