@@ -2,7 +2,7 @@ use crate::{
     errors::CResultMany,
     hlr::hlr,
     lex::{indent_parens, lex, VarName},
-    parse::{self, Expr, FuncCode, TypeRelation},
+    parse::{self, FuncCode, TypeRelation},
     typ::ReturnStyle,
     Unit, XcReflect, mir::mir,
 };
@@ -125,14 +125,13 @@ impl Unit {
             let mut lexed = lex(of);
             let mut context = lexed.split(VarName::None, HashMap::new());
 
-            Expr::Block(vec![Expr::Return(box parse::parse_expr(&mut context).unwrap())])
+            parse::parse_expr(&mut context).unwrap().wrap_in_block()
         };
 
         let code = FuncCode::from_expr(expr);
 
-        let value_function_name = VarName::from(format!("$val{:x}", rand::random::<u32>()));
         let value_function_info = UniqueFuncInfo {
-            name: value_function_name,
+            name: VarName::from("$val"),
             ..Default::default()
         };
 

@@ -57,9 +57,9 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
     let string_type = comp_data.get_by_name(&"String".into()).unwrap();
 
-    let to_string = box Expr::Ident(VarName::from("to_string"));
-    let input_var = box Expr::Ident(VarName::from("input"));
-    let push_string = box Expr::Ident(VarName::from("push_string"));
+    let to_string = Expr::ident("to_string");
+    let input_var = Expr::ident("input");
+    let push_string = Expr::ident("push_string");
 
     let expr = match typ.clone().get_deref().unwrap().as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
@@ -82,7 +82,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     name: output_var,
                     type_spec: string_type.into(),
                 },
-                box Expr::Strin(Arc::from(&*prefix)),
+                Expr::string(&*prefix),
             );
             statements.push(make_var);
 
@@ -93,7 +93,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     field_name.to_string() + " = "
                 };
 
-                let field_prefix_expr = Expr::Strin(Arc::from(&*field_prefix));
+                let field_prefix_expr = Expr::String(Arc::from(&*field_prefix));
 
                 let push_prefix_call = Expr::Call {
                     func: push_string.clone(),
@@ -123,19 +123,19 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let push_closer_call = Expr::Call {
                 func: push_string,
                 generics: Vec::new(),
-                args: vec![output_var_ref, Expr::Strin("}".into()).get_ref()],
+                args: vec![output_var_ref, Expr::String("}".into()).get_ref()],
                 is_method: true,
             };
             statements.push(push_closer_call);
 
-            let ret = Expr::Return(box output_var_expr.clone());
+            let ret = Expr::Return(Box::new(output_var_expr.clone()));
             statements.push(ret);
             Expr::Block(statements)
         },
         TypeEnum::Array(ArrayType { count, .. }) => {
             let output_var = VarName::from("output");
-            let output_var_expr = Expr::Ident(output_var.clone());
-            let output_var_ref = Expr::UnarOp(Opcode::Ref, box output_var_expr.clone());
+            let output_var_expr = Expr::ident(&*output_var);
+            let output_var_ref = Expr::UnarOp(Opcode::Ref, output_var_expr.clone());
 
             let mut statements = Vec::new();
             let make_var = Expr::SetVar(
@@ -143,11 +143,11 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     name: output_var,
                     type_spec: string_type.into(),
                 },
-                box Expr::Strin("[".into()),
+                Expr::string("["),
             );
             statements.push(make_var);
 
-            let push_string = box Expr::Ident(VarName::from("push_string"));
+            let push_string = Expr::ident("push_string");
 
             for index in 0..*count {
                 let comma = if index > 0 {
@@ -156,7 +156,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     Arc::from("")
                 };
 
-                let comma_expr = Expr::Strin(comma);
+                let comma_expr = Expr::String(comma);
 
                 let push_comma_call = Expr::Call {
                     func: push_string.clone(),
@@ -171,10 +171,10 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
                     generics: Vec::new(),
                     args: vec![Expr::UnarOp(
                         Opcode::Ref,
-                        box Expr::Index(
-                            box Expr::UnarOp(Opcode::Deref, input_var.clone()),
-                            box Expr::Number(index as u64),
-                        ),
+                        Box::new(Expr::Index(
+                            Box::new(Expr::UnarOp(Opcode::Deref, input_var.clone())),
+                            Box::new(Expr::Number(index as u64)),
+                        )),
                     )],
                     is_method: true,
                 };
@@ -191,12 +191,12 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let push_closer_call = Expr::Call {
                 func: push_string,
                 generics: Vec::new(),
-                args: vec![output_var_ref, Expr::Strin("]".into())],
+                args: vec![output_var_ref, Expr::String("]".into())],
                 is_method: true,
             };
             statements.push(push_closer_call);
 
-            let ret = Expr::Return(box output_var_expr.clone());
+            let ret = Expr::Return(output_var_expr);
             statements.push(ret);
             Expr::Block(statements)
         },

@@ -2,7 +2,6 @@
 #![feature(int_roundings)]
 #![feature(let_chains)]
 #![feature(type_alias_impl_trait)]
-#![feature(box_syntax)]
 #![feature(type_changing_struct_update)]
 #![feature(if_let_guard)]
 #![feature(min_specialization)]
@@ -11,7 +10,7 @@
 #![feature(tuple_trait)]
 #![feature(exclusive_range_pattern)]
 
-// HOW DEBUG FlAGS WORK:
+// HOW THE DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
 // 2. backend-debug: enables debug printing for backend, like LLVM or Cranelift
 // 3. show-bytes: enables debug printing for the bytes of each type, during
@@ -39,7 +38,6 @@ pub mod error {
     pub use crate::parse::ParseError;
 }
 
-#[cfg(feature = "cxc_derive")]
 pub use cxc_derive::{XcReflect, xc_opaque};
 
 #[cfg(feature = "show-bytes")]
@@ -67,3 +65,6 @@ pub mod backend {
 
 mod typ;
 mod unit;
+
+#[cfg(not(any(feature = "backend-llvm", feature = "backend-cranelift")))]
+compile_error!("No backend chosen: in your Cargo.toml, enable either backend-cranelift (recommended) or backend-llvm (requires LLVM to be installed)");

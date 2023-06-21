@@ -21,7 +21,7 @@ pub enum Expr {
     Number(u64),
     Float(f64),
     Bool(bool),
-    Strin(Arc<str>),
+    String(Arc<str>),
     Ident(VarName),
     TypedValue(TypeSpec, Box<Expr>),
     Struct(Vec<(VarName, Expr)>, InitOpts),
@@ -68,43 +68,51 @@ impl<'a> IntoIterator for &'a Expr {
             Number(_)
             | Float(_)
             | Bool(_)
-            | Strin(_)
+            | String(_)
             | Ident(_)
             | StaticMethodPath(..)
-            | Error { .. } => box empty(),
+            | Error { .. } => Box::new(empty()),
             Struct(fields, _) 
-                => box fields.iter().map(|(_, expr)| expr).flatten(),
-            Tuple(exprs, _) => box exprs.iter().flatten(),
-            Array(exprs, _) => box exprs.iter().flatten(),
-            Index(a, i) => box [&**a, &**i].into_iter().flatten(),
-            SetVar(_, rhs) => box once(&**rhs).flatten(),
-            Set(lhs, rhs) => box [&**lhs, &**rhs].into_iter().flatten(),
+                => Box::new(fields.iter().map(|(_, expr)| expr).flatten()),
+            Tuple(exprs, _) => Box::new(exprs.iter().flatten()),
+            Array(exprs, _) => Box::new(exprs.iter().flatten()),
+            Index(a, i) => Box::new([&**a, &**i].into_iter().flatten()),
+            SetVar(_, rhs) => Box::new(once(&**rhs).flatten()),
+            Set(lhs, rhs) => Box::new([&**lhs, &**rhs].into_iter().flatten()),
             Call {
                 func: name, args, ..
-            } => box once(&**name).chain(args.iter()),
-            UnarOp(_, hs) => box once(&**hs).flatten(),
-            BinOp(_, lhs, rhs) => box [&**lhs, &**rhs].into_iter().flatten(),
-            Member(o, _) => box o.into_iter(),
-            IfThen(i, t) => box [&**i, &**t].into_iter().flatten(),
-            IfThenElse(i, t, e) => box [&**i, &**t, &**e].into_iter().flatten(),
-            ForWhile(f, w) => box [&**f, &**w].into_iter().flatten(),
-            Block(stmts) => box stmts.iter().flatten(),
-            Return(r) => box once(&**r).flatten(),
-            Enclosed(expr) => box once(&**expr).flatten(),
-            TypedValue(_, expr) => box once(&**expr).flatten(),
+            } => Box::new(once(&**name).chain(args.iter())),
+            UnarOp(_, hs) => Box::new(once(&**hs).flatten()),
+            BinOp(_, lhs, rhs) => Box::new([&**lhs, &**rhs].into_iter().flatten()),
+            Member(o, _) => Box::new(o.into_iter()),
+            IfThen(i, t) => Box::new([&**i, &**t].into_iter().flatten()),
+            IfThenElse(i, t, e) => Box::new([&**i, &**t, &**e].into_iter().flatten()),
+            ForWhile(f, w) => Box::new([&**f, &**w].into_iter().flatten()),
+            Block(stmts) => Box::new(stmts.iter().flatten()),
+            Return(r) => Box::new(once(&**r).flatten()),
+            Enclosed(expr) => Box::new(once(&**expr).flatten()),
+            TypedValue(_, expr) => Box::new(once(&**expr).flatten()),
         };
 
-        box me.chain(rest)
+        Box::new(me.chain(rest))
     }
 }
 impl Expr {
-    pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, box self.clone()) }
+    pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, Box::new(self.clone())) }
 
     pub fn wrap_in_block(self) -> Expr {
         match self {
             Expr::Block(_) => self,
-            _ => Expr::Block(vec![Expr::Return(box self)]),
+            _ => Expr::Block(vec![Expr::Return(Box::new(self))]),
         }
+    }
+
+    pub fn ident(from: &str) -> Box<Expr> {
+        Box::new(Expr::Ident(VarName::from(from)))
+    }
+
+    pub fn string(from: &str) -> Box<Expr> {
+        Box::new(Expr::String(Arc::from(from)))
     }
 }
 

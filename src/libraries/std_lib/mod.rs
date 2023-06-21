@@ -79,7 +79,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
         generic_count: 0,
         code: Expr::TypedValue(
             TypeSpec::Int(64), 
-            box Expr::Number(*count as u64)
+            Box::new(Expr::Number(*count as u64))
         ).wrap_in_block(),
         relation: TypeSpecRelation::Static(typ.into()),
     })

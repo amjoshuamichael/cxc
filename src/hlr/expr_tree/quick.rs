@@ -72,15 +72,6 @@ impl NodeDataGen for VarName {
     }
 }
 
-impl Default for Box<dyn NodeDataGen> {
-    fn default() -> Self {
-        box HNodeData::Number {
-            value: 0,
-            lit_type: Type::i(32),
-        }
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct SetVarGen<T: NodeDataGen, U: NodeDataGen> {
     pub lhs: T,
@@ -106,7 +97,7 @@ impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for SetVarGen<T, U> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BinOpGen {
     pub lhs: Box<dyn NodeDataGen>,
     pub op: Opcode,
@@ -136,13 +127,13 @@ impl NodeDataGen for BinOpGen {
 }
 
 #[derive(Debug, Default)]
-pub struct UnarOpGen {
+pub struct UnarOpGen<T: NodeDataGen> {
     pub op: Opcode,
-    pub hs: Box<dyn NodeDataGen>,
+    pub hs: T,
     pub ret_type: Type,
 }
 
-impl NodeDataGen for UnarOpGen {
+impl<T: NodeDataGen> NodeDataGen for UnarOpGen<T> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
@@ -252,7 +243,7 @@ impl StructLitGen {
         StructLitGen {
             fields: elems.into_iter()
                 .enumerate()
-                .map(|(i, e)| ((i as u32).into(), e))
+                .map(|(i, e)| (VarName::TupleIndex(i), e))
                 .collect(),
             ..Default::default()
         }
@@ -290,19 +281,22 @@ impl NodeDataGen for ArrayLitGen {
 }
 
 #[derive(Debug, Default)]
-pub struct MemberGen {
-    pub object: Box<dyn NodeDataGen>,
+pub struct MemberGen<T: NodeDataGen> {
+    pub object: T,
     pub field: VarName,
 }
 
-impl NodeDataGen for MemberGen {
+impl<T: NodeDataGen> NodeDataGen for MemberGen<T> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
         let object = self.object.add_to_expr_tree(hlr, space);
         let object_type = hlr.tree.get(object).ret_type();
         let member_type = 
-            hlr.get_type_spec(&TypeSpec::StructMember(box object_type.into(), self.field.clone()))
+            hlr.get_type_spec(&TypeSpec::StructMember(
+                    Box::new(object_type.into()),
+                    self.field.clone()
+                ))
                 .unwrap();
 
         hlr.tree.replace(
@@ -319,14 +313,14 @@ impl NodeDataGen for MemberGen {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct IndexGen {
-    pub object: Box<dyn NodeDataGen>,
-    pub index: Box<dyn NodeDataGen>,
+#[derive(Debug)]
+pub struct IndexGen<T: NodeDataGen, U: NodeDataGen> {
+    pub object: T,
+    pub index: U,
     pub ret_type: Type,
 }
 
-impl NodeDataGen for IndexGen {
+impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for IndexGen<T, U> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
@@ -347,11 +341,11 @@ impl NodeDataGen for IndexGen {
 }
 
 #[derive(Debug, Default)]
-pub struct RefGen {
-    pub object: Box<dyn NodeDataGen>,
+pub struct RefGen<T: NodeDataGen> {
+    pub object: T,
 }
 
-impl NodeDataGen for RefGen {
+impl<T: NodeDataGen> NodeDataGen for RefGen<T> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
@@ -372,9 +366,9 @@ impl NodeDataGen for RefGen {
     }
 }
 
-pub fn get_ref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<RefGen> {
+pub fn get_ref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<RefGen<T>> {
     Box::new(RefGen {
-        object: box node_data_gen,
+        object: node_data_gen,
     })
 }
 

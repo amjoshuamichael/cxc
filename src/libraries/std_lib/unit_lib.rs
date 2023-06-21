@@ -29,9 +29,12 @@ impl Library for UnitLib {
             ]
         );
 
-        unit.assert_size_of::<VarName>().unwrap();
-        unit.assert_size_of_with_name::<TypeRelation>("TypeRelation").unwrap();
-        unit.assert_size_of::<UniqueFuncInfo>().unwrap();
-        unit.assert_size_of::<Func>().unwrap();
+        #[cfg(feature = "ffi-assertions")]
+        {
+            unit.assert_size_of::<VarName>().unwrap();
+            unit.assert_size_of_with_name::<TypeRelation>("TypeRelation").unwrap();
+            unit.assert_size_of::<UniqueFuncInfo>().unwrap();
+            unit.assert_size_of::<Func>().unwrap();
+        }
     }
 }

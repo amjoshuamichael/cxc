@@ -39,7 +39,7 @@ impl IsBackend for CraneliftBackend {
             globals: BTreeMap::new(),
             module: make_proper_module(&isa),
             frontend_config: isa.frontend_config(),
-            isa: box isa,
+            isa: Box::new(isa),
             generations: Generations::default(),
         };
 
@@ -159,8 +159,7 @@ impl IsBackend for CraneliftBackend {
 
     fn compiled_iter<'a>(&'a self) -> 
         Box<dyn Iterator<Item = (&UniqueFuncInfo, &Self::LowerableFuncRef)> + 'a> {
-        dbg!(&self.func_pointers);
-        box self.func_pointers.iter()
+        Box::new(self.func_pointers.iter())
     }
 
     fn add_global(&mut self, name: VarName, typ: Type, address: *mut usize) {

@@ -69,11 +69,11 @@ pub fn add_drops(hlr: &mut FuncRep) {
                 generics: var_type.generics().clone(),
                 ..Default::default()
             },
-            args: vec![box UnarOpGen {
+            args: vec![Box::new(UnarOpGen {
                 op: Opcode::Ref,
-                hs: box var_name.clone(),
+                hs: var_name,
                 ret_type: var_type.get_ref()
-            }],
+            })],
             ..Default::default()
         });
     }

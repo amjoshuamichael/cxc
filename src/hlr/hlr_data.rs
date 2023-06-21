@@ -170,7 +170,7 @@ impl<'a> FuncRep<'a> {
                 },
             ),
             Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value }),
-            Expr::Strin(value) => {
+            Expr::String(value) => {
                 let call_space = self.tree.make_one_space(parent);
                 let ref_space = self.tree.make_one_space(call_space);
                 let array_space = self.tree.make_one_space(ref_space);

@@ -23,17 +23,14 @@ fn hot_reload_many() {
 
     let best = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
     let worst = unit.get_fn("the_worst_num").unwrap().downcast::<(), i32>();
-    dbg!(best(), worst(), best.inner.get_pointer(), worst.inner.get_pointer());
     assert_eq!(best(), 41);
     assert_eq!(worst(), 0);
 
     unit.push_script("the_best_num(); i32 { ; 42 } ").unwrap();
-    dbg!(best(), worst(), best.inner.get_pointer(), worst.inner.get_pointer());
     assert_eq!(best(), 42);
     assert_eq!(worst(), 0);
 
     unit.push_script("the_worst_num(); i32 { ; 1 } ").unwrap();
-    dbg!(best(), worst(), best.inner.get_pointer(), worst.inner.get_pointer());
     assert_eq!(best(), 42);
     assert_eq!(worst(), 1);
 

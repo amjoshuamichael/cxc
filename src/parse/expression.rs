@@ -56,7 +56,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
             let object = atoms.pop().unwrap().unwrap_expr()?;
 
-            Expr::Index(box object, box index).into()
+            Expr::Index(Box::new(object), Box::new(index)).into()
         } else if matches!(next, Tok::DottedNum(..)) {
             lexer.next_tok()?;
             // parse tuple index
@@ -64,7 +64,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
             let Tok::DottedNum((_, right)) = next else { unreachable!() };
 
-            Expr::Member(box object, right.into()).into()
+            Expr::Member(Box::new(object), VarName::TupleIndex(right as usize)).into()
         } else if next == Tok::Dot {
             lexer.next_tok()?;
             let previous = atoms
@@ -73,7 +73,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 .unwrap_expr()?;
             let field = lexer.next_tok()?.var_name()?;
 
-            Expr::Member(box previous, field).into()
+            Expr::Member(Box::new(previous), field).into()
         } else if let Ok(opcode) = next.get_bin_opcode() {
             if opcode == Opcode::Multiplier {
                 // this might be a dereference just before an assignment. for example,
@@ -122,13 +122,13 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             Expr::Float(format!("{l}.{r}").parse().unwrap()).into()
         },
         Tok::Bool(val) => Expr::Bool(val).into(),
-        Tok::Strin(val) => Expr::Strin(val).into(),
+        Tok::Strin(val) => Expr::String(val).into(),
         Tok::VarName(val) => Expr::Ident(val).into(),
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
         Tok::LBrack => parse_array_literal(lexer)?.into(),
         Tok::LParen => {
             lexer.assert_next_tok_is(Tok::LParen)?;
-            let enclosed = Expr::Enclosed(box parse_math_expr(lexer)?).into();
+            let enclosed = Expr::Enclosed(Box::new(parse_math_expr(lexer)?)).into();
             lexer.assert_next_tok_is(Tok::RParen)?;
             enclosed
         },
@@ -151,7 +151,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
                     .ok_or(ParseError::ImproperExpression)?;
                 let Atom::Expr(expr) = value 
                     else { return Err(ParseError::ImproperExpression) };
-                Expr::TypedValue(type_spec, box expr).into()
+                Expr::TypedValue(type_spec, Box::new(expr)).into()
             }
         },
         Tok::LCurly 
@@ -181,7 +181,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         Atom::Expr(Expr::Number(_))
             | Atom::Expr(Expr::Float(_))
             | Atom::Expr(Expr::Bool(_))
-            | Atom::Expr(Expr::Strin(_))
+            | Atom::Expr(Expr::String(_))
             | Atom::Expr(Expr::Ident(_))
             | Atom::Op(_)
     ) {
@@ -207,14 +207,14 @@ fn parse_call(
             args.insert(0, Expr::UnarOp(Opcode::Ref, object));
 
             Expr::Call {
-                func: box Expr::Ident(method_name),
+                func: Box::new(Expr::Ident(method_name)),
                 generics,
                 args,
                 is_method: true,
             }
         },
         Atom::Expr(_) => Expr::Call {
-            func: box func.unwrap_expr()?,
+            func: Box::new(func.unwrap_expr()?),
             generics,
             args,
             is_method: false,
@@ -237,9 +237,9 @@ fn detect_unary_ops(atoms: &mut Vec<Atom>) -> ParseResult<()> {
 
             let opcode = atoms.remove(opcode_pos).unwrap_op()?;
 
-            let rhs = box atoms.remove(opcode_pos).unwrap_expr()?;
+            let rhs = atoms.remove(opcode_pos).unwrap_expr()?;
 
-            atoms.insert(opcode_pos, Expr::UnarOp(opcode, rhs).into());
+            atoms.insert(opcode_pos, Expr::UnarOp(opcode, Box::new(rhs)).into());
         }
     }
 
@@ -255,9 +255,9 @@ fn detect_binary_ops(atoms: &mut Vec<Atom>) -> ParseResult<()> {
                 return Err(ParseError::ImproperExpression);
             }
 
-            let lhs = box atoms.remove(opcode_pos - 1).unwrap_expr()?;
+            let lhs = Box::new(atoms.remove(opcode_pos - 1).unwrap_expr()?);
             let opcode = atoms.remove(opcode_pos - 1).unwrap_op().unwrap();
-            let rhs = box atoms.remove(opcode_pos - 1).unwrap_expr()?;
+            let rhs = Box::new(atoms.remove(opcode_pos - 1).unwrap_expr()?);
 
             let new_binop = Expr::BinOp(opcode, lhs, rhs);
 

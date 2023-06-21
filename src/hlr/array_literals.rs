@@ -23,15 +23,15 @@ pub fn array_literals(hlr: &mut FuncRep) {
                     .insert_statement_before(
                         current_statement,
                         SetVarGen {
-                            lhs: box IndexGen {
-                                object: box new_array.clone(),
-                                index: box HNodeData::Number {
+                            lhs: IndexGen {
+                                object: new_array.clone(),
+                                index: HNodeData::Number {
                                     lit_type: Type::i(64),
                                     value: index as u64,
                                 },
                                 ret_type: base.clone(),
                             },
-                            rhs: box hlr.tree.get(*part_expr),
+                            rhs: *part_expr,
                         },
                     )
                     .inserted_id();

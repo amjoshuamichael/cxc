@@ -18,10 +18,10 @@ impl InvalidState for Type {
 impl InvalidState for RefType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index == 0 {
-            Some(box HNodeData::Number {
+            Some(Box::new(HNodeData::Number {
                 value: 0,
                 lit_type: Type::i(64),
-            })
+            }))
         } else {
             None
         }
@@ -31,10 +31,10 @@ impl InvalidState for RefType {
 impl InvalidState for BoolType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index + 2 < 256 {
-            Some(box HNodeData::Number {
+            Some(Box::new(HNodeData::Number {
                 value: (index + 2) as u64,
                 lit_type: Type::i(8),
-            })
+            }))
         } else {
             None
         }
@@ -58,10 +58,10 @@ impl InvalidState for FloatType {
 impl InvalidState for FuncType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         if index == 0 {
-            Some(box HNodeData::Number {
+            Some(Box::new(HNodeData::Number {
                 value: 0,
                 lit_type: Type::i(64),
-            })
+            }))
         } else {
             None
         }
@@ -72,11 +72,11 @@ impl InvalidState for ArrayType {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
         let elem_invalid_state = self.base.invalid_state(index)?;
 
-        Some(box ArrayLitGen {
+        Some(Box::new(ArrayLitGen {
             var_type: Type::new(TypeEnum::Array(self.clone())),
             parts: vec![elem_invalid_state],
             initialize: InitOpts::Uninit,
-        })
+        }))
     }
 }
 
@@ -88,11 +88,11 @@ impl InvalidState for StructType {
 
         for (field_name, field_type) in &self.fields {
             if field_type.invalid_state(0).is_some() {
-                return Some(box StructLitGen {
+                return Some(Box::new(StructLitGen {
                     var_type: Type::new(TypeEnum::Struct(self.clone())),
                     fields: vec![(field_name.clone(), field_type.invalid_state(index)?)],
                     initialize: InitOpts::Uninit,
-                });
+                }));
             }
         }
 
@@ -108,17 +108,17 @@ impl InvalidState for SumType {
             self.largest_variant_data()
                 .invalid_state(index + variant_count - 1)
         } else if variant_count + index < 256 {
-            Some(box StructLitGen {
+            Some(Box::new(StructLitGen {
                 var_type: self.largest_variant_as_struct(),
                 fields: vec![(
                     "tag".into(),
-                    box HNodeData::Number {
+                    Box::new(HNodeData::Number {
                         value: (variant_count + index) as u64,
                         lit_type: Type::i(8),
-                    },
+                    }),
                 )],
                 initialize: InitOpts::Uninit,
-            })
+            }))
         } else {
             None
         }

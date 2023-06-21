@@ -179,7 +179,7 @@ impl Type {
         let indexed_fields = fields
             .into_iter()
             .enumerate()
-            .map(|(i, field)| ((i as u32).into(), field))
+            .map(|(i, field)| (VarName::TupleIndex(i), field))
             .collect();
 
         Type::new(TypeEnum::Struct(StructType {

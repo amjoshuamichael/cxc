@@ -9,11 +9,11 @@ impl ExprTree {
     pub fn iter_mut<'a>(
         &'a mut self,
     ) -> Box<dyn Iterator<Item = (ExprID, &mut HNodeData)> + 'a> {
-        box self.nodes.iter_mut().map(|(id, node)| (id, &mut node.data))
+        Box::new(self.nodes.iter_mut().map(|(id, node)| (id, &mut node.data)))
     }
 
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (ExprID, &HNodeData)> + 'a> {
-        box self.nodes.iter().map(|(id, node)| (id, &node.data))
+        Box::new(self.nodes.iter().map(|(id, node)| (id, &node.data)))
     }
 
     pub fn ids_in_order(&self) -> Vec<ExprID> {

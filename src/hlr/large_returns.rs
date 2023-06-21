@@ -38,8 +38,8 @@ fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
             let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
 
             hlr.insert_statement_before(return_id, SetVarGen {
-                lhs: box casted_ret.clone(),
-                rhs: box hlr.tree.get(*to_return),
+                lhs: casted_ret.clone(),
+                rhs: hlr.tree.get(*to_return),
             });
 
             hlr.replace_quick(*to_return, casted_ret.clone());
@@ -56,14 +56,14 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
             let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
 
             hlr.insert_statement_before(return_id, SetVarGen {
-                lhs: box casted_ret.clone(),
-                rhs: box CallGen {
+                lhs: casted_ret.clone(),
+                rhs: CallGen {
                     info: UniqueFuncInfo {
                         name: VarName::from("cast"),
-                        generics: vec![hlr.tree.get(*to_return).ret_type(), f64.clone()],
+                        generics: vec![hlr.ret_type.clone(), f64.clone()],
                         ..Default::default()
                     },
-                    args: vec![box hlr.tree.get(*to_return)],
+                    args: vec![Box::new(*to_return)],
                     ..Default::default()
                 },
             });
@@ -92,8 +92,8 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
             hlr.insert_statement_before(
                 return_id,
                 SetVarGen {
-                    lhs: box output_var_name.clone(),
-                    rhs: box to_return_data.clone(),
+                    lhs: output_var_name.clone(),
+                    rhs: to_return_data.clone(),
                 },
             );
 
@@ -102,14 +102,14 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
                 StructLitGen {
                     var_type: i64i64.clone(),
                     ..StructLitGen::tuple(vec![
-                        box MemberGen {
-                            object: box output_var_name.clone(),
-                            field: 0.into(),
-                        },
-                        box MemberGen {
-                            object: box output_var_name.clone(),
-                            field: 1.into(),
-                        }
+                        Box::new(MemberGen {
+                            object: output_var_name.clone(),
+                            field: VarName::TupleIndex(0),
+                        }),
+                        Box::new(MemberGen {
+                            object: output_var_name.clone(),
+                            field: VarName::TupleIndex(1),
+                        }),
                     ])
                 },
             );
@@ -193,8 +193,8 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     hlr.insert_statement_before(
         og_call,
         SetVarGen {
-            lhs: box raw_ret_var_name.clone(),
-            rhs: box og_call_data.clone(),
+            lhs: raw_ret_var_name.clone(),
+            rhs: og_call_data.clone(),
         },
     )
     .after_that(MemCpyGen {
@@ -228,9 +228,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
 
     let call_var = hlr.add_variable("_call_out", &ret_type);
 
-    let new_arg = hlr.insert_quick(og_call_id, RefGen {
-        object: box call_var.clone(),
-    });
+    let new_arg = hlr.insert_quick(og_call_id, get_ref(call_var.clone()));
 
     *sret = Some(new_arg);
 

@@ -41,10 +41,10 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
 
             for (field_name, field_type) in &struct_type.fields {
                 let other_default_call = Expr::Call {
-                    func: box Expr::StaticMethodPath(
+                    func: Box::new(Expr::StaticMethodPath(
                         field_type.clone().into(),
                         "default".into(),
-                    ),
+                    )),
                     generics: Vec::new(),
                     args: Vec::new(),
                     is_method: false,
@@ -55,7 +55,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
 
             let struct_lit = Expr::TypedValue(
                 typ.clone().into(),
-                box Expr::Struct(fields, InitOpts::NoFill),
+                Box::new(Expr::Struct(fields, InitOpts::NoFill)),
             );
 
             let relation = TypeSpecRelation::Static(TypeSpec::Type(typ.clone()));

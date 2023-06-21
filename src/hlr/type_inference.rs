@@ -7,6 +7,9 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 use std::hash::Hash;
 
+#[cfg(feature ="xc-debug")]
+use crate::lex::indent_parens;
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 enum Inferable {
     Expr(ExprID),
@@ -201,12 +204,12 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 let constraint = match op {
                     Opcode::Not => Constraint::SameAs(hs.into()),
                     Opcode::Ref => Constraint::RelatedTo {
-                        spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                        spec: TypeSpec::GenParam(0).get_ref(),
                         gen_params: vec![hs.into()],
                         method_of: None,
                     },
                     Opcode::Deref => Constraint::RelatedTo {
-                        spec: TypeSpec::Deref(box TypeSpec::GenParam(0)),
+                        spec: TypeSpec::GenParam(0).get_deref(),
                         gen_params: vec![hs.into()],
                         method_of: None,
                     },
@@ -232,7 +235,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 infer_map.insert(
                     id,
                     Constraint::RelatedTo {
-                        spec: TypeSpec::StructMember(box TypeSpec::GenParam(0), field.clone()),
+                        spec: TypeSpec::StructMember(
+                            Box::new(TypeSpec::GenParam(0)),
+                            field.clone()
+                        ),
                         gen_params: vec![object.into()],
                         method_of: None,
                     },
@@ -242,7 +248,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 infer_map.insert(
                     id,
                     Constraint::RelatedTo {
-                        spec: TypeSpec::FuncReturnType(box TypeSpec::GenParam(0)),
+                        spec: TypeSpec::FuncReturnType(Box::new(TypeSpec::GenParam(0))),
                         gen_params: vec![f.into()],
                         method_of: None,
                     },
@@ -299,7 +305,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         id,
                         Constraint::RelatedTo {
                             spec: TypeSpec::Array(
-                                box TypeSpec::GenParam(0),
+                                Box::new(TypeSpec::GenParam(0)),
                                 parts.len() as u32,
                             ),
                             gen_params: vec![first_element.into()],
@@ -311,7 +317,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Index { object, .. } => infer_map.insert(
                 id,
                 Constraint::RelatedTo {
-                    spec: TypeSpec::ArrayElem(box TypeSpec::GenParam(0)),
+                    spec: TypeSpec::ArrayElem(Box::new(TypeSpec::GenParam(0))),
                     gen_params: vec![object.into()],
                     method_of: None,
                 },
@@ -338,9 +344,9 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
             GenParam(_) => return None, // gen param is not equal to the one we're looking for
             Ref(elem) | Deref(elem) | Array(elem, _) => {
                 lhs = match rhs {
-                    Ref(_) => Deref(box lhs),
-                    Deref(_) => Ref(box lhs),
-                    Array(..) => ArrayElem(box lhs),
+                    Ref(_) => Deref(Box::new(lhs)),
+                    Deref(_) => Ref(Box::new(lhs)),
+                    Array(..) => ArrayElem(Box::new(lhs)),
                     _ => unreachable!(),
                 };
 
@@ -351,7 +357,7 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
 
                 for (index, generic) in generics.iter().enumerate() {
                     if spec_from_perspective_of_generic(generic, generic_index).is_some() {
-                        lhs = GetGeneric(box lhs, index as u32);
+                        lhs = GetGeneric(Box::new(lhs), index as u32);
                         rhs = generic.clone();
 
                         found_generic = true;
@@ -369,7 +375,7 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
 
                 for (field_name, field_spec) in fields.iter() {
                     if spec_from_perspective_of_generic(field_spec, generic_index).is_some() {
-                        lhs = StructMember(box lhs, field_name.clone());
+                        lhs = StructMember(Box::new(lhs), field_name.clone());
                         rhs = field_spec.clone();
 
                         found_field = true;

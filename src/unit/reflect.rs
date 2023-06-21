@@ -1,4 +1,5 @@
 use std::{rc::Rc, sync::Arc, any::TypeId};
+#[cfg(feature = "ffi-assertions")]
 use crate::errors::TResult;
 
 use crate::{

@@ -1,6 +1,6 @@
 Vec<T> = {
-    capacity: i64,
     data_loc: &T,
+    capacity: i64,
     len: i64,
 }
 

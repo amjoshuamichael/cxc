@@ -34,7 +34,8 @@ pub enum TypeSpec {
 }
 
 impl TypeSpec {
-    pub fn get_ref(self) -> TypeSpec { TypeSpec::Ref(box self) }
+    pub fn get_ref(self) -> TypeSpec { TypeSpec::Ref(Box::new(self)) }
+    pub fn get_deref(self) -> TypeSpec { TypeSpec::Deref(Box::new(self)) }
     pub fn unknown() -> TypeSpec { TypeSpec::Type(Type::unknown()) }
 }
 
@@ -85,7 +86,7 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         let right = types_between_ops.remove(plus_pos + 1);
         let left = types_between_ops.remove(plus_pos);
 
-        let new_union = TypeSpec::Union(box left, box right);
+        let new_union = TypeSpec::Union(Box::new(left), Box::new(right));
         types_between_ops.insert(plus_pos, new_union);
     }
 
@@ -157,7 +158,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             let mut output = parse_type(lexer)?;
 
             for _ in 0..count {
-                output = TypeSpec::Ref(box output);
+                output = output.get_ref();
             }
 
             output
@@ -168,7 +169,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             let mut output = parse_type(lexer)?;
 
             for _ in 0..count {
-                output = TypeSpec::Deref(box output);
+                output = output.get_deref();
             }
 
             output
@@ -178,7 +179,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             let count = lexer.next_tok()?.int_value()?;
             lexer.next_tok()?;
 
-            TypeSpec::Array(box parse_type(lexer)?, count.try_into().unwrap())
+            TypeSpec::Array(Box::new(parse_type(lexer)?), count.try_into().unwrap())
         },
         Tok::TypeName(name) => {
             lexer.next_tok()?;
@@ -222,7 +223,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                 _ => TypeSpec::Void,
             };
 
-            TypeSpec::Function(arg_types, box ret_type)
+            TypeSpec::Function(arg_types, Box::new(ret_type))
         },
         _ => {
             return Err(ParseError::UnexpectedTok {
@@ -237,8 +238,8 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             lexer.next_tok()?;
 
             match lexer.next_tok()? {
-                Tok::VarName(name) => TypeSpec::StructMember(box type_alias, name),
-                Tok::TypeName(name) => TypeSpec::SumMember(box type_alias, name),
+                Tok::VarName(name) => TypeSpec::StructMember(Box::new(type_alias), name),
+                Tok::TypeName(name) => TypeSpec::SumMember(Box::new(type_alias), name),
                 got => {
                     return Err(ParseError::UnexpectedTok {
                         got,

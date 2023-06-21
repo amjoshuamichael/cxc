@@ -17,8 +17,8 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
             let max_set_size = lhs_size.max(rhs_size);
 
             if max_set_size <= 8 && 
-                rhs_type.fields_iter().count() <= 1 && 
-                lhs_type.fields_iter().count() <= 1 { return; }
+                rhs_type.primitive_fields_iter().count() <= 1 && 
+                lhs_type.primitive_fields_iter().count() <= 1 { return; }
 
             if let HNodeData::Ident { name, .. } = hlr.tree.get_ref(*rhs) {
                 hlr.variables[name].do_not_drop = true;

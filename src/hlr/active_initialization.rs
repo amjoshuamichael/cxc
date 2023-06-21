@@ -29,8 +29,8 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
             hlr.insert_statement_before(
                 structlit_id,
                 SetVarGen {
-                    lhs: box new_default.clone(),
-                    rhs: box CallGen {
+                    lhs: new_default.clone(),
+                    rhs: CallGen {
                         info: UniqueFuncInfo {
                             name: VarName::from("default"),
                             relation: TypeRelation::Static(var_type.clone()),
@@ -51,7 +51,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                 let initialized = hlr.insert_quick(
                     structlit_id,
                     MemberGen {
-                        object: box new_default.clone(),
+                        object: new_default.clone(),
                         field: field_name.clone(),
                     },
                 );
@@ -77,7 +77,7 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
 
             let new_default = hlr.insert_quick(
                 arraylit_id,
-                box UniqueFuncInfo {
+                UniqueFuncInfo {
                     name: VarName::from("default"),
                     relation: TypeRelation::Static(array_type.base.clone()),
                     ..Default::default()

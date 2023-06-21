@@ -39,7 +39,7 @@ impl CompData {
                 name: VarName::None,
                 type_spec: TypeSpec::Int(64),
             }],
-            ret_type: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+            ret_type: TypeSpec::GenParam(0).get_ref(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
@@ -50,7 +50,7 @@ impl CompData {
             ret_type: TypeSpec::Void,
             args: vec![VarDecl {
                 name: VarName::None,
-                type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                type_spec: TypeSpec::GenParam(0).get_ref(),
             }],
 
             generic_count: 1,
@@ -64,11 +64,11 @@ impl CompData {
             args: vec![
                 VarDecl {
                     name: VarName::None,
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                    type_spec: TypeSpec::GenParam(0).get_ref(),
                 },
                 VarDecl {
                     name: VarName::None,
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                    type_spec: TypeSpec::GenParam(0).get_ref(),
                 },
                 VarDecl {
                     name: VarName::None,
@@ -87,11 +87,11 @@ impl CompData {
             args: vec![
                 VarDecl {
                     name: VarName::None,
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                    type_spec: TypeSpec::GenParam(0).get_ref(),
                 },
                 VarDecl {
                     name: VarName::None,
-                    type_spec: TypeSpec::Ref(box TypeSpec::GenParam(0)),
+                    type_spec: TypeSpec::GenParam(0).get_ref(),
                 },
                 VarDecl {
                     name: VarName::None,

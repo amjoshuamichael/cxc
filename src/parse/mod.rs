@@ -287,13 +287,13 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             };
 
             let rhs = lexer.recover(parse_expr)?;
-            Ok(Expr::SetVar(var, box rhs))
+            Ok(Expr::SetVar(var, Box::new(rhs)))
         } else if lexer.peek_tok() == Ok(Tok::Assignment) {
             lexer.assert_next_tok_is(Tok::Assignment)?;
 
             let rhs = lexer.recover(parse_expr)?;
 
-            Ok(Expr::Set(box lhs, box rhs))
+            Ok(Expr::Set(Box::new(lhs), Box::new(rhs)))
         } else {
             Ok(lhs)
         }
@@ -319,7 +319,7 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         Tok::Question => parse_if(lexer),
         Tok::Semicolon => {
             lexer.next_tok()?;
-            Ok(Expr::Return(box parse_expr(lexer)?))
+            Ok(Expr::Return(Box::new(parse_expr(lexer)?)))
         },
         err => Err(ParseError::UnexpectedTok {
             got: err,
@@ -345,7 +345,7 @@ fn parse_for(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
     let w = parse_expr(ctx)?;
     let d = parse_block(ctx)?;
 
-    Ok(Expr::ForWhile(box w, box d))
+    Ok(Expr::ForWhile(Box::new(w), Box::new(d)))
 }
 
 fn parse_if(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
@@ -359,8 +359,8 @@ fn parse_if(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
 
         let e = parse_block(ctx)?;
 
-        Ok(Expr::IfThenElse(box i, box t, box e))
+        Ok(Expr::IfThenElse(Box::new(i), Box::new(t), Box::new(e)))
     } else {
-        Ok(Expr::IfThen(box i, box t))
+        Ok(Expr::IfThen(Box::new(i), Box::new(t)))
     }
 }

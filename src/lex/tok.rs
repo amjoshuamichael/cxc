@@ -17,7 +17,7 @@ use crate as cxc;
 #[xc_opaque]
 pub enum VarName {
     Other(Arc<str>),
-    TupleIndex(u32),
+    TupleIndex(usize),
     None,
     Error,
     Sret,
@@ -50,10 +50,6 @@ impl From<&str> for VarName {
     fn from(s: &str) -> Self { 
         Self::Other(Arc::from(s)) 
     }
-}
-
-impl From<u32> for VarName {
-    fn from(s: u32) -> Self { Self::TupleIndex(s) }
 }
 
 impl From<String> for VarName {

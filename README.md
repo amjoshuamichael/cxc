@@ -16,7 +16,7 @@ The default features of the crate use [cranelift](https://cranelift.dev/) as a c
 cxc = {
     git = "https://github.com/amjoshuamichael/cxc", 
     default-features = false, 
-    features = ["cxc_derive", "use-llvm", "ffi-assertions"]
+    features = ["use-llvm", "ffi-assertions"]
 }
 ```
 

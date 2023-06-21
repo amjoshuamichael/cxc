@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, rc::Rc, cell::RefCell};
+use std::collections::BTreeMap;
 use inkwell::OptimizationLevel;
 use inkwell::types::BasicType;
 
@@ -19,13 +19,13 @@ pub struct LLVMBackend {
     pub globals: BTreeMap<VarName, (Type, PointerValue<'static>)>,
     module: Module<'static>,
     pub context: &'static Context,
-    execution_engine: Rc<RefCell<ExecutionEngine<'static>>>,
+    execution_engine: ExecutionEngine<'static>,
     compiled: BTreeMap<UniqueFuncInfo, Func>,
     pub generations: Generations,
 }
 
 fn make_context() -> &'static Context {
-    unsafe { std::mem::transmute(Box::leak(box Context::create())) }
+    unsafe { std::mem::transmute(Box::leak(Box::new(Context::create()))) }
 }
 
 impl IsBackend for LLVMBackend {
@@ -36,7 +36,7 @@ impl IsBackend for LLVMBackend {
     fn create() -> Self {
         let context: &'static _ = make_context();
 
-        let random_module_name = format!("cxc_{:x}", rand::random::<u64>());
+        let random_module_name = format!("cxc");
         let module = Context::create_module(context, &random_module_name);
 
         let execution_engine = module
@@ -46,7 +46,7 @@ impl IsBackend for LLVMBackend {
         Self {
             context,
             module,
-            execution_engine: Rc::new(RefCell::new(execution_engine)),
+            execution_engine,
             globals: BTreeMap::new(),
             compiled: BTreeMap::new(),
             generations: Generations::default(),
@@ -54,15 +54,10 @@ impl IsBackend for LLVMBackend {
     }
 
     fn begin_compilation_round(&mut self) {
-        self.execution_engine
-            .borrow()
-            .remove_module(&self.module)
-            .expect("unable to remove execution engine");
-        self.execution_engine.replace(
-            self.module
-                .create_jit_execution_engine(OptimizationLevel::None)
-                .expect("unable to recreate execution engine"),
-        );
+        self.execution_engine.remove_module(&self.module).unwrap();
+        self.execution_engine = self.module
+            .create_jit_execution_engine(OptimizationLevel::None)
+            .expect("unable to recreate execution engine");
     }
 
     fn register_function(&mut self, info: UniqueFuncInfo, func_type: FuncType) {
@@ -106,10 +101,7 @@ impl IsBackend for LLVMBackend {
             let name = func_info.to_string(&self.generations);
 
             self.compiled.get(func_info).unwrap().set_pointer(
-                self.execution_engine
-                    .borrow()
-                    .get_function_address(&name)
-                    .expect("unable to get function address") as *const usize,
+                self.execution_engine.get_function_address(&name).unwrap() as _
             );
         }
     }

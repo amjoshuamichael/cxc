@@ -49,7 +49,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                                 ],
                                 ..Default::default()
                             },
-                            args: vec![box castable_data],
+                            args: vec![Box::new(castable_data)],
                             ..Default::default()
                         },
                     )
@@ -78,12 +78,12 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                             fields: vec![
                                 (
                                     "tag".into(),
-                                    box HNodeData::Number {
+                                    Box::new(HNodeData::Number {
                                         value: variant_type.tag as u64,
                                         lit_type: tag_type,
-                                    },
+                                    }),
                                 ),
-                                ("data".into(), box hlr.tree.get(fields[0].1)),
+                                ("data".into(), Box::new(fields[0].1)),
                             ],
                             ..Default::default()
                         },
@@ -120,7 +120,7 @@ pub fn variant_literals(hlr: &mut FuncRep) {
                             ],
                             ..Default::default()
                         },
-                        args: vec![box hlr.tree.get(new_struct)],
+                        args: vec![Box::new(new_struct)],
                         ..Default::default()
                     },
                 );

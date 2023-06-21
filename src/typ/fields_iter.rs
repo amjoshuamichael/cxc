@@ -110,14 +110,14 @@ impl Iterator for FieldsIter {
         let to_return: &Type = match self.over.as_type_enum() {
             TypeEnum::Struct(StructType { fields, .. }) => {
                 let iterating_over = &fields.get(self.index)?.1;
-                self.inner = Some(box FieldsIter::new(iterating_over.clone()));
+                self.inner = Some(Box::new(FieldsIter::new(iterating_over.clone())));
                 iterating_over
             },
             TypeEnum::Ref(RefType { base }) => {
                 if self.index > 0 {
                     return None;
                 };
-                self.inner = Some(box FieldsIter::new(base.clone()));
+                self.inner = Some(Box::new(FieldsIter::new(base.clone())));
                 base
             },
             TypeEnum::Variant(_) => unreachable!(),
@@ -125,7 +125,7 @@ impl Iterator for FieldsIter {
                 if self.index as u32 > *count {
                     return None;
                 }
-                self.inner = Some(box FieldsIter::new(base.clone()));
+                self.inner = Some(Box::new(FieldsIter::new(base.clone())));
                 base
             },
             _ => return None,

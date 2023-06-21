@@ -452,7 +452,7 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
             let vals = compile_operand(fcs, val);
 
             match l {
-                MAddr::Var(name) => fcs.variables[dbg!(name)].write(&mut fcs.builder, vals),
+                MAddr::Var(name) => fcs.variables[name].write(&mut fcs.builder, vals),
                 MAddr::Reg(reg) => {
                     let addr = get_addr(fcs, &MAddr::Reg(*reg), 0);
 

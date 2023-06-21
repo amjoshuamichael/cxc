@@ -13,7 +13,7 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
             let object_type = hlr.tree.get(*object).ret_type();
 
             let report = hlr.comp_data.get_spec_report(
-                &TypeSpec::StructMember(box object_type.clone().into(), field.clone()), 
+                &TypeSpec::StructMember(Box::new(object_type.into()), field.clone()), 
                 &()
             )?;
 

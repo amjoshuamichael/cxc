@@ -52,11 +52,11 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                     .insert_statement_before(
                         current_statement,
                         SetVarGen {
-                            lhs: box MemberGen {
-                                object: box new_struct.clone(),
+                            lhs: MemberGen {
+                                object: new_struct.clone(),
                                 field: field_name.clone(),
                             },
-                            rhs: box *field_expr,
+                            rhs: *field_expr,
                         },
                     )
                     .inserted_id();

@@ -9,8 +9,8 @@ impl Library for DropLib {
 }
 
 pub fn derive_drop(_: &CompData, typ: Type) -> Option<FuncCode> {
-    let drop = box Expr::Ident(VarName::from("drop"));
-    let me = box Expr::Ident(VarName::from("self"));
+    let drop = Expr::ident("drop");
+    let me = Expr::ident("self");
 
     let expr = match typ.clone().get_deref()?.as_type_enum() {
         _ if typ.is_shallow() => Expr::Block(Vec::new()),
@@ -20,8 +20,12 @@ pub fn derive_drop(_: &CompData, typ: Type) -> Option<FuncCode> {
             for (field_name, field_type) in struct_type.fields.iter() {
                 let generics = 
                     field_type.generics().clone().into_iter().map(|x| x.into()).collect();
-                let args =
-                    vec![Expr::UnarOp(Opcode::Ref, box Expr::Member(me.clone(), field_name.clone()))];
+                let args = vec![
+                        Expr::UnarOp(
+                            Opcode::Ref, 
+                            Box::new(Expr::Member(me.clone(), field_name.clone()))
+                        )
+                    ];
 
                 statements.push(Expr::Call {
                     func: drop.clone(),
