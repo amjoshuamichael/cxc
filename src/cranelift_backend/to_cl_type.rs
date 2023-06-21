@@ -8,6 +8,7 @@ use crate::BoolType;
 use crate::FuncType;
 use crate::RefType;
 use crate::TypeEnum;
+use crate::typ::ArgStyle;
 use crate::typ::ReturnStyle;
 use crate::typ::SumType;
 use crate::typ::UnknownType;
@@ -28,8 +29,15 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool
     }
 
     for typ in &typ.args {
-        for cl_type in typ.raw_arg_type().to_cl_type() {
-            sig.params.push(AbiParam::new(cl_type));
+        if typ.arg_style() == ArgStyle::Pointer {
+            sig.params.push(AbiParam::special(
+                cl_types::I64, 
+                ArgumentPurpose::StructArgument(typ.size() as u32),
+            ))
+        } else {
+            for cl_type in typ.raw_arg_type().to_cl_type() {
+                sig.params.push(AbiParam::new(cl_type));
+            }
         }
     }
 
