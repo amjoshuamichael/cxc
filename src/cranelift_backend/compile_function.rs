@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, BTreeSet}, iter::once};
 
-use cranelift::{codegen::{ir::{StackSlot, FuncRef, SigRef, Inst, InstBuilderBase}, self}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
+use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
 use cranelift_module::Module;
 
 use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, UniqueFuncInfo, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}, RefType, IntType};
@@ -198,9 +198,7 @@ impl Writeable {
                 assert_eq!(vals.len(), 1);
                 builder.def_var(*var, vals[0])
             },
-            Writeable::Arg { index, types, entry_block } => {
-                
-            },
+            Writeable::Arg { .. } => panic!(),
             Writeable::Slot(slot, _) => {
                 let slot = builder.ins().stack_addr(cl_types::I64, *slot, 0);
                 write_vals_to_addr(builder, slot, vals);
@@ -447,7 +445,7 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
             fcs.registers.insert(*l, r.unwrap());
         },
         MLine::SetAddr { l, r } => {
-            let r = compile_addr_expr(fcs, &r, Some(l));
+            let r = compile_addr_expr(fcs, &r);
             fcs.addresses.insert(*l, r);
         },
         MLine::Store { l, val } => {
@@ -593,7 +591,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
     fcs.builder.ins().return_(&*ret);
 }
 
-fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr, l: Option<&MAddrReg>) -> CLValue {
+fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr) -> CLValue {
     match r {
         MAddrExpr::Expr(expr) => compile_expr(fcs, expr, None).map(one).unwrap(),
         MAddrExpr::Addr(addr) => get_addr(fcs, addr, 0),
@@ -662,7 +660,6 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
         MExpr::UnarOp { ret_type, op, hs } => {
             Some(vec![compile_unarop(fcs, ret_type, *op, hs)])
         }
-        MExpr::Array { elem_type, elems } => todo!(),
         MExpr::Ref { on } => Some(vec![get_addr(fcs, on, 0)]),
         MExpr::Deref { to, on } => {
             let ptr = one(compile_operand(fcs, on));
@@ -701,7 +698,6 @@ fn build_intrinsic_function(
         "free" => {
             let free_info = UniqueFuncInfo::from(VarName::from("$free"));
             let func_ref = fcs.used_functions[&free_info];
-            let free_size = info.generics[0].size() as i64;
             fcs.builder.ins().call(func_ref, &[a[0]]);
             None
         },

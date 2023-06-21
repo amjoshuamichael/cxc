@@ -1,7 +1,6 @@
 mod test_utils;
 
-use cxc::library::{StdLib, TypeInterfaceLib};
-use cxc::Unit;
+use cxc::library::StdLib;
 use test_utils::{xc_test, TwoOf};
 
 #[test]

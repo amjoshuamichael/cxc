@@ -439,9 +439,3 @@ impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T
         space
     }
 }
-
-pub fn get_deref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<DerefGen<T>> {
-    Box::new(DerefGen {
-        object: node_data_gen,
-    })
-}

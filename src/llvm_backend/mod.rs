@@ -13,7 +13,6 @@ use inkwell::types::*;
 use std::collections::BTreeMap;
 use operations::compile_bin_op;
 
-use self::inkwell_utils::const_array;
 use self::operations::compile_unar_op;
 use self::to_llvm_type::ToLLVMType;
 
@@ -31,7 +30,6 @@ pub struct FunctionCompilationState<'a> {
 }
 
 mod operations;
-mod inkwell_utils;
 mod backend;
 mod to_llvm_type;
 
@@ -239,12 +237,6 @@ pub fn compile_expr(
             let loaded = 
                 fcs.builder.build_load(to.to_basic_type(fcs.context), obj, reg_name);
             Some(loaded.as_basic_value_enum())
-        }
-        MExpr::Array { elem_type, elems } => {
-            let elems = elems.into_iter().map(|elem| compile_operand(fcs, elem));
-
-            let array = const_array(elem_type.to_any_type(fcs.context), elems);
-            Some(array.as_basic_value_enum())
         }
         MExpr::BinOp { left_type, op, l, r, } => {
             Some(compile_bin_op(

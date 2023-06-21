@@ -42,7 +42,6 @@ fn variables_in_expr(mexpr: &MExpr) -> Vec<VarInMIR> {
             l.into_iter().chain(r.into_iter()).collect()
         },
         MExpr::UnarOp { hs, .. } => variables_in_operand(hs),
-        MExpr::Array { elems, .. } => elems.into_iter().map(variables_in_operand).flatten().collect(),
         MExpr::Call { f, a, .. } => {
             let f = variables_in_callable(f);
             let a = a.into_iter().map(variables_in_operand).flatten();

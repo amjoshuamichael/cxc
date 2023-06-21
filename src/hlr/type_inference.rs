@@ -1,6 +1,5 @@
 use super::prelude::*;
 use crate::{
-    lex::indent_parens,
     parse::{InitOpts, Opcode, TypeSpec},
     Type, TypeRelation, UniqueFuncInfo, VarName,
 };

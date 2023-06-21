@@ -282,16 +282,6 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Call { typ, f: MCallable::FirstClass(f), a, sret }
         },
-        HNodeData::ArrayLit { var_type, parts, .. } => {
-            let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() else { unreachable!() };
-            let parts = parts.into_iter().map(|part| build_as_operand(tree.get(part), tree, mir)).collect();
-
-            MExpr::Array {
-                elem_type: base.clone(),
-                // TODO: unify "elems" and "parts" throughout the entire codebase
-                elems: parts,
-            }
-        }
         HNodeData::Member { .. } | HNodeData::Index { .. } => {
             let addr = build_as_addr(node, tree, mir);
 

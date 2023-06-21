@@ -1,10 +1,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{unit::{backends::IsBackend, callable::CallInput, Generations}, FuncDowncasted, Func, UniqueFuncInfo, FuncType, mir::{MIR, MLine, MExpr}, VarName, Type, typ::ReturnStyle};
+use crate::{unit::{backends::IsBackend, callable::CallInput, Generations}, FuncDowncasted, Func, UniqueFuncInfo, FuncType, mir::MIR, VarName, Type, typ::ReturnStyle};
 
-use cranelift::{prelude::{*, isa::{TargetIsa, TargetFrontendConfig}, types as cl_types}, codegen::ir::SigRef};
+use cranelift::prelude::{*, isa::{TargetIsa, TargetFrontendConfig}, types as cl_types};
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{DataContext, Module, FuncId, Linkage, default_libcall_names};
+use cranelift_module::{Module, FuncId, Linkage, default_libcall_names};
 use indexmap::IndexMap;
 
 use self::to_cl_type::{ToCLType, func_type_to_signature};

@@ -93,7 +93,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                     });
 
                     hlr.tree.replace(arg, hlr.tree.get(new_ref_arg));
-                } else if let ArgStyle::Ints(l, r) = arg_style {
+                } else if let ArgStyle::Ints(..) = arg_style {
                     let new_arg_name = format!("{f}_arg_{a}");
                     let new_arg = hlr.add_variable(&*new_arg_name, &old_arg_type.raw_arg_type());
 

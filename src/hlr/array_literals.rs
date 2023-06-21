@@ -1,7 +1,7 @@
 use crate::{Type, TypeEnum, ArrayType};
 
 use super::{
-    expr_tree::{MemberGen, HNodeData, SetVarGen, IndexGen},
+    expr_tree::{HNodeData, SetVarGen, IndexGen},
     hlr_data::FuncRep,
 };
 
