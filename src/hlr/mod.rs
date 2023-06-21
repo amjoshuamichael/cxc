@@ -4,6 +4,7 @@ mod auto_deref;
 mod remove_redundant_derefs;
 mod op_overloading;
 mod struct_literals;
+mod array_literals;
 mod variant_literals;
 mod large_returns;
 mod large_args;
@@ -32,6 +33,7 @@ use self::active_initialization::active_initialization;
 use self::auto_deref::auto_deref;
 use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
+use self::array_literals::array_literals;
 use self::variant_literals::variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::large_returns;
@@ -64,11 +66,12 @@ pub fn hlr(
     variant_literals(&mut output);
     active_initialization(&mut output);
     struct_literals(&mut output);
+    array_literals(&mut output);
     large_returns(&mut output);
-    large_set_to_memcpy(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
     add_drops(&mut output);
     large_args(&mut output);
+    large_set_to_memcpy(&mut output);
     remove_redundant_derefs(&mut output);
 
     #[cfg(feature = "xc-debug")]

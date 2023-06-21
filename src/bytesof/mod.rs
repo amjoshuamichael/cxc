@@ -20,7 +20,7 @@ impl<'a, T> Byteable for BytesIter<'a, T> {
         if self.index >= std::mem::size_of::<T>() {
             None
         } else {
-            print!("{} ", self.index);
+            print!("{:2} ", self.index);
             let byte = Some(unsafe { *ptr.add(self.index) });
             self.index += 1;
             byte

@@ -5,11 +5,11 @@ value<T>(data: T); Value {
 
     bytes_vec = Vec<u8>:new()
 
-    b = 0
+    b = i64 0
     @ b < EraseDataU8(T):len() {
         bytes_vec.push(bytes_arr[b]) 
 
-        b = b + 1
+        b = b + i64 1
     }
 
     ; Value {

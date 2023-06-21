@@ -5,6 +5,7 @@ use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen}};
 pub fn add_drops(hlr: &mut FuncRep) {
     let vars = hlr.variables
         .iter()
+        .filter(|(_, info)| !info.do_not_drop)
         .map(|(name, info)| (name.clone(), info.typ.clone()))
         .collect::<Vec<_>>();
 
@@ -28,7 +29,14 @@ pub fn add_drops(hlr: &mut FuncRep) {
                     Opcode::Ref => return false,
                     _ => {},
                 },
-                HNodeData::Set { .. } => return false,
+                HNodeData::Set { lhs, .. } => {
+                    if matches!(
+                            hlr.tree.get_ref(lhs), 
+                            HNodeData::Ident { name, .. } if name == &var_name
+                        ) {
+                        return false
+                    }
+                }
                 _ => {},
             }
 

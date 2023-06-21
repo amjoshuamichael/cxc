@@ -4,7 +4,6 @@ use super::struct_literals::struct_literals;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
 use crate::lex::VarName;
-use crate::parse::*;
 use crate::typ::ReturnStyle;
 use crate::Type;
 use crate::UniqueFuncInfo;
@@ -130,6 +129,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
         VariableInfo {
             typ: hlr.ret_type.get_ref(),
             arg_index: ArgIndex::SRet,
+            ..Default::default()
         }
     );
 

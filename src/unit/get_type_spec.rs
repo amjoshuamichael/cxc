@@ -85,8 +85,6 @@ impl CompData {
                     .collect::<TResult<Vec<_>>>()?;
                 // TODO: type level function errors
                 func(args.clone(), self)
-                    .with_from_function(name.clone())
-                    .with_parameters(&args)
             },
             TypeSpec::Int(size) => Type::i(*size),
             TypeSpec::UInt(size) => Type::u(*size),
@@ -113,9 +111,12 @@ impl CompData {
                 if let Some(member) = member {
                     member
                 } else {
-                    let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() 
-                        else { panic!() };
-                    return Err(TErr::FieldNotFound(struct_type.clone(), field_name.clone()));
+                    for typ in struct_type.deref_chain(self).into_iter() {
+                        let TypeEnum::Struct(struct_type) = typ.as_type_enum() 
+                            else { continue };
+                        return Err(TErr::FieldNotFound(struct_type.clone(), field_name.clone()));
+                    }
+                    return Err(TErr::NotAStruct(struct_type.clone()))
                 }
             },
             TypeSpec::SumMember(sum_type, type_name) => {
@@ -196,7 +197,8 @@ impl CompData {
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {
                 let array = self.get_spec(array, generics)?;
-                let TypeEnum::Array(ArrayType { base, .. }) = array.as_type_enum() else { panic!() };
+                let TypeEnum::Array(ArrayType { base, .. }) = array.as_type_enum() 
+                    else { return Err(TErr::NotAnArray(array)) };
                 base.clone()
             },
             TypeSpec::Union(left, right) => {

@@ -161,6 +161,9 @@ pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'stat
     for index in 0..fcs.mir.lines.len() {
         compile_mline(fcs, index);
     }
+
+    #[cfg(feature = "backend-debug")]
+    println!("Compiling: {}", fcs.function.to_string().replace("\\n", "\n"));
 }
 
 pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
@@ -243,10 +246,10 @@ pub fn compile_expr(
             let array = const_array(elem_type.to_any_type(fcs.context), elems);
             Some(array.as_basic_value_enum())
         }
-        MExpr::BinOp { ret_type, op, l, r, } => {
+        MExpr::BinOp { left_type, op, l, r, } => {
             Some(compile_bin_op(
                 fcs, 
-                ret_type, 
+                left_type, 
                 *op, 
                 compile_operand(fcs, l), 
                 compile_operand(fcs, r), 

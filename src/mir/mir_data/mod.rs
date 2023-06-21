@@ -41,7 +41,11 @@ impl MIR {
             var_name = VarName::from(&*base_name);
         }
 
-        self.variables.insert(var_name, VariableInfo { typ, arg_index: ArgIndex::None, });
+        self.variables.insert(var_name, VariableInfo { 
+            typ, 
+            arg_index: ArgIndex::None, 
+            ..Default::default()
+        });
 
         VarName::from(&*base_name)
     }
@@ -182,7 +186,7 @@ pub enum MOperand {
 pub enum MExpr {
     MemLoc(MMemLoc),
     Addr(MAddr),
-    BinOp { ret_type: Type, op: Opcode, l: MOperand, r: MOperand, },
+    BinOp { left_type: Type, op: Opcode, l: MOperand, r: MOperand, },
     UnarOp { ret_type: Type, op: Opcode, hs: MOperand },
     Array { elem_type: Type, elems: Vec<MOperand> },
     Call { typ: FuncType, f: MCallable, a: Vec<MOperand>, sret: Option<MMemLoc> },

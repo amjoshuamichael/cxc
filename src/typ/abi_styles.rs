@@ -1,6 +1,6 @@
 use crate::{TypeEnum, Type, typ::fields_iter::PrimitiveFieldsIter, XcReflect};
 
-use crate as cxc;
+use crate::{self as cxc, IntType};
 
 #[derive(PartialEq, Eq, Debug, XcReflect)]
 pub enum ReturnStyle {
@@ -20,6 +20,7 @@ pub enum ReturnStyle {
 #[derive(PartialEq, Eq, Debug, XcReflect)]
 pub enum ArgStyle {
     Direct,
+    Ints(IntType, Option<IntType>),
     Pointer,
 }
 
@@ -43,6 +44,11 @@ pub fn realize_arg_style(arg_style: ArgStyle, on: &Type) -> Type {
     match arg_style {
         ArgStyle::Direct => on.clone(),
         ArgStyle::Pointer => on.get_ref(),
+        ArgStyle::Ints(l, None) => Type::new(TypeEnum::Int(l)),
+        ArgStyle::Ints(l, Some(r)) => Type::new_tuple(vec![
+            Type::new(TypeEnum::Int(l)),
+            Type::new(TypeEnum::Int(r)),
+        ]),
     }
 }
 
@@ -127,19 +133,34 @@ impl Type {
             Unknown => panic!("cannot return unknown type"),
         }
     }
-}
 
-impl Type {
     pub fn arg_style(&self) -> ArgStyle {
         use TypeEnum::*;
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ArgStyle::Direct,
-            _ => if self.size() <= 8 {
-                ArgStyle::Direct
-            } else {
-                ArgStyle::Pointer
-            },
+            _ => match self.size() {
+                0..=8 => {
+                    // TODO: make i take usize or make size return u32
+                    let int_type = IntType { 
+                        size: (self.size() * 8) as u32,
+                        signed: true
+                    };
+                    ArgStyle::Ints(int_type, None)
+                },
+                9..=16 => {
+                    let first_int_type = IntType { size: 64, signed: true };
+                    let second_int_type = IntType { 
+                        size: (self.size() * 8) as u32 - 64,
+                        signed: true 
+                    };
+                    ArgStyle::Ints(first_int_type, Some(second_int_type))
+                },
+                17.. => {
+                    ArgStyle::Pointer
+                },
+                _ => unreachable!()
+            }
         }
     }
 }

@@ -28,7 +28,7 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool
     }
 
     for typ in &typ.args {
-        for cl_type in typ.to_cl_type() {
+        for cl_type in typ.raw_arg_type().to_cl_type() {
             sig.params.push(AbiParam::new(cl_type));
         }
     }
@@ -143,7 +143,9 @@ impl ToCLType for BoolType {
 
 impl ToCLType for ArrayType {
     fn to_cl_type(&self) -> Vec<ClType> {
-        self.base.to_cl_type()
+        let base_types = self.base.to_cl_type();
+        let base_type_count = base_types.len();
+        base_types.into_iter().cycle().take(base_type_count * self.count as usize).collect()
     }
 }
 

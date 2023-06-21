@@ -45,6 +45,7 @@ show-bytes = []
 
 [profile.bench]
 opt-level = 3
+debug = true
 
 [profile.release]
 opt-level = 3

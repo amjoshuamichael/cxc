@@ -28,10 +28,11 @@ impl Debug for ExprTree {
         for expr in &self.nodes {
             writeln!(
                 fmt,
-                "{:?} : {:?} : {:?}",
+                "{:?} <- {:?} : {:?} : {:?}",
                 expr.0,
+                expr.1.parent,
                 expr.1.data,
-                expr.1.data.ret_type()
+                expr.1.data.ret_type(),
             )?
         }
 
@@ -323,6 +324,7 @@ impl HNodeData {
                 generics,
                 a: args,
                 relation,
+                sret,
                 ..
             } => {
                 let mut call = match relation {
@@ -345,12 +347,20 @@ impl HNodeData {
                 }
 
                 call += "(";
+
+                if let Some(sret) = sret {
+                    call += "-> ";
+                    call += &*tree.get(*sret).to_string(tree);
+                    call += " | ";
+                }
+
                 for (a, arg) in args.iter().enumerate() {
                     if a > 0 {
                         call += ", ";
                     }
                     call += &*tree.get(*arg).to_string(tree);
                 }
+
                 call += ")";
                 call
             },

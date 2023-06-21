@@ -5,10 +5,13 @@ pub struct PrintLib;
 impl Library for PrintLib {
     fn add_to_unit(&self, unit: &mut Unit) {
         unit.push_script(include_str!("print.cxc")).unwrap();
+        let string = unit.comp_data.get_by_name(&"String".into()).unwrap().get_ref();
+
         unit.add_rust_func_explicit(
             "external_print_string",
             external_print_string as *const usize,
             ExternalFuncAdd {
+                arg_types: vec![string.get_ref()],
                 ..ExternalFuncAdd::empty()
             },
         );
@@ -17,11 +20,7 @@ impl Library for PrintLib {
             "panic",
             panic as *const usize,
             ExternalFuncAdd {
-                arg_types: vec![unit
-                    .comp_data
-                    .get_by_name(&"String".into())
-                    .unwrap()
-                    .get_ref()],
+                arg_types: vec![string.get_ref()],
                 ..ExternalFuncAdd::empty()
             },
         );

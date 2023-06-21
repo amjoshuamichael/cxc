@@ -21,6 +21,7 @@ pub enum VarName {
     None,
     Error,
     Sret,
+    // TODO: Cast,
 }
 
 impl Default for VarName {

@@ -294,8 +294,7 @@ impl Unit {
     }
 
     pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Option<(UniqueFuncInfo, Func)> {
-        dbg!(ptr);
-        let (info, func): (&UniqueFuncInfo, &Func) = self.backend.compiled_iter().find(|(_, func)| dbg!(func.get_pointer()) == ptr)?;
+        let (info, func): (&UniqueFuncInfo, &Func) = self.backend.compiled_iter().find(|(_, func)| func.get_pointer() == ptr)?;
 
         Some((info.clone(), func.clone()))
     }

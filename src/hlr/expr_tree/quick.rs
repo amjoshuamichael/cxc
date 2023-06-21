@@ -41,6 +41,13 @@ impl NodeDataGen for HNodeData {
     }
 }
 
+impl NodeDataGen for ExprID {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        hlr.tree.set_parent(*self, parent);
+        *self
+    }
+}
+
 impl NodeDataGen for usize {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(
@@ -75,12 +82,12 @@ impl Default for Box<dyn NodeDataGen> {
 }
 
 #[derive(Debug, Default)]
-pub struct SetVarGen {
-    pub lhs: Box<dyn NodeDataGen>,
-    pub rhs: Box<dyn NodeDataGen>,
+pub struct SetVarGen<T: NodeDataGen, U: NodeDataGen> {
+    pub lhs: T,
+    pub rhs: U,
 }
 
-impl NodeDataGen for SetVarGen {
+impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for SetVarGen<T, U> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 

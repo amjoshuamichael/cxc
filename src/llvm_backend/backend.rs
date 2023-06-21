@@ -112,9 +112,6 @@ impl IsBackend for LLVMBackend {
                     .expect("unable to get function address") as *const usize,
             );
         }
-
-        #[cfg(feature = "backend-debug")]
-        println!("{}", self.module.print_to_string().to_string());
     }
 
     fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {

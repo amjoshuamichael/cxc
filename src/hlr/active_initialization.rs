@@ -65,53 +65,28 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
 fn handle_array_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |arraylit_id, arraylit_data, hlr| {
-            let HNodeData::ArrayLit { var_type, parts: part_ids, initialize } = 
-                arraylit_data.clone() else { return };
+            let HNodeData::ArrayLit { var_type, parts: ref mut part_ids, initialize } = 
+                arraylit_data else { return };
 
-            if initialize != InitOpts::Default {
+            if *initialize != InitOpts::Default {
                 return;
             }
 
             let TypeEnum::Array(array_type) = var_type.as_type_enum() 
                 else { panic!() };
 
-            let defaulted_array = 
-                hlr.add_variable("defaulted_array", &var_type);
+            let new_default = hlr.insert_quick(
+                arraylit_id,
+                box UniqueFuncInfo {
+                    name: VarName::from("default"),
+                    relation: TypeRelation::Static(array_type.base.clone()),
+                    ..Default::default()
+                }
+            );
 
-            let set_default_array = hlr
-                .insert_statement_before(
-                    arraylit_id,
-                    SetVarGen {
-                        lhs: box defaulted_array.clone(),
-                        rhs: box arraylit_data.clone(),
-                    },
-                )
-                .inserted_id();
-
-            hlr.tree.set_parent(arraylit_id, set_default_array);
-
-            for index in part_ids.len()..(array_type.count as usize) {
-                hlr.insert_statement_before(
-                    arraylit_id,
-                    SetVarGen {
-                        lhs: box IndexGen {
-                            object: box defaulted_array.clone(),
-                            index: box index,
-                            ret_type: array_type.base.clone(),
-                        },
-                        rhs: box UniqueFuncInfo {
-                            name: VarName::from("default"),
-                            relation: TypeRelation::Static(array_type.base.clone()),
-                            ..Default::default()
-                        },
-                    },
-                );
+            for _ in part_ids.len()..(array_type.count as usize) {
+                part_ids.push(new_default);
             }
-
-            *arraylit_data = HNodeData::Ident {
-                name: defaulted_array,
-                var_type: var_type.clone(),
-            };
         },
     );
 }

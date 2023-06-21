@@ -191,8 +191,12 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Ident { ref name, .. } => {
                 infer_map.insert(id, Constraint::SameAs(name.into()));
             },
-            HNodeData::BinOp { lhs, .. } => {
-                infer_map.insert(id, Constraint::SameAs(lhs.into()));
+            HNodeData::BinOp { lhs, op, .. } => {
+                if op.is_cmp() {
+                    infer_map.insert(id, Constraint::IsType(Type::bool()));
+                } else {
+                    infer_map.insert(id, Constraint::SameAs(lhs.into()));
+                }
             },
             HNodeData::UnarOp { op, hs, .. } => {
                 let constraint = match op {

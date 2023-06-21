@@ -55,7 +55,7 @@ fn vec_push_and_check() {
         }
 
         main() {
-            number_of_checks: i64 = i64 40
+            number_of_checks: i64 = i64 100
 
             num_vec: Vec<i64> = Vec<i64>:new()
             two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new()
@@ -164,19 +164,19 @@ fn bit_array_16() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<[16]bool>:new()
+            arr8 = BitArray<i16>:new()
 
-            arr8.toggle(0)
-            arr8.toggle(4)
-            arr8.toggle(15)
+            arr8.toggle(u16 0)
+            arr8.toggle(u16 4)
+            arr8.toggle(u16 15)
 
-            assert_eq(arr8.get(0), true)
-            assert_eq(arr8.get(1), false)
-            assert_eq(arr8.get(3), false)
-            assert_eq(arr8.get(4), true)
-            assert_eq(arr8.get(5), false)
-            assert_eq(arr8.get(14), false)
-            assert_eq(arr8.get(15), true)
+            assert_eq(arr8.get(u16 0), true)
+            assert_eq(arr8.get(u16 1), false)
+            assert_eq(arr8.get(u16 3), false)
+            assert_eq(arr8.get(u16 4), true)
+            assert_eq(arr8.get(u16 5), false)
+            assert_eq(arr8.get(u16 14), false)
+            assert_eq(arr8.get(u16 15), true)
         }
         "
     )
@@ -187,19 +187,19 @@ fn bit_array_32() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<[32]bool>:new()
+            arr8 = BitArray<i32>:new()
 
-            arr8.toggle(0)
-            arr8.toggle(4)
-            arr8.toggle(31)
+            arr8.toggle(u32 0)
+            arr8.toggle(u32 4)
+            arr8.toggle(u32 31)
 
-            assert_eq(arr8.get(0), true)
-            assert_eq(arr8.get(1), false)
-            assert_eq(arr8.get(3), false)
-            assert_eq(arr8.get(4), true)
-            assert_eq(arr8.get(5), false)
-            assert_eq(arr8.get(30), false)
-            assert_eq(arr8.get(31), true)
+            assert_eq(arr8.get(u32 0), true)
+            assert_eq(arr8.get(u32 1), false)
+            assert_eq(arr8.get(u32 3), false)
+            assert_eq(arr8.get(u32 4), true)
+            assert_eq(arr8.get(u32 5), false)
+            assert_eq(arr8.get(u32 30), false)
+            assert_eq(arr8.get(u32 31), true)
         }
         "
     )
@@ -210,21 +210,21 @@ fn bit_array_8() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<[8]bool>:new()
+            arr8 = BitArray<i8>:new()
 
-            arr8.toggle(0)
-            arr8.toggle(4)
-            arr8.toggle(7)
-            arr8.toggle(7)
-            arr8.toggle(7)
+            arr8.toggle(u8 0)
+            arr8.toggle(u8 4)
+            arr8.toggle(u8 7)
+            arr8.toggle(u8 7)
+            arr8.toggle(u8 7)
 
-            assert_eq(arr8.get(0), true)
-            assert_eq(arr8.get(1), false)
-            assert_eq(arr8.get(3), false)
-            assert_eq(arr8.get(4), true)
-            assert_eq(arr8.get(5), false)
-            assert_eq(arr8.get(6), false)
-            assert_eq(arr8.get(7), true)
+            assert_eq(arr8.get(u8 0), true)
+            assert_eq(arr8.get(u8 1), false)
+            assert_eq(arr8.get(u8 3), false)
+            assert_eq(arr8.get(u8 4), true)
+            assert_eq(arr8.get(u8 5), false)
+            assert_eq(arr8.get(u8 6), false)
+            assert_eq(arr8.get(u8 7), true)
         }
         "
     )

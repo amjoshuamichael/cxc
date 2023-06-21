@@ -8,7 +8,8 @@ use cxc::{
 fn default_util() {
     let mut unit = Unit::new();
 
-    unit.add_lib(StdLib);
+    unit.push_script("Vec<T> = { u64, u64, u64}");
+    unit.add_reflect_type::<String>();
     unit.add_external_default::<String>();
     unit.push_script("main(); String { ; String:default() }");
 
@@ -20,7 +21,8 @@ fn default_util() {
 fn clone_util() {
     let mut unit = Unit::new();
 
-    unit.add_lib(StdLib);
+    unit.push_script("Vec<T> = { u64, u64, u64}");
+    unit.add_reflect_type::<String>();
     unit.add_external_clone::<String>();
 
     let string_type = unit.comp_data.get_by_name(&"String".into()).unwrap();

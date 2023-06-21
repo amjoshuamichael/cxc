@@ -1,4 +1,3 @@
-#![allow(unused_must_use)]
 mod test_utils;
 
 use cxc::library::{StdLib, TypeInterfaceLib};
@@ -63,10 +62,10 @@ fn generic_methods() {
         # buy las vegas
         main() {
             after_this: Roll<f32> = Roll<f32> { val = 7.0 }
-            assert_eq<f32>(after_this.come_on<f32>(), 7_7_7.0) # let's go!
+            assert_eq(after_this.come_on<f32>() == 7_7_7.0, true) # let's go!
 
             roll: Roll<i32> = Roll<i32> { val = 7 }
-            assert_eq<f32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
+            assert_eq<i32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
         }
         "
     )

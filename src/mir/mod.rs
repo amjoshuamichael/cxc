@@ -135,6 +135,7 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
                     mir.variables.insert(new_var_name.clone(), VariableInfo {
                         typ: mir.variables[&name].typ.clone(),
                         arg_index: ArgIndex::None,
+                        ..Default::default()
                     });
                 }
 
@@ -205,10 +206,12 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
     match node {
         HNodeData::BinOp { lhs, op, rhs, .. } => {
+            let left_type = tree.get(lhs).ret_type();
+
             let lhs = build_as_operand(tree.get(lhs), tree, mir);
             let rhs = build_as_operand(tree.get(rhs), tree, mir);
 
-            MExpr::BinOp { ret_type, op, l: lhs, r: rhs }
+            MExpr::BinOp { left_type, op, l: lhs, r: rhs }
         },
         HNodeData::UnarOp { op, hs, .. } => {
             match op {
@@ -330,15 +333,22 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
         | HNodeData::Number { .. } 
         | HNodeData::Float { .. } 
         | HNodeData::Bool { .. } 
-        | HNodeData::Call { .. } => {
-            let new_var = mir.new_variable("temp_storage", node.ret_type());
-            let addr = MAddr::Var(new_var);
-
+        | HNodeData::Call { .. } 
+        | HNodeData::UnarOp { .. } 
+        | HNodeData::BinOp { .. } => {
+            let node_ret_type = node.ret_type();
             let expr = build_as_operand(node, tree, mir);
 
-            mir.lines.push(MLine::Store { l: addr.clone(), val: expr });
+            if let MOperand::MemLoc(MMemLoc::Var(name)) = expr {
+                MAddrExpr::Addr(MAddr::Var(name))
+            } else {
+                let new_var = mir.new_variable("temp_storage", node_ret_type);
+                let addr = MAddr::Var(new_var);
 
-            MAddrExpr::Addr(addr)
+                mir.lines.push(MLine::Store { l: addr.clone(), val: expr });
+
+                MAddrExpr::Addr(addr)
+            }
         },
         _ => panic!("{node:?}"),
     }

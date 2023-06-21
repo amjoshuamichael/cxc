@@ -92,6 +92,8 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn register_function(&mut self, info: UniqueFuncInfo, func_type: FuncType) {
+        self.generations.update(info.clone());
+
         let mut ctx = self.module.make_context();
 
         func_type_to_signature(&func_type, &mut ctx.func.signature, false);
@@ -167,6 +169,8 @@ impl IsBackend for CraneliftBackend {
         func_type: FuncType, 
         ptr: *const usize
     ) {
+        self.generations.update(info.clone());
+
         let mut ctx = self.module.make_context();
 
         func_type_to_signature(&func_type, &mut ctx.func.signature, false);
@@ -264,7 +268,6 @@ impl IsBackend for CraneliftBackend {
 
         self.module.define_function(id, &mut ctx).unwrap();
         ctx.compile(&**self.isa).unwrap();
-
 
         self.cl_function_data.insert(info.clone(), (ctx, id));
         self.func_pointers.insert(info.clone(), Func::new_external(info, func_type, ptr));

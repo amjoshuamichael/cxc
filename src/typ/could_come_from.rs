@@ -46,19 +46,6 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type) -> bool {
             continue;
         }
 
-        if other_next.from_function() == self_next.from_function()
-            && self_next.from_function() != &TypeName::Anonymous
-            && other_next
-                .parameters()
-                .iter()
-                .zip(self_next.parameters().iter())
-                .all(|(other_gen, self_gen)| could_come_from_filled(self_gen, other_gen))
-        {
-            self_iter.skip_children_of_last();
-            other_iter.skip_children_of_last();
-            continue;
-        }
-
         match self_next.clone().as_type_enum() {
             TypeEnum::Array(ArrayType {
                 count: self_count,

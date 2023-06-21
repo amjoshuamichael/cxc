@@ -226,6 +226,7 @@ impl<'a> FuncRep<'a> {
         self.variables.insert(new_name.clone(), VariableInfo {
             typ: typ.clone(),
             arg_index: ArgIndex::None,
+            ..Default::default()
         });
 
         new_name.clone()
