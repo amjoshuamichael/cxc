@@ -448,6 +448,26 @@ fn pass_20byte_return_20byte() {
 }
 
 #[test]
+fn pass_to_40byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script("take_5(nums: {i64, i64, i64, i64, i64}); i64 { ; nums.3 + i64 2 }").unwrap();
+    let take_5 = 
+        unit.get_fn("take_5").unwrap().downcast::<((i64, i64, i64, i64, i64),), i64>();
+    assert_eq!(take_5((439, 435, 102, 4, 100)), 6);
+}
+
+#[test]
+fn pass_40byte_return_40byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script("take_5(nums: {i64, i64, i64, i64, i64}); {i64, i64, i64, i64, i64} { ; nums }").unwrap();
+    let take_5 = 
+        unit.get_fn("take_5").unwrap().downcast::<((i64, i64, i64, i64, i64),), (i64, i64, i64, i64, i64)>();
+    assert_eq!(take_5((439, 435, 102, 4, 100)), (439, 435, 102, 4, 100));
+}
+
+#[test]
 fn strings() {
     xc_test!(
         use StdLib;
@@ -460,3 +480,4 @@ fn strings() {
         String::from("that's cray")
     )
 }
+

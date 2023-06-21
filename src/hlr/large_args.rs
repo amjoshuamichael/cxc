@@ -60,7 +60,7 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarName) {
 }
 
 fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
-    hlr.variables[&arg_name].typ = hlr.variables[&arg_name].typ.get_ref();
+    let arg_type_reffed = hlr.variables[&arg_name].typ.get_ref();
 
     hlr.modify_many_infallible_rev(
         move |var_id, var_data, hlr| {
@@ -68,7 +68,12 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
                 return;
             }
 
-            hlr.replace_quick(var_id, DerefGen { object: arg_name.clone() });
+            hlr.replace_quick(var_id, DerefGen { 
+                object: HNodeData::Ident {
+                    name: arg_name.clone(),
+                    var_type: arg_type_reffed.clone(),
+                },
+        });
             *var_data = hlr.tree.get(var_id);
         }
     );
