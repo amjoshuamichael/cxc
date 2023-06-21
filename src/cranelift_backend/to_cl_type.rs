@@ -33,7 +33,7 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool
             && cfg!(not(any(target_arch = "arm", target_arch = "aarch64"))) {
             sig.params.push(AbiParam::special(
                 cl_types::I64, 
-                ArgumentPurpose::StructArgument(8),
+                ArgumentPurpose::StructArgument(typ.size().next_multiple_of(8) as u32),
             ))
         } else {
             for cl_type in typ.raw_arg_type().to_cl_type() {
