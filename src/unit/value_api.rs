@@ -130,9 +130,8 @@ impl Unit {
 
         let code = FuncCode::from_expr(expr);
 
-        let value_function_name = VarName::from(format!("$val{:x}", rand::random::<u32>()));
         let value_function_info = UniqueFuncInfo {
-            name: value_function_name,
+            name: "$val".into(),
             ..Default::default()
         };
 
