@@ -1,8 +1,6 @@
-#![allow(unused_must_use)]
 mod test_utils;
 
-use cxc::library::{StdLib, TypeInterfaceLib};
-use cxc::Unit;
+use cxc::library::StdLib;
 use test_utils::{xc_test, TwoOf};
 
 #[test]
@@ -63,10 +61,10 @@ fn generic_methods() {
         # buy las vegas
         main() {
             after_this: Roll<f32> = Roll<f32> { val = 7.0 }
-            assert_eq<f32>(after_this.come_on<f32>(), 7_7_7.0) # let's go!
+            assert_eq(after_this.come_on<f32>() == 7_7_7.0, true) # let's go!
 
             roll: Roll<i32> = Roll<i32> { val = 7 }
-            assert_eq<f32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
+            assert_eq<i32>(roll.come_on<i32>(), 7_7_7) # i like it, i like it!
         }
         "
     )
@@ -103,34 +101,6 @@ fn hello_world() {
         }
         "#
     )
-}
-
-#[test]
-fn derivations() {
-    let mut unit = Unit::new();
-    unit.add_lib(TypeInterfaceLib)
-        .push_script(
-            "
-        Point2D = {
-            x: i32,
-            y: i32
-        }
-
-        Point3D = {
-            x: i32,
-            y: i32,
-            z: i32
-        }
-
-        test_derivation() {
-            point2D: Point2D = Point2D { x = 0, y = 0 }
-
-        }
-        ",
-        )
-        .unwrap();
-
-    unit.get_fn("test_derivation").unwrap().downcast::<(), ()>()()
 }
 
 #[test]

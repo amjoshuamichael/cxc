@@ -23,14 +23,17 @@ fn hot_reload_many() {
 
     let best = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
     let worst = unit.get_fn("the_worst_num").unwrap().downcast::<(), i32>();
+    dbg!(best(), worst(), best.inner.get_pointer(), worst.inner.get_pointer());
     assert_eq!(best(), 41);
     assert_eq!(worst(), 0);
 
     unit.push_script("the_best_num(); i32 { ; 42 } ").unwrap();
+    dbg!(best(), worst(), best.inner.get_pointer(), worst.inner.get_pointer());
     assert_eq!(best(), 42);
     assert_eq!(worst(), 0);
 
     unit.push_script("the_worst_num(); i32 { ; 1 } ").unwrap();
+    dbg!(best(), worst(), best.inner.get_pointer(), worst.inner.get_pointer());
     assert_eq!(best(), 42);
     assert_eq!(worst(), 1);
 
@@ -95,6 +98,11 @@ fn get_fn_by_ptr() {
         "#
     ).unwrap();
 
+    let add_two = functions[0];
+    let add_two = unit.get_fn_by_ptr(add_two as _).unwrap().1;
+
+    functions.clear();
+
     unit.push_script(
         r#"
         ninety(); i32 { ; 90 }
@@ -105,10 +113,10 @@ fn get_fn_by_ptr() {
         "#
     ).unwrap();
 
-    let [add_two, ninety] = &*functions else { panic!() };
+    let ninety = functions[0];
+    let ninety = unit.get_fn_by_ptr(ninety as _).unwrap().1;
 
-    let add_two = unit.get_fn_by_ptr(*add_two as _).unwrap().1;
-    let ninety = unit.get_fn_by_ptr(*ninety as _).unwrap().1;
+    functions.clear();
 
     assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
     assert_eq!(ninety.typ(), FuncType { args: vec![], ret: Type::i(32) });

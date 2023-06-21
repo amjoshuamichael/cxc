@@ -47,13 +47,13 @@ impl IsBackend for LLVMBackend {
             context,
             module,
             execution_engine: Rc::new(RefCell::new(execution_engine)),
-            globals: BTreeMap::default(),
-            compiled: BTreeMap::default(),
+            globals: BTreeMap::new(),
+            compiled: BTreeMap::new(),
             generations: Generations::default(),
         }
     }
 
-    fn begin_compilation_round(&self) {
+    fn begin_compilation_round(&mut self) {
         self.execution_engine
             .borrow()
             .remove_module(&self.module)
@@ -101,7 +101,7 @@ impl IsBackend for LLVMBackend {
         compile_routine(&mut fcs, &self.module);
     }
 
-    fn end_compilation_round(&self) {
+    fn end_compilation_round(&mut self) {
         for func_info in self.compiled.keys() {
             let name = func_info.to_string(&self.generations);
 
@@ -111,11 +111,6 @@ impl IsBackend for LLVMBackend {
                     .get_function_address(&name)
                     .expect("unable to get function address") as *const usize,
             );
-        }
-
-        #[cfg(feature = "llvm-debug")]
-        {
-            println!("{}", self.module.print_to_string().to_string());
         }
     }
 

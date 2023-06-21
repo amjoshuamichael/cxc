@@ -10,6 +10,11 @@ pub fn struct_literals(hlr: &mut FuncRep) {
         |structlit, struct_data, hlr| {
             let HNodeData::StructLit { ref mut var_type, fields: field_exprs, .. } = struct_data 
                 else { return };
+
+            if field_exprs.len() == 0 {
+                *struct_data = HNodeData::Number { lit_type: Type::i(32), value: 0 };
+                return;
+            }
             
             let new_struct_type = {
                 let TypeEnum::Struct(struct_type) = var_type.as_type_enum()
@@ -42,7 +47,6 @@ pub fn struct_literals(hlr: &mut FuncRep) {
 
             let mut current_statement = structlit;
 
-
             for (field_name, field_expr) in field_exprs.iter().rev() {
                 current_statement = hlr
                     .insert_statement_before(
@@ -52,10 +56,12 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                                 object: box new_struct.clone(),
                                 field: field_name.clone(),
                             },
-                            rhs: box hlr.tree.get(*field_expr),
+                            rhs: box *field_expr,
                         },
                     )
                     .inserted_id();
+
+
             }
 
             *struct_data = HNodeData::Ident {

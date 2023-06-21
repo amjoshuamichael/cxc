@@ -1,6 +1,5 @@
 use super::prelude::*;
 use crate::{
-    lex::indent_parens,
     parse::{InitOpts, Opcode, TypeSpec},
     Type, TypeRelation, UniqueFuncInfo, VarName,
 };
@@ -142,7 +141,8 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
     }
 
-    if crate::XC_DEBUG {
+    #[cfg(feature = "xc-debug")]
+    {
         println!("{}", indent_parens(format!("{infer_map:?}").replace('\n', "")));
         println!("{:?}", &hlr.tree);
         println!("{}", &hlr.tree.to_string());
@@ -190,8 +190,12 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Ident { ref name, .. } => {
                 infer_map.insert(id, Constraint::SameAs(name.into()));
             },
-            HNodeData::BinOp { lhs, .. } => {
-                infer_map.insert(id, Constraint::SameAs(lhs.into()));
+            HNodeData::BinOp { lhs, op, .. } => {
+                if op.is_cmp() {
+                    infer_map.insert(id, Constraint::IsType(Type::bool()));
+                } else {
+                    infer_map.insert(id, Constraint::SameAs(lhs.into()));
+                }
             },
             HNodeData::UnarOp { op, hs, .. } => {
                 let constraint = match op {

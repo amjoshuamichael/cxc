@@ -1,4 +1,5 @@
 use crate::hlr::hlr_data::VariableInfo;
+use crate::hlr::hlr_data::ArgIndex;
 use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
 use crate::typ::ReturnStyle;
 use crate::{unit::*, Type, FuncType, VarName};
@@ -12,7 +13,6 @@ use inkwell::types::*;
 use std::collections::BTreeMap;
 use operations::compile_bin_op;
 
-use self::inkwell_utils::const_array;
 use self::operations::compile_unar_op;
 use self::to_llvm_type::ToLLVMType;
 
@@ -30,7 +30,6 @@ pub struct FunctionCompilationState<'a> {
 }
 
 mod operations;
-mod inkwell_utils;
 mod backend;
 mod to_llvm_type;
 
@@ -57,7 +56,6 @@ impl LLVMBackend {
     }
 }
 
-// ONLY adds if nescessary
 pub fn add_nescessary_attributes_to_func(
     function: &mut FunctionValue<'static>,
     context: &'static Context,
@@ -110,7 +108,7 @@ fn build_stack_allocas(
     fcs: &mut FunctionCompilationState,
 ) {
     for (name, info) in fcs.mir.variables.iter() {
-        if info.arg_index.is_some() {
+        if info.arg_index != ArgIndex::None {
             continue;
         }
 
@@ -148,9 +146,8 @@ fn get_used_functions(
 }
 
 pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'static>) {
-    if crate::LLVM_DEBUG {
-        println!("Compiling: {}", fcs.mir.info.name);
-    }
+    #[cfg(feature = "backend-debug")]
+    println!("Compiling: {}", fcs.mir.info.name);
 
     build_stack_allocas(fcs);
     create_blocks(fcs);
@@ -162,10 +159,13 @@ pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'stat
     for index in 0..fcs.mir.lines.len() {
         compile_mline(fcs, index);
     }
+
+    #[cfg(feature = "backend-debug")]
+    println!("Compiling: {}", fcs.function.to_string().replace("\\n", "\n"));
 }
 
 pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
-    #[cfg(feature = "llvm-debug")]
+    #[cfg(feature = "backend-debug")]
     println!("{:?}", fcs.mir.lines[index]);
 
     match &fcs.mir.lines[index] {
@@ -214,8 +214,11 @@ pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
     }
 }
 
-pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&MReg>) 
-    -> Option<BasicValueEnum<'static>> {
+pub fn compile_expr(
+    fcs: &FunctionCompilationState, 
+    expr: &MExpr, 
+    reg: Option<&MReg>
+) -> Option<BasicValueEnum<'static>> {
     let reg_name = &*reg.map(MReg::to_string).unwrap_or_default(); 
     match expr {
         MExpr::MemLoc(memloc) => { Some(load_memloc(fcs, memloc)) },
@@ -235,16 +238,10 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 fcs.builder.build_load(to.to_basic_type(fcs.context), obj, reg_name);
             Some(loaded.as_basic_value_enum())
         }
-        MExpr::Array { elem_type, elems } => {
-            let elems = elems.into_iter().map(|elem| compile_operand(fcs, elem));
-
-            let array = const_array(elem_type.to_any_type(fcs.context), elems);
-            Some(array.as_basic_value_enum())
-        }
-        MExpr::BinOp { ret_type, op, l, r, } => {
+        MExpr::BinOp { left_type, op, l, r, } => {
             Some(compile_bin_op(
                 fcs, 
-                ret_type, 
+                left_type, 
                 *op, 
                 compile_operand(fcs, l), 
                 compile_operand(fcs, r), 
@@ -260,7 +257,7 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 reg_name,
             ))
         }
-        MExpr::Call { typ, f: MCallable::Func(f), a } => {
+        MExpr::Call { typ, f: MCallable::Func(f), a, sret } => {
             match &*f.name.to_string() {
                 "memcpy" => {
                     let src = compile_operand(fcs, &a[0]).into_pointer_value();
@@ -344,12 +341,16 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 _ => {
                     let func = fcs.used_functions.get(f).unwrap();
 
-                    let arg_vals = a.into_iter()
+                    let mut arg_vals = a.into_iter()
                         .map(|arg| {
                             let basic_arg = compile_operand(fcs, arg);
                             BasicMetadataValueEnum::try_from(basic_arg).unwrap()
                         })
                         .collect::<Vec<_>>();
+
+                    if let Some(sret) = sret {
+                        arg_vals.insert(0, load_memloc(fcs, sret).into());
+                    }
 
                     let mut callsite = fcs.builder.build_call(
                         *func, 
@@ -365,15 +366,19 @@ pub fn compile_expr(fcs: &FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 }
             }
         },
-        MExpr::Call { typ, f: MCallable::FirstClass(loc), a } => {
+        MExpr::Call { typ, f: MCallable::FirstClass(loc), a, sret } => {
             let func = load_memloc(fcs, loc).into_pointer_value();
 
-            let arg_vals = a.into_iter()
+            let mut arg_vals = a.into_iter()
                 .map(|arg| {
                     let basic_arg = compile_operand(fcs, arg);
                     BasicMetadataValueEnum::try_from(basic_arg).unwrap()
                 })
                 .collect::<Vec<_>>();
+
+            if let Some(sret) = sret {
+                arg_vals.insert(0, load_memloc(fcs, sret).into());
+            }
 
             let mut callsite = fcs.builder.build_indirect_call(
                 typ.llvm_func_type(fcs.context, false),
@@ -479,8 +484,18 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
                     let global = &fcs.globals[&name];
                     BasicValueEnum::PointerValue(global.1)
                 }
-                Some(VariableInfo { arg_index: Some(arg_index), .. }) => {
-                    fcs.function.get_nth_param(*arg_index).unwrap().into()
+                Some(VariableInfo { arg_index: ArgIndex::Some(arg_index), .. }) => {
+                    let param_index = 
+                        if fcs.mir.func_type.ret.return_style() == ReturnStyle::Sret {
+                            *arg_index + 1
+                        } else {
+                            *arg_index
+                        };
+
+                    fcs.function.get_nth_param(param_index as u32).unwrap().into()
+                }
+                Some(VariableInfo { arg_index: ArgIndex::SRet, .. }) => {
+                    fcs.function.get_nth_param(0).unwrap().into()
                 }
                 Some(VariableInfo { typ: var_type, .. }) => {
                     fcs.builder.build_load(

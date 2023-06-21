@@ -91,10 +91,9 @@ impl Unit {
         let lexed = lex(script);
 
         let parsed = parse::parse(lexed).map_err(|errs| {
-            if crate::XC_DEBUG {
-                for err in &errs {
-                    println!("{err}");
-                }
+            #[cfg(feature = "xc-debug")]
+            for err in &errs {
+                println!("{err}");
             }
 
             { errs }.drain(..).map(CErr::Parse).collect::<Vec<_>>()
@@ -225,7 +224,7 @@ impl Unit {
 
         self.backend.end_compilation_round();
 
-        #[cfg(feature = "llvm-debug")]
+        #[cfg(feature = "backend-debug")]
         println!("--finished all compilation--");
         
 
@@ -295,8 +294,7 @@ impl Unit {
     }
 
     pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Option<(UniqueFuncInfo, Func)> {
-        dbg!(&self.backend.compiled_iter().count());
-        let (info, func): (&UniqueFuncInfo, &Func) = self.backend.compiled_iter().find(|(_, func)| dbg!(func.get_pointer()) == ptr)?;
+        let (info, func): (&UniqueFuncInfo, &Func) = self.backend.compiled_iter().find(|(_, func)| func.get_pointer() == ptr)?;
 
         Some((info.clone(), func.clone()))
     }

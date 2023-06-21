@@ -140,8 +140,9 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
             return Ok(script);
         }
 
-        if crate::XC_DEBUG {
-            println!("moving to the next declaration!");
+        #[cfg(feature = "xc-debug")]
+        {
+            println!("\\ \\Next declaration");
         }
     }
 }

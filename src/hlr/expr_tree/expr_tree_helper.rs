@@ -1,5 +1,5 @@
 use crate::errors::CResultMany;
-use crate::hlr::hlr_data::{FuncRep, VariableInfo};
+use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex};
 use crate::{Type, UniqueFuncInfo, VarName};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
@@ -124,8 +124,6 @@ impl ExprTree {
         new_space
     }
 
-    pub fn return_type(&self) -> Type { self.get(self.root).ret_type() }
-
     pub fn unique_func_info_of_call(&self, call: &HNodeData) -> UniqueFuncInfo {
         let HNodeData::Call { f, generics, relation, .. } = call.clone()
             else { panic!() };
@@ -222,38 +220,16 @@ impl<'a> FuncRep<'a> {
         new
     }
 
-    pub fn add_argument(&mut self, name: &str, typ: Type) -> VarName { 
-        self.add_variable_inner(name, typ, true) 
-    }
-
-    pub fn add_variable(&mut self, name: &str, typ: &Type) -> VarName { 
-        let name = self.add_variable_inner(name, typ.clone(), false);
-
-        name.clone()
-    }
-
-    pub fn add_variable_inner(
-        &mut self,
-        name: &str,
-        typ: Type,
-        add_as_arg: bool,
-    ) -> VarName {
+    pub fn add_variable(&mut self, name: &str, typ: &Type) -> VarName {
         let new_name = self.uniqueify_varname(name);
 
-        if add_as_arg {
-            for (_, var_info) in self.variables.iter_mut() {
-                if let Some(arg_index) = &mut var_info.arg_index {
-                    *arg_index += 1;
-                }
-            }
-        }
-
         self.variables.insert(new_name.clone(), VariableInfo {
-            typ,
-            arg_index: if add_as_arg { Some(0) } else { None },
+            typ: typ.clone(),
+            arg_index: ArgIndex::None,
+            ..Default::default()
         });
 
-        new_name
+        new_name.clone()
     }
 
     fn uniqueify_varname(&mut self, name: &str) -> VarName {

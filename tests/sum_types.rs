@@ -11,7 +11,7 @@ pub enum IntOrFloat {
 }
 
 #[test]
-fn sum_type_basic_set() {
+fn sum_type_basic_set_1() {
     xc_test!(
         "
             IntOrFloat = { Int: i32 / Float: f32 }

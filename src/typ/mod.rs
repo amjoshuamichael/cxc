@@ -223,8 +223,6 @@ impl Type {
 
     pub fn name(&self) -> &TypeName { &self.0.name }
     pub fn generics(&self) -> &Vec<Type> { &self.0.generics }
-    pub fn from_function(&self) -> &TypeName { &self.0.from_function }
-    pub fn parameters(&self) -> &Vec<Type> { &self.0.parameters }
 
     pub(crate) fn with_name(self, name: TypeName) -> Self {
         self.modify_type_data(|data| data.name = name.clone())
@@ -232,14 +230,6 @@ impl Type {
 
     pub(crate) fn with_generics(self, generics: &[Type]) -> Self {
         self.modify_type_data(|data| data.generics = generics.to_owned())
-    }
-
-    pub fn with_from_function(self, name: TypeName) -> Self {
-        self.modify_type_data(|data| data.from_function = name.clone())
-    }
-
-    pub fn with_parameters(self, parameters: &[Type]) -> Self {
-        self.modify_type_data(|data| data.parameters = parameters.to_owned())
     }
 
     pub fn modify_type_data(self, function: impl FnOnce(&mut TypeData)) -> Self {
@@ -272,6 +262,16 @@ impl Type {
     pub fn is_shallow(&self) -> bool {
         !self.fields_iter().any(|field| matches!(field.as_type_enum(), TypeEnum::Ref(_)))
     }
+
+    pub fn is_primitive(&self) -> bool {
+        !matches!(
+            self.as_type_enum(), 
+            TypeEnum::Struct(_) | 
+            TypeEnum::Array(_) | 
+            TypeEnum::Sum(_) | 
+            TypeEnum::Variant(_)
+        )
+    }
 }
 
 impl From<Type> for TypeSpec {
@@ -284,8 +284,6 @@ pub struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
     pub generics: Vec<Type>,
-    pub from_function: TypeName,
-    pub parameters: Vec<Type>,
 }
 
 impl Debug for TypeData {
@@ -532,7 +530,6 @@ impl VariantType {
         let as_struct_no_padding = Type::new_struct(fields.clone());
 
         let padding_amount = if &parent.largest_variant_data() != variant_data {
-            dbg!(&parent.largest_variant_as_struct(), &as_struct_no_padding);
             parent.largest_variant_as_struct().size() - as_struct_no_padding.size()
         } else {
             0
@@ -546,7 +543,7 @@ impl VariantType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
     // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,

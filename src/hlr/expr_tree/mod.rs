@@ -28,10 +28,11 @@ impl Debug for ExprTree {
         for expr in &self.nodes {
             writeln!(
                 fmt,
-                "{:?} : {:?} : {:?}",
+                "{:?} <- {:?} : {:?} : {:?}",
                 expr.0,
+                expr.1.parent,
                 expr.1.data,
-                expr.1.data.ret_type()
+                expr.1.data.ret_type(),
             )?
         }
 
@@ -115,17 +116,22 @@ pub enum HNodeData {
         lhs: ExprID,
         rhs: ExprID,
     },
+    // TODO: combine Call and IndirectCall, making Call take a UniqueFuncInfo and 
+    // abstracting over the differences between ExprID and a UniqueFuncInfo using an 
+    // HCallable enum
     Call {
         ret_type: Type,
         f: VarName,
         generics: Vec<Type>,
         a: Vec<ExprID>,
+        sret: Option<ExprID>,
         relation: TypeRelation,
     },
     IndirectCall {
         ret_type: Type,
         f: ExprID,
         a: Vec<ExprID>,
+        sret: Option<ExprID>,
     },
     Member {
         ret_type: Type,
@@ -252,8 +258,8 @@ impl HNodeData {
 
     pub fn to_string(&self, tree: &ExprTree) -> String {
         match self {
-            Number { value, .. } => value.to_string(),
-            Float { value, .. } => value.to_string(),
+            Number { value, lit_type } => format!("{value}{lit_type:?}"),
+            Float { value, lit_type } => format!("{value}{lit_type:?}"),
             Bool { value, .. } => value.to_string(),
             Ident { name, .. } => name.to_string(),
             StructLit {
@@ -318,6 +324,7 @@ impl HNodeData {
                 generics,
                 a: args,
                 relation,
+                sret,
                 ..
             } => {
                 let mut call = match relation {
@@ -340,12 +347,20 @@ impl HNodeData {
                 }
 
                 call += "(";
+
+                if let Some(sret) = sret {
+                    call += "-> ";
+                    call += &*tree.get(*sret).to_string(tree);
+                    call += " | ";
+                }
+
                 for (a, arg) in args.iter().enumerate() {
                     if a > 0 {
                         call += ", ";
                     }
                     call += &*tree.get(*arg).to_string(tree);
                 }
+
                 call += ")";
                 call
             },

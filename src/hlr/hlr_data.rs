@@ -3,8 +3,8 @@ use super::expr_tree::*;
 use super::hlr_data_output::FuncOutput;
 use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
-use crate::{parse::*, TypeEnum};
 use crate::typ::ReturnStyle;
+use crate::{parse::*, TypeEnum};
 use crate::unit::{CompData, UniqueFuncInfo};
 use crate::Type;
 use indexmap::IndexMap;
@@ -25,11 +25,24 @@ pub type Variables = IndexMap<VarName, VariableInfo>;
 #[derive(Default, Debug, Clone)]
 pub struct VariableInfo {
     pub typ: Type,
-    pub arg_index: Option<u32>,
+    pub arg_index: ArgIndex,
+
+    // specially marks variables that definitely should not be dropped. if this is marked
+    // as false, traditional drwillop rules still apply. this is not a way to check if a
+    // variable will be dropped.
+    pub do_not_drop: bool,
+}
+
+#[derive(Copy, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ArgIndex {
+    #[default]
+    None,
+    SRet,
+    Some(usize),
 }
 
 impl VariableInfo {
-    pub fn is_arg(&self) -> bool { self.arg_index.is_some() }
+    pub fn is_arg_or_sret(&self) -> bool { self.arg_index != ArgIndex::None }
 }
 
 impl<'a> FuncRep<'a> {
@@ -55,7 +68,8 @@ impl<'a> FuncRep<'a> {
                 arg.name.clone(),
                 VariableInfo {
                     typ,
-                    arg_index: Some(a as u32),
+                    arg_index: ArgIndex::Some(a),
+                    ..Default::default()
                 },
             );
         }
@@ -70,7 +84,8 @@ impl<'a> FuncRep<'a> {
             if !new.variables.contains_key(var_name) {
                 new.variables.insert(var_name.clone(), VariableInfo {
                     typ,
-                    arg_index: None,
+                    arg_index: ArgIndex::None,
+                    ..Default::default()
                 });
             }
         }
@@ -81,28 +96,37 @@ impl<'a> FuncRep<'a> {
         Ok(new)
     }
 
-    pub fn args<'b>(&'b mut self) -> Box<dyn Iterator<Item = (&VarName, &VariableInfo)> + 'b> {
+    // includes sret argument
+    pub fn args<'b>(&'b mut self) -> Vec<(&VarName, &VariableInfo)> {
         self.variables
             .sort_by(|_, df, _, df2| df.arg_index.cmp(&df2.arg_index));
 
-        let names_and_flow = self
+        let mut names_and_flow = self
             .variables
             .iter()
             .map(|(name, v_info)| (name, v_info))
-            .filter(|(_, v_info)| v_info.is_arg());
+            .filter(|(_, v_info)| v_info.is_arg_or_sret())
+            .collect::<Vec<_>>();
 
-        box names_and_flow
+        names_and_flow.sort_by(|(_, linfo), (_, rinfo)| { 
+            linfo.arg_index.cmp(&rinfo.arg_index) 
+        });
+
+        names_and_flow
     }
 
+    // includes sret argument
     pub fn arg_types(&mut self) -> Vec<Type> {
-        self.args().map(|(_, v_info)| v_info.typ.clone()).collect::<Vec<_>>()
+        self.args().into_iter().map(|(_, v_info)| v_info.typ.clone()).collect::<Vec<_>>()
     }
 
+    // includes sret argument
     pub fn arg_names(&mut self) -> Vec<VarName> {
-        self.args().map(|(name, _)| name).cloned().collect::<Vec<_>>()
+        self.args().into_iter().map(|(name, _)| name).cloned().collect::<Vec<_>>()
     }
 
-    pub fn arg_count(&mut self) -> u32 { self.args().count() as u32 }
+    // includes sret argument
+    pub fn arg_count(&mut self) -> u32 { self.args().len() as u32 }
 
     pub fn get_type_spec(&self, alias: &TypeSpec) -> TResult<Type> {
         self.comp_data.get_spec(alias, &self.info)
@@ -199,7 +223,9 @@ impl<'a> FuncRep<'a> {
                     a: vec![ref_space, len_arg],
                     generics: Vec::new(),
                     relation: TypeRelationGeneric::Static(string_type),
+                    sret: None,
                 };
+
                 self.tree.replace(call_space, call_data);
                 call_space
             },
@@ -363,6 +389,7 @@ impl<'a> FuncRep<'a> {
                         generics,
                         a: arg_ids,
                         relation,
+                        sret: None,
                     }
                 } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *name {
                     let type_origin = self.get_type_spec(type_spec).unwrap_or(Type::unknown());
@@ -373,6 +400,7 @@ impl<'a> FuncRep<'a> {
                         generics,
                         a: arg_ids,
                         relation: TypeRelation::Static(type_origin),
+                        sret: None,
                     }
                 } else {
                     let f = self.add_expr(*name, space);
@@ -380,6 +408,7 @@ impl<'a> FuncRep<'a> {
                         ret_type: Type::unknown(),
                         f,
                         a: arg_ids,
+                        sret: None,
                     }
                 };
 

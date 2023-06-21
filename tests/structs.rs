@@ -10,6 +10,21 @@ fn basic_struct() {
     xc_test!(
         "
         ; i32 {
+            x: Point2D = Point2D { -- }
+            x.x = 30
+            x.y = 90
+            ; x.x + x.y
+        }
+        ";
+        120
+    )
+}
+
+#[test]
+fn struct_lit() {
+    xc_test!(
+        "
+        ; i32 {
             x: Point2D = Point2D { x = 30, y = 90 }
             ; x.x + x.y
         }
@@ -207,16 +222,17 @@ fn array_basic() {
         main(); i32 {
             original: [7]i32 = [1, 4, 8, 15, 16, 23, 42]
 
-            first_sum: i32 = original[3] + original[0] + original[6]
+            first_sum: i32 = original[i64 3] + original[i64 0] + original[i64 6]
 
-            index: i32 = 0
-            @ index < 7 {
-                original[index] = index * 2
+            index: i64 = i64 0
+            @ index < i64 7 {
+                original[index] = index * i64 2
 
-                index = index + 1
+                index = index + i64 1
             }
 
-            second_sum: i32 = original[0] + original[1] + original[3] + original[6]
+            second_sum: i32 = 
+                original[i64 0] + original[i64 1] + original[i64 3] + original[i64 6]
 
             ; first_sum + second_sum
         }
@@ -241,18 +257,18 @@ fn struct_arrays() {
                 Point2D { x = 1672, y = 2526 },
             ]
 
-            assert_eq<i32>(points[0].x, 43)
-            #assert_eq<i32>(points[0].y, 15)
+            assert_eq<i32>(points[i64 0].x, 43)
+            assert_eq<i32>(points[i64 0].y, 15)
 
-            #points[0].x = 94
+            points[i64 0].x = 94
 
-            #assert_eq<i32>(points[0].x, 94)
-            #assert_eq<i32>(points[0].y, 15)
+            assert_eq<i32>(points[i64 0].x, 94)
+            assert_eq<i32>(points[i64 0].y, 15)
 
-            #points[1] = Point2D { x = 4, y = 6 }
+            points[i64 1] = Point2D { x = 4, y = 6 }
 
-            #assert_eq<i32>(points[1].x, 4)
-            #assert_eq<i32>(points[1].y, 6)
+            assert_eq<i32>(points[i64 1].x, 4)
+            assert_eq<i32>(points[i64 1].y, 6)
         }
         "
     )

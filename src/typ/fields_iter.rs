@@ -57,8 +57,8 @@ pub struct FieldsIter {
 
 impl FieldsIter {
     pub fn new(from: Type) -> FieldsIter {
-        if matches!(from.as_type_enum(), TypeEnum::Variant { .. }) {
-            panic!();
+        if let TypeEnum::Variant(variant_type) = from.as_type_enum() {
+            return variant_type.as_struct().fields_iter()
         }
 
         FieldsIter {

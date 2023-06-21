@@ -1,7 +1,7 @@
 use crate::{
     hlr::hlr_data::FuncRep,
     lex::VarName,
-    parse::{InitOpts, Opcode, TypeSpec},
+    parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
     Type, UniqueFuncInfo,
 };
 
@@ -29,9 +29,22 @@ impl NodeDataGen for Box<dyn NodeDataGen> {
     }
 }
 
+impl<T: NodeDataGen> NodeDataGen for Box<T> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        self.as_ref().add_to_expr_tree(hlr, parent)
+    }
+}
+
 impl NodeDataGen for HNodeData {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(parent, self.clone())
+    }
+}
+
+impl NodeDataGen for ExprID {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        hlr.tree.set_parent(*self, parent);
+        *self
     }
 }
 
@@ -69,12 +82,12 @@ impl Default for Box<dyn NodeDataGen> {
 }
 
 #[derive(Debug, Default)]
-pub struct SetVarGen {
-    pub lhs: Box<dyn NodeDataGen>,
-    pub rhs: Box<dyn NodeDataGen>,
+pub struct SetVarGen<T: NodeDataGen, U: NodeDataGen> {
+    pub lhs: T,
+    pub rhs: U,
 }
 
-impl NodeDataGen for SetVarGen {
+impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for SetVarGen<T, U> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
@@ -152,6 +165,7 @@ impl NodeDataGen for UnarOpGen {
 pub struct CallGen {
     pub info: UniqueFuncInfo,
     pub args: Vec<Box<dyn NodeDataGen>>,
+    pub sret: Option<Box<dyn NodeDataGen>>,
 }
 
 impl NodeDataGen for CallGen {
@@ -161,8 +175,10 @@ impl NodeDataGen for CallGen {
         let args = self
             .args
             .iter()
-            .map(|gen| gen.add_to_expr_tree(hlr, space))
+            .map(|arg| arg.add_to_expr_tree(hlr, space))
             .collect();
+
+        let sret = self.sret.as_ref().map(|sret| sret.add_to_expr_tree(hlr, space));
 
         let func_type = hlr.comp_data.get_func_type(&self.info).unwrap();
 
@@ -174,6 +190,7 @@ impl NodeDataGen for CallGen {
                 relation: self.info.relation.clone(),
                 ret_type: func_type.ret,
                 a: args,
+                sret,
             },
         );
 
@@ -181,6 +198,7 @@ impl NodeDataGen for CallGen {
     }
 }
 
+// TODO: is this nescessary
 impl NodeDataGen for UniqueFuncInfo {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let func_type = hlr.comp_data.get_func_type(self).unwrap();
@@ -193,6 +211,7 @@ impl NodeDataGen for UniqueFuncInfo {
                 relation: self.relation.clone(),
                 ret_type: func_type.ret,
                 a: Vec::new(),
+                sret: None,
             },
         )
     }
@@ -385,8 +404,38 @@ impl<T: NodeDataGen> NodeDataGen for DerefGen<T> {
     }
 }
 
-pub fn get_deref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<DerefGen<T>> {
-    Box::new(DerefGen {
-        object: node_data_gen,
-    })
+#[derive(Debug, Default)]
+pub struct MemCpyGen<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> {
+    pub from: T,
+    pub to: U,
+    pub size: V,
+}
+
+impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T, U, V> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+
+        let from = self.from.add_to_expr_tree(hlr, space);
+        let to = self.to.add_to_expr_tree(hlr, space);
+        let size = self.size.add_to_expr_tree(hlr, space);
+
+        let generics = vec![
+            hlr.tree.get_ref(from).ret_type().get_deref().unwrap(),
+            hlr.tree.get_ref(to).ret_type().get_deref().unwrap(),
+        ];
+
+        hlr.tree.replace(
+            space,
+            HNodeData::Call {
+                f: "memcpy".into(),
+                relation: TypeRelationGeneric::Unrelated,
+                generics,
+                ret_type: Type::void(),
+                a: vec![from, to, size],
+                sret: None,
+            }
+        );
+
+        space
+    }
 }

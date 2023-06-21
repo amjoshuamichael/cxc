@@ -117,7 +117,8 @@ fn infer_alloc() {
     xc_test!(
         r#"
         main() {
-            ptr: &i32 = alloc(1)
+            ptr: &i32 = alloc(i64 1)
+            *ptr = 4
         }
         "#
     )
@@ -144,10 +145,10 @@ fn infer_default_array() {
         r#"
         main() {
             x: [4]i32 = [ 90, 43, ++ ]
-            assert_eq(x[0], 90)
-            assert_eq(x[1], 43)
-            assert_eq(x[2], 0)
-            assert_eq(x[3], 0)
+            assert_eq(x[i64 0], 90)
+            assert_eq(x[i64 1], 43)
+            assert_eq(x[i64 2], 0)
+            assert_eq(x[i64 3], 0)
         }
         "#
     )

@@ -16,10 +16,10 @@ fn num_of_size(input: Vec<Type>, _: &CompData) -> Type {
     assert_eq!(input.len(), 1);
 
     match input[0].size() {
-        0..=8 => Type::i(8),
-        9..=16 => Type::i(16),
-        17..=32 => Type::i(32),
-        33..=64 => Type::i(64),
+        1 => Type::u(8),
+        2 => Type::u(16),
+        3..=4 => Type::u(32),
+        5..=8 => Type::u(64),
         _ => Type::void(),
     }
 }

@@ -6,11 +6,11 @@ Vec<T> = {
 
 <T> &Vec<T>:. {
     push(val: T) {
-        ? self.len == 0 {
+        ? self.len == i64 0 {
             *self = Vec<T> {
                 len = i64 0,
                 capacity = i64 4,
-                data_loc = alloc<T>(4)
+                data_loc = alloc<T>(i64 4)
             }
         }
 

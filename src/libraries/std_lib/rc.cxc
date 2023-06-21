@@ -10,17 +10,17 @@ Rc<T> = {
 
 <T> &RcBox<T>:. {
     inc_strong() {
-        self.strong = self.strong + 1
+        self.strong = self.strong + i64 1
     }
 
     dec_strong() {
-        self.strong = self.strong - 1
+        self.strong = self.strong - i64 1
     }
 }
 
 <T> Rc<T>:: { 
     new(value: T); Rc<T> {
-        box: &RcBox<T> = alloc< RcBox<T> >( 1 )
+        box: &RcBox<T> = alloc< RcBox<T> >( i64 1 )
 
         *box = RcBox<T> { strong = i64 1, weak = i64 0, value = value }
         
@@ -54,7 +54,7 @@ Rc<T> = {
     drop() {
         self.inner.dec_strong()
 
-        ? self.inner.strong == 0 {
+        ? self.inner.strong == i64 0 {
             # destroy the contained object
             self.inner.value.drop()
             self.inner.drop()

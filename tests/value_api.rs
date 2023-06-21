@@ -77,7 +77,7 @@ fn value_20() {
 }
 
 #[test]
-fn values_24() {
+fn value_24() {
     let mut unit = Unit::new();
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
@@ -99,12 +99,12 @@ fn value_4_no_depedency() {
 fn basic_value_func() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
-    unit.push_script("sixty_three(); Value { ; value(u32 63) }").unwrap();
+    unit.push_script("sixty_three(); Value { ; value(u32 234) }").unwrap();
 
     let value = unit.get_fn("sixty_three").unwrap().downcast::<(), Value>()();
     assert_eq!(value.get_type(), &unit.comp_data.get_spec(&"u32".into(), &()).unwrap());
     let value_u32 = unsafe { *value.consume::<u32>() };
-    assert_eq!(value_u32, 63);
+    assert_eq!(value_u32, 234);
 }
 
 #[test]

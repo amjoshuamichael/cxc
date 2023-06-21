@@ -33,7 +33,7 @@ BitArrayIterator<T> = {
 
 <T> &BitArrayIterator<T>:. {
     next(); Option<bool> {
-        self.index = self.index + 1
+        self.index = self.index + Me.index 1
         ; self.bitarray.get(self.index)
     }
 }

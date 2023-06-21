@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
-use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::VariableInfo}, FuncType, TypeEnum, ArrayType};
+use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::{VariableInfo, ArgIndex}}, FuncType, TypeEnum, ArrayType};
 
 pub use self::mir_data::*;
 
 mod mir_data;
+mod remove_post_return_statements;
+
+use remove_post_return_statements::remove_post_return_statements;
 
 pub fn mir(hlr: FuncOutput) -> MIR {
     let mut mir = MIR { 
@@ -21,11 +24,12 @@ pub fn mir(hlr: FuncOutput) -> MIR {
 
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
 
-    if crate::XC_DEBUG {
-        for (l, line) in mir.lines.iter().enumerate() {
-            // print the index with three digits of space
-            println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
-        }
+    remove_post_return_statements(&mut mir);
+
+    #[cfg(feature = "xc-debug")]
+    for (l, line) in mir.lines.iter().enumerate() {
+        // print the index with three digits of space
+        println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
     }
 
     mir
@@ -119,7 +123,7 @@ fn build_as_memloc(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MMemLo
 fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
     match node {
         HNodeData::Ident { name, .. } => {
-            if mir.variables[&name].arg_index.is_some() {
+            if let ArgIndex::Some(_) = mir.variables[&name].arg_index {
                 let new_var_name = VarName::from(&*(name.to_string() + "addr"));
 
                 if !mir.variables.contains_key(&new_var_name) {
@@ -130,7 +134,8 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
 
                     mir.variables.insert(new_var_name.clone(), VariableInfo {
                         typ: mir.variables[&name].typ.clone(),
-                        arg_index: None,
+                        arg_index: ArgIndex::None,
+                        ..Default::default()
                     });
                 }
 
@@ -201,10 +206,12 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
     match node {
         HNodeData::BinOp { lhs, op, rhs, .. } => {
+            let left_type = tree.get(lhs).ret_type();
+
             let lhs = build_as_operand(tree.get(lhs), tree, mir);
             let rhs = build_as_operand(tree.get(rhs), tree, mir);
 
-            MExpr::BinOp { ret_type, op, l: lhs, r: rhs }
+            MExpr::BinOp { left_type, op, l: lhs, r: rhs }
         },
         HNodeData::UnarOp { op, hs, .. } => {
             match op {
@@ -223,7 +230,6 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             }
         },
         HNodeData::Call { ref f, ref a, ref generics, .. } if &*f.to_string() == "cast" => {
-            let from_type = generics[0].clone();
             let to_type = generics[1].clone();
 
             let val = build_as_addr(tree.get(a[0]), tree, mir);
@@ -232,7 +238,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             mir.lines.push(MLine::MemCpy {
                 from: val, 
                 to: MAddr::Var(new_cast_out.clone()), 
-                len: MOperand::Lit(MLit::Int { size: 32, val: from_type.size() as u64 }),
+                len: MOperand::Lit(MLit::Int { size: 64, val: to_type.size() as u64 }),
             });
 
             MExpr::MemLoc(MMemLoc::Var(new_cast_out))
@@ -250,40 +256,39 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Void
         },
-        HNodeData::Call { ref a, ref ret_type, .. } => {
+        HNodeData::Call { ref a, ref ret_type, ref sret, .. } => {
             let info = tree.unique_func_info_of_call(&node);
+
             let typ = FuncType {
                 ret: ret_type.clone(),
                 args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
             };
-            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
 
-            MExpr::Call { typ, f: MCallable::Func(info), a }
+            let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
+            let sret = sret.as_ref().map(|sret| build_as_memloc(tree.get(*sret), tree, mir));
+
+            MExpr::Call { typ, f: MCallable::Func(info), a, sret }
         },
-        HNodeData::IndirectCall { ref f, ref a, ref ret_type, .. } => {
+        HNodeData::IndirectCall { ref f, ref a, ref ret_type, ref sret, .. } => {
             let f = build_as_memloc(tree.get(*f), tree, mir);
+
             let typ = FuncType {
                 ret: ret_type.clone(),
                 args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
             };
+
             let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
+            let sret = sret.as_ref().map(|sret| build_as_memloc(tree.get(*sret), tree, mir));
 
-            MExpr::Call { typ, f: MCallable::FirstClass(f), a }
+            MExpr::Call { typ, f: MCallable::FirstClass(f), a, sret }
         },
-        HNodeData::ArrayLit { var_type, parts, .. } => {
-            let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() else { unreachable!() };
-            let parts = parts.into_iter().map(|part| build_as_operand(tree.get(part), tree, mir)).collect();
-
-            MExpr::Array {
-                elem_type: base.clone(),
-                // TODO: unify "elems" and "parts" throughout the entire codebase
-                elems: parts,
-            }
-        }
         HNodeData::Member { .. } | HNodeData::Index { .. } => {
             let addr = build_as_addr(node, tree, mir);
 
             MExpr::Addr(addr)
+        }
+        HNodeData::Ident { name, .. } => {
+            MExpr::MemLoc(MMemLoc::Var(name))
         }
         _ => todo!("{:?}", node),
     }
@@ -318,15 +323,22 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
         | HNodeData::Number { .. } 
         | HNodeData::Float { .. } 
         | HNodeData::Bool { .. } 
-        | HNodeData::Call { .. } => {
-            let new_var = mir.new_variable("temp_storage", node.ret_type());
-            let addr = MAddr::Var(new_var);
-
+        | HNodeData::Call { .. } 
+        | HNodeData::UnarOp { .. } 
+        | HNodeData::BinOp { .. } => {
+            let node_ret_type = node.ret_type();
             let expr = build_as_operand(node, tree, mir);
 
-            mir.lines.push(MLine::Store { l: addr.clone(), val: expr });
+            if let MOperand::MemLoc(MMemLoc::Var(name)) = expr {
+                MAddrExpr::Addr(MAddr::Var(name))
+            } else {
+                let new_var = mir.new_variable("temp_storage", node_ret_type);
+                let addr = MAddr::Var(new_var);
 
-            MAddrExpr::Addr(addr)
+                mir.lines.push(MLine::Store { l: addr.clone(), val: expr });
+
+                MAddrExpr::Addr(addr)
+            }
         },
         _ => panic!("{node:?}"),
     }

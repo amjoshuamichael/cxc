@@ -1,8 +1,9 @@
+use super::hlr_data::ArgIndex;
+use super::hlr_data::VariableInfo;
 use super::struct_literals::struct_literals;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
 use crate::lex::VarName;
-use crate::parse::*;
 use crate::typ::ReturnStyle;
 use crate::Type;
 use crate::UniqueFuncInfo;
@@ -63,6 +64,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
                         ..Default::default()
                     },
                     args: vec![box hlr.tree.get(*to_return)],
+                    ..Default::default()
                 },
             });
 
@@ -120,7 +122,16 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
-    let output_var = hlr.add_argument("Sret", hlr.ret_type.clone().get_ref());
+    let output_var = VarName::from("Sret");
+
+    hlr.variables.insert(
+        output_var.clone(),
+        VariableInfo {
+            typ: hlr.ret_type.get_ref(),
+            arg_index: ArgIndex::SRet,
+            ..Default::default()
+        }
+    );
 
     hlr.modify_many_infallible(
         |return_id, data, hlr| {
@@ -130,10 +141,14 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
             hlr.insert_statement_before(
                 return_id,
-                SetVarGen {
-                    lhs: get_deref(output_var.clone()),
-                    rhs: box hlr.tree.get(*to_return_inner),
-                },
+                MemCpyGen {
+                    from: get_ref(hlr.tree.get(*to_return_inner)),
+                    to: output_var.clone(),
+                    size: HNodeData::Number {
+                        lit_type: Type::i(64),
+                        value: hlr.ret_type.size() as u64,
+                    }
+                }
             );
 
             *to_return = None;
@@ -182,24 +197,19 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
             rhs: box og_call_data.clone(),
         },
     )
-    .after_that(CallGen {
-        info: UniqueFuncInfo {
-            name: VarName::from("memcpy"),
-            generics: vec![raw_ret_var_type.clone()],
-            relation: TypeRelation::Unrelated,
-            ..Default::default()
+    .after_that(MemCpyGen {
+        from: get_ref(HNodeData::Ident {
+            var_type: raw_ret_var_type.clone(),
+            name: raw_ret_var_name,
+        }),
+        to: get_ref(HNodeData::Ident {
+            var_type: casted_var_type.clone(),
+            name: casted_var_name.clone(),
+        }),
+        size: HNodeData::Number {
+            lit_type: Type::i(64),
+            value: casted_var_type.size().min(raw_ret_var_type.size()) as u64,
         },
-        args: vec![
-            get_ref(HNodeData::Ident {
-                var_type: raw_ret_var_type.clone(),
-                name: raw_ret_var_name,
-            }),
-            get_ref(HNodeData::Ident {
-                var_type: casted_var_type.clone(),
-                name: casted_var_name.clone(),
-            }),
-            box raw_ret_var_type.size()
-        ],
     });
 
     hlr.tree.replace(
@@ -213,7 +223,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let mut new_data = hlr.tree.get(og_call_id);
-    let HNodeData::Call { ref mut a, ret_type, .. } = 
+    let HNodeData::Call { ref mut sret, ret_type, .. } = 
         &mut new_data else { unreachable!(); };
 
     let call_var = hlr.add_variable("_call_out", &ret_type);
@@ -222,7 +232,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         object: box call_var.clone(),
     });
 
-    a.insert(0, new_arg);
+    *sret = Some(new_arg);
 
     hlr.insert_statement_before(og_call_id, new_data);
     hlr.replace_quick(og_call_id, call_var);

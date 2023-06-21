@@ -11,7 +11,8 @@ pub use tok::{TypeName, VarName};
 use crate::parse::context::ParseContext;
 
 pub fn lex(input: &str) -> ParseContext<()> {
-    if crate::XC_DEBUG {
+    #[cfg(feature = "xc-debug")]
+    {
         println!();
         println!("====NEW LEX====");
     }

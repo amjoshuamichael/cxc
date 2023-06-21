@@ -102,12 +102,6 @@ pub fn compile_unar_op(
     use Opcode::*;
 
     match op {
-        //Ref => {
-        //    return match hs {
-        //        MOperand::MemLoc(memloc) => memloc_as_ptr(fcs, memloc),
-        //        MOperand::Lit(_) => panic!(),
-        //    }.as_basic_value_enum()
-        //},
         Deref => {
             let hs = compile_operand(fcs, hs).into_pointer_value();
 

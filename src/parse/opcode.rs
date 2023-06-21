@@ -62,6 +62,11 @@ impl Opcode {
             _ => None,
         }
     }
+
+    pub fn is_cmp(&self) -> bool {
+        use Opcode::*;
+        matches!(self, Equal | Inequal | LessThan | GrtrThan | LessOrEqual | GreaterOrEqual)
+    }
 }
 
 impl ToString for Opcode {

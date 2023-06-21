@@ -64,6 +64,8 @@ pub enum TErr {
     TooFewGenerics(Vec<Type>, u8),
     CantDeref(Type),
     NotAFunction(Type),
+    NotAStruct(Type),
+    NotAnArray(Type),
 }
 
 #[derive(Debug)]

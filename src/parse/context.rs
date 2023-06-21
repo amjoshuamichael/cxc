@@ -117,9 +117,8 @@ impl<N: Default + Clone> ParseContext<N> {
             self.tok_pos.inc();
         }
 
-        if crate::XC_DEBUG {
-            print!("{}", next.to_string());
-        }
+        #[cfg(feature = "xc-debug")]
+        print!("{}", next.to_string());
 
         Ok(next.clone())
     }
@@ -164,9 +163,8 @@ impl<N: Default + Clone> ParseContext<N> {
         match parser(self) {
             Ok(expr) => Ok(expr),
             Err(error) => {
-                if crate::XC_DEBUG {
-                    println!("...recovering...");
-                }
+                #[cfg(feature = "xc-debug")]
+                println!("...recovering...");
 
                 let mut has_increased_once = false;
 

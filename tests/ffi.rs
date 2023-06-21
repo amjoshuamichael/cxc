@@ -205,7 +205,7 @@ fn method_on_struct_with_arg() {
 
 #[test]
 fn external_function() {
-    pub fn print_num(input: i64) {
+    pub fn assert_is_less_than_100(input: i32) {
         assert!(input < 100);
     }
 
@@ -213,16 +213,16 @@ fn external_function() {
 
     unit.add_rust_func_explicit(
         "assert_is_less_than_100",
-        print_num as *const usize,
+        assert_is_less_than_100 as *const usize,
         ExternalFuncAdd {
-            arg_types: vec![Type::i(64)],
+            arg_types: vec![Type::i(32)],
             ..ExternalFuncAdd::empty()
         },
     );
     unit.push_script(
         "
-        call(); i64 {
-            x: i64 = 0
+        call(); i32 {
+            x: i32 = 0
             @ x < 100 {
                 assert_is_less_than_100(x)
                 x = x + 1
