@@ -129,7 +129,7 @@ impl Func {
         inner.code.clone()
     }
 
-    pub fn set_pointer(&self, pointer: *const usize) {
+    pub(crate) fn set_pointer(&self, pointer: *const usize) {
         let mut inner = self.inner.write().unwrap();
         inner.code = FuncCodePtr::Compiled {
             pointer: NonNull::new(pointer as *mut _),

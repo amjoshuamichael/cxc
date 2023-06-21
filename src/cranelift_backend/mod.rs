@@ -81,13 +81,14 @@ impl IsBackend for CraneliftBackend {
 
         self.module = make_proper_module(&*self.isa);
 
-        for (id, (info, (ctx, _))) in self.cl_function_data.iter_mut().enumerate() {
-            self.module.declare_function(
+        for (info, (ctx, ref mut func_id)) in self.cl_function_data.iter_mut() {
+            let new_id = self.module.declare_function(
                 &*info.to_string(&self.generations), 
                 Linkage::Local, 
                 &ctx.func.signature,
             ).unwrap();
-            self.module.define_function(FuncId::from_u32(id as u32), ctx).unwrap();
+            self.module.define_function(new_id, ctx).unwrap();
+            *func_id = new_id;
         }
     }
 
@@ -105,7 +106,9 @@ impl IsBackend for CraneliftBackend {
         ).unwrap();
 
         self.cl_function_data.insert(info.clone(), (ctx, id));
-        self.func_pointers.insert(info.clone(), Func::new_compiled(info, func_type));
+        self.func_pointers
+            .entry(info.clone())
+            .or_insert_with(|| Func::new_compiled(info, func_type));
     }
 
     fn compile_function(&mut self, mir: MIR) {
@@ -156,6 +159,7 @@ impl IsBackend for CraneliftBackend {
 
     fn compiled_iter<'a>(&'a self) -> 
         Box<dyn Iterator<Item = (&UniqueFuncInfo, &Self::LowerableFuncRef)> + 'a> {
+        dbg!(&self.func_pointers);
         box self.func_pointers.iter()
     }
 
