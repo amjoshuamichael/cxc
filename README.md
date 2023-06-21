@@ -10,7 +10,7 @@ This repository contains the compiler.
 cxc = { git = "https://github.com/amjoshuamichael/cxc" }
 ```
 
-The default features of the crate use cranelift as a compiler backend. Alternatively, you can activate the "llvm" feature, which uses LLVM, but it does require that you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. Both backends have full feature parity. The Cranelift backend compiles faster, and is more portable, but the emitted code is slower. The LLVM backend is less portable because it requires that users have LLVM installed, but the emitted code is faster.
+The default features of the crate use [cranelift](https://cranelift.dev/) as a compiler backend. Alternatively, you can activate the "llvm" feature, which uses [LLVM](https://llvm.org/), but it does require that you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. Both backends have full feature parity. The Cranelift backend compiles faster, and is more portable, but the emitted code is slower. The LLVM backend is less portable because it requires that users have LLVM installed, but the emitted code is faster.
 
 ```
 cxc = {
