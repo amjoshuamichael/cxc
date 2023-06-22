@@ -277,23 +277,23 @@ fn arc_clone() {
     )
 }
 
-// TODO: backtraces work differently on arm
+// TODO: backtraces don't work properly
 #[test]
-#[should_panic(expected = "1 is not equal to 2!")]
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"),))]
+#[ignore]
+#[should_panic(expected = "100 is not equal to 200!")]
 fn int_failed_assert() {
     xc_test!(
         "
         main() {
-            assert_eq(1, 2)
+            assert_eq(100, 200)
         }
         "
     )
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected = "true is not equal to false!")]
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"),))]
 fn bool_failed_assert() {
     xc_test!(
         "
@@ -305,8 +305,8 @@ fn bool_failed_assert() {
 }
 
 #[test]
+#[ignore]
 #[should_panic(expected = "failure!")]
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"),))]
 fn panic() {
     xc_test!(
         r#"

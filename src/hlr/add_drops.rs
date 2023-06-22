@@ -56,13 +56,12 @@ pub fn add_drops(hlr: &mut FuncRep) {
             }).unwrap();
         let (stmt, block) = hlr.tree.statement_and_block(first_use);
         let HNodeData::Block { stmts, .. } = hlr.tree.get(block) else { unreachable!() };
-        let last_return_index = stmts
+        let last_return = stmts
             .iter()
             .skip_while(|&&s| s != stmt)
-            .find(|&&s| matches!(hlr.tree.get(s), HNodeData::Return { .. }))
-            .unwrap_or(stmts.last().unwrap());
+            .find(|&&s| matches!(hlr.tree.get(s), HNodeData::Return { .. }));
 
-        hlr.insert_statement_before(*last_return_index, CallGen {
+        let drop_call = CallGen {
             info: UniqueFuncInfo {
                 name: "drop".into(),
                 relation: TypeRelation::MethodOf(var_type.get_ref()),
@@ -75,6 +74,12 @@ pub fn add_drops(hlr: &mut FuncRep) {
                 ret_type: var_type.get_ref()
             })],
             ..Default::default()
-        });
+        };
+
+        if let Some(last_return) = last_return {
+            hlr.insert_statement_before(*last_return, drop_call);
+        } else {
+            hlr.insert_statement_after(*stmts.last().unwrap(), drop_call);
+        }
     }
 }

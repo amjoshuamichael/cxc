@@ -55,7 +55,7 @@ impl IsBackend for CraneliftBackend {
             alloc_x_bytes as *const usize,
         );
 
-        unsafe fn free(ptr: *mut u8, size: i32) {
+        unsafe fn free(ptr: *mut u8) {
             use std::alloc::*;
             // this is undefined behavior!! we're using a layout that is only the size of 
             // the type of the pointer. if the user allocates more than one of a type, 
@@ -63,7 +63,7 @@ impl IsBackend for CraneliftBackend {
             // allocation API. because the cxc allocation api does not require that the 
             // user specify the size of their deallocation, the only way to fix this in 
             // this backend is to stash the size of allocation for every allocation.
-            let possibly_wrong_layout = Layout::from_size_align(size as usize, 4).unwrap();
+            let possibly_wrong_layout = Layout::from_size_align(4 as usize, 4).unwrap();
             dealloc(ptr, possibly_wrong_layout)
         }
 
