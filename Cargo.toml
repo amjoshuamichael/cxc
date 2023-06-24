@@ -2,33 +2,41 @@
 name = "cxc"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "A high performance scripting language"
+homepage = "http://amjoshuamichael.com/cxc/"
+repository = "http://amjoshuamichael.com/cxc/"
+readme = "README.md"
+keywords = ["scripting", "scripting-language"]
+categories = ["parser-implementations"]
+include = ["/src/**/*", "/Cargo.toml", "/README.md", "LICENSE*"]
 
 [dependencies]
 
 logos = "0.12.0"
 
 llvm-sys = { version = "150", optional = true }
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm15-0"], optional = true }
+inkwell = { version = "0.2", optional = true, features = ["llvm15-0"] }
 
-cranelift = { version = "0.95.0", optional = true }
-cranelift-jit = { version = "0.95.0", optional = true }
-cranelift-module = { version = "0.95.0", optional = true }
-cranelift-native = { version = "0.95.0", optional = true }
+cranelift = { version = "0.95", optional = true }
+cranelift-jit = { version = "0.95", optional = true }
+cranelift-module = { version = "0.95", optional = true }
+cranelift-native = { version = "0.95", optional = true }
 
-memoize = "0.3.1"
-slotmap = "1.0.6"
-indexmap = "1.9.2"
-passable = { git = "https://github.com/amjoshuamichael/passable" }
-lazy_static = "1.4.0"
+memoize = "0.3"
+slotmap = "1"
+indexmap = "1"
+passable = "1"
+lazy_static = "1"
 
-bytemuck = { version = "1.12.3", optional = true, default-features = false }
-region = { version = "3.0.0", optional = true }
+bytemuck = { version = "1.12", optional = true, default-features = false }
+region = { version = "3.0", optional = true }
 
-cxc_derive = { git = "https://github.com/amjoshuamichael/cxc_derive" }
+cxc_derive = "0.1"
 
 # these libraries are re-exported into cxc
 
-glam = { version = "0.22.0", optional = true }
+glam = { version = "0.22", optional = true }
 
 [dev-dependencies]
 serial_test = "1.0.0"

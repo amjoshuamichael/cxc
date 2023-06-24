@@ -8,10 +8,8 @@ use test::{black_box, Bencher};
 #[bench]
 pub fn compile_std_lib(b: &mut Bencher) {
     b.iter(|| {
-        for _ in 0..10000 {
-            let mut unit = black_box(Unit::new());
-            black_box(unit.add_lib(StdLib));
-        }
+        let mut unit = black_box(Unit::new());
+        black_box(unit.add_lib(StdLib));
     });
 }
 
