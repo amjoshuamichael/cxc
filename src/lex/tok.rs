@@ -339,33 +339,24 @@ impl Tok {
 
     pub fn is_bin_op(&self) -> bool { self.get_bin_opcode().is_ok() }
 
-    pub fn var_name(self) -> Result<VarName, ParseError> {
+    pub fn var_name(&self) -> Result<VarName, ParseError> {
         match self {
-            Tok::VarName(name) => Ok(name),
-            err => Err(ParseError::UnexpectedTok {
-                got: err,
-                expected: vec![TokName::VarName],
-            }),
+            Tok::VarName(name) => Ok(name.clone()),
+            got => ParseError::unexpected(got, vec![TokName::VarName]),
         }
     }
 
-    pub fn type_name(self) -> Result<TypeName, ParseError> {
+    pub fn type_name(&self) -> Result<TypeName, ParseError> {
         match self {
-            Tok::TypeName(name) => Ok(name),
-            err => Err(ParseError::UnexpectedTok {
-                got: err,
-                expected: vec![TokName::TypeName],
-            }),
+            Tok::TypeName(name) => Ok(name.clone()),
+            got => ParseError::unexpected(got, vec![TokName::TypeName]),
         }
     }
 
-    pub fn int_value(self) -> Result<u64, ParseError> {
+    pub fn int_value(&self) -> Result<u64, ParseError> {
         match self {
-            Tok::Int(val) => Ok(val),
-            err => Err(ParseError::UnexpectedTok {
-                got: err,
-                expected: vec![TokName::Int],
-            }),
+            Tok::Int(val) => Ok(*val),
+            got => ParseError::unexpected(got, vec![TokName::Int]),
         }
     }
 

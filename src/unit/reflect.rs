@@ -28,7 +28,7 @@ pub trait XcReflect: 'static {
             let mut spec_lexer = lexer.split(VarName::None, GenericLabels::default());
 
             let name = if let Ok(possible_name) = spec_lexer.peek_tok()
-                       && let Ok(name) = possible_name.type_name()
+                       && let Ok(name) = possible_name.clone().type_name()
                        && matches!(name, TypeName::Other(_))
                        && spec_lexer.peek_by(1).is_err() {
                 name

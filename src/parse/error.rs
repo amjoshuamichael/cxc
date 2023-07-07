@@ -68,6 +68,12 @@ pub enum ParseError {
     BadVariantName(TypeName),
 }
 
+impl ParseError {
+    pub(crate) fn unexpected<T>(got: &Tok, expected: Vec<TokName>) -> ParseResult<T> {
+        Err(ParseError::UnexpectedTok { got: got.clone(), expected })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseErrorSpanned {
     pub error: ParseError,
@@ -80,11 +86,11 @@ pub struct ParseErrorSpanned {
 pub struct TokenSpan(pub Vec<Tok>);
 
 impl TokenSpan {
-    pub fn new(all: &Vec<(usize, Tok, usize)>, start: usize, end: usize) -> Self {
+    pub fn new(all: &Vec<Tok>, start: usize, end: usize) -> Self {
         Self(
             all[start..end.min(all.len())]
                 .iter()
-                .map(|(_, tok, _)| tok.clone())
+                .map(|tok| tok.clone())
                 .collect(),
         )
     }

@@ -31,7 +31,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
     let mut last_atom = Atom::Op(Opcode::Plus);
 
-    while let Ok(next) = lexer.peek_tok() {
+    while let Ok(next) = lexer.peek_tok().cloned() {
         let atom = if matches!(last_atom, Atom::Op(_)) {
             // if the last atom was an operator, we expect these
             match parse_atom_after_op(lexer)? {
@@ -84,7 +84,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 let mut detached = lexer.detach();
 
                 if let Ok(_actually_lhs) = parse_expr(&mut detached) && 
-                    detached.peek_tok()? == Tok::Assignment {
+                    detached.peek_tok()? == &Tok::Assignment {
                     break;
                 }
             }
@@ -114,7 +114,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 // parses atoms that go in between operators. Like the 1, 2, and "Hello" in 1 *
 // 2 + "hello"
 fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>> {
-    let atom = match lexer.peek_tok()? {
+    let atom = match lexer.peek_tok()?.clone() {
         Tok::Int(val) => Expr::Number(val).into(),
         Tok::Float(val) => Expr::Float(val).into(),
         Tok::DottedNum((l, r)) => {
@@ -122,8 +122,8 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             Expr::Float(format!("{l}.{r}").parse().unwrap()).into()
         },
         Tok::Bool(val) => Expr::Bool(val).into(),
-        Tok::Strin(val) => Expr::String(val).into(),
-        Tok::VarName(val) => Expr::Ident(val).into(),
+        Tok::Strin(val) => Expr::String(val.clone()).into(),
+        Tok::VarName(val) => Expr::Ident(val.clone()).into(),
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
         Tok::LBrack => parse_array_literal(lexer)?.into(),
         Tok::LParen => {
@@ -132,7 +132,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             lexer.assert_next_tok_is(Tok::RParen)?;
             enclosed
         },
-        Tok::LCurly if lexer.peek_by(1)? == Tok::RCurly => {
+        Tok::LCurly if lexer.peek_by(1)? == &Tok::RCurly => {
             lexer.next_tok()?;
             lexer.next_tok()?;
 
@@ -141,17 +141,17 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         _ if let Ok(type_spec) = parse_type_spec(&mut lexer.detach()) => {
             parse_type_spec(lexer)?;
 
-            if lexer.peek_tok()? == Tok::Colon {
+            if lexer.peek_tok()? == &Tok::Colon {
                 lexer.next_tok()?;
                 let func_name = lexer.next_tok()?.var_name()?;
-                Expr::StaticMethodPath(type_spec, func_name).into()
+                Atom::Expr(Expr::StaticMethodPath(type_spec, func_name))
             } else {
                 let value = lexer
                     .recover(parse_atom_after_op)?
                     .ok_or(ParseError::ImproperExpression)?;
                 let Atom::Expr(expr) = value 
                     else { return Err(ParseError::ImproperExpression) };
-                Expr::TypedValue(type_spec, Box::new(expr)).into()
+                Atom::Expr(Expr::TypedValue(type_spec, Box::new(expr)))
             }
         },
         Tok::LCurly 
@@ -282,7 +282,7 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
 
         fields.push((field_name, rhs));
 
-        if lexer.peek_tok()? != Tok::Comma {
+        if lexer.peek_tok()? != &Tok::Comma {
             break;
         }
 
@@ -300,10 +300,10 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
         },
         Tok::RCurly => InitOpts::NoFill,
         got => {
-            return Err(ParseError::UnexpectedTok {
-                got,
-                expected: vec![TokName::DoublePlus, TokName::RCurly, TokName::Comma],
-            })
+            return ParseError::unexpected(
+                got, 
+                vec![TokName::DoublePlus, TokName::RCurly, TokName::Comma]
+            );
         },
     };
 
@@ -343,17 +343,14 @@ fn parse_array_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError>
             },
             Tok::Comma => {},
             got => {
-                return Err(ParseError::UnexpectedTok {
-                    got,
-                    expected: vec![TokName::RBrack, TokName::Comma],
-                })
+                return ParseError::unexpected(got, vec![TokName::RBrack, TokName::Comma]);
             },
         }
     }
 }
 
 fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> ParseResult<bool> {
-    if lexer.peek_tok()? != Tok::LAngle {
+    if lexer.peek_tok()? != &Tok::LAngle {
         return Ok(false);
     }
 
@@ -363,5 +360,5 @@ fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> ParseResult<bool> {
 
     Ok(detached.errors.deref().unwrap().is_empty()
         && list.is_ok()
-        && detached.peek_tok()? == tok)
+        && detached.peek_tok()? == &tok)
 }

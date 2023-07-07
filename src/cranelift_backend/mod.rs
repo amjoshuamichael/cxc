@@ -1,18 +1,19 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{unit::{backends::IsBackend, callable::CallInput, Generations}, FuncDowncasted, Func, UniqueFuncInfo, FuncType, mir::MIR, VarName, Type, typ::ReturnStyle};
+use crate::{unit::{backends::IsBackend, callable::CallInput, Generations}, FuncDowncasted, Func, UniqueFuncInfo, FuncType, mir::MIR, VarName, Type};
 
-use cranelift::prelude::{*, isa::{TargetIsa, TargetFrontendConfig}, types as cl_types};
+use cranelift::prelude::{*, isa::{TargetIsa, TargetFrontendConfig}};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, FuncId, Linkage, default_libcall_names};
 use indexmap::IndexMap;
 
-use self::to_cl_type::{ToCLType, func_type_to_signature};
+use self::{to_cl_type::{func_type_to_signature}, external_function::ExternalFuncData};
 
 mod to_cl_type;
 mod compile_function;
 mod variables_in_mline;
 mod global;
+mod external_function;
 
 pub struct CraneliftBackend { 
     cl_function_data: IndexMap<UniqueFuncInfo, (codegen::Context, FuncId)>,
@@ -23,6 +24,7 @@ pub struct CraneliftBackend {
     isa: Box<Arc<dyn TargetIsa>>,
     frontend_config: TargetFrontendConfig,
     generations: Generations,
+    external_functions: BTreeMap<UniqueFuncInfo, ExternalFuncData>,
 }
 
 impl IsBackend for CraneliftBackend {
@@ -41,6 +43,7 @@ impl IsBackend for CraneliftBackend {
             frontend_config: isa.frontend_config(),
             isa: Box::new(isa),
             generations: Generations::default(),
+            external_functions: BTreeMap::new(),
         };
 
         unsafe fn alloc_x_bytes(x: i32) -> *const u8 {
@@ -149,8 +152,11 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
-        let Some(func) = self.func_pointers.get(info) else { return false };
-        func.code().pointer().is_some()
+        if let Some(func) = self.func_pointers.get(info) {
+            func.code().pointer().is_some()
+        } else {
+            self.external_functions.contains_key(info)
+        }
     }
 
     fn get_function(&self, info: impl Into<UniqueFuncInfo>) -> Option<&Self::LowerableFuncRef> {
@@ -172,108 +178,7 @@ impl IsBackend for CraneliftBackend {
         func_type: FuncType, 
         ptr: *const usize
     ) {
-        self.generations.update(info.clone());
-
-        let mut ctx = self.module.make_context();
-
-        func_type_to_signature(&func_type, &mut ctx.func.signature, false);
-
-        let id = self.module.declare_function(
-            &*info.to_string(&self.generations),
-            Linkage::Local,
-            &ctx.func.signature,
-        ).unwrap();
-
-        let mut function_builder_context = FunctionBuilderContext::new();
-        let mut builder = FunctionBuilder::new(&mut ctx.func, &mut function_builder_context);
-
-        let entry_block = builder.create_block();
-        builder.append_block_params_for_function_params(entry_block);
-        builder.switch_to_block(entry_block);
-        builder.seal_block(entry_block);
-
-        let sigref = {
-            // because of rust ABI rules, the rust function we're calling might have
-            // a different return style than the equivalent cxc function
-            let mut external_signature = self.module.make_signature();
-            func_type_to_signature(&func_type, &mut external_signature, true);
-            builder.func.import_signature(external_signature)
-        };
-
-        let func_val = builder.ins().iconst(cl_types::I64, ptr as i64);
-
-        if func_type.ret.return_style() == ReturnStyle::Sret {
-            let args = builder.block_params(entry_block).to_vec();
-            
-            builder.ins().call_indirect(sigref, func_val, &*args);
-            builder.ins().return_(&[]);
-        } else if func_type.ret.rust_return_style() == ReturnStyle::Sret {
-            let stack_slot = builder.create_sized_stack_slot(StackSlotData {
-                kind: StackSlotKind::ExplicitSlot,
-                size: func_type.ret.size() as u32,
-            });
-
-            let stack_addr = builder.ins().stack_addr(cl_types::I64, stack_slot, 0);
-
-            let mut args = builder.block_params(entry_block).to_vec();
-            args.insert(0, stack_addr);
-            builder.ins().call_indirect(sigref, func_val, &*args);
-
-            // copy val to stack so we can return it
-            
-            let first_ret = builder.ins().stack_load(cl_types::I64, stack_slot, 0);
-
-            let second_ret_type = match func_type.ret.return_style() {
-                ReturnStyle::ThroughI64I32 => cl_types::I32,
-                ReturnStyle::ThroughI64I64 => cl_types::I64,
-                _ => unreachable!()
-            };
-            let second_ret = builder.ins().stack_load(second_ret_type, stack_slot, 8);
-
-            builder.ins().return_(&[first_ret, second_ret]);
-        } else if func_type.ret.return_style() != func_type.ret.rust_return_style() {
-            let stack_slot = builder.create_sized_stack_slot(StackSlotData {
-                kind: StackSlotKind::ExplicitSlot,
-                size: func_type.ret.size() as u32,
-            });
-
-            let args = builder.block_params(entry_block).to_vec();
-            let call = builder.ins().call_indirect(sigref, func_val, &*args);
-            let call_ret_vals = builder.inst_results(call).to_vec();
-
-            let mut stack_offset = 0;
-            for (t, typ) in 
-                func_type.ret.rust_raw_return_type().to_cl_type().into_iter().enumerate() {
-                let val = call_ret_vals[t];
-                builder.ins().stack_store(val, stack_slot, stack_offset as i32);
-                stack_offset += typ.bytes();
-            }
-
-            let mut ret_vals = Vec::new();
-            let mut stack_offset = 0;
-
-            for typ in func_type.ret.raw_return_type().to_cl_type() {
-                let val = builder.ins().stack_load(typ, stack_slot, stack_offset as i32);
-                ret_vals.push(val);
-                stack_offset += typ.bytes();
-            }
-
-            builder.ins().return_(&*ret_vals);
-        } else {
-            let args = builder.block_params(entry_block).to_vec();
-            let call = builder.ins().call_indirect(sigref, func_val, &*args);
-            let ret = builder.inst_results(call).to_vec();
-            builder.ins().return_(&*ret);
-        }
-        
-        #[cfg(feature = "backend-debug")]
-        println!("external {}:\n{}", &info.name, ctx.func);
-
-        self.module.define_function(id, &mut ctx).unwrap();
-        ctx.compile(&**self.isa).unwrap();
-
-        self.cl_function_data.insert(info.clone(), (ctx, id));
-        self.func_pointers.insert(info.clone(), Func::new_external(info, func_type, ptr));
+        external_function::add_external_func(self, info, func_type, ptr);
     }
 }
 

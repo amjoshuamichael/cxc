@@ -9,6 +9,7 @@
 #![feature(fn_traits)]
 #![feature(tuple_trait)]
 #![feature(exclusive_range_pattern)]
+#![feature(yeet_expr)]
 
 // HOW THE DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
@@ -48,6 +49,7 @@ mod mir;
 mod lex;
 mod libraries;
 mod parse;
+mod cache;
 
 #[cfg(feature = "backend-llvm")]
 mod llvm_backend;

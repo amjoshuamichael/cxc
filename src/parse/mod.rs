@@ -31,8 +31,8 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpan
             Ok(script) => Ok(script),
             Err(error) => Err(vec![ParseErrorSpanned {
                 start: 0,
-                end: lexer.inner.last().unwrap().2,
-                tokens_between: TokenSpan::new(&lexer.inner, 0, lexer.inner.len()),
+                end: lexer.spans.last().unwrap().1,
+                tokens_between: TokenSpan::new(&lexer.tokens, 0, lexer.tokens.len()),
                 error,
             }]),
         }
@@ -113,10 +113,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                         Tok::ColonDot => TypeRelationGeneric::MethodOf(method_of.clone()),
                         Tok::DoubleColon => TypeRelationGeneric::Static(method_of.clone()),
                         got => {
-                            return Err(ParseError::UnexpectedTok {
-                                got,
-                                expected: vec![TokName::ColonDot, TokName::DoubleColon],
-                            })
+                            return ParseError::unexpected(got, vec![TokName::ColonDot, TokName::DoubleColon]);
                         },
                     };
 
@@ -148,7 +145,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
 }
 
 pub fn parse_generics(lexer: &mut GlobalParseContext) -> ParseResult<GenericLabels> {
-    if lexer.peek_tok()? == Tok::LAngle {
+    if lexer.peek_tok()? == &Tok::LAngle {
         let list = parse_list(Tok::angles(), Some(Tok::Comma), parse_generic_label, lexer)?
             .iter()
             .enumerate()
@@ -163,11 +160,8 @@ pub fn parse_generics(lexer: &mut GlobalParseContext) -> ParseResult<GenericLabe
 
 pub fn parse_generic_label(lexer: &mut GlobalParseContext) -> ParseResult<TypeName> {
     match lexer.next_tok()? {
-        Tok::TypeName(name) => Ok(name),
-        err => Err(ParseError::UnexpectedTok {
-            got: err,
-            expected: vec![TokName::TypeName],
-        }),
+        Tok::TypeName(name) => Ok(name.clone()),
+        got => ParseError::unexpected(got, vec![TokName::TypeName]),
     }
 }
 
@@ -205,10 +199,7 @@ pub fn parse_func_code(
             TypeSpec::Void
         }
         got => {
-            Err(ParseError::UnexpectedTok {
-                got,
-                expected: vec![TokName::Semicolon, TokName::LCurly],
-            })?
+            return ParseError::unexpected(got, vec![TokName::Semicolon, TokName::LCurly]);
         }
     };
 
@@ -278,17 +269,14 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                         type_spec,
                     }
                 },
-                err => {
-                    return Err(ParseError::UnexpectedTok {
-                        got: err,
-                        expected: vec![TokName::Assignment, TokName::Colon],
-                    })
+                got => {
+                    return ParseError::unexpected(got, vec![TokName::Assignment, TokName::Colon]);
                 },
             };
 
             let rhs = lexer.recover(parse_expr)?;
             Ok(Expr::SetVar(var, Box::new(rhs)))
-        } else if lexer.peek_tok() == Ok(Tok::Assignment) {
+        } else if lexer.peek_tok() == Ok(&Tok::Assignment) {
             lexer.assert_next_tok_is(Tok::Assignment)?;
 
             let rhs = lexer.recover(parse_expr)?;
@@ -321,9 +309,8 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             lexer.next_tok()?;
             Ok(Expr::Return(Box::new(parse_expr(lexer)?)))
         },
-        err => Err(ParseError::UnexpectedTok {
-            got: err,
-            expected: vec![
+        got => {
+            return ParseError::unexpected(got, vec![
                 TokName::VarName,
                 TokName::TypeName,
                 TokName::Int,
@@ -334,8 +321,8 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 TokName::Question,
                 TokName::Semicolon,
                 TokName::LCurly,
-            ],
-        }),
+            ]);
+        },
     }
 }
 
@@ -354,7 +341,7 @@ fn parse_if(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
     let i = parse_expr(ctx)?;
     let t = parse_block(ctx)?;
 
-    if ctx.peek_tok()? == Tok::Colon {
+    if ctx.peek_tok()? == &Tok::Colon {
         ctx.next_tok()?;
 
         let e = parse_block(ctx)?;

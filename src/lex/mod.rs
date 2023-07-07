@@ -17,13 +17,15 @@ pub fn lex(input: &str) -> ParseContext<()> {
         println!("====NEW LEX====");
     }
 
-    let mut tokens: Vec<(usize, Tok, usize)> = Vec::new();
+    let mut tokens: Vec<Tok> = Vec::new();
+    let mut spans: Vec<(usize, usize)> = Vec::new();
 
     let mut lexer = Tok::lexer(input);
 
     while let Some(tok) = lexer.next() {
-        tokens.push((lexer.span().start, tok, lexer.span().end));
+        tokens.push(tok);
+        spans.push((lexer.span().start, lexer.span().end));
     }
 
-    ParseContext::new(tokens)
+    ParseContext::new(tokens, spans)
 }

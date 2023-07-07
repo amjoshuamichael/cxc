@@ -60,7 +60,6 @@ impl Library for StringLib {
 fn string_from_bytes(buf: *mut u8, length: usize) -> String {
     let slice = unsafe { std::slice::from_raw_parts(buf, length) };
     let x = String::from_utf8_lossy(slice).to_string();
-    dbg!(x.as_ptr() as usize, x.len() as usize);
     x
 }
 

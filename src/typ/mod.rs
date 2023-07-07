@@ -1,3 +1,4 @@
+use crate::cache::Cache;
 use crate::errors::{TErr, TResult};
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
@@ -39,7 +40,9 @@ impl Default for Type {
 impl Type {
     pub fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
 
-    pub fn size(&self) -> usize { size::size_of_type(self.clone()) }
+    pub fn size(&self) -> usize { 
+        self.0.cached_size.retrieve_or_call(|| size::size_of_type(self.clone()) )
+    }
 
     pub fn is_subtype_of(&self, of: &Type) -> bool {
         match self.as_type_enum() {
@@ -278,12 +281,13 @@ impl From<Type> for TypeSpec {
     fn from(typ: Type) -> TypeSpec { TypeSpec::Type(typ) }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(Default, Hash, PartialEq, Eq, PartialOrd, Clone, Ord, XcReflect)]
 #[xc_opaque]
 pub struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
     pub generics: Vec<Type>,
+    pub cached_size: Cache<usize>,
 }
 
 impl Debug for TypeData {

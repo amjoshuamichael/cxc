@@ -96,7 +96,9 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 }
 
 fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    let beginning_of_alias = lexer.peek_tok()?;
+    // TODO: shouldn't have to clone here, and also shouldn't have to clone in a couple
+    // other places in this same file
+    let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {
         Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2)) {
@@ -107,14 +109,14 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 
                 let mut elems = Vec::new();
 
-                if lexer.peek_tok()? == Tok::RCurly {
+                if lexer.peek_tok()? == &Tok::RCurly {
                     lexer.next_tok()?;
                     return Ok(TypeSpec::Tuple(Vec::new()));
                 }
 
                 elems.push(parse_type(lexer)?);
 
-                match (lexer.next_tok()?, lexer.peek_tok()) {
+                match (lexer.next_tok()?.clone(), lexer.peek_tok()) {
                     (Tok::RCurly, _) => elems.into_iter().next().unwrap(),
                     (Tok::Comma, Ok(Tok::RCurly)) => {
                         lexer.assert_next_tok_is(Tok::RCurly)?;
@@ -122,7 +124,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                     },
                     (Tok::Comma, Ok(_)) => {
                         loop {
-                            if lexer.peek_tok() == Ok(Tok::RCurly) {
+                            if lexer.peek_tok() == Ok(&Tok::RCurly) {
                                 lexer.next_tok()?;
                                 break;
                             }
@@ -133,10 +135,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                                 Tok::Comma => continue,
                                 Tok::RCurly => break,
                                 got => {
-                                    return Err(ParseError::UnexpectedTok {
-                                        expected: vec![TokName::RCurly, TokName::Comma],
-                                        got,
-                                    })
+                                    return ParseError::unexpected(got, vec![TokName::RCurly, TokName::Comma]);
                                 },
                             }
                         }
@@ -144,10 +143,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                         TypeSpec::Tuple(elems)
                     },
                     (got, _) => {
-                        return Err(ParseError::UnexpectedTok {
-                            expected: vec![TokName::RCurly, TokName::Comma],
-                            got,
-                        })
+                        return ParseError::unexpected(&got, vec![TokName::RCurly, TokName::Comma]);
                     },
                 }
             },
@@ -193,14 +189,16 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                 TypeName::F16 => TypeSpec::Float(FloatType::F16),
                 TypeName::Me => TypeSpec::Me,
                 TypeName::Other(_) => {
-                    if lexer.peek_tok() == Ok(Tok::LParen) {
+                    let name = name.clone();
+
+                    if lexer.peek_tok() == Ok(&Tok::LParen) {
                         let type_level_func_args =
                             parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
 
-                        TypeSpec::TypeLevelFunc(name, type_level_func_args)
+                        TypeSpec::TypeLevelFunc(name.clone(), type_level_func_args)
                     } else if let Some(generic_index) = lexer.get_generic_label(&name) {
                         TypeSpec::GenParam(generic_index)
-                    } else if lexer.peek_tok() == Ok(Tok::LAngle) {
+                    } else if lexer.peek_tok() == Ok(&Tok::LAngle) {
                         let generics =
                             parse_list(Tok::angles(), Some(Tok::Comma), parse_type, lexer)?;
 
@@ -226,10 +224,10 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             TypeSpec::Function(arg_types, Box::new(ret_type))
         },
         _ => {
-            return Err(ParseError::UnexpectedTok {
-                got: beginning_of_alias,
-                expected: vec![TokName::TypeName, TokName::LCurly, TokName::Ref],
-            })
+            return ParseError::unexpected(
+                &beginning_of_alias, 
+                vec![TokName::TypeName, TokName::LCurly, TokName::Ref]
+            );
         },
     };
 
@@ -238,13 +236,12 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             lexer.next_tok()?;
 
             match lexer.next_tok()? {
-                Tok::VarName(name) => TypeSpec::StructMember(Box::new(type_alias), name),
-                Tok::TypeName(name) => TypeSpec::SumMember(Box::new(type_alias), name),
+                Tok::VarName(name) => 
+                    TypeSpec::StructMember(Box::new(type_alias), name.clone()),
+                Tok::TypeName(name) => 
+                    TypeSpec::SumMember(Box::new(type_alias), name.clone()),
                 got => {
-                    return Err(ParseError::UnexpectedTok {
-                        got,
-                        expected: vec![TokName::VarName, TokName::TypeName],
-                    })
+                    return ParseError::unexpected(got, vec![TokName::VarName, TokName::TypeName]);
                 },
             }
         },

@@ -11,7 +11,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
 
     lexer.assert_next_tok_is(opener)?;
 
-    if lexer.peek_tok()? == closer {
+    if lexer.peek_tok()? == &closer {
         lexer.next_tok()?;
         return Ok(Vec::new());
     }
@@ -23,20 +23,17 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
 
         loop {
             match lexer.next_tok()? {
-                s if s == separator => {
-                    if lexer.peek_tok()? == closer.clone() {
+                s if s == &separator => {
+                    if lexer.peek_tok()? == &closer {
                         lexer.next_tok()?;
                         break;
                     }
 
                     list.push(lexer.recover_with(&parser, vec![&separator, &closer])?)
                 },
-                s if s == closer => break,
-                err => {
-                    return Err(ParseError::UnexpectedTok {
-                        got: err,
-                        expected: vec![TokName::from(separator)],
-                    })
+                s if s == &closer => break,
+                got => {
+                    return ParseError::unexpected(got, vec![TokName::from(separator)]);
                 },
             }
         }
@@ -44,7 +41,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
         // parse without separator
         loop {
             match lexer.peek_tok()? {
-                c if c == closer => {
+                c if c == &closer => {
                     lexer.next_tok()?;
                     break;
                 },
@@ -62,7 +59,7 @@ pub fn parse_one_or_list<T: Default + Clone, O: Errable>(
     parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,
     lexer: &mut ParseContext<T>,
 ) -> Result<Vec<O>, ParseError> {
-    if lexer.peek_tok()? == opener_and_closer.0 {
+    if lexer.peek_tok()? == &opener_and_closer.0 {
         parse_list(opener_and_closer, separator, parser, lexer)
     } else {
         Ok(vec![parser(lexer)?])

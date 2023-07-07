@@ -5,7 +5,7 @@ use cranelift_module::Module;
 
 use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, UniqueFuncInfo, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}, RefType, IntType};
 
-use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}};
 
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -28,7 +28,8 @@ pub fn make_fcs<'a>(
                 let intrinsic_name = format!("${}", info.name);
                 let info = UniqueFuncInfo::from(VarName::from(&*intrinsic_name));
 
-                (backend.cl_function_data[&info].1, info)
+                return None;
+                //(backend.cl_function_data[&info].1, info)
             } else {
                 return None
             };
@@ -116,6 +117,7 @@ pub fn make_fcs<'a>(
         used_globals,
         var_locations,
         function_signatures: &backend.func_signatures,
+        external_functions: &backend.external_functions,
         frontend_config: &backend.frontend_config,
         ret_type: mir.func_type.ret.clone(),
     };
@@ -163,6 +165,7 @@ pub struct FunctionCompilationState<'a> {
     used_functions: BTreeMap<UniqueFuncInfo, FuncRef>,
     used_globals: BTreeMap<VarName, CLValue>,
     function_signatures: &'a BTreeMap<FuncType, Signature>,
+    external_functions: &'a BTreeMap<UniqueFuncInfo, ExternalFuncData>,
     frontend_config: &'a TargetFrontendConfig,
     ret_type: Type,
 }
@@ -641,6 +644,12 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 MCallable::Func(info) => {
                     if let Some(func_ref) = fcs.used_functions.get(&info) {
                         fcs.builder.ins().call(*func_ref, &*all_args)
+                    } else if let Some(ext_func_data) = fcs.external_functions.get(&info) {
+                        return Some(build_external_func_call(
+                            &mut fcs.builder, 
+                            all_args, 
+                            ext_func_data
+                        ));
                     } else {
                         return build_intrinsic_function(fcs, info, all_args);
                     }
@@ -687,18 +696,27 @@ fn build_intrinsic_function(
         },
         "alloc" => {
             let alloc_info = UniqueFuncInfo::from(VarName::from("$alloc"));
-            let func_ref = fcs.used_functions[&alloc_info];
+            let ext_alloc = &fcs.external_functions[&alloc_info];
+            let alloc_func = fcs.builder.ins().iconst(cl_types::I64, ext_alloc.ptr as i64);
+            let alloc_sigref = fcs.builder.import_signature(ext_alloc.sig.clone());
             let size_multiplier = info.generics[0].size() as i64;
             let size_multiplier = fcs.builder.ins().iconst(cl_types::I64, size_multiplier);
             let proper_size = fcs.builder.ins().imul(a[0], size_multiplier);
-            let call_inst = fcs.builder.ins().call(func_ref, &[proper_size]);
+            let call_inst = fcs.builder.ins().call_indirect(
+                alloc_sigref, 
+                alloc_func, 
+                &[proper_size]
+            );
             let ret = fcs.builder.inst_results(call_inst)[0];
             Some(vec![ret])
         },
         "free" => {
             let free_info = UniqueFuncInfo::from(VarName::from("$free"));
-            let func_ref = fcs.used_functions[&free_info];
-            fcs.builder.ins().call(func_ref, &[a[0]]);
+            let ext_free = &fcs.external_functions[&free_info];
+            let free_func = fcs.builder.ins().iconst(cl_types::I64, ext_free.ptr as i64);
+            let free_sigref = fcs.builder.import_signature(ext_free.sig.clone());
+
+            fcs.builder.ins().call_indirect(free_sigref, free_func, &[a[0]]);
             None
         },
         "size_of" => {

@@ -187,8 +187,7 @@ impl Unit {
             set = func_reps
                 .iter()
                 .flat_map(|f| f.dependencies.clone().into_iter())
-                .filter(|f| !self.has_been_compiled(f) )
-                .filter(|f| !all_func_infos.contains(&f) )
+                .filter(|f| !self.has_been_compiled(f) && !all_func_infos.contains(&f))
                 .collect();
 
             for func in func_reps.iter() {

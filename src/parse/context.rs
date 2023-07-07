@@ -6,6 +6,10 @@ use passable::Pass;
 
 use super::{ParseErrorSpanned, TokenSpan};
 
+pub type GlobalParseContext = ParseContext<()>;
+pub type FuncParseContext = ParseContext<VarName>;
+pub type TypeParseContext = ParseContext<TypeName>;
+
 #[derive(Debug, Clone, Default)]
 struct SharedNum(Rc<RefCell<usize>>);
 
@@ -19,13 +23,10 @@ impl SharedNum {
     }
 }
 
-pub type GlobalParseContext = ParseContext<()>;
-pub type FuncParseContext = ParseContext<VarName>;
-pub type TypeParseContext = ParseContext<TypeName>;
-
 #[derive(Default)]
 pub struct ParseContext<N> {
-    pub inner: Rc<Vec<(usize, Tok, usize)>>,
+    pub tokens: Rc<Vec<Tok>>,
+    pub spans: Rc<Vec<(usize, usize)>>,
     tok_pos: SharedNum,
     scope: SharedNum,
     pub name: N,
@@ -34,9 +35,10 @@ pub struct ParseContext<N> {
 }
 
 impl<N: Default + Clone> ParseContext<N> {
-    pub fn new(tokens: Vec<(usize, Tok, usize)>) -> Self {
+    pub fn new(tokens: Vec<Tok>, spans: Vec<(usize, usize)>) -> Self {
         Self {
-            inner: Rc::new(tokens),
+            tokens: Rc::new(tokens),
+            spans: Rc::new(spans),
             ..Default::default()
         }
     }
@@ -55,7 +57,8 @@ impl<N: Default + Clone> ParseContext<N> {
         ParseContext {
             name,
             generic_labels,
-            inner: self.inner.clone(),
+            tokens: self.tokens.clone(),
+            spans: self.spans.clone(),
             tok_pos: self.tok_pos.clone(),
             scope: self.scope.clone(),
             errors: self.errors.pass().unwrap(),
@@ -66,7 +69,8 @@ impl<N: Default + Clone> ParseContext<N> {
         Self {
             name: self.name.clone(),
             generic_labels: self.generic_labels.clone(),
-            inner: self.inner.clone(),
+            tokens: self.tokens.clone(),
+            spans: self.spans.clone(),
             tok_pos: self.tok_pos.detach(),
             scope: self.scope.clone(),
             errors: Pass::default(),
@@ -75,43 +79,41 @@ impl<N: Default + Clone> ParseContext<N> {
 
     pub fn generic_count(&self) -> usize { self.generic_labels.len() }
 
-    pub fn peek_by(&self, offset: usize) -> ParseResult<Tok> {
+    pub fn peek_by(&self, offset: usize) -> ParseResult<&Tok> {
         let mut current = self.tok_pos.val();
         let mut token = &Tok::Space;
 
         for _ in 0..=offset {
             token = &Tok::Space;
             while token.is_whitespace() {
-                token = &self
-                    .inner
+                token = self
+                    .tokens
                     .get(current)
-                    .ok_or(ParseError::UnexpectedEndOfFile)?
-                    .1;
+                    .ok_or(ParseError::UnexpectedEndOfFile)?;
                 current += 1;
             }
         }
 
-        Ok(token.clone())
+        Ok(&token)
     }
 
-    pub fn peek_tok(&mut self) -> ParseResult<Tok> { self.peek_by(0) }
+    pub fn peek_tok(&self) -> ParseResult<&Tok> { self.peek_by(0) }
 
     pub fn next_is_whitespace(&mut self) -> bool {
-        match self.inner.get(self.tok_pos.val()) {
-            Some((_, tok, _)) => tok.is_whitespace(),
+        match self.tokens.get(self.tok_pos.val()) {
+            Some(tok) => tok.is_whitespace(),
             None => false
         }
     }
 
-    pub fn next_tok(&mut self) -> ParseResult<Tok> {
+    pub fn next_tok(&mut self) -> ParseResult<&Tok> {
         let mut next = &Tok::Space;
 
         while next.is_whitespace() {
-            next = &self
-                .inner
+            next = self
+                .tokens
                 .get(self.tok_pos.val())
-                .ok_or(ParseError::UnexpectedEndOfFile)?
-                .1;
+                .ok_or(ParseError::UnexpectedEndOfFile)?;
 
             Self::check_scope(&self.scope, next);
             self.tok_pos.inc();
@@ -120,15 +122,15 @@ impl<N: Default + Clone> ParseContext<N> {
         #[cfg(feature = "xc-debug")]
         print!("{}", next.to_string());
 
-        Ok(next.clone())
+        Ok(&next)
     }
 
     pub fn assert_next_tok_is(&mut self, tok: Tok) -> Result<(), ParseError> {
         let next = self.next_tok()?;
 
-        if next != tok {
+        if next != &tok {
             return Err(ParseError::UnexpectedTok {
-                got: next,
+                got: next.clone(),
                 expected: vec![TokName::from(tok)],
             });
         }
@@ -149,14 +151,14 @@ impl<N: Default + Clone> ParseContext<N> {
         skip_until: Vec<&Tok>,
     ) -> ParseResult<O> {
         let next_non_whitespace_index = self
-            .inner
+            .tokens
             .iter()
             .skip(self.tok_pos.val())
-            .position(|(_, tok, _)| !tok.is_whitespace())
+            .position(|tok| !tok.is_whitespace())
             .unwrap_or_default()
             + self.tok_pos.val();
         let tok_start = next_non_whitespace_index;
-        let char_start = self.inner[next_non_whitespace_index].0;
+        let char_start = self.spans[next_non_whitespace_index].0;
 
         let beginning_scope = self.scope.val();
 
@@ -174,10 +176,9 @@ impl<N: Default + Clone> ParseContext<N> {
 
                 loop {
                     let next_token = &self
-                        .inner
+                        .tokens
                         .get(self.tok_pos.val())
-                        .ok_or(ParseError::UnexpectedEndOfFile)?
-                        .1;
+                        .ok_or(ParseError::UnexpectedEndOfFile)?;
 
                     if skip_until.contains(&next_token) && self.scope.val() == beginning_scope {
                         break;
@@ -196,7 +197,7 @@ impl<N: Default + Clone> ParseContext<N> {
                 }
 
                 let tok_end = self.tok_pos.val();
-                let char_end = self.inner[tok_end].2 - 1;
+                let char_end = self.spans[tok_end].1 - 1;
 
                 // sometimes, the parser can get stuck with whitespace tokens, causing
                 // char_end to be less than char_start. this is a hacky fix, but it keeps
@@ -211,7 +212,7 @@ impl<N: Default + Clone> ParseContext<N> {
                     error,
                     start: char_start,
                     end: char_end,
-                    tokens_between: TokenSpan::new(&self.inner, tok_start, tok_end),
+                    tokens_between: TokenSpan::new(&self.tokens, tok_start, tok_end),
                 };
 
                 self.errors.deref_mut().unwrap().push(spanned);
