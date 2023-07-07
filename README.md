@@ -1,20 +1,18 @@
 # cxc
 `cxc` is a high-performance scripting language designed for speed: both of writing code, and of running code. It is built to be used as a Rust-hosted scripting language and as such, it has full interoperability with Rust. `cxc` syntax is concise and low-level intention is inferred, not explicitly stated by the programmer. Like Rust, `cxc` compiles down to [LLVM](https://llvm.org) and then to machine code. `cxc` has Rust-level performance, but can be compiled at runtime.
 
-This repository contains the compiler.
-
 ## Example
 
 ```
 [dependencies]
-cxc = { git = "https://github.com/amjoshuamichael/cxc" }
+cxc = "0.1"
 ```
 
 The default features of the crate use [cranelift](https://cranelift.dev/) as a compiler backend. Alternatively, you can activate the "llvm" feature, which uses [LLVM](https://llvm.org/), but it does require that you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. Both backends have full feature parity. The Cranelift backend compiles faster, and is more portable, but the emitted code is slower. The LLVM backend is less portable because it requires that users have LLVM installed, but the emitted code is faster.
 
 ```
 cxc = {
-    git = "https://github.com/amjoshuamichael/cxc", 
+    version = "0.1",
     default-features = false, 
     features = ["use-llvm", "ffi-assertions"]
 }
@@ -51,7 +49,7 @@ fn main() {
 ```
 
 # ⚠️ WARNING ⚠️  ( USE AT YOUR OWN RISK )
-* The compiler is very young, and there are still many bugs. (If you are using the language, please feel free to throw any issue reports my way! Feedback of any kind is greatly appreciated!!)
+* The compiler is very young, and there are still many bugs. (If you are using the language, please feel free to throw any issue reports my way! Feedback of any kind is greatly appreciated.)
 * `cxc` is a low-level language, so it does a lot of low-level and unsafe operations at runtime. this means that the communication between `cxc` and Rust code is unsafe and unstable. Because the compiler is so young, some of the FFI and ABI bugs have not been ironed out.
 * The "ffi-assertions" feature is designed to catch isses when you improperly match up Rust and `cxc` types and functions, but it isn't a catch-all. The [cxc_derive](https://github.com/amjoshuamichael/cxc_derive) macro helps with this, but it's easy to mess up.
 * **Minimum Supported Rust Version (MSRV) is latest nightly.** FFI issues *will* occur if you use any other version.

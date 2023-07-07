@@ -26,7 +26,7 @@ cranelift-native = { version = "0.95", optional = true }
 memoize = "0.3"
 slotmap = "1"
 indexmap = "1"
-passable = { path = "../passable/" }
+passable = "1"
 lazy_static = "1"
 
 bytemuck = { version = "1.12", optional = true, default-features = false }
