@@ -223,15 +223,18 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
 
 fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let mut new_data = hlr.tree.get(og_call_id);
-    let HNodeData::Call { ref mut sret, ret_type, .. } = 
+    let HNodeData::Call { ref mut sret, ref mut ret_type, .. } = 
         &mut new_data else { unreachable!(); };
 
-    let call_var = hlr.add_variable("_call_out", &ret_type);
+    let call_var = hlr.add_variable("_call_out", ret_type);
 
     let new_arg = hlr.insert_quick(og_call_id, get_ref(call_var.clone()));
 
     *sret = Some(new_arg);
 
+    *ret_type = Type::void();
     hlr.insert_statement_before(og_call_id, new_data);
     hlr.replace_quick(og_call_id, call_var);
+
+
 }

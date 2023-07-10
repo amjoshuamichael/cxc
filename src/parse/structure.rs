@@ -26,7 +26,6 @@ pub enum TypeSpec {
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
     Union(Box<TypeSpec>, Box<TypeSpec>),
-
     #[default]
     Void,
     Type(Type),

@@ -1,22 +1,22 @@
 Vec<T> = {
     data_loc: &T,
-    capacity: i64,
-    len: i64,
+    capacity: u64,
+    len: u64,
 }
 
 <T> &Vec<T>:. {
     push(val: T) {
-        ? self.len == i64 0 {
+        ? self.len == u64 0 {
             *self = Vec<T> {
-                len = i64 0,
-                capacity = i64 4,
-                data_loc = alloc<T>(i64 4)
+                len = u64 0,
+                capacity = u64 4,
+                data_loc = alloc<T>(u64 4)
             }
         }
 
         ? self.len >= self.capacity {
             # reallocate memory
-            self.capacity = self.capacity * i64 2
+            self.capacity = self.capacity * u64 2
 
             new_ptr: &T = alloc<T>(self.capacity)
             memmove<T>(self.data_loc, new_ptr, self.len * size_of<T>())
@@ -28,15 +28,15 @@ Vec<T> = {
         ptr: &T = self.data_loc + self.len
         *ptr = val
         
-        self.len = self.len + i64 1
+        self.len = self.len + u64 1
     }
 
-    get(index: i64); T {
+    get(index: u64); T {
         ptr: &T = self.data_loc + index
         ; *ptr
     }
 
-    get_ref(index: i64); &T {
+    get_ref(index: u64); &T {
         ptr: &T = self.data_loc + index
         ; ptr
     }
@@ -54,9 +54,9 @@ Vec<T> = {
 <T> Vec<T>:: {
     new(); Vec<T> {
         new_vec: Vec<T> = Vec<T> {
-            len = i64 0,
-            capacity = i64 4,
-            data_loc = cast<i64, &T>(i64 0),
+            len = u64 0,
+            capacity = u64 4,
+            data_loc = cast<u64, &T>(u64 0),
         }
 
         ; new_vec

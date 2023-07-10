@@ -135,6 +135,8 @@ impl ExprTree {
             ..Default::default()
         }
     }
+
+    pub fn count(&self) -> usize { self.nodes.len() }
 }
 
 impl<'a> FuncRep<'a> {

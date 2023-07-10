@@ -114,7 +114,7 @@ fn first_class_void() {
             large_value.a = large_value.a * x
         }
 
-        get_that_fn(); (i32) {
+        get_that_fn(); FnHolder {
             ; FnHolder { multiply_a_by }
         }
 

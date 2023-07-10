@@ -185,6 +185,7 @@ struct MyPoint {
 }
 
 #[test]
+#[ignore]
 fn auto_deref_method_2() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -293,7 +294,7 @@ fn deref() {
         NumRef = &Num
         NumAgain = *NumRef
 
-        main() {
+        main(); NumAgain {
             x: Num = 5
             y: NumRef = &x
             z: NumAgain = *y

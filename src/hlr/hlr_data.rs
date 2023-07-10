@@ -157,14 +157,14 @@ impl<'a> FuncRep<'a> {
                 parent,
                 HNodeData::Number {
                     value,
-                    lit_type: Type::i(32),
+                    lit_type: Type::unknown(),
                 },
             ),
             Expr::Float(value) => self.tree.insert(
                 parent,
                 HNodeData::Float {
-                    lit_type: Type::f32(),
                     value,
+                    lit_type: Type::f32(),
                 },
             ),
             Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value }),
@@ -230,13 +230,12 @@ impl<'a> FuncRep<'a> {
             Expr::Ident(name) => {
                 let var_type = match self.variables.get(&name) {
                     Some(variables) => variables.typ.clone(),
-                    None => dbg!(&self
+                    None => self
                         .comp_data
-                        .globals)
+                        .globals
                         .get(&name.clone())
                         .unwrap_or_else(|| {
-                            println!("variables: {:?}", &self.variables); 
-                            panic!("could not find identifier {name}") // TODO: throw error
+                            panic!("could not find identifier {} in {:?}", name, self.variables) // TODO: throw error
                         })
                         .clone(),
                 };

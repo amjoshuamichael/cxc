@@ -10,7 +10,7 @@ use std::hash::Hash;
 #[cfg(feature ="xc-debug")]
 use crate::lex::indent_parens;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 enum Inferable {
     Expr(ExprID),
     Var(VarName),
@@ -27,39 +27,43 @@ impl From<ExprID> for Inferable {
     fn from(id: ExprID) -> Inferable { Inferable::Expr(id) }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+struct InferableConnection {
+    spec: TypeSpec,
+    gen_params: Vec<Inferable>,
+    // Some functions use the Me keyword to reference the type that they are a
+    // method of. This is that type, and it is used when doing type solving on
+    // arguments and return types.
+    method_of: Option<Inferable>,
+}
+
+#[derive(Default, Debug)]
+struct Constraints {
+    same_as: IndexSet<Inferable>,
+    connections: IndexSet<InferableConnection>,
+    known: KnownInferableInformation,
+    is: Type,
+}
+
+#[derive(Default, Debug)]
+enum KnownInferableInformation {
+    Int,
+    Struct {
+        has_fields: IndexSet<(VarName, Type)>,
+    },
+    #[default]
+    None,
+}
+
+#[derive(Default, Debug)]
 struct InferMap {
-    inferables: IndexMap<Inferable, IndexSet<Constraint>>,
+    infers: IndexMap<Inferable, Constraints>,
     calls: IndexSet<ExprID>,
 }
 
 impl InferMap {
-    pub fn insert(&mut self, inferable: impl Into<Inferable>, constraint: Constraint) {
-        let inferable = inferable.into();
-
-        match self.inferables.get_mut(&inferable) {
-            Some(ref mut constraints) => {
-                constraints.insert(constraint);
-            },
-            None => {
-                self.inferables
-                    .insert(inferable, [constraint].into_iter().collect());
-            },
-        }
-    }
-
-    pub fn iter(&self) -> indexmap::map::Iter<Inferable, IndexSet<Constraint>> {
-        self.inferables.iter()
-    }
-
-    pub fn add_call(&mut self, inferable: ExprID) { self.calls.insert(inferable); }
-
-    pub fn remove_call(&mut self, inferable: &ExprID) { self.calls.remove(inferable); }
-
-    pub fn calls(&self) -> indexmap::set::Iter<ExprID> { self.calls.iter() }
-
     pub fn all_types_known(&self, hlr: &FuncRep) -> bool {
-        self.inferables
+        self.infers
             .keys()
             .all(|inferable| type_of_inferable(inferable, hlr).is_known())
             && self.calls.is_empty()
@@ -68,72 +72,53 @@ impl InferMap {
                 node.ret_type().is_known()
             })
     }
-}
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
-enum Constraint {
-    IsType(Type),
-    RelatedTo {
-        spec: TypeSpec,
-        gen_params: Vec<Inferable>,
-        // Some functions use the Me keyword to reference the type that they are a
-        // method of. This is that type, and it is used when doing type solving on
-        // arguments and return types.
-        method_of: Option<Inferable>,
-    },
-    SameAs(Inferable),
-}
+    // just a way to check if we've done anything since the last round
+    pub fn known_count(&self, hlr: &FuncRep) -> usize {
+        self.infers
+            .values()
+            .map(|Constraints { same_as, connections, known, .. }| 
+                 same_as.len() + 
+                 connections.len() + 
+                 if let KnownInferableInformation::Struct { ref has_fields, .. } = known { 
+                     has_fields.len() 
+                 } else { 
+                     0 
+                 }
+             ).sum::<usize>() + 
+        self.infers.keys().filter(|inferable| type_of_inferable(inferable, hlr).is_known()).count() +
+        (hlr.tree.count() - self.calls.len())
+    }
 
-fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
-    use Inferable::*;
+    pub fn on(&mut self, inferable: impl Into<Inferable>) -> &mut Constraints {
+        let inferable = inferable.into();
 
-    match inferable {
-        Expr(id) => hlr.tree.get(*id).ret_type(),
-        Var(name) => hlr.variables.get(name).unwrap().typ.clone(),
-        Relation(id) => {
-            let HNodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
-            relation.inner_type().unwrap()
-        },
-        CallGeneric(id, index) => {
-            let HNodeData::Call { generics, .. } = hlr.tree.get(*id) else { panic!() };
-            generics[*index].clone()
-        },
-        ReturnType => hlr.ret_type.clone(),
+        if self.infers.contains_key(&inferable) {
+            &mut self.infers[&inferable]
+        } else {
+            self.infers.insert(inferable, Constraints::default());
+            self.infers.last_mut().unwrap().1
+        }
     }
 }
 
-fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
-    use Inferable::*;
-
-    let to = to.clone();
-
-    match inferable {
-        Expr(id) => {
-            if let Some(typ) = hlr.tree.get_mut(*id).ret_type_mut() {
-                *typ = to
-            }
-        },
-        Var(name) => hlr.variables.get_mut(name).unwrap().typ = to,
-        Relation(id) => {
-            let HNodeData::Call { ref mut relation, .. } = hlr.tree.get_mut(*id) else { panic!() };
-            *relation.inner_type_mut().unwrap() = to
-        },
-        CallGeneric(id, index) => {
-            let HNodeData::Call { ref mut generics, .. } = hlr.tree.get_mut(*id) else { panic!() };
-            generics[*index] = to
-        },
-        ReturnType => hlr.ret_type = to,
-    }
+#[derive(PartialEq)]
+enum InferenceSteps {
+    Start,
+    FillIntsAndFloats,
+    FillStructLiterals,
+    Failure,
 }
 
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut infer_map = InferMap::default();
 
     setup_initial_constraints(hlr, &mut infer_map); 
+    
+    let mut previous_known_count = 0;
+    let mut step = InferenceSteps::Start;
 
-    infer_map.insert(Inferable::ReturnType, Constraint::SameAs(hlr.tree.root.into()));
-
-    for _ in 0..12 {
+    for _ in 0.. {
         type_solving_round(&mut infer_map, hlr);
         infer_calls(&mut infer_map, hlr);
 
@@ -141,6 +126,17 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
         if infer_map.all_types_known(hlr) {
             return;
+        }
+
+        let current_known_count = infer_map.known_count(hlr);
+
+        if previous_known_count != current_known_count {
+            previous_known_count = current_known_count; 
+        } else {
+            advance_inference_step(&mut step, hlr);
+            if step == InferenceSteps::Failure {
+                break;
+            }
         }
     }
 
@@ -152,7 +148,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
         println!("---UNKNOWNS---");
         for inferable in infer_map
-            .inferables
+            .infers
             .iter()
             .filter(|(inferable, _)| type_of_inferable(inferable, hlr).is_unknown())
         {
@@ -178,7 +174,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
 fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
     for (var, info) in &hlr.variables {
-        infer_map.insert(Inferable::Var(var.clone()), Constraint::IsType(info.typ.clone()));
+        infer_map.on(var).is = info.typ.clone();
     }
 
     for id in hlr.tree.ids_in_order().into_iter().rev() {
@@ -191,81 +187,68 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
         match node_data {
             HNodeData::Ident { ref name, .. } => {
-                infer_map.insert(id, Constraint::SameAs(name.into()));
+                infer_map.on(id).same_as.insert(name.into());
             },
-            HNodeData::BinOp { lhs, op, .. } => {
+            HNodeData::BinOp { lhs, rhs, op, .. } => {
                 if op.is_cmp() {
-                    infer_map.insert(id, Constraint::IsType(Type::bool()));
+                    infer_map.on(id).is = Type::bool();
                 } else {
-                    infer_map.insert(id, Constraint::SameAs(lhs.into()));
+                    infer_map.on(id).same_as.insert(lhs.into());
                 }
+
+                infer_map.on(lhs).same_as.insert(rhs.into());
             },
             HNodeData::UnarOp { op, hs, .. } => {
-                let constraint = match op {
-                    Opcode::Not => Constraint::SameAs(hs.into()),
-                    Opcode::Ref => Constraint::RelatedTo {
-                        spec: TypeSpec::GenParam(0).get_ref(),
-                        gen_params: vec![hs.into()],
-                        method_of: None,
-                    },
-                    Opcode::Deref => Constraint::RelatedTo {
-                        spec: TypeSpec::GenParam(0).get_deref(),
-                        gen_params: vec![hs.into()],
-                        method_of: None,
+                let contraints = infer_map.on(id);
+
+                match op {
+                    Opcode::Not => { contraints.same_as.insert(hs.into()); },
+                    Opcode::Ref | Opcode::Deref => {
+                        let spec = if op == Opcode::Ref {
+                            TypeSpec::GenParam(0).get_ref() 
+                        } else { 
+                            TypeSpec::GenParam(0).get_deref() 
+                        };
+
+                        contraints.connections.insert(InferableConnection {
+                            spec,
+                            gen_params: vec![hs.into()],
+                            method_of: None,
+                        });
                     },
                     _ => continue,
-                };
-
-                infer_map.insert(id, constraint);
+                }
             },
-            HNodeData::Call {
-                ref relation,
-                ..
-            } => {
-                match relation {
-                    TypeRelation::MethodOf(_) => {
-                        infer_map.add_call(id);
-                    },
-                    TypeRelation::Static(_) | TypeRelation::Unrelated => {
-                        infer_map.add_call(id);
-                    },
-                };
-            },
+            HNodeData::Call { .. } => { infer_map.calls.insert(id); },
             HNodeData::Member { object, field, .. } => {
-                infer_map.insert(
-                    id,
-                    Constraint::RelatedTo {
+                infer_map.on(id).connections.insert(
+                    InferableConnection {
                         spec: TypeSpec::StructMember(
                             Box::new(TypeSpec::GenParam(0)),
                             field.clone()
                         ),
                         gen_params: vec![object.into()],
                         method_of: None,
-                    },
+                    }.into(),
                 );
             },
             HNodeData::IndirectCall { f, .. } => {
-                infer_map.insert(
-                    id,
-                    Constraint::RelatedTo {
+                infer_map.on(id).connections.insert(
+                    InferableConnection {
                         spec: TypeSpec::FuncReturnType(Box::new(TypeSpec::GenParam(0))),
                         gen_params: vec![f.into()],
                         method_of: None,
-                    },
+                    }.into(),
                 );
             },
-            HNodeData::Block { stmts, .. } => {
-                if let Some(&last_stmt) = stmts.last() {
-                    infer_map.insert(id, Constraint::SameAs(last_stmt.into()));
-                } else {
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
-                }
+            HNodeData::Block { .. } => { 
+                infer_map.on(id).is = Type::void();
             },
             HNodeData::Return { to_return, .. } => {
+                infer_map.on(id).is = Type::void();
+
                 if let Some(to_return) = to_return {
-                    infer_map.insert(id, Constraint::SameAs(to_return.into()));
-                } else {
-                    infer_map.insert(id, Constraint::IsType(Type::void()));
+                    infer_map.on(to_return).same_as.insert(Inferable::ReturnType);
                 }
             },
             HNodeData::StructLit {
@@ -284,13 +267,12 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
                     let spec = TypeSpec::Struct(infer_fields);
 
-                    infer_map.insert(
-                        id,
-                        Constraint::RelatedTo {
+                    infer_map.on(id).connections.insert(
+                        InferableConnection {
                             spec,
                             gen_params: fields.iter().map(|(_, id)| (*id).into()).collect(),
                             method_of: None,
-                        },
+                        }
                     );
                 }
             },
@@ -301,9 +283,8 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             } => {
                 if var_type.is_unknown() && initialize == InitOpts::NoFill {
                     let first_element = *parts.first().unwrap();
-                    infer_map.insert(
-                        id,
-                        Constraint::RelatedTo {
+                    infer_map.on(id).connections.insert(
+                        InferableConnection {
                             spec: TypeSpec::Array(
                                 Box::new(TypeSpec::GenParam(0)),
                                 parts.len() as u32,
@@ -314,23 +295,24 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     );
                 }
             },
-            HNodeData::Index { object, .. } => infer_map.insert(
-                id,
-                Constraint::RelatedTo {
-                    spec: TypeSpec::ArrayElem(Box::new(TypeSpec::GenParam(0))),
-                    gen_params: vec![object.into()],
-                    method_of: None,
-                },
-            ),
+            HNodeData::Index { object, .. } => {
+                infer_map.on(id).connections.insert(
+                    InferableConnection {
+                        spec: TypeSpec::ArrayElem(Box::new(TypeSpec::GenParam(0))),
+                        gen_params: vec![object.into()],
+                        method_of: None,
+                    },
+                );
+            },
             HNodeData::Set { lhs, rhs, .. } => {
-                infer_map.insert(lhs, Constraint::SameAs(rhs.into()));
+                infer_map.on(lhs).same_as.insert(rhs.into());
             },
             _ => {},
         }
     }
 }
 
-fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Option<TypeSpec> {
+fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: usize) -> Option<TypeSpec> {
     // this algorithm works like an algebraic math problem.
     use TypeSpec::*;
 
@@ -396,96 +378,92 @@ fn spec_from_perspective_of_generic(spec: &TypeSpec, generic_index: u32) -> Opti
 }
 
 fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
-    for (original, constraints) in infer_map.clone().iter() {
-        for constraint in constraints {
-            match constraint {
-                Constraint::IsType(_) => {},
-                Constraint::SameAs(other) => {
-                    infer_map.insert(other.clone(), Constraint::SameAs(original.clone()));
-                },
-                Constraint::RelatedTo {
-                    spec,
-                    gen_params,
-                    method_of,
-                } => {
-                    for (param_index, param) in gen_params.iter().enumerate() {
-                        if !type_of_inferable(param, hlr).is_unknown() {
-                            continue;
-                        }
+    for index in 0..infer_map.infers.len() {
+        let (original, _) = infer_map.infers.get_index(index).unwrap();
+        let original = original.clone();
+        let constraints = infer_map.infers
+            .insert(original.clone(), Constraints::default()).unwrap();
 
-                        let reversed_spec =
-                            spec_from_perspective_of_generic(spec, param_index as u32);
+        for other in &constraints.same_as {
+            infer_map.on(other.clone()).same_as.insert(original.clone());
+        }
 
-                        if reversed_spec.is_none() {
-                            continue;
-                        }
+        for connection in &constraints.connections {
+            for (param_index, param) in connection.gen_params.iter().enumerate() {
+                if !type_of_inferable(param, hlr).is_unknown() {
+                    continue;
+                }
 
-                        infer_map.insert(
-                            param.clone(),
-                            Constraint::RelatedTo {
-                                spec: reversed_spec.unwrap(),
-                                gen_params: vec![original.clone()],
-                                method_of: method_of.clone(),
-                            },
-                        );
-                    }
-                },
+                let reversed_spec =
+                    spec_from_perspective_of_generic(&connection.spec, param_index);
+
+                if reversed_spec.is_none() {
+                    continue;
+                }
+
+                infer_map.on(param.clone()).connections.insert(
+                    InferableConnection {
+                        spec: reversed_spec.unwrap(),
+                        gen_params: vec![original.clone()],
+                        method_of: connection.method_of.clone(),
+                    },
+                );
             }
         }
+
+        infer_map.infers.insert(original.clone(), constraints);
     }
 }
 
 fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
-    for (unknown, constraints) in infer_map.clone().iter() {
-        for constraint in constraints {
-            match constraint {
-                Constraint::IsType(typ) => {
-                    if !Type::are_subtypes(typ, &type_of_inferable(unknown, hlr)) {
-                        set_inferable(unknown, typ, hlr);
-                    }
-                },
-                Constraint::SameAs(inferable) => {
-                    let to = type_of_inferable(inferable, hlr);
+    for index in 0..infer_map.infers.len() {
+        let (unknown, constraints) = infer_map.infers.get_index_mut(index).unwrap();
 
-                    if to.is_unknown() {
-                        continue;
-                    }
+        if constraints.is.is_known() {
+            set_inferable(unknown, &constraints.is, hlr)
+        } else {
+            for inferable in &constraints.same_as {
+                let to = type_of_inferable(inferable, hlr);
 
+                if to.is_known() {
                     set_inferable(unknown, &to, hlr);
-                },
-                Constraint::RelatedTo {
-                    spec,
-                    gen_params,
-                    method_of,
-                } => {
-                    let gen_params = gen_params
-                        .iter()
-                        .map(|inferable| type_of_inferable(inferable, hlr))
-                        .collect::<Vec<_>>();
-
-                    let method_of = method_of
-                        .as_ref()
-                        .map(|inferable| type_of_inferable(inferable, hlr));
-
-                    if gen_params.iter().all(Type::is_known)
-                        && (method_of.is_none() || method_of.as_ref().unwrap().is_known())
-                    {
-                        let to = hlr
-                            .comp_data
-                            .get_spec(spec, &(gen_params, method_of))
-                            .unwrap();
-
-                        set_inferable(unknown, &to, hlr);
-                    };
-                },
+                    break;
+                }
             }
+        }
+        
+        for InferableConnection { spec, gen_params, method_of } in &constraints.connections {
+            let gen_params = gen_params
+                .iter()
+                .map(|inferable| type_of_inferable(inferable, hlr))
+                .collect::<Vec<_>>();
+
+            let method_of = method_of
+                .as_ref()
+                .map(|inferable| type_of_inferable(inferable, hlr));
+
+            if gen_params.iter().all(Type::is_known)
+                && (method_of.is_none() || method_of.as_ref().unwrap().is_known())
+            {
+                let to = hlr
+                    .comp_data
+                    .get_spec(spec, &(gen_params, method_of))
+                    .unwrap();
+
+                set_inferable(unknown, &to, hlr);
+            };
         }
     }
 }
 
 fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
-    for id in infer_map.clone().calls() {
-        let node_data = hlr.tree.get(*id);
+    for call_index in 0.. {
+        let id = match infer_map.calls.get_index(call_index) {
+            Some(id) => *id,
+            None => break,
+        };
+
+        let node_data = hlr.tree.get(id);
         let func_info = hlr.tree.unique_func_info_of_call(&node_data);
 
         if func_info.relation.is_method() {
@@ -501,14 +479,14 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     ..func_info.clone()
                 };
 
-                if fill_in_call(infer_map, hlr, dereffed_func_info.clone(), id, doing_deref) {
-                    let HNodeData::Call { relation: ref mut og_call_relation, .. } = hlr.tree.get_mut(*id) else { unreachable!() };
+                if fill_in_call(infer_map, hlr, dereffed_func_info.clone(), &id, doing_deref) {
+                    let HNodeData::Call { relation: ref mut og_call_relation, .. } = hlr.tree.get_mut(id) else { unreachable!() };
                     *og_call_relation = dereffed_func_info.relation;
                     break;
                 }
             }
         } else {
-            fill_in_call(infer_map, hlr, func_info, id, false);
+            fill_in_call(infer_map, hlr, func_info, &id, false);
         }
     }
 }
@@ -521,8 +499,21 @@ fn fill_in_call(
     doing_deref: bool,
 ) -> bool {
     if let Ok(func_type) = hlr.comp_data.get_func_type(&func_info) {
-        infer_map.remove_call(id);
+        infer_map.calls.remove(id);
         set_inferable(&(*id).into(), &func_type.ret, hlr);
+
+        let HNodeData::Call { a, .. } = hlr.tree.get_ref(*id) else { unreachable!() };
+        let a = a.clone();
+
+        for (a, (arg_type, arg_id)) in func_type.args.iter().zip(a.into_iter()).enumerate() {
+            let arg_type = if doing_deref && a == 0 {
+                func_info.relation.inner_type().unwrap()
+            } else {
+                arg_type.clone()
+            };
+
+            set_inferable(&arg_id.into(), &arg_type, hlr);
+        }
 
         true
     } else if let Some(decl_info) = hlr.comp_data.get_declaration_of(&func_info) {
@@ -531,7 +522,7 @@ fn fill_in_call(
         // get_declaration_of) method, we can fill in some constraints
         // that will help us find the type
 
-        infer_map.remove_call(id);
+        infer_map.calls.remove(id);
 
         let code = hlr.comp_data.func_code.get(&decl_info).unwrap();
 
@@ -554,6 +545,7 @@ fn fill_in_call(
             .is_some()
             .then_some(Inferable::Relation(*id));
 
+        // TODO: check if func has too few / too many args
         for (arg_index, arg) in code.args.iter().enumerate() {
             if doing_deref && arg_index == 0 {
                 // First argument is the self argument, which is already
@@ -561,9 +553,8 @@ fn fill_in_call(
                 continue;
             }
 
-            infer_map.insert(
-                a[arg_index], // TODO: if this fails, func has too few / too many args
-                Constraint::RelatedTo {
+            infer_map.on(a[arg_index]).connections.insert( 
+                InferableConnection {
                     spec: arg.type_spec.clone(),
                     gen_params: call_generic_inferables.clone(),
                     method_of: relation_inferable.clone(),
@@ -571,9 +562,8 @@ fn fill_in_call(
             );
         }
 
-        infer_map.insert(
-            *id,
-            Constraint::RelatedTo {
+        infer_map.on(*id).connections.insert(
+            InferableConnection {
                 spec: code.ret_type.clone(),
                 gen_params: call_generic_inferables.clone(),
                 method_of: relation_inferable.clone(),
@@ -582,18 +572,15 @@ fn fill_in_call(
 
         if !doing_deref && code.relation.is_method() {
             let first_arg = *a.first().unwrap();
-            infer_map.insert(Inferable::Relation(*id), Constraint::SameAs(first_arg.into()));
+            infer_map.on(Inferable::Relation(*id)).same_as.insert(first_arg.into());
         } else if doing_deref {
-            infer_map.insert(
-                Inferable::Relation(*id), 
-                Constraint::IsType(func_info.relation.inner_type().unwrap())
-            );
+            infer_map.on(Inferable::Relation(*id)).is = 
+                func_info.relation.inner_type().unwrap()
         }
 
         if let Some(relation) = code.relation.inner_type() {
-            infer_map.insert(
-                Inferable::Relation(*id),
-                Constraint::RelatedTo {
+            infer_map.on(Inferable::Relation(*id)).connections.insert(
+                InferableConnection {
                     spec: relation,
                     gen_params: call_generic_inferables,
                     method_of: relation_inferable,
@@ -606,3 +593,69 @@ fn fill_in_call(
         false
     }
 }
+
+fn advance_inference_step(step: &mut InferenceSteps, hlr: &mut FuncRep) {
+    match step {
+        InferenceSteps::Start => {
+            *step = InferenceSteps::FillIntsAndFloats;
+            hlr.modify_many_infallible(|_, number_data, _| {
+                match number_data {
+                    HNodeData::Number { lit_type, .. } if lit_type.is_unknown() => {
+                        *lit_type = Type::i(32);
+                    },
+                    HNodeData::Float { lit_type, .. } if lit_type.is_unknown() => {
+                        *lit_type = Type::i(32);
+                    },
+                    _ => {}
+                };
+            })
+        },
+        InferenceSteps::FillIntsAndFloats => todo!(),
+        InferenceSteps::FillStructLiterals => todo!(),
+        InferenceSteps::Failure => todo!(),
+    }
+}
+
+fn type_of_inferable(inferable: &Inferable, hlr: &FuncRep) -> Type {
+    use Inferable::*;
+
+    match inferable {
+        Expr(id) => hlr.tree.get(*id).ret_type(),
+        Var(name) => hlr.variables.get(name).unwrap().typ.clone(),
+        Relation(id) => {
+            let HNodeData::Call { relation, .. } = hlr.tree.get(*id) else { panic!() };
+            relation.inner_type().unwrap()
+        },
+        CallGeneric(id, index) => {
+            let HNodeData::Call { generics, .. } = hlr.tree.get(*id) else { panic!() };
+            generics[*index].clone()
+        },
+        ReturnType => hlr.ret_type.clone(),
+    }
+}
+
+fn set_inferable(inferable: &Inferable, to: &Type, hlr: &mut FuncRep) {
+    use Inferable::*;
+
+    let to = to.clone();
+
+    match inferable {
+        Expr(id) => {
+            if let Some(typ) = hlr.tree.get_mut(*id).ret_type_mut() {
+                *typ = to
+            }
+        },
+        Var(name) => hlr.variables.get_mut(name).unwrap().typ = to,
+        Relation(id) => {
+            let HNodeData::Call { ref mut relation, .. } = hlr.tree.get_mut(*id) else { panic!() };
+            *relation.inner_type_mut().unwrap() = to
+        },
+        CallGeneric(id, index) => {
+            let HNodeData::Call { ref mut generics, .. } = hlr.tree.get_mut(*id) else { panic!() };
+            generics[*index] = to
+        },
+        ReturnType => hlr.ret_type = to,
+    }
+}
+
+

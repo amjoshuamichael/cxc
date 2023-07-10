@@ -1,3 +1,5 @@
+#![allow(arithmetic_overflow)]
+
 mod test_utils;
 use cxc::library::StdLib;
 use test_utils::xc_test;
@@ -164,5 +166,28 @@ fn infer_cast() {
         }
         "#;
         unsafe { std::mem::transmute::<(i32, i32), i64>((90, 8943)) }
+    )
+}
+
+#[test]
+fn infer_number_size_u8() {
+    xc_test!(
+        r#"
+        # notifies the compiler that whatever variable is passed into this function is a u8
+        takes_a_u8(a: u8) { }
+
+        main(); bool {
+            x = 90
+
+            takes_a_u8(x)
+
+            # this 250 should become a u8, and so should y. y should overflow, 
+            # causing it to be less than x
+            y = 250 + x
+
+            ; x > y
+        }
+        "#;
+        true
     )
 }

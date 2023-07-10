@@ -294,13 +294,11 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
 
         if *location == VarLocation::Reg {
             let writeable = if let ArgIndex::Some(arg_index) = arg_index {
-                dbg!(&arg_index);
-                dbg!(&name);
                 let raw_arg_types = typ.raw_arg_type().to_cl_type();
                 let raw_arg_type_count = raw_arg_types.len();
 
                 let writeable = Writeable::Arg { 
-                    index: dbg!(*arg_index + arg_offset), 
+                    index: *arg_index + arg_offset, 
                     types: raw_arg_types,
                     entry_block: fcs.entry_block.block,
                 };
@@ -588,7 +586,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
         ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => {
             vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I64, 8)]
         },
-        _ => unreachable!(),
+        _ => unreachable!("{return_style:?}"),
     };
 
     fcs.builder.ins().return_(&*ret);
