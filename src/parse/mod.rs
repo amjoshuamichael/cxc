@@ -113,7 +113,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                         Tok::ColonDot => TypeRelationGeneric::MethodOf(method_of.clone()),
                         Tok::DoubleColon => TypeRelationGeneric::Static(method_of.clone()),
                         got => {
-                            return ParseError::unexpected(got, vec![TokName::ColonDot, TokName::DoubleColon]);
+                            return ParseError::unexpected(got, vec![TokName::Assignment, TokName::ColonDot, TokName::DoubleColon]);
                         },
                     };
 
@@ -332,7 +332,7 @@ fn parse_for(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
     let w = parse_expr(ctx)?;
     let d = parse_block(ctx)?;
 
-    Ok(Expr::ForWhile(Box::new(w), Box::new(d)))
+    Ok(Expr::While(Box::new(w), Box::new(d)))
 }
 
 fn parse_if(ctx: &mut FuncParseContext) -> ParseResult<Expr> {

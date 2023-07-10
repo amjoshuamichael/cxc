@@ -162,7 +162,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             ) || 
             (
                 matches!(lexer.peek_by(1)?, Tok::VarName(_)) && 
-                !matches!(lexer.peek_by(2)?, Tok::RCurly | Tok::Comma)
+                matches!(lexer.peek_by(2)?, Tok::Assignment)
             ) => 
         {
             parse_struct_literal(lexer)?.into()

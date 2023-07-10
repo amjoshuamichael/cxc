@@ -74,7 +74,7 @@ impl Value {
             ..Default::default()
         };
 
-        unit.compile_func_set(vec![info.clone()]).unwrap();
+        unit.compile_func_set(std::iter::once(info.clone()).collect()).unwrap();
 
         let mut output = String::new();
 
@@ -138,7 +138,7 @@ impl Unit {
         let hlr = hlr(value_function_info.clone(), &self.comp_data, code)?;
         let mir = mir(hlr);
 
-        let dependencies: Vec<_> = mir.dependencies
+        let dependencies = mir.dependencies
             .iter()
             .filter(|f| !self.has_been_compiled(f))
             .cloned()

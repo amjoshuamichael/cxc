@@ -1,0 +1,11 @@
+Slice<T> = {
+    ptr: &T,
+    len: u64, # TODO: usize
+}
+
+<T> Slice<T>:.slice(range: Range<u64>); Me {
+    ; Me {
+        ptr = self.ptr + range.start,
+        len = range.end - range.start,
+    }
+}

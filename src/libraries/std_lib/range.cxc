@@ -1,0 +1,11 @@
+Range<T> = {
+    start: T,
+    end: T,
+}
+
+<T> Range<T>::from(start: T, end: T); Me {
+    ; Me {
+        start = start,
+        end = end,
+    }
+}

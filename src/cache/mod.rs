@@ -2,8 +2,6 @@ use std::{sync::RwLock, cmp::Ordering};
 
 use crate::XcReflect;
 
-use crate as cxc;
-
 pub struct Cache<T> {
     calculated: RwLock<Option<T>>,
 }

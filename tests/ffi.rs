@@ -428,6 +428,32 @@ fn pass_to_4byte() {
 }
 
 #[test]
+fn pass_to_16byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script("sum_two_add_3(x: { i64, i64 }); i64 { ; x.0 + x.1 + i64 3 }").unwrap();
+    let sum_two_add_3 = 
+        unit.get_fn("sum_two_add_3").unwrap().downcast::<((i64, i64),), i64>();
+    assert_eq!(sum_two_add_3((3i64, 90i64)), 96i64);
+}
+
+#[test]
+fn pass_to_two_16byte() {
+    let mut unit = Unit::new();
+
+    unit.push_script(
+        "
+        sum_four_add_3(x: { i64, i64 }, y: { i64, i64 }); i64 {
+             ; x.0 + x.1 + y.0 + y.1 + i64 3
+        }
+        ")
+        .unwrap();
+    let sum_four_add_3 = 
+        unit.get_fn("sum_four_add_3").unwrap().downcast::<((i64, i64), (i64, i64)), i64>();
+    assert_eq!(sum_four_add_3((3i64, 90i64), (8i64, 23i64)), 127i64);
+}
+
+#[test]
 fn pass_to_20byte() {
     let mut unit = Unit::new();
 

@@ -132,8 +132,6 @@ impl<'a> FuncRep<'a> {
         self.comp_data.get_spec(alias, &self.info)
     }
 
-    pub fn comp_data(&self) -> &CompData { self.comp_data }
-
     pub fn output(mut self) -> FuncOutput {
         let mut func_arg_types = self.arg_types();
 
@@ -232,9 +230,9 @@ impl<'a> FuncRep<'a> {
             Expr::Ident(name) => {
                 let var_type = match self.variables.get(&name) {
                     Some(variables) => variables.typ.clone(),
-                    None => self
+                    None => dbg!(&self
                         .comp_data
-                        .globals
+                        .globals)
                         .get(&name.clone())
                         .unwrap_or_else(|| {
                             println!("variables: {:?}", &self.variables); 
@@ -329,7 +327,7 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_binop);
                 space
             },
-            Expr::ForWhile(w, d) => {
+            Expr::While(w, d) => {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = HNodeData::While {

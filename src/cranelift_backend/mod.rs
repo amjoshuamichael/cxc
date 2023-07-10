@@ -7,7 +7,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, FuncId, Linkage, default_libcall_names};
 use indexmap::IndexMap;
 
-use self::{to_cl_type::{func_type_to_signature}, external_function::ExternalFuncData};
+use self::{to_cl_type::func_type_to_signature, external_function::ExternalFuncData};
 
 mod to_cl_type;
 mod compile_function;

@@ -1,8 +1,8 @@
-use cranelift::{prelude::{FunctionBuilderContext, types as cl_types, FunctionBuilder, InstBuilder, StackSlotKind, StackSlotData, Value as CLValue, Signature}, codegen::ir::SigRef};
-use cranelift_module::{Linkage, Module};
+use cranelift::prelude::{types as cl_types, FunctionBuilder, InstBuilder, StackSlotKind, StackSlotData, Value as CLValue, Signature};
+use cranelift_module::Module;
 
 
-use crate::{UniqueFuncInfo, FuncType, cranelift_backend::to_cl_type::{func_type_to_signature, ToCLType}, typ::ReturnStyle, Func};
+use crate::{UniqueFuncInfo, FuncType, cranelift_backend::to_cl_type::{func_type_to_signature, ToCLType}, typ::ReturnStyle};
 
 use super::CraneliftBackend;
 

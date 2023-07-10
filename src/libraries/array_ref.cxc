@@ -1,4 +1,0 @@
-ArrayRef<T> = { 
-    first_element: &T,
-    len: BYE,
-}

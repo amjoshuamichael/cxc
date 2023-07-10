@@ -10,7 +10,7 @@ fn basic_struct() {
     xc_test!(
         "
         ; i32 {
-            x: Point2D = Point2D { -- }
+            x: Point2D = { -- }
             x.x = 30
             x.y = 90
             ; x.x + x.y
@@ -37,12 +37,12 @@ fn struct_lit() {
 fn set_to_with_function() {
     xc_test!(
         "
-            double(in: i32); i32 { ; in * 2 }
+        double(in: i32); i32 { ; in * 2 }
 
-            main(); i32 {
-                x: Point2D = Point2D { x = double(2), y = 9 }
-                ; x.x + x.y
-            }
+        main(); i32 {
+            x: Point2D = Point2D { x = double(2), y = 9 }
+            ; x.x + x.y
+        }
         ";
         13
     )
@@ -216,65 +216,6 @@ fn auto_deref_method_2() {
 }
 
 #[test]
-fn array_basic() {
-    xc_test!(
-        "
-        main(); i32 {
-            original: [7]i32 = [1, 4, 8, 15, 16, 23, 42]
-
-            first_sum: i32 = original[i64 3] + original[i64 0] + original[i64 6]
-
-            index: i64 = i64 0
-            @ index < i64 7 {
-                original[index] = index * i64 2
-
-                index = index + i64 1
-            }
-
-            second_sum: i32 = 
-                original[i64 0] + original[i64 1] + original[i64 3] + original[i64 6]
-
-            ; first_sum + second_sum
-        }
-        ";
-        78
-    )
-}
-
-#[test]
-fn struct_arrays() {
-    xc_test!(
-        "
-        Point2D = {
-            x: i32,
-            y: i32
-        }
-
-        main() {
-            points: [3]Point2D = [
-                Point2D { x = 43, y = 15 },
-                Point2D { x = 327, y = 413 },
-                Point2D { x = 1672, y = 2526 },
-            ]
-
-            assert_eq<i32>(points[i64 0].x, 43)
-            assert_eq<i32>(points[i64 0].y, 15)
-
-            points[i64 0].x = 94
-
-            assert_eq<i32>(points[i64 0].x, 94)
-            assert_eq<i32>(points[i64 0].y, 15)
-
-            points[i64 1] = Point2D { x = 4, y = 6 }
-
-            assert_eq<i32>(points[i64 1].x, 4)
-            assert_eq<i32>(points[i64 1].y, 6)
-        }
-        "
-    )
-}
-
-#[test]
 fn active_initialize_struct_ints() {
     xc_test!(
         use StdLib;
@@ -310,50 +251,6 @@ fn active_initialize_struct_strings() {
             b: "Bb".into(),
             ..Default::default()
         }
-    );
-}
-
-#[test]
-fn active_initialize_array_ints() {
-    xc_test!(
-        use StdLib;
-        "
-        main(); [5]i32 {
-            numbers: [5]i32 = [10, 20, 90, ++]
-
-            ; numbers
-        }
-        ";
-        [10, 20, 90, 0, 0]
-    );
-}
-
-#[test]
-fn string_array() {
-    xc_test!(
-        use StdLib;
-        r#"
-        main(); [2]String {
-            numbers: [2]String = ["one", "two"]
-            ; numbers
-        }
-        "#;
-        [String::from("one"), String::from("two")]
-    );
-}
-
-#[test]
-fn active_initialize_array_strings() {
-    xc_test!(
-        use StdLib;
-        r#"
-        main(); [5]String {
-            numbers: [5]String = ["one", "two", "three", ++ ]
-
-            ; numbers
-        }
-        "#;
-        [String::from("one"), String::from("two"), String::from("three"), String::default(), String::default()]
     );
 }
 

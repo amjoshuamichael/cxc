@@ -70,3 +70,6 @@ mod unit;
 
 #[cfg(not(any(feature = "backend-llvm", feature = "backend-cranelift")))]
 compile_error!("No backend chosen: in your Cargo.toml, enable either backend-cranelift (recommended) or backend-llvm (requires LLVM to be installed)");
+
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("cxc only works for 64 bit architectures.");

@@ -24,12 +24,6 @@ pub fn make_fcs<'a>(
         let (func_id, info) = 
             if let Some((_, func_id)) = backend.cl_function_data.get(info) {
                 (*func_id, info.clone())
-            } else if matches!(&*info.name, "alloc" | "free") {
-                let intrinsic_name = format!("${}", info.name);
-                let info = UniqueFuncInfo::from(VarName::from(&*intrinsic_name));
-
-                return None;
-                //(backend.cl_function_data[&info].1, info)
             } else {
                 return None
             };
@@ -152,7 +146,7 @@ pub fn compile(
 pub struct FunctionCompilationState<'a> {
     builder: FunctionBuilder<'a>,
     addresses: BTreeMap<MAddrReg, CLValue>,
-    // functions can return a struct with multiple values over 8 bytes. for example, the 
+    // functions can return a struct with a size of over 8 bytes. for example, the 
     // struct {i64, i32}. in llvm, we return this struct directly as it is, but in 
     // cranelift, we *actually* just return multiple values from the function. that's why 
     // we use a vec of CLValues here.
@@ -214,7 +208,6 @@ impl Writeable {
             Writeable::Var(var) => { builder.use_var(*var); },
             Writeable::Slot(..) | Writeable::Arg { .. } => {},
         }
-
     }
 
     fn load(&self, builder: &mut FunctionBuilder) -> Vec<CLValue> {
@@ -287,18 +280,27 @@ impl Writeable {
 fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
     let mut arg_offset = 0;
 
+    let mut var_locations: Vec<_> = fcs.var_locations.iter().collect();
+    var_locations.sort_by(
+        |
+            (_, (_, VariableInfo { arg_index: a, .. })), 
+            (_, (_, VariableInfo { arg_index: b, .. })),
+        | a.cmp(b));
+
     for (id, (name, (location, VariableInfo { typ, arg_index, .. }))) 
-        in fcs.var_locations.iter().enumerate() {
+        in var_locations.into_iter().enumerate() {
         let var = Variable::from_u32(id as u32);
         let var_types = typ.to_cl_type();
 
         if *location == VarLocation::Reg {
             let writeable = if let ArgIndex::Some(arg_index) = arg_index {
+                dbg!(&arg_index);
+                dbg!(&name);
                 let raw_arg_types = typ.raw_arg_type().to_cl_type();
                 let raw_arg_type_count = raw_arg_types.len();
 
                 let writeable = Writeable::Arg { 
-                    index: *arg_index + arg_offset, 
+                    index: dbg!(*arg_index + arg_offset), 
                     types: raw_arg_types,
                     entry_block: fcs.entry_block.block,
                 };
@@ -438,8 +440,6 @@ fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
         })
         .collect();
 }
-
-
 
 fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
     match &line {

@@ -6,7 +6,6 @@ use self::functions::TypeLevelFunc;
 pub use self::generations::Generations;
 pub use self::value_api::Value;
 use crate::FuncType;
-use crate::TypeEnum;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
 use crate::hlr::prelude::*;
@@ -145,7 +144,7 @@ impl Unit {
             funcs_to_compile
         };
 
-        self.compile_func_set(funcs_to_process.clone())?;
+        self.compile_func_set(funcs_to_process.iter().cloned().collect())?;
 
         if has_comp_script {
             self.run_comp_script();
@@ -154,7 +153,7 @@ impl Unit {
         Ok(funcs_to_process)
     }
 
-    pub fn compile_func_set(&mut self, mut set: Vec<UniqueFuncInfo>) -> CResultMany<()> {
+    pub fn compile_func_set(&mut self, mut set: BTreeSet<UniqueFuncInfo>) -> CResultMany<()> {
         if set.is_empty() {
             return Ok(());
         }
@@ -166,19 +165,36 @@ impl Unit {
 
         while !set.is_empty() {
             all_func_infos.extend(set.clone().into_iter());
+
+            for info in &set {
+                // register first class functions
+                let code = self.comp_data.get_code(info.clone()).unwrap();
+
+                let func_arg_types = code
+                    .args
+                    .iter()
+                    .map(|VarDecl { type_spec, .. }| {
+                         self.comp_data.get_spec(type_spec, info)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let func_ret_type = self.comp_data.get_spec(&code.ret_type, info)?;
+                let func_type = func_ret_type.func_with_args(func_arg_types);
+
+                self.comp_data.globals.insert(
+                    info.name.clone(),
+                    func_type.clone()
+                );
+            }
             
             let func_reps: Vec<MIR> = { set }
-                .drain(..)
+                .into_iter()
                 .map(|info| {
                     let code = self.comp_data.get_code(info.clone()).unwrap();
+
                     let hlr = hlr(info.clone(), &self.comp_data, code)?;
                     let mir = mir(hlr);
 
                     self.backend.register_function(info.clone(), mir.func_type.clone());
-                    self.comp_data.globals.insert(
-                        info.name, 
-                        Type::new(TypeEnum::Func(mir.func_type.clone()))
-                    );
 
                     Ok(mir)
                 })
@@ -186,7 +202,7 @@ impl Unit {
 
             set = func_reps
                 .iter()
-                .flat_map(|f| f.dependencies.clone().into_iter())
+                .flat_map(|f| { f.dependencies.clone().into_iter() })
                 .filter(|f| !self.has_been_compiled(f) && !all_func_infos.contains(&f))
                 .collect();
 
