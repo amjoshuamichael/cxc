@@ -142,28 +142,28 @@ impl ExprTree {
 impl<'a> FuncRep<'a> {
     pub fn modify_many(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         self.modify_many_inner(self.tree.ids_in_order().drain(..), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_rev(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_infallible(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep),
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep),
     ) {
         self.modify_many(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
 
     pub fn modify_many_infallible_rev(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep),
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep),
     ) {
         self.modify_many_rev(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
@@ -171,7 +171,7 @@ impl<'a> FuncRep<'a> {
     fn modify_many_inner(
         &mut self,
         id_iterator: impl Iterator<Item = ExprID>,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         for index in id_iterator {
             let mut data_copy = self.tree.get(index);

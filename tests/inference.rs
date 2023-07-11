@@ -170,7 +170,7 @@ fn infer_cast() {
 }
 
 #[test]
-fn infer_number_size_u8() {
+fn infer_int_size_u8() {
     xc_test!(
         r#"
         # notifies the compiler that whatever variable is passed into this function is a u8
@@ -189,5 +189,164 @@ fn infer_number_size_u8() {
         }
         "#;
         true
+    )
+}
+
+#[test]
+fn infer_float_size_f64_1() {
+    xc_test!(
+        r#"
+        takes_an_f64(a: f64) { }
+
+        size_of_val<T>(val: &T); u64 {
+            ; size_of<T>()
+        }
+
+        main(); bool {
+            x = 90.0
+
+            takes_an_f64(x)
+
+            y = 250.0 + x
+
+            ; size_of_val(&y) == 8
+        }
+        "#;
+        true
+    )
+}
+
+#[test]
+fn infer_float_size_f64_2() {
+    xc_test!(
+        r#"
+        takes_an_f64(a: f64) { }
+
+        main(); f64 {
+            x = 90.0
+
+            takes_an_f64(x)
+
+            y = 250.0 + x
+
+            ? y > 250.0 + 80.0 {
+                ; y
+            }
+
+            ; 0.0
+        }
+        "#;
+        250.0f64 + 90.0f64
+    )
+}
+
+#[test]
+fn infer_struct_fields_with_arg() {
+    xc_test!(
+        use StdLib;
+        r#"
+        takes_3_nums(me: {x: i32, y: i32, z: i32}) {}
+
+        main(); i32 {
+            three = { x = 43, y = 65, ++ }
+
+            takes_3_nums(three)
+
+            x = three.x + three.y + three.z
+
+            ; x
+        }
+        "#;
+        43 + 65
+    )
+}
+
+#[test]
+fn infer_struct_fields_with_member() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); i32 {
+            three = { x = 43, y = 65, ++ }
+
+            x = three.x + three.y + three.z
+
+            ; x
+        }
+        "#;
+        43 + 65
+    )
+}
+
+#[test]
+fn infer_set_struct_fields_basic() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); i32 { ; cast(size_of<T>()) }
+
+        main(); i32 {
+            three = { -- }
+            three.x = 90
+            three.y = 48
+            three.z = 39
+
+            ; three.x + three.y + three.z + size_of_val(&three)
+        }
+        "#;
+        90 + 48 + 39 + 12
+    )
+}
+
+#[test]
+fn infer_set_struct_fields_and_infer_number_size() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); u64 { ; size_of<T>() }
+
+        main(); u64 {
+            three = { -- }
+            three.x = 90
+            three.y = 48
+            three.z = 39
+
+            ; three.x + three.y + three.z + size_of_val(&three)
+        }
+        "#;
+        90u64 + 48u64 + 39u64 + 24u64
+    )
+}
+
+#[test]
+fn infer_number_u32_in_struct() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); u64 { ; size_of<T>() }
+
+        main(); u64 {
+            twonums = { 30, 40 }
+
+            ; size_of_val(&twonums)
+        }
+        "#;
+        8u64
+    )
+}
+
+#[test]
+fn infer_number_u8_in_struct() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); u64 { ; size_of<T>() }
+        takes_a_u8(val: u8) {}
+
+        main(); u64 {
+            twonums = { 30, 40 }
+            takes_a_u8(twonums.0)
+            takes_a_u8(twonums.1)
+
+            ; size_of_val(&twonums)
+        }
+        "#;
+        2u64
     )
 }

@@ -50,9 +50,39 @@ enum KnownInferableInformation {
     Int,
     Struct {
         has_fields: IndexSet<(VarName, Type)>,
+        field_count: Option<usize>,
     },
     #[default]
     None,
+}
+
+impl KnownInferableInformation {
+    fn has_fields(&mut self) -> &mut IndexSet<(VarName, Type)> {
+        self.has_fields_field_count().0
+    }
+
+    fn field_count(&mut self) -> &mut Option<usize> {
+        self.has_fields_field_count().1
+    }
+
+    fn has_fields_field_count(&mut self) -> (&mut IndexSet<(VarName, Type)>, &mut Option<usize>) {
+        match self {
+            KnownInferableInformation::Struct { has_fields, field_count, .. } => 
+                (has_fields, field_count),
+            KnownInferableInformation::None => {
+                *self = KnownInferableInformation::Struct { 
+                    has_fields: IndexSet::new(),
+                    field_count: None,
+                };
+
+                let KnownInferableInformation::Struct { has_fields, field_count } = self
+                    else { unreachable!() };
+
+                (has_fields, field_count)
+            }
+            KnownInferableInformation::Int => panic!(), // TODO: should be an error
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -102,12 +132,12 @@ impl InferMap {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum InferenceSteps {
-    Start,
-    FillIntsAndFloats,
-    FillStructLiterals,
-    Failure,
+    Start = 0,
+    FillStructLiterals = 1,
+    FillIntsAndFloats = 2,
+    Failure = 3,
 }
 
 pub fn infer_types(hlr: &mut FuncRep) {
@@ -120,6 +150,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
     for _ in 0.. {
         type_solving_round(&mut infer_map, hlr);
+        fill_known_information(&mut infer_map, hlr);
         infer_calls(&mut infer_map, hlr);
 
         introduce_reverse_constraints(&mut infer_map, hlr);
@@ -133,7 +164,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
         if previous_known_count != current_known_count {
             previous_known_count = current_known_count; 
         } else {
-            advance_inference_step(&mut step, hlr);
+            advance_inference_step(&mut step, hlr, &mut infer_map);
             if step == InferenceSteps::Failure {
                 break;
             }
@@ -252,11 +283,13 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 }
             },
             HNodeData::StructLit {
-                var_type,
                 fields,
                 initialize,
+                ..
             } => {
-                if var_type.is_unknown() && initialize == InitOpts::NoFill {
+                let constraints = infer_map.on(id);
+
+                if initialize == InitOpts::NoFill {
                     let infer_fields = fields
                         .iter()
                         .enumerate()
@@ -267,13 +300,23 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
                     let spec = TypeSpec::Struct(infer_fields);
 
-                    infer_map.on(id).connections.insert(
+                    constraints.connections.insert(
                         InferableConnection {
                             spec,
                             gen_params: fields.iter().map(|(_, id)| (*id).into()).collect(),
                             method_of: None,
                         }
                     );
+
+                    constraints.known = KnownInferableInformation::Struct {
+                        has_fields: IndexSet::new(),
+                        field_count: Some(fields.len()),
+                    }
+                } else {
+                    constraints.known = KnownInferableInformation::Struct {
+                        has_fields: IndexSet::new(),
+                        field_count: None,
+                    }
                 }
             },
             HNodeData::ArrayLit {
@@ -386,6 +429,7 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap, hlr: &FuncRep) {
 
         for other in &constraints.same_as {
             infer_map.on(other.clone()).same_as.insert(original.clone());
+            infer_map.on(other.clone()).same_as.extend(constraints.same_as.clone());
         }
 
         for connection in &constraints.connections {
@@ -452,6 +496,62 @@ fn type_solving_round(infer_map: &mut InferMap, hlr: &mut FuncRep) {
 
                 set_inferable(unknown, &to, hlr);
             };
+        }
+    }
+}
+
+fn fill_known_information(infer_map: &mut InferMap, hlr: &mut FuncRep) {
+    for id in hlr.tree.ids_in_order().into_iter() {
+        let node_data = hlr.tree.get_ref(id);
+
+        match node_data {
+            HNodeData::Member { ret_type, object, field } if ret_type.is_known() => {
+                infer_map.on(*object).known.has_fields() 
+                    .insert((field.clone(), ret_type.clone()));
+            }
+            HNodeData::StructLit { fields, .. } => {
+                for field in fields {
+                    let field_type = type_of_inferable(&field.1.into(), hlr);
+
+                    if field_type.is_unknown() { continue }
+
+                    infer_map
+                        .on(id)
+                        .known
+                        .has_fields()
+                        .insert((field.0.clone(), field_type.clone()));
+                }
+            }
+            _ => {}
+        }
+
+        if let KnownInferableInformation::Struct { ref has_fields, ref field_count } = 
+            infer_map.on(id).known {
+            let mut all_fields = has_fields.clone();
+            let mut real_field_count = *field_count;
+
+            let same_as = infer_map.on(id).same_as.clone();
+
+            for similarity in same_as.clone() {
+                let (similarity_has, similarity_field_count) = 
+                    infer_map.on(similarity).known.has_fields_field_count();
+
+                all_fields.extend(similarity_has.iter().cloned());
+
+                if similarity_field_count.is_some() {
+                    if real_field_count.is_some() {
+                        assert_eq!(real_field_count, *similarity_field_count);
+                    } else {
+                        real_field_count = *similarity_field_count;
+                    }
+                }
+            }
+
+            *infer_map.on(id).known.has_fields() = all_fields.clone();
+            for similarity in same_as {
+                *infer_map.on(similarity.clone()).known.has_fields() = all_fields.clone();
+                *infer_map.on(similarity).known.field_count() = real_field_count;
+            }
         }
     }
 }
@@ -530,8 +630,8 @@ fn fill_in_call(
 
         {
             let HNodeData::Call {
-                        ref mut generics, ..
-                    } = hlr.tree.get_mut(*id) else { unreachable!() };
+                ref mut generics, ..
+            } = hlr.tree.get_mut(*id) else { unreachable!() };
             generics.resize(code.generic_count as usize, Type::unknown());
         }
 
@@ -594,25 +694,47 @@ fn fill_in_call(
     }
 }
 
-fn advance_inference_step(step: &mut InferenceSteps, hlr: &mut FuncRep) {
-    match step {
-        InferenceSteps::Start => {
-            *step = InferenceSteps::FillIntsAndFloats;
-            hlr.modify_many_infallible(|_, number_data, _| {
-                match number_data {
-                    HNodeData::Number { lit_type, .. } if lit_type.is_unknown() => {
-                        *lit_type = Type::i(32);
-                    },
-                    HNodeData::Float { lit_type, .. } if lit_type.is_unknown() => {
-                        *lit_type = Type::i(32);
-                    },
-                    _ => {}
-                };
-            })
-        },
-        InferenceSteps::FillIntsAndFloats => todo!(),
-        InferenceSteps::FillStructLiterals => todo!(),
-        InferenceSteps::Failure => todo!(),
+fn advance_inference_step(
+    step: &mut InferenceSteps, 
+    hlr: &mut FuncRep, 
+    infer_map: &mut InferMap
+) {
+    *step = match step {
+        InferenceSteps::Start => InferenceSteps::FillStructLiterals,
+        InferenceSteps::FillStructLiterals => InferenceSteps::FillIntsAndFloats,
+        InferenceSteps::FillIntsAndFloats => InferenceSteps::Failure,
+        InferenceSteps::Failure => panic!(), // should be caught by infer_types
+    };
+
+    if *step >= InferenceSteps::FillStructLiterals {
+        hlr.modify_many_infallible(|struct_id, struct_data, _| {
+            let HNodeData::StructLit { var_type, .. } = struct_data else { return };
+
+            if var_type.is_known() { return; }
+
+            let KnownInferableInformation::Struct { ref has_fields, field_count, .. } = 
+                infer_map.on(struct_id).known else { return };
+
+            if let Some(field_count) = field_count && has_fields.len() != field_count {
+                return;
+            }
+
+            *var_type = Type::new_struct(has_fields.iter().cloned().collect());
+        })
+    }
+
+    if *step >= InferenceSteps::FillIntsAndFloats {
+        hlr.modify_many_infallible(|_, number_data, _| {
+            match number_data {
+                HNodeData::Number { lit_type, .. } if lit_type.is_unknown() => {
+                    *lit_type = Type::i(32);
+                },
+                HNodeData::Float { lit_type, .. } if lit_type.is_unknown() => {
+                    *lit_type = Type::f(32);
+                },
+                _ => {}
+            };
+        })
     }
 }
 

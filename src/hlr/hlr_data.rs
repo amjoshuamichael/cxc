@@ -164,7 +164,7 @@ impl<'a> FuncRep<'a> {
                 parent,
                 HNodeData::Float {
                     value,
-                    lit_type: Type::f32(),
+                    lit_type: Type::unknown(),
                 },
             ),
             Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value }),

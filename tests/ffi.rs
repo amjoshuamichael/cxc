@@ -151,8 +151,6 @@ fn large_struct() {
 fn i32_and_ref() {
     let mut unit = Unit::new();
 
-    unit.add_lib(StdLib);
-
     unit.push_script(
         "
         main(pointer: &i32); {i32, &i32} {
