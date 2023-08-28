@@ -8,6 +8,7 @@ pub fn large_args(hlr: &mut FuncRep) {
     handle_own_args(hlr);
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_args(hlr: &mut FuncRep) {
     let args: Vec<_> = hlr
         .args()
@@ -79,6 +80,7 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
     );
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         move |call_id, data, hlr| {

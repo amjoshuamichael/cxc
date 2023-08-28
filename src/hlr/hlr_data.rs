@@ -15,8 +15,6 @@ pub struct FuncRep<'a> {
     pub comp_data: &'a CompData,
     pub info: UniqueFuncInfo,
     pub ret_type: Type,
-
-    // used to find where variables are declared.
     pub variables: Variables,
 }
 
@@ -219,7 +217,7 @@ impl<'a> FuncRep<'a> {
                     ret_type: string_type.clone(),
                     f: "from_bytes".into(),
                     a: vec![ref_space, len_arg],
-                    generics: Vec::new(),
+                    generics: vec![arr_type.clone()],
                     relation: TypeRelationGeneric::Static(string_type),
                     sret: None,
                 };

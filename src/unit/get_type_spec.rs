@@ -50,11 +50,19 @@ impl<T: GenericTable> GenericTable for (T, Option<Type>) {
 
 impl GenericTable for UniqueFuncInfo {
     fn get_at_index(&self, index: u8) -> Option<Type> {
-        self.generics.get(index as usize).cloned()
+        if let Some(inner_type) = self.relation.inner_type() {
+            inner_type.clone().complete_deref().generics()
+                .get(index as usize)
+                .or_else(|| self.generics.get(index as usize + inner_type.generics().len()))
+                .cloned()
+        } else {
+            self.generics.get(index as usize).cloned()
+        }
     }
     fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
 }
 
+#[derive(Debug)]
 pub struct GetSpecReport {
     typ: Type,
     pub deref_count: i8,
@@ -180,7 +188,7 @@ impl CompData {
                     .map(|ga| self.get_spec(ga, generics))
                     .collect::<TResult<Vec<_>>>()?;
 
-                self.get_spec(self.get_alias_for(name)?, &generics)?
+                self.get_spec(self.get_typedef_of(name)?, &generics)?
                     .with_name(name.clone())
                     .with_generics(&generics)
             },
@@ -191,9 +199,11 @@ impl CompData {
                     .ok_or(TErr::CantGetGeneric(on.clone(), on.generics().clone(), *index))?
                     .clone()
             },
-            TypeSpec::GenParam(index) => generics
+            TypeSpec::GenParam(index) => {
+                generics
                 .get_at_index(*index)
-                .ok_or(TErr::TooFewGenerics(generics.all_generics(), *index))?,
+                .ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics(), *index))?
+            }
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {
                 let array = self.get_spec(array, generics)?;

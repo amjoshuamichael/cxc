@@ -5,7 +5,7 @@ Slice<T> = {
 
 <T> Slice<T>:.slice(range: Range<u64>); Me {
     ; Me {
-        ptr = self.ptr + range.start,
+        ptr = self.ptr.ptr_add(range.start),
         len = range.end - range.start,
     }
 }

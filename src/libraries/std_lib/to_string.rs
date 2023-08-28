@@ -61,7 +61,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     let input_var = Expr::ident("input");
     let push_string = Expr::ident("push_string");
 
-    let expr = match typ.clone().get_deref().unwrap().as_type_enum() {
+    let expr = match typ.clone().get_deref()?.as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
             let prefix = {
                 let mut type_name = 

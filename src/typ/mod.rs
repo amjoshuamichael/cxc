@@ -134,6 +134,8 @@ impl Type {
             chain.push(derefed);
         }
 
+        chain.insert(1, self.get_ref());
+
         chain
     }
 

@@ -34,6 +34,8 @@ impl Library for StdLib {
         unit.push_script(include_str!("drop.cxc")).unwrap();
         unit.add_lib(DropLib);
 
+        unit.push_script(include_str!("ptr.cxc")).unwrap();
+
         unit.add_lib(ArrayHelperLib);
 
         unit.push_script(include_str!("vec.cxc")).unwrap();

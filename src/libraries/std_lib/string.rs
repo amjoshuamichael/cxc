@@ -5,7 +5,7 @@ use crate::libraries::Library;
 pub(super) struct StringLib;
 
 impl crate::XcReflect for String {
-    fn alias_code() -> String { "String = { Vec<u8> }".to_string() }
+    fn alias_code() -> String { "String = { Vec<u8>, }".to_string() }
 }
 
 impl Library for StringLib {
@@ -25,11 +25,11 @@ impl Library for StringLib {
         );
 
         unit.add_rust_func_explicit(
-            "from_bytes",
+            "_from_bytes",
             string_from_bytes as *const usize,
             ExternalFuncAdd {
                 ret_type: string_type.clone(),
-                arg_types: vec![Type::void_ptr(), Type::i(64)],
+                arg_types: vec![Type::u(8).get_ref(), Type::i(64)],
                 relation: TypeRelation::Static(string_type.clone()),
                 ..ExternalFuncAdd::empty()
             },
@@ -45,15 +45,7 @@ impl Library for StringLib {
             },
         );
 
-        unit.add_rust_func_explicit(
-            "drop",
-            drop_string as *const usize,
-            ExternalFuncAdd {
-                arg_types: vec![string_type.get_ref()],
-                relation: TypeRelation::MethodOf(string_type.get_ref()),
-                ..ExternalFuncAdd::empty()
-            },
-        );
+        unit.push_script(include_str!("string.cxc")).unwrap();
     }
 }
 
@@ -64,5 +56,3 @@ fn string_from_bytes(buf: *mut u8, length: usize) -> String {
 }
 
 fn push_string(this: &mut String, other: &String) { *this += &**other; }
-
-fn drop_string(string: &mut String) { unsafe { std::ptr::drop_in_place(string) } }

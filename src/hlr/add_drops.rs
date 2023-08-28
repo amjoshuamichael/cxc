@@ -2,6 +2,7 @@ use crate::{parse::Opcode, UniqueFuncInfo, TypeRelation, TypeEnum};
 
 use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen}};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn add_drops(hlr: &mut FuncRep) {
     let vars = hlr.variables
         .iter()

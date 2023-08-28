@@ -25,19 +25,19 @@ Vec<T> = {
             self.data_loc = new_ptr
         }
 
-        ptr: &T = self.data_loc + self.len
+        ptr: &T = self.data_loc.ptr_add(self.len)
         *ptr = val
         
         self.len = self.len + u64 1
     }
 
     get(index: u64); T {
-        ptr: &T = self.data_loc + index
+        ptr: &T = self.data_loc.ptr_add(index)
         ; *ptr
     }
 
     get_ref(index: u64); &T {
-        ptr: &T = self.data_loc + index
+        ptr: &T = self.data_loc.ptr_add(index)
         ; ptr
     }
 }

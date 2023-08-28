@@ -143,7 +143,7 @@ impl CompData {
             ..Default::default()
         });
 
-        out.aliases.insert("Type".into(), TypeSpec::Int(64));
+        out.typedefs.insert("Type".into(), TypeSpec::Int(64));
 
         out
     }
@@ -270,19 +270,19 @@ impl CompData {
     }
 
     pub fn add_type_alias(&mut self, name: TypeName, a: TypeSpec) {
-        self.aliases.insert(name, a);
+        self.typedefs.insert(name, a);
     }
 
-    pub fn contains(&self, key: &TypeName) -> bool { self.aliases.contains_key(key) }
+    pub fn contains(&self, key: &TypeName) -> bool { self.typedefs.contains_key(key) }
 
     pub fn get_by_name(&self, name: &TypeName) -> TResult<Type> {
-        let alias = self.get_alias_for(name)?;
+        let alias = self.get_typedef_of(name)?;
         let realized_type = self.get_spec(alias, &())?;
         Ok(realized_type.with_name(name.clone()).with_generics(&Vec::new()))
     }
 
-    pub fn get_alias_for(&self, name: &TypeName) -> TResult<&TypeSpec> {
-        self.aliases.get(name).ok_or(TErr::Unknown(name.clone()))
+    pub fn get_typedef_of(&self, name: &TypeName) -> TResult<&TypeSpec> {
+        self.typedefs.get(name).ok_or(TErr::Unknown(name.clone()))
     }
 }
 

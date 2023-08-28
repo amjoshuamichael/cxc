@@ -104,13 +104,15 @@ fn hello_world() {
 #[test]
 fn infer_vec_push() {
     xc_test!(
+        use StdLib;
         r#"
         main() {
-            x = Vec<i32>:new()
+            x = Vec<i32>:new<i32>()
             x.push(432)
-            assert_eq(x.get(0), 432)
+            x.get(0)
         }
-        "#
+        "#;
+        432
     )
 }
 
@@ -144,6 +146,7 @@ fn infer_default_struct() {
 #[test]
 fn infer_default_array() {
     xc_test!(
+        use StdLib;
         r#"
         main() {
             x: [4]i32 = [ 90, 43, ++ ]
@@ -152,7 +155,8 @@ fn infer_default_array() {
             assert_eq(x[i64 2], 0)
             assert_eq(x[i64 3], 0)
         }
-        "#
+        "#;
+        ()
     )
 }
 
@@ -348,5 +352,23 @@ fn infer_number_u8_in_struct() {
         }
         "#;
         2u64
+    )
+}
+
+#[test]
+fn infer_array_len() {
+    xc_test!(
+        use StdLib;
+        r#"
+        takes_a_big_array(val: &[200]u8) {}
+
+        main(); u64 {
+            supposed_to_be_big = [432, 656, ++]
+            takes_a_big_array(&supposed_to_be_big)
+
+            ; supposed_to_be_big.len()
+        }
+        "#;
+        200u64
     )
 }

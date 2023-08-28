@@ -12,25 +12,18 @@ impl Library for DefaultLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_static_deriver("default".into(), derive_default);
 
-        unit.add_rust_func_explicit(
-            "default",
-            i32::default as *const usize,
-            ExternalFuncAdd {
-                ret_type: Type::i(32),
-                relation: TypeRelation::Static(Type::i(32)),
-                ..ExternalFuncAdd::empty()
-            },
-        );
-
-        unit.add_rust_func_explicit(
-            "default",
-            f32::default as *const usize,
-            ExternalFuncAdd {
-                ret_type: Type::f(32),
-                relation: TypeRelation::Static(Type::f(32)),
-                ..ExternalFuncAdd::empty()
-            },
-        );
+        // TODO: write this in actual cxc code
+        unit.add_external_default::<i8>();
+        unit.add_external_default::<i16>();
+        unit.add_external_default::<i32>();
+        unit.add_external_default::<i64>();
+        unit.add_external_default::<u8>();
+        unit.add_external_default::<u16>();
+        unit.add_external_default::<u32>();
+        unit.add_external_default::<u64>();
+        unit.add_external_default::<f32>();
+        unit.add_external_default::<f64>();
+        unit.add_external_default::<bool>();
     }
 }
 

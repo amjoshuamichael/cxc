@@ -1,0 +1,5 @@
+<T> &T:.ptr_add(val: u64); &T {
+    ptr_as_u64 = cast<&T, u64>(self) 
+    add_as_u64 = ptr_as_u64 + val * size_of<T>()
+    ; cast<u64, &T>(add_as_u64)
+}

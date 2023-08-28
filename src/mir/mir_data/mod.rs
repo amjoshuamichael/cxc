@@ -101,9 +101,6 @@ impl fmt::Debug for MLine {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MReg(u32);
 
-impl ToString for MReg {
-    fn to_string(&self) -> String { format!("{self}") }
-}
 impl Display for MReg {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "_{}", self.0) }
 }
@@ -114,9 +111,6 @@ impl fmt::Debug for MReg {
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MAddrReg(u32);
 
-impl ToString for MAddrReg {
-    fn to_string(&self) -> String { format!("{self}") }
-}
 impl Display for MAddrReg {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "-{}", self.0) }
 }

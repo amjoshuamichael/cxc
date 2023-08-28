@@ -42,6 +42,7 @@ use self::large_args::large_args;
 use self::add_drops::add_drops;
 use self::remove_redundant_derefs::remove_redundant_derefs;
 
+
 pub fn hlr(
     info: UniqueFuncInfo,
     comp_data: &CompData,
@@ -60,6 +61,12 @@ pub fn hlr(
     #[cfg(feature = "xc-debug")]
     println!("{}", &output.tree.to_string());
 
+    // the following hlr passes are nescessary, not just optimization
+    //
+    // each hlr pass is marked with #[cfg_attr(debug_assertions, inline(never))] so we can 
+    // see the individual perf impact of each pass when using a flamegraph
+
+    dbg!(&output.tree);
     infer_types(&mut output);
     auto_deref(&mut output)?;
     op_overloading(&mut output);

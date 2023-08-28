@@ -5,6 +5,7 @@ use super::{
     hlr_data::FuncRep,
 };
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn variant_literals(hlr: &mut FuncRep) {
     hlr.modify_many_infallible_rev(
         |struct_id, mut struct_data, hlr| {

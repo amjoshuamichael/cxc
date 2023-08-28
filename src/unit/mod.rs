@@ -48,7 +48,7 @@ pub struct Unit {
 #[derive(Clone, Default, XcReflectMac)]
 #[xc_opaque]
 pub struct CompData {
-    aliases: BTreeMap<TypeName, TypeSpec>,
+    typedefs: BTreeMap<TypeName, TypeSpec>,
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     reflected_types: BTreeMap<TypeId, Type>,
     pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
@@ -167,11 +167,11 @@ impl Unit {
             all_func_infos.extend(set.clone().into_iter());
 
             for info in &set {
-                // register first class functions
+                // register all functions
                 let code = self.comp_data.get_code(info.clone()).unwrap();
 
-                let func_arg_types = code
-                    .args
+                let func_arg_types = dbg!(code
+                    .args)
                     .iter()
                     .map(|VarDecl { type_spec, .. }| {
                          self.comp_data.get_spec(type_spec, info)
@@ -180,10 +180,12 @@ impl Unit {
                 let func_ret_type = self.comp_data.get_spec(&code.ret_type, info)?;
                 let func_type = func_ret_type.func_with_args(func_arg_types);
 
-                self.comp_data.globals.insert(
-                    info.name.clone(),
-                    func_type.clone()
-                );
+                if info.generics.is_empty() {
+                    self.comp_data.globals.insert(
+                        info.name.clone(),
+                        func_type.clone()
+                    );
+                }
             }
             
             let func_reps: Vec<MIR> = { set }

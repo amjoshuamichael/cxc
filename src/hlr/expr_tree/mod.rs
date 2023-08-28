@@ -11,7 +11,7 @@ pub use quick::*;
 #[derive(Default, Clone)]
 pub struct ExprTree {
     pub root: ExprID,
-    nodes: SlotMap<ExprID, ExprNode>,
+    pub nodes: SlotMap<ExprID, ExprNode>,
 }
 
 impl ToString for ExprTree {
@@ -45,7 +45,7 @@ new_key_type! {
 }
 
 #[derive(Clone)]
-struct ExprNode {
+pub struct ExprNode {
     parent: ExprID,
     data: HNodeData,
 }

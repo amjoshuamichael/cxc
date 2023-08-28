@@ -208,12 +208,10 @@ pub fn parse_func_code(
     let generic_count = lexer.generic_count() as u32;
 
     if let TypeSpecRelation::MethodOf(relation) = &relation {
-        let mut new_args = vec![VarDecl {
+        args.insert(0, VarDecl {
             name: VarName::from("self"),
             type_spec: relation.clone(),
-        }];
-        new_args.append(&mut args);
-        args = new_args;
+        });
     }
 
     Ok(FuncCode {

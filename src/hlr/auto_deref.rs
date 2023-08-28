@@ -5,6 +5,7 @@ use crate::{
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many(
         |memberlit, member_data, hlr| {
@@ -17,7 +18,9 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
                 &()
             )?;
 
-            for _ in 0..report.deref_count {
+            let deref_count = report.deref_count - 1;
+
+            for _ in 0..deref_count {
                 let object_type = hlr.tree.get(*object).ret_type();
 
                 *object = hlr.insert_quick(
@@ -56,19 +59,32 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
 
                     hlr.comp_data.get_func_type(&dereffed_func_info).is_ok()
                 })
-                .unwrap_or_else(|| todo!());
+                .unwrap_or_else(|| todo!()) as i32 - 1;
 
-            for d in 0..deref_level_of_call {
-                let last_arg = a.first_mut().unwrap();
+            if deref_level_of_call == 0 {
+                let first_arg = a.first_mut().unwrap();
 
-                *last_arg = hlr.insert_quick(
+                *first_arg = hlr.insert_quick(
                     callid,
                     HNodeData::UnarOp {
-                        ret_type: deref_chain[d + 1].clone(),
-                        op: Opcode::Deref,
-                        hs: *last_arg,
+                        ret_type: method_of.get_ref(),
+                        op: Opcode::Ref,
+                        hs: *first_arg,
                     },
                 );
+            } else {
+                for d in 0..deref_level_of_call {
+                    let first_arg = a.first_mut().unwrap();
+
+                    *first_arg = hlr.insert_quick(
+                        callid,
+                        HNodeData::UnarOp {
+                            ret_type: deref_chain[(d + 1) as usize].clone(),
+                            op: Opcode::Deref,
+                            hs: *first_arg,
+                        },
+                    );
+                }
             }
         },
     );

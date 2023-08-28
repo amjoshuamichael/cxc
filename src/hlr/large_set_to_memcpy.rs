@@ -2,6 +2,7 @@ use crate::Type;
 
 use super::{hlr_data::FuncRep, expr_tree::{HNodeData, get_ref, MemCpyGen}};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |set_id, data, hlr| {

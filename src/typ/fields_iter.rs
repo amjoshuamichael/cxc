@@ -154,6 +154,11 @@ mod tests {
     }
 
     #[test]
+    fn fields_iter_single_tuple() {
+        let  mut iter = FieldsIter::new(Type::new_tuple(vec![Type::i(32)]));
+    }
+
+    #[test]
     fn fields_iter_ref() {
         let mut iter = FieldsIter::new(
             Type::new(TypeEnum::Struct(StructType {
@@ -227,4 +232,5 @@ mod tests {
         assert_eq!(iter.next(), Some(Type::f32()));
         assert_eq!(iter.next(), None);
     }
+
 }

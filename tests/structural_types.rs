@@ -34,7 +34,7 @@ fn nested_structural_type() {
 }
 
 #[test]
-fn structural_type_method() {
+fn basic_structural_type_method() {
     xc_test!(
         "
             &{ x: i32, y: i32 }:.add(); i32 {

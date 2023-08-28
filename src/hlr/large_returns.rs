@@ -13,6 +13,7 @@ pub fn large_returns(hlr: &mut FuncRep) {
     handle_own_return(hlr);
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
         ReturnStyle::ThroughI32
@@ -156,6 +157,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
     );
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
     for call_id in hlr.tree.ids_in_order().drain(..).rev() {
         let data = hlr.tree.get(call_id);

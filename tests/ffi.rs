@@ -180,7 +180,7 @@ fn method_on_struct_with_arg() {
         Point2D::magnify as *const usize,
         ExternalFuncAdd {
             arg_types: vec![point2d.get_ref().clone(), Type::i(32)].clone(),
-            ret_type: Type::i(32),
+            ret_type: point2d.clone(),
             relation: TypeRelation::MethodOf(point2d.get_ref()),
             ..ExternalFuncAdd::empty()
         },

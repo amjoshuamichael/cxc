@@ -16,6 +16,16 @@ impl Type {
 }
 
 fn could_come_from_filled(self_type: &Type, other_type: &Type) -> bool {
+    if (self_type.name() != other_type.name() && self_type.name() != &TypeName::Anonymous)
+        && other_type
+            .generics()
+            .iter()
+            .zip(self_type.generics().iter())
+            .all(|(other_gen, self_gen)| could_come_from_filled(self_gen, other_gen))
+    {
+        return false;
+    }
+
     let filler = Type::empty().with_name("Filler".into());
 
     let mut self_iter = FieldsIter::new(self_type.clone().wrap());
@@ -23,6 +33,7 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type) -> bool {
 
     while let Some(self_next) = self_iter.next() {
         let other_next = other_iter.next();
+
         if other_next.is_none() {
             return false;
         };

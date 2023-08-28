@@ -71,6 +71,10 @@ impl ExprTree {
 
         ids_of(self, self.root)
     }
+    
+    pub fn ids_unordered(&self) -> slotmap::basic::Keys<ExprID, ExprNode> {
+        self.nodes.keys()
+    }
 
     pub fn insert(&mut self, parent: ExprID, data: HNodeData) -> ExprID {
         self.nodes.insert(ExprNode { parent, data })

@@ -2,6 +2,7 @@ use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName};
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn op_overloading(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |op_id, op_data, hlr| {
