@@ -45,11 +45,7 @@ impl Type {
     }
 
     pub fn is_subtype_of(&self, of: &Type) -> bool {
-        match self.as_type_enum() {
-            TypeEnum::Variant(VariantType { parent, .. }) 
-                if let TypeEnum::Sum(of_sum) = of.as_type_enum() => parent == of_sum,
-            other => other == of.as_type_enum(),
-        }
+        self == of
     }
 
     pub fn are_subtypes(lhs: &Self, rhs: &Self) -> bool {
@@ -193,27 +189,6 @@ impl Type {
         }))
     }
 
-    pub fn new_sum(mut variants: Vec<(TypeName, Type)>) -> Type {
-        if variants.len() == 2
-            && variants[0].1 != Type::empty()
-            && variants[1].1 == Type::empty()
-        {
-            variants.swap(0, 1);
-        }
-
-        let largest_variant_index = variants
-            .iter()
-            .enumerate()
-            .max_by_key(|(_, (_, typ))| typ.size())
-            .unwrap()
-            .0;
-
-        Type::new(TypeEnum::Sum(SumType {
-            variants,
-            largest_variant_index,
-        }))
-    }
-
     pub fn unknown() -> Type { Type::new(TypeEnum::Unknown) }
 
     pub fn void() -> Type { Type::new(TypeEnum::Void) }
@@ -272,9 +247,7 @@ impl Type {
         !matches!(
             self.as_type_enum(), 
             TypeEnum::Struct(_) | 
-            TypeEnum::Array(_) | 
-            TypeEnum::Sum(_) | 
-            TypeEnum::Variant(_)
+            TypeEnum::Array(_)
         )
     }
 }
@@ -335,8 +308,6 @@ pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
     Struct(StructType),
-    Sum(SumType),
-    Variant(VariantType),
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
@@ -365,8 +336,6 @@ impl Deref for TypeEnum {
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
             TypeEnum::Bool(t) => t,
-            TypeEnum::Sum(t) => t,
-            TypeEnum::Variant(t) => t,
             TypeEnum::Void => &VOID_STATIC,
             TypeEnum::Unknown => &UNKNOWN_STATIC,
         }
@@ -428,124 +397,6 @@ impl StructType {
         types.reverse();
 
         Some(types[0].clone())
-    }
-}
-
-// TODO: is not interroperable with a rust sum type with 0 variants.
-#[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord, XcReflect)]
-pub struct SumType {
-    pub variants: Vec<(TypeName, Type)>,
-    largest_variant_index: usize,
-}
-
-impl SumType {
-    pub fn get_variant_type(
-        &self,
-        variant_name: &TypeName,
-    ) -> TResult<Type> {
-        let (variant_index, variant_type) = self
-            .variants
-            .iter()
-            .enumerate()
-            .find(|(_, (name, _))| name == variant_name)
-            .ok_or(TErr::VariantNotFound(self.clone(), variant_name.clone()))
-            .map(|(index, (_, t))| (index, t.clone()))?;
-
-        Ok(Type::new(TypeEnum::Variant(VariantType {
-            tag: variant_index as u32,
-            parent: self.clone(),
-            variant_type,
-        })))
-    }
-
-    pub fn get_variant_index(&self, field_name: &TypeName) -> usize {
-        self.variants
-            .iter()
-            .position(|field| &field.0 == field_name)
-            .unwrap()
-    }
-
-    pub fn largest_variant_data(&self) -> Type {
-        self.variants[self.largest_variant_index].1.clone()
-    }
-
-    pub fn largest_variant_as_struct(&self) -> Type {
-        VariantType::as_struct_no_parent(self, &self.largest_variant_data())
-    }
-
-    pub fn largest_variant_index(&self) -> usize { self.largest_variant_index }
-
-    pub fn has_internal_discriminant(&self) -> bool {
-        if self.variants.is_empty() {
-            return false;
-        }
-
-        let mut nonempty_variants = self.variants.iter().filter(|(_, typ)| !typ.is_empty());
-        if let Some((_, nonempty_variant)) = nonempty_variants.next() {
-            if nonempty_variants.count() != 0 {
-                return false;
-            }
-
-            nonempty_variant
-                .invalid_state((self.variants.len() - 2) as u32)
-                .is_some()
-        } else {
-            false
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord, XcReflect)]
-pub struct VariantType {
-    pub tag: u32,
-    pub parent: SumType,
-    pub variant_type: Type,
-}
-
-impl VariantType {
-    pub fn as_struct(&self) -> Type {
-        Self::as_struct_no_parent(&self.parent, &self.variant_type)
-    }
-
-    pub fn parent_type(&self) -> Type {
-        Type::new(TypeEnum::Sum(self.parent.clone()))
-    }
-
-    pub fn as_struct_no_parent(parent: &SumType, variant_data: &Type) -> Type {
-        let mut fields = match variant_data.as_type_enum() {
-            TypeEnum::Struct(StructType { fields, .. }) => fields.clone(),
-            _ => vec![("data".into(), variant_data.clone())],
-        };
-
-        // TODO: add ability to get alignment of a type
-        let tag_should_copy_alignment_of = match fields.get(0) {
-            Some(field) => field.1.clone(),
-            None => parent.largest_variant_data(),
-        };
-        let tag_size = match tag_should_copy_alignment_of.size() {
-            0..=1 => 8,
-            2..4 => 16,
-            _ => 32,
-        };
-        let tag = ("tag".into(), Type::i(tag_size));
-
-        if !parent.has_internal_discriminant() {
-            fields.insert(0, tag);
-        }
-
-        let as_struct_no_padding = Type::new_struct(fields.clone());
-
-        let padding_amount = if &parent.largest_variant_data() != variant_data {
-            parent.largest_variant_as_struct().size() - as_struct_no_padding.size()
-        } else {
-            0
-        };
-
-        if padding_amount > 0 {
-            fields.push(("padding".into(), Type::i(8).get_array(padding_amount as u32)));
-        }
-
-        Type::new_struct(fields)
     }
 }
 

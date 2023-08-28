@@ -96,7 +96,7 @@ impl Type {
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
-            Struct(_) | Array(_) | Variant(_) => {
+            Struct(_) | Array(_) => {
                 let size = self.size();
 
                 if size > 16 {
@@ -114,19 +114,6 @@ impl Type {
                     }
                 } else {
                     ReturnStyle::Direct
-                }
-            },
-            Sum(sum_type) => {
-                let size = self.size();
-
-                if size > 16 {
-                    return ReturnStyle::Sret;
-                }
-
-                if sum_type.has_internal_discriminant() {
-                    sum_type.largest_variant_data().return_style()
-                } else {
-                    return_style_from_size(size)
                 }
             },
             Void => ReturnStyle::Void,

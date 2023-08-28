@@ -17,12 +17,6 @@ pub(super) fn size_of_type(typ: Type) -> usize {
 
             size_sum.next_multiple_of(alignment)
         },
-        TypeEnum::Sum(sum_type) => {
-            sum_type.largest_variant_as_struct().size()
-        },
-        TypeEnum::Variant(variant_type) => {
-            variant_type.as_struct().size()
-        }
         TypeEnum::Ref(_) => 8,
         TypeEnum::Func(_) => 8,
         TypeEnum::Array(ArrayType { base, count }) => {

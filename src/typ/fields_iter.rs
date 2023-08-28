@@ -57,10 +57,6 @@ pub struct FieldsIter {
 
 impl FieldsIter {
     pub fn new(from: Type) -> FieldsIter {
-        if let TypeEnum::Variant(variant_type) = from.as_type_enum() {
-            return variant_type.as_struct().fields_iter()
-        }
-
         FieldsIter {
             over: from,
             index: 0,
@@ -120,7 +116,6 @@ impl Iterator for FieldsIter {
                 self.inner = Some(Box::new(FieldsIter::new(base.clone())));
                 base
             },
-            TypeEnum::Variant(_) => unreachable!(),
             TypeEnum::Array(ArrayType { base, count }) => {
                 if self.index as u32 > *count {
                     return None;

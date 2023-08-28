@@ -54,14 +54,6 @@ impl Kind for StructType {
     }
 }
 
-impl Kind for SumType {
-    fn to_string(&self) -> String { format!("/{:?}/", self.variants) }
-}
-
-impl Kind for VariantType {
-    fn to_string(&self) -> String { format!("{:?}.{}", self.parent, self.tag) }
-}
-
 impl Kind for IntType {
     fn to_string(&self) -> String {
         let prefix = if self.signed { 'i' } else { 'u' };

@@ -5,7 +5,6 @@ mod remove_redundant_derefs;
 mod op_overloading;
 mod struct_literals;
 mod array_literals;
-mod variant_literals;
 mod large_returns;
 mod large_args;
 mod type_inference;
@@ -34,7 +33,6 @@ use self::auto_deref::auto_deref;
 use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
 use self::array_literals::array_literals;
-use self::variant_literals::variant_literals;
 use self::hlr_data_output::FuncOutput;
 use self::large_returns::large_returns;
 use self::large_set_to_memcpy::large_set_to_memcpy;
@@ -66,11 +64,9 @@ pub fn hlr(
     // each hlr pass is marked with #[cfg_attr(debug_assertions, inline(never))] so we can 
     // see the individual perf impact of each pass when using a flamegraph
 
-    dbg!(&output.tree);
     infer_types(&mut output);
     auto_deref(&mut output)?;
     op_overloading(&mut output);
-    variant_literals(&mut output);
     active_initialization(&mut output);
     struct_literals(&mut output);
     array_literals(&mut output);

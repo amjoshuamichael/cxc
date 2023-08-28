@@ -69,8 +69,6 @@ fn could_come_from_filled(self_type: &Type, other_type: &Type) -> bool {
                 };
             },
             TypeEnum::Struct(_)
-            | TypeEnum::Sum(_)
-            | TypeEnum::Variant(_)
             | TypeEnum::Ref(_)
             | TypeEnum::Bool(_)
             | TypeEnum::Func(_)

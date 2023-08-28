@@ -405,10 +405,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
         if let Some(known_type) = graph.knowns.remove(&child) {
             if constraints.is.is_known() && known_type != constraints.is {
-                dbg!(&graph.all_inferables);
-                dbg!(&hlr.tree);
-                dbg!(&constraints);
-                dbg!(&constraints.is, &constraints.last_set_by, &known_type);
                 panic!() // TODO: error
             }
 

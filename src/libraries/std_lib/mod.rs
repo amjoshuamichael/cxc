@@ -42,7 +42,6 @@ impl Library for StdLib {
         unit.push_script(include_str!("hashmap.cxc")).unwrap();
         unit.push_script(include_str!("rc.cxc")).unwrap();
         unit.push_script(include_str!("lucid.cxc")).unwrap();
-        unit.push_script(include_str!("option.cxc")).unwrap();
         unit.push_script(include_str!("range.cxc")).unwrap();
         unit.push_script(include_str!("slice.cxc")).unwrap();
 
