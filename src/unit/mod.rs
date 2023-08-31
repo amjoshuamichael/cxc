@@ -1,13 +1,13 @@
 use self::backends::IsBackend;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
-pub use self::functions::FuncDeclInfo;
 use self::functions::TypeLevelFunc;
 pub use self::generations::Generations;
 pub use self::value_api::Value;
 use crate::FuncType;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
+use crate::errors::TResult;
 use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::libraries::Library;
@@ -20,6 +20,8 @@ use crate::Type;
 pub use add_external::ExternalFuncAdd;
 pub use functions::UniqueFuncInfo;
 pub use reflect::XcReflect;
+use slotmap::SlotMap;
+use slotmap::new_key_type;
 use std::any::TypeId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -51,15 +53,16 @@ pub struct CompData {
     typedefs: BTreeMap<TypeName, TypeSpec>,
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     reflected_types: BTreeMap<TypeId, Type>,
-    pub(crate) func_code: BTreeMap<FuncDeclInfo, FuncCode>,
-    decl_names: BTreeMap<VarName, Vec<FuncDeclInfo>>,
+    pub(crate) func_code: SlotMap<FuncCodeId, FuncCode>,
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
-    intrinsics: BTreeSet<FuncDeclInfo>,
+    intrinsics: BTreeSet<FuncCodeId>,
     pub generations: Generations,
     dependencies: BTreeMap<UniqueFuncInfo, BTreeSet<UniqueFuncInfo>>,
     pub func_types: BTreeMap<UniqueFuncInfo, FuncType>,
     pub globals: BTreeMap<VarName, Type>,
 }
+
+new_key_type! { pub struct FuncCodeId; }
 
 impl Debug for CompData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -105,7 +108,7 @@ impl Unit {
                 self.comp_data.add_type_alias(decl.name, decl.typ);
             }
 
-            let mut declarations = Vec::new();
+            let mut declarations = Vec::<FuncCodeId>::new();
 
             for code in parsed.funcs.iter() {
                 let is_generic = code.has_generics();
@@ -123,14 +126,15 @@ impl Unit {
 
             let funcs_to_compile: Vec<UniqueFuncInfo> = { declarations }
                 .drain(..)
-                .map(|decl| {
-                    let relation = decl
+                .map(|code_id| {
+                    let code = &self.comp_data.func_code[code_id];
+                    let relation = code
                         .relation
                         .clone()
                         .map_inner_type(|spec| self.comp_data.get_spec(&spec, &()).unwrap());
 
                     let func_info = UniqueFuncInfo {
-                        name: decl.name,
+                        name: code.name.clone(),
                         relation,
                         ..Default::default()
                     };
@@ -170,8 +174,8 @@ impl Unit {
                 // register all functions
                 let code = self.comp_data.get_code(info.clone()).unwrap();
 
-                let func_arg_types = dbg!(code
-                    .args)
+                let func_arg_types = code
+                    .args
                     .iter()
                     .map(|VarDecl { type_spec, .. }| {
                          self.comp_data.get_spec(type_spec, info)
@@ -205,7 +209,9 @@ impl Unit {
             set = func_reps
                 .iter()
                 .flat_map(|f| { f.dependencies.clone().into_iter() })
-                .filter(|f| !self.has_been_compiled(f) && !all_func_infos.contains(&f))
+                .filter(|f| 
+                    !self.has_been_compiled(f).unwrap() && !all_func_infos.contains(&f)
+                )
                 .collect();
 
             for func in func_reps.iter() {
@@ -243,7 +249,6 @@ impl Unit {
 
         #[cfg(feature = "backend-debug")]
         println!("--finished all compilation--");
-        
 
         Ok(())
     }
@@ -261,16 +266,15 @@ impl Unit {
         self.backend.get_function(with)
     }
 
-    pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
-        let is_intrinsic = if let Some(decl) = self.comp_data.get_declaration_of(info) {
-            self.comp_data.intrinsics.contains(&decl)
+    pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> TResult<bool> {
+        if let Some(decl) = self.comp_data.get_declaration_of(info)? && 
+            self.comp_data.intrinsics.contains(&decl) {
+            Ok(true)
+        } else if self.backend.has_been_compiled(&info) {
+            Ok(true)
         } else {
-            false
-        };
-
-        let is_compiled_as_function = self.backend.has_been_compiled(&info);
-
-        is_intrinsic || is_compiled_as_function
+            Ok(false)
+        }
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

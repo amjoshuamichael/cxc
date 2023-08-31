@@ -1,7 +1,7 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec},
-    Type, TypeRelation, UniqueFuncInfo, VarName, CompData,
+    Type, TypeRelation, UniqueFuncInfo, VarName, CompData, errors::TResult,
 };
 use indexmap::{IndexSet, IndexMap};
 use std::{hash::Hash, collections::HashMap};
@@ -138,7 +138,6 @@ impl InferMap {
     }
 
     pub fn constraint_index_of(&self, inferable: impl Into<Inferable> + std::fmt::Debug) -> ConstraintIndex {
-        dbg!(&inferable);
         let inferable = inferable.into();
 
         let inferable_index = self.inferables.iter().position(|i| i == &inferable).unwrap();
@@ -277,7 +276,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
         fn add_to_inferables_list(&mut self, add: impl Into<Inferable>) -> usize {
             let add = add.into();
-            dbg!(&add);
             assert!(!self.all_inferables.contains(&add));
 
             self.all_inferables.push(add);
@@ -417,7 +415,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
     }
 
     infer_map.inferable_index_to_constraint_index = inferable_index_to_constraint_index;
-    infer_map.inferables = dbg!(graph.all_inferables);
+    infer_map.inferables = graph.all_inferables;
     infer_map.constraints = constraints_set;
 
     for id in ids_in_order.into_iter().rev() {
@@ -747,7 +745,7 @@ fn fill_known_information(infer_map: &mut InferMap, hlr: &mut FuncRep) {
     }
 }
 
-fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
+fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
     for call_index in 0.. {
         let id = match infer_map.calls.get_index(call_index) {
             Some(id) => *id,
@@ -769,16 +767,18 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     ..func_info.clone()
                 };
 
-                if fill_in_call(infer_map, hlr, dereffed_func_info.clone(), &id, doing_deref) {
+                if fill_in_call(infer_map, hlr, dereffed_func_info.clone(), &id, doing_deref)? {
                     let HNodeData::Call { relation: ref mut og_call_relation, .. } = hlr.tree.get_mut(id) else { unreachable!() };
                     *og_call_relation = dereffed_func_info.relation;
                     break;
                 }
             }
         } else {
-            fill_in_call(infer_map, hlr, func_info, &id, false);
+            fill_in_call(infer_map, hlr, func_info, &id, false)?;
         }
     }
+
+    Ok(())
 }
 
 fn fill_in_call(
@@ -787,7 +787,7 @@ fn fill_in_call(
     func_info: UniqueFuncInfo,
     id: &ExprID,
     doing_deref: bool,
-) -> bool {
+) -> TResult<bool> {
     if let Ok(func_type) = hlr.comp_data.get_func_type(&func_info) {
         infer_map.calls.remove(id);
         let constraint = &mut infer_map.constraint_of(*id);
@@ -816,8 +816,8 @@ fn fill_in_call(
             constraint.last_set_by = LastSetBy::ArgTypeOfFunction(func_info.clone(), a);
         }
 
-        true
-    } else if let Some(decl_info) = hlr.comp_data.get_declaration_of(&func_info) {
+        Ok(true)
+    } else if let Some(code_id) = hlr.comp_data.get_declaration_of(&func_info)? {
         // Function has generics that we do not know, but because of the
         // signature of the function declaration (found by the
         // get_declaration_of) method, we can fill in some constraints
@@ -825,7 +825,7 @@ fn fill_in_call(
 
         infer_map.calls.remove(id);
 
-        let code = hlr.comp_data.func_code.get(&decl_info).unwrap();
+        let code = hlr.comp_data.func_code.get(code_id).unwrap();
 
         let HNodeData::Call { a, .. } = hlr.tree.get(*id) else { unreachable!() };
 
@@ -900,9 +900,9 @@ fn fill_in_call(
             );
         }
 
-        true
+        Ok(true)
     } else {
-        false
+        Ok(false)
     }
 }
 

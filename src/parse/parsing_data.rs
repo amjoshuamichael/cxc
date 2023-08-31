@@ -1,7 +1,7 @@
 use std::{fmt::Debug, hash::Hash, iter::{once, empty}, sync::Arc};
 
 use crate::{
-    unit::{CompData, FuncDeclInfo, UniqueFuncInfo},
+    unit::{CompData, UniqueFuncInfo},
     Type, XcReflect,
 };
 
@@ -195,13 +195,6 @@ pub struct FuncCode {
 }
 
 impl FuncCode {
-    pub fn decl_info(&self) -> FuncDeclInfo {
-        FuncDeclInfo {
-            name: self.name.clone(),
-            relation: self.relation.clone(),
-        }
-    }
-
     pub fn to_unique_func_info(&self, comp_data: &CompData) -> UniqueFuncInfo {
         let relation = self
             .relation

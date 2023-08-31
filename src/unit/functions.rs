@@ -153,57 +153,48 @@ impl CompData {
         self.intrinsics.insert(decl_info);
     }
 
-    pub fn insert_code(&mut self, code: FuncCode) -> FuncDeclInfo {
-        let decl_info = code.decl_info();
-        self.func_code.insert(decl_info.clone(), code);
-        self.append_type_for_name(&decl_info);
+    pub fn insert_code(&mut self, code: FuncCode) -> FuncCodeId {
+        for (id, older_code) in &mut self.func_code {
+            if older_code.name == code.name && older_code.relation == code.relation {
+                *older_code = code;
+                return id;
+            }
+        }
 
-        decl_info
-    }
-
-    pub(crate) fn append_type_for_name(&mut self, info: &FuncDeclInfo) {
-        self.decl_names
-            .entry(info.name.clone())
-            .and_modify(|set| set.push(info.clone()))
-            .or_insert(vec![info.clone()]);
+        self.func_code.insert(code)
     }
 
     pub fn insert_temp_function(&mut self, code: FuncCode) -> UniqueFuncInfo {
-        let name = VarName::from("T_temp");
-        let decl_info = FuncDeclInfo {
-            name: name.clone(),
-            ..Default::default()
-        };
-
-        self.func_code.insert(decl_info, code);
+        self.func_code.insert(code);
 
         UniqueFuncInfo {
-            name,
+            name: VarName::from("T_temp"),
             ..Default::default()
         }
     }
 
-    pub fn func_exists(&self, info: &FuncDeclInfo) -> bool { self.func_code.contains_key(info) }
-
     pub fn name_is_intrinsic(&self, name: &VarName) -> bool {
-        self.intrinsics.iter().any(|decl| &decl.name == name)
+        self.intrinsics.iter().any(|id| {
+            &self.func_code[*id].name == name
+        })
     }
 
-    pub fn get_declaration_of(&self, info: &UniqueFuncInfo) -> Option<FuncDeclInfo> {
-        let possible_decls = self.decl_names.get(&info.name)?;
+    pub fn get_declaration_of(&self, info: &UniqueFuncInfo) -> TResult<Option<FuncCodeId>> {
+        for (id, decl) in &self.func_code {
+            if decl.name != info.name {
+                continue;
+            }
 
-        for decl in possible_decls {
-            if let Some(found_relation) = decl.relation.inner_type() && 
-                let Some(looking_for_relation) = info.relation.inner_type() {
-                if looking_for_relation.could_come_from(found_relation, self).unwrap() {
-                    return Some(decl.clone());
-                }
-            } else if decl.relation.inner_type().is_none() && info.relation.inner_type().is_none() {
-                return Some(decl.clone());
-            };
+            if decl.relation.inner_type().is_none() && info.relation.inner_type().is_none()  {
+                return Ok(Some(id));
+            } else if let Some(looking_at_relation) = decl.relation.inner_type() && 
+                let Some(looking_for_relation) = info.relation.inner_type() &&
+                looking_for_relation.could_come_from(looking_at_relation, self)? {
+                return Ok(Some(id));
+            }
         }
 
-        None
+        Ok(None)
     }
 
     pub fn get_func_type(&self, info: &UniqueFuncInfo) -> CResult<FuncType> {
@@ -239,10 +230,8 @@ impl CompData {
 
     // TODO: return pointer from this function
     pub fn get_code(&self, info: UniqueFuncInfo) -> CResult<FuncCode> {
-        let decl_info = self.get_declaration_of(&info);
-
-        if let Some(decl_info) = decl_info {
-            return Ok(self.func_code.get(&decl_info).unwrap().clone());
+        if let Some(decl_info) = self.get_declaration_of(&info)? {
+            return Ok(self.func_code[decl_info].clone());
         };
 
         self.get_derived_code(&info)
@@ -289,12 +278,6 @@ impl CompData {
 use std::hash::Hash;
 
 use super::*;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
-pub struct FuncDeclInfo {
-    pub name: VarName,
-    pub relation: TypeSpecRelation,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
 #[repr(C)] // TODO: this shouldn't have to be here

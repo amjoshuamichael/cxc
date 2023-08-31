@@ -70,8 +70,7 @@ fn depends_on() {
     assert_eq!(best(), 42);
     assert_eq!(worse(), 41);
 
-    unit.push_script("worse_num(); i32 { ; the_best_num() - 2 }")
-        .unwrap();
+    unit.push_script("worse_num(); i32 { ; the_best_num() - 2 }").unwrap();
     assert_eq!(best(), 42);
     assert_eq!(worse(), 40);
 }

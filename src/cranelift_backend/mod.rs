@@ -149,6 +149,7 @@ impl IsBackend for CraneliftBackend {
             let address = self.module.get_finalized_function(func_id) as *const usize;
             self.func_pointers[&func_info].set_pointer(address);
         }
+        dbg!(&self.func_pointers);
     }
 
     fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {

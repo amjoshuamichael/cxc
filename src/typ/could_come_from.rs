@@ -1,9 +1,9 @@
-use crate::{parse::TypeSpec, *, errors::CResult};
+use crate::{parse::TypeSpec, *, errors::TResult};
 
 use super::fields_iter::FieldsIter;
 
 impl Type {
-    pub fn could_come_from(&self, spec: TypeSpec, comp_data: &CompData) -> CResult<bool> {
+    pub fn could_come_from(&self, spec: TypeSpec, comp_data: &CompData) -> TResult<bool> {
         // we'll realize the spec with a temporary type to fill in the generics,
         // then we'll compare it to the self, and if we hit that
         // temporary type, we'll assume that that field is equal, and

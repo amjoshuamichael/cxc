@@ -141,7 +141,6 @@ impl CompData {
                 Type::new_struct(typed_fields)
             },
             TypeSpec::Sum(variants) => {
-                dbg!(&spec);
                 todo!()
             },
             TypeSpec::Tuple(types) => {

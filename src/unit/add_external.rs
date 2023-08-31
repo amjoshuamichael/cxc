@@ -1,10 +1,8 @@
-use crate::parse::TypeSpec;
 use crate::{
     FuncType, Type, TypeEnum,
     TypeRelation, UniqueFuncInfo, Unit, XcReflect,
 };
 
-use super::FuncDeclInfo;
 use super::backends::IsBackend;
 
 pub struct ExternalFuncAdd {
@@ -116,11 +114,5 @@ impl Unit {
             func_type.clone(), 
             function_ptr, 
         );
-
-        // TODO: figure out what this does and put it somewhere else
-        self.comp_data.append_type_for_name(&FuncDeclInfo {
-            name: func_info.name.clone(),
-            relation: func_info.relation.map_inner_type(TypeSpec::from),
-        });
     }
 }

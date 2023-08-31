@@ -140,7 +140,7 @@ impl Unit {
 
         let dependencies = mir.dependencies
             .iter()
-            .filter(|f| !self.has_been_compiled(f))
+            .filter(|f| !self.has_been_compiled(f).unwrap())
             .cloned()
             .collect();
 
