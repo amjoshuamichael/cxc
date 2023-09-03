@@ -114,7 +114,6 @@ fn slice_basic() {
         main(); { u64, u32 } {
             numbers: [5]u32 = [543, 60, 44, 222, 994]
 
-            
             range: Range<u64> = Range<u64>:from(u64 2, u64 4)
             slice: Slice<u32> = numbers.slice(range)
             ; { slice.len, *slice.ptr }

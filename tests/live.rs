@@ -41,7 +41,6 @@ fn hot_reload_many() {
 
 #[test]
 #[serial]
-#[ignore]
 fn depended_on() {
     let mut unit = Unit::new();
 
@@ -113,7 +112,6 @@ fn get_fn_by_ptr() {
 
     let mut functions = Vec::<usize>::new();
     unit.add_global("functions".into(), &mut functions as *mut _);
-    //cxc::bytesof::print_binary(&functions);
 
     unit.push_script(
         r#"
@@ -129,8 +127,6 @@ fn get_fn_by_ptr() {
     let add_two = unit.get_fn_by_ptr(add_two as _).unwrap().1;
 
     functions.clear();
-
-    //cxc::bytesof::print_binary(&functions);
 
     unit.push_script(
         r#"

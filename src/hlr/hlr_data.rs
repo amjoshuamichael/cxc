@@ -1,5 +1,5 @@
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use super::expr_tree::*;
 use super::hlr_data_output::HLR;
@@ -7,7 +7,7 @@ use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::{parse::*, TypeEnum};
-use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo};
+use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo, FuncId};
 use crate::Type;
 use indexmap::IndexMap;
 
@@ -154,15 +154,13 @@ impl<'a> FuncRep<'a> {
         let func_type = self.ret_type.clone().func_with_args(func_arg_types);
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
-        let mut dependencies = HashSet::<FuncQuery>::new();
+        let mut dependencies = HashMap::<FuncQuery, Option<(FuncId, u32)>>::new();
 
         for (_, node_data) in self.tree.iter() {
             let HNodeData::Call { .. } = node_data else { continue; };
-
-            let func_info = self.tree.func_query_of_call(node_data);
-            dependencies.insert(func_info);
+            let func_query = self.tree.func_query_of_call(node_data);
+            dependencies.insert(func_query, None);
         }
-
 
         (
             HLR {

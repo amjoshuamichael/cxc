@@ -26,6 +26,7 @@ use slotmap::new_key_type;
 use std::any::TypeId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::pin::Pin;
@@ -65,7 +66,7 @@ pub struct CompData {
 
 #[derive(Debug, Clone)]
 pub struct ProcessedFuncInfo {
-    pub dependencies: HashSet<FuncQuery>,
+    pub dependencies: HashMap<FuncQuery, Option<(FuncId, u32)>>,
     pub name: VarName,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
@@ -74,7 +75,7 @@ pub struct ProcessedFuncInfo {
 
 impl ProcessedFuncInfo {
     pub fn to_string(&self, generations: &Generations, func_id: FuncId) -> String {
-        let gen = generations.get_gen_of(&func_id);
+        let gen = generations.get_gen_of(func_id);
         let gen_suffix = format!("{gen:x}");
 
         match &self.relation {
@@ -194,13 +195,11 @@ impl Unit {
             return Ok(());
         }
 
-        let mut all_func_infos = Vec::new();
+        let mut all_func_ids = Vec::<FuncId>::new();
 
         let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
 
         while !set.is_empty() {
-            all_func_infos.extend(set.clone().into_iter());
-
             for query in &set {
                 // TODO: here, get code id, but also get code generics with id
                 let code = self.comp_data.get_code(query.clone()).unwrap();
@@ -225,11 +224,11 @@ impl Unit {
 
             let current_func_ids: Vec<FuncId> = set
                 .drain()
-                .map(|info| {
-                    let code = self.comp_data.get_code(info.clone()).unwrap();
+                .map(|id| {
+                    let code = self.comp_data.get_code(id.clone()).unwrap();
 
                     let (hlr, processed_func_info) = 
-                        hlr(info.clone(), &self.comp_data, code.as_ref())?;
+                        hlr(id.clone(), &self.comp_data, code.as_ref())?;
 
                     let possibly_existing_id = self.comp_data.query_for_id(&FuncQuery {
                         name: processed_func_info.name.clone(),
@@ -245,37 +244,77 @@ impl Unit {
                     };
 
                     hlrs.insert(func_id, hlr);
+                    all_func_ids.push(func_id);
+                    self.comp_data.generations.update(func_id);
 
                     Ok(func_id)
                 })
                 .collect::<CResultMany<Vec<FuncId>>>()?;
 
+
             let uncompiled_dependencies = current_func_ids
                 .iter()
-                .flat_map(|f| { self.comp_data.processed[*f].dependencies.iter() })
+                .flat_map(|f| { self.comp_data.processed[*f].dependencies.keys() })
                 .filter(|f| {
-                    !self.has_been_compiled(f) && !all_func_infos.contains(&f)
+                    if !self.has_been_compiled(f) {
+                        true
+                    } else if self.comp_data.query_for_id(f).is_some() {
+                        false
+                    } else if let Some(code_id) = self.comp_data.query_for_code(f) &&
+                        self.comp_data.intrinsics.contains(&code_id) {
+                        false
+                    } else {
+                        true
+                    }
                 })
                 .cloned()
                 .collect::<BTreeSet<FuncQuery>>();
 
-            let dependents = BTreeSet::new();
-            for mir in current_func_ids.iter() {
-                // TODO: this needs to be redone
-                //let mut depended_on_by = self.comp_data.processed[&mir.id].depen
-                //    .dependencies
-                //    .get(&mir.info)
-                //    .cloned()
-                //    .unwrap_or_default(); // if dependencies aren't listed, assume 
-                //                          // there aren't any
+            let mut dependents = BTreeSet::new();
+            for (dependent_id, ProcessedFuncInfo { dependencies, name, relation, generics, .. }) 
+                in &self.comp_data.processed {
 
-                //depended_on_by.retain(|f| self.comp_data.generations.update(f.clone()));
+                if all_func_ids.contains(&dependent_id) {
+                    continue; 
+                }
 
-                //set.extend(depended_on_by);
+                for (query, og_location) in dependencies {
+                    if og_location.is_none() { continue }
+                    let og_location = og_location.unwrap();
+
+                    let func_id = self.comp_data.query_for_id(&query).unwrap();
+
+                    let func_gen = self.comp_data.generations.get_gen_of(func_id);
+
+                    if og_location != (func_id, func_gen) {
+                        dependents.insert(FuncQuery {
+                            name: name.clone(),  
+                            relation: relation.clone(),  
+                            generics: generics.clone(),  
+                        });
+                    }
+                }
+                
             }
 
             set.extend(uncompiled_dependencies);
             set.extend(dependents);
+        }
+
+        for id in &all_func_ids {
+            let mut dependencies = self.comp_data.processed[*id].dependencies.clone();
+
+            for (func_query, fn_loc) in &mut dependencies {
+                if let Some(func_id) = self.comp_data.query_for_id(&func_query) {
+                    dbg!(&func_query);
+                    dbg!(&func_id);
+
+                    let func_generation = self.comp_data.generations.get_gen_of(func_id);
+                    *fn_loc = Some((func_id, func_generation));
+                }
+            }
+
+            self.comp_data.processed[*id].dependencies = dependencies;
         }
 
         self.backend.begin_compilation_round();
@@ -288,7 +327,7 @@ impl Unit {
 
             let dependencies = processed_func_info
                 .dependencies
-                .iter()
+                .keys()
                 .filter_map(|query| {
                     Some((query.clone(), self.comp_data.query_for_id(query)?))
                 })

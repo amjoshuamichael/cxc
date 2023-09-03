@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use crate::{
     FuncType, Type, TypeEnum,
@@ -102,12 +102,14 @@ impl Unit {
         };
 
         let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {
-            dependencies: HashSet::new(),
+            dependencies: HashMap::new(),
             name: name.into(),
             relation: ext_add.relation,
             generics: ext_add.generics,
             typ: func_type.clone(),
         });
+
+        self.comp_data.generations.update(func_id);
 
         self.backend.add_external_func(
             func_id, 

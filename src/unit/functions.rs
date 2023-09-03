@@ -191,7 +191,14 @@ impl CompData {
     }
 
     pub fn query_for_id(&self, query: &FuncQuery) -> Option<FuncId> {
-        for (id, info) in &self.processed {
+        Self::query_for_id_just_processed(&self.processed, query)
+    }
+
+    pub fn query_for_id_just_processed(
+        processed: &SlotMap<FuncId, ProcessedFuncInfo>, 
+        query: &FuncQuery,
+    ) -> Option<FuncId> {
+        for (id, info) in processed {
             if &info.name != &query.name {
                 continue; 
             }
@@ -204,6 +211,7 @@ impl CompData {
 
         None
     }
+
 
     pub fn get_func_type(&self, query: &FuncQuery) -> CResult<FuncType> {
         if let Some(func_id) = self.query_for_id(query) {
