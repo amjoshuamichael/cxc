@@ -3,3 +3,7 @@
     add_as_u64 = ptr_as_u64 + val * size_of<T>()
     ; cast<u64, &T>(add_as_u64)
 }
+
+<T> &T:.ptr_zero(); &T {
+    ; self
+}

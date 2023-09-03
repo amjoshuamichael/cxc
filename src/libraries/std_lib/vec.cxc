@@ -6,7 +6,7 @@ Vec<T> = {
 
 <T> &Vec<T>:. {
     push(val: T) {
-        ? self.len == u64 0 {
+        ? self.capacity == u64 0 {
             *self = Vec<T> {
                 len = u64 0,
                 capacity = u64 4,
@@ -17,17 +17,17 @@ Vec<T> = {
         ? self.len >= self.capacity {
             # reallocate memory
             self.capacity = self.capacity * u64 2
-
+            
             new_ptr: &T = alloc<T>(self.capacity)
             memmove<T>(self.data_loc, new_ptr, self.len * size_of<T>())
             free<T>(self.data_loc)
-
+            
             self.data_loc = new_ptr
         }
 
         ptr: &T = self.data_loc.ptr_add(self.len)
         *ptr = val
-        
+
         self.len = self.len + u64 1
     }
 
@@ -55,7 +55,7 @@ Vec<T> = {
     new(); Vec<T> {
         new_vec: Vec<T> = Vec<T> {
             len = u64 0,
-            capacity = u64 4,
+            capacity = u64 0,
             data_loc = cast<u64, &T>(u64 0),
         }
 

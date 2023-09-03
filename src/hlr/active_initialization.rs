@@ -1,4 +1,4 @@
-use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, UniqueFuncInfo};
+use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, FuncQuery};
 
 use super::{
     expr_tree::{CallGen, MemberGen, HNodeData, SetVarGen},
@@ -33,7 +33,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                 SetVarGen {
                     lhs: new_default.clone(),
                     rhs: CallGen {
-                        info: UniqueFuncInfo {
+                        info: FuncQuery {
                             name: VarName::from("default"),
                             relation: TypeRelation::Static(var_type.clone()),
                             ..Default::default()
@@ -79,7 +79,7 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
 
             let new_default = hlr.insert_quick(
                 arraylit_id,
-                UniqueFuncInfo {
+                FuncQuery {
                     name: VarName::from("default"),
                     relation: TypeRelation::Static(array_type.base.clone()),
                     ..Default::default()

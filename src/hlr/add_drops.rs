@@ -1,4 +1,4 @@
-use crate::{parse::Opcode, UniqueFuncInfo, TypeRelation, TypeEnum};
+use crate::{parse::Opcode, FuncQuery, TypeRelation, TypeEnum};
 
 use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen}};
 
@@ -63,7 +63,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
             .find(|&&s| matches!(hlr.tree.get(s), HNodeData::Return { .. }));
 
         let drop_call = CallGen {
-            info: UniqueFuncInfo {
+            info: FuncQuery {
                 name: "drop".into(),
                 relation: TypeRelation::MethodOf(var_type.get_ref()),
                 generics: var_type.generics().clone(),

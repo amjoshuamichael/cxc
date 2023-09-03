@@ -23,7 +23,6 @@ macro_rules! xc_test {
             unit.push_script(&*format!("main() {code}")).unwrap();
         }
 
-
         #[allow(unused_assignments)]
         // this is just so output uses the expected output's type
         let mut output = $expected_output;

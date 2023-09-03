@@ -1,9 +1,11 @@
+use std::collections::HashSet;
+
 use crate::{
     FuncType, Type, TypeEnum,
-    TypeRelation, UniqueFuncInfo, Unit, XcReflect,
+    TypeRelation, FuncQuery, Unit, XcReflect,
 };
 
-use super::backends::IsBackend;
+use super::{backends::IsBackend, ProcessedFuncInfo};
 
 pub struct ExternalFuncAdd {
     pub ret_type: Type,
@@ -94,24 +96,22 @@ impl Unit {
         function_ptr: *const usize,
         ext_add: ExternalFuncAdd,
     ) {
-        let func_info = UniqueFuncInfo {
-            name: name.into(),
-            relation: ext_add.relation.clone(),
-            generics: ext_add.generics.clone(),
-            ..Default::default()
+        let func_type = FuncType {
+            ret: ext_add.ret_type,
+            args: ext_add.arg_types,
         };
 
-        let func_type = ext_add
-            .ret_type
-            .clone()
-            .func_with_args(ext_add.arg_types.clone());
-        let TypeEnum::Func(func_type) = func_type.as_type_enum() else { panic!() };
-
-        self.comp_data.func_types.insert(func_info.clone(), func_type.clone());
+        let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {
+            dependencies: HashSet::new(),
+            name: name.into(),
+            relation: ext_add.relation,
+            generics: ext_add.generics,
+            typ: func_type.clone(),
+        });
 
         self.backend.add_external_func(
-            func_info.clone(), 
-            func_type.clone(), 
+            func_id, 
+            func_type,
             function_ptr, 
         );
     }

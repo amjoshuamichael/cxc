@@ -1,7 +1,7 @@
 use crate::{
     errors::{TErr, TResult},
     parse::TypeSpec,
-    ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation, UniqueFuncInfo,
+    ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation, FuncQuery,
     VarName,
 };
 use std::fmt::Debug;
@@ -38,28 +38,36 @@ impl<T: GenericTable> GenericTable for (T, Type) {
     fn get_self(&self) -> Option<Type> { Some(self.1.clone()) }
 }
 
-impl<T: GenericTable> GenericTable for (T, TypeRelation) {
-    fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
+impl<T: GenericTable> GenericTable for (&T, &TypeRelation) {
+    fn get_at_index(&self, index: u8) -> Option<Type> { 
+        if let Some(inner_type) = self.1.inner_type() {
+            inner_type
+                .clone()
+                .complete_deref()
+                .generics()
+                .get(index as usize)
+                .cloned()
+                .or_else(|| self.0.get_at_index(index + inner_type.generics().len() as u8))
+        } else {
+            self.0.get_at_index(index)
+        }
+    }
     fn get_self(&self) -> Option<Type> { self.1.inner_type() }
+}
+
+impl GenericTable for FuncQuery {
+    fn get_at_index(&self, index: u8) -> Option<Type> { 
+        (&self.generics, &self.relation).get_at_index(index)
+    }
+    fn get_self(&self) -> Option<Type> { 
+        (&self.generics, &self.relation).get_self()
+    }
+
 }
 
 impl<T: GenericTable> GenericTable for (T, Option<Type>) {
     fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
     fn get_self(&self) -> Option<Type> { self.1.clone() }
-}
-
-impl GenericTable for UniqueFuncInfo {
-    fn get_at_index(&self, index: u8) -> Option<Type> {
-        if let Some(inner_type) = self.relation.inner_type() {
-            inner_type.clone().complete_deref().generics()
-                .get(index as usize)
-                .or_else(|| self.generics.get(index as usize + inner_type.generics().len()))
-                .cloned()
-        } else {
-            self.generics.get(index as usize).cloned()
-        }
-    }
-    fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
 }
 
 #[derive(Debug)]

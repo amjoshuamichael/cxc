@@ -1,6 +1,7 @@
 use crate::lex::{indent_parens, TypeName, VarName};
 use crate::parse::*;
 use crate::Type;
+use crate::unit::FuncId;
 use std::fmt::{Debug, Formatter};
 
 mod expr_tree_helper;
@@ -116,8 +117,8 @@ pub enum HNodeData {
         lhs: ExprID,
         rhs: ExprID,
     },
-    // TODO: combine Call and IndirectCall, making Call take a UniqueFuncInfo and 
-    // abstracting over the differences between ExprID and a UniqueFuncInfo using an 
+    // TODO: combine Call and IndirectCall, making Call take a FuncQuery and 
+    // abstracting over the differences between ExprID and a FuncQuery using an 
     // HCallable enum
     Call {
         ret_type: Type,

@@ -17,7 +17,7 @@ pub mod expr_tree;
 use crate::errors::CResultMany;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
-use crate::unit::{CompData, UniqueFuncInfo};
+use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo};
 use type_inference::infer_types;
 
 pub mod prelude {
@@ -33,7 +33,7 @@ use self::auto_deref::auto_deref;
 use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
 use self::array_literals::array_literals;
-use self::hlr_data_output::FuncOutput;
+use self::hlr_data_output::HLR;
 use self::large_returns::large_returns;
 use self::large_set_to_memcpy::large_set_to_memcpy;
 use self::large_args::large_args;
@@ -42,10 +42,10 @@ use self::remove_redundant_derefs::remove_redundant_derefs;
 
 
 pub fn hlr(
-    info: UniqueFuncInfo,
+    info: FuncQuery,
     comp_data: &CompData,
-    code: FuncCode,
-) -> CResultMany<FuncOutput> {
+    code: &FuncCode,
+) -> CResultMany<(HLR, ProcessedFuncInfo)> {
     #[cfg(feature = "xc-debug")]
     {
         println!();

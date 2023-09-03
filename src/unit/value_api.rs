@@ -6,11 +6,11 @@ use crate::{
     typ::ReturnStyle,
     Unit, XcReflect, mir::mir,
 };
-use std::{collections::HashMap, mem::transmute, sync::Mutex};
+use std::{collections::{HashMap, BTreeSet, HashSet}, mem::transmute, sync::Mutex};
 
 use crate::Type;
 
-use super::{UniqueFuncInfo, backends::IsBackend};
+use super::{FuncQuery, backends::IsBackend, FuncId};
 
 use crate as cxc;
 
@@ -68,7 +68,7 @@ impl Value {
     }
 
     pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
-        let info = UniqueFuncInfo {
+        let info = FuncQuery {
             name: "to_string".into(),
             relation: TypeRelation::MethodOf(self.typ.clone()),
             ..Default::default()
@@ -128,33 +128,32 @@ impl Unit {
             parse::parse_expr(&mut context).unwrap().wrap_in_block()
         };
 
-        let code = FuncCode::from_expr(expr);
+        let value_function_name = VarName::from("$val");
 
-        let value_function_info = UniqueFuncInfo {
-            name: VarName::from("$val"),
+        let code = FuncCode {
+            name: value_function_name.clone(),
+            ..FuncCode::from_expr(expr)
+        };
+
+        let value_function_query = FuncQuery {
+            name: value_function_name,
             ..Default::default()
         };
 
-        let hlr = hlr(value_function_info.clone(), &self.comp_data, code)?;
-        let mir = mir(hlr);
+        self.comp_data.func_code.insert(code);
 
-        let dependencies = mir.dependencies
-            .iter()
-            .filter(|f| !self.has_been_compiled(f).unwrap())
-            .cloned()
-            .collect();
+        {
+            let mut func_set = HashSet::new();
+            func_set.insert(value_function_query.clone());
+            self.compile_func_set(func_set);
+        }
 
-        self.compile_func_set(dependencies)?;
+        let value_func_id = self.comp_data.query_for_id(&value_function_query).unwrap();
 
-        let ret_type = mir.func_type.ret.clone();
+        let func_addr = self.backend.get_function(value_func_id).unwrap();
+        let func_info = &self.comp_data.processed[value_func_id];
 
-        self.backend.begin_compilation_round();
-        self.backend.register_function(value_function_info.clone(), mir.func_type.clone());
-        self.backend.compile_function(mir);
-        self.backend.end_compilation_round();
-
-        let func_addr = self.backend.get_function(value_function_info).unwrap();
-
+        let ret_type = &func_info.typ.ret;
         let value = unsafe {
             match ret_type.return_style() {
                 ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {

@@ -1,13 +1,12 @@
-use std::{collections::{BTreeSet, BTreeMap}, fmt::{Formatter, Display}, fmt};
+use std::{collections::{BTreeMap, HashMap}, fmt::{Formatter, Display}, fmt};
 
-use crate::{hlr::hlr_data::{Variables, VariableInfo, ArgIndex}, UniqueFuncInfo, FuncType, Type, VarName, parse::Opcode, };
+use crate::{hlr::hlr_data::{Variables, VariableInfo, ArgIndex}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
 
 #[derive(Debug)]
 pub struct MIR {
     pub lines: Vec<MLine>,
     pub variables: Variables,
-    pub dependencies: BTreeSet<UniqueFuncInfo>,
-    pub info: UniqueFuncInfo,
+    pub dependencies: HashMap<FuncQuery, FuncId>,
     pub func_type: FuncType,
     pub block_count: u32,
     pub reg_count: u32,
@@ -69,6 +68,11 @@ pub enum MLine {
         to: MAddr,
         len: MOperand,
     },
+    MemMove {
+        from: MOperand,
+        to: MOperand,
+        len: MOperand,
+    },
     Return(Option<MOperand>),
     Marker(u32),
     Goto(u32),
@@ -94,6 +98,7 @@ impl fmt::Debug for MLine {
             Expr(expr) => write!(f, "{:?}", expr),
             Branch { if_, yes, no } => write!(f, "if {:?} goto {} else {}", if_, yes, no),
             MemCpy { from, to, len } => write!(f, "mcpy {from:?} to {to:?}; {len:?} bytes"),
+            MemMove { from, to, len } => write!(f, "mmve {from:?} to {to:?}; {len:?} bytes"),
         }
     }
 }
@@ -183,7 +188,9 @@ pub enum MExpr {
     BinOp { left_type: Type, op: Opcode, l: MOperand, r: MOperand, },
     UnarOp { ret_type: Type, op: Opcode, hs: MOperand },
     Call { typ: FuncType, f: MCallable, a: Vec<MOperand>, sret: Option<MMemLoc> },
+    Free { ptr: MOperand, },
     Ref { on: MAddr },
+    Alloc { len: MOperand, },
     // TODO: replace operand with memloc here?
     Deref { to: Type, on: MOperand },
     Void,
@@ -191,7 +198,7 @@ pub enum MExpr {
 
 #[derive(Debug)]
 pub enum MCallable {
-    Func(UniqueFuncInfo),
+    Func(FuncId),
     FirstClass(MMemLoc),
 }
 

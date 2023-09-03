@@ -1,6 +1,6 @@
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex};
-use crate::{Type, UniqueFuncInfo, VarName};
+use crate::{Type, FuncQuery, VarName};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
 use super::{ExprNode, HNodeData::*};
@@ -128,11 +128,11 @@ impl ExprTree {
         new_space
     }
 
-    pub fn unique_func_info_of_call(&self, call: &HNodeData) -> UniqueFuncInfo {
+    pub fn func_query_of_call(&self, call: &HNodeData) -> FuncQuery {
         let HNodeData::Call { f, generics, relation, .. } = call.clone()
             else { panic!() };
 
-        UniqueFuncInfo {
+        FuncQuery {
             name: f,
             relation,
             generics,

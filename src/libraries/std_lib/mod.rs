@@ -44,6 +44,7 @@ impl Library for StdLib {
         unit.push_script(include_str!("lucid.cxc")).unwrap();
         unit.push_script(include_str!("range.cxc")).unwrap();
         unit.push_script(include_str!("slice.cxc")).unwrap();
+        unit.push_script(include_str!("alloc.cxc")).unwrap();
 
         unit.add_lib(StringLib);
         unit.add_lib(ToStringLib);

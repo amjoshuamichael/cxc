@@ -85,6 +85,6 @@ fn derive_array_len_m(_: &CompData, typ: Type) -> Option<FuncCode> {
             TypeSpec::Int(64), 
             Box::new(Expr::Number(*count as u64))
         ).wrap_in_block(),
-        relation: TypeSpecRelation::Static(typ.into()),
+        relation: TypeSpecRelation::MethodOf(typ.into()),
     })
 }

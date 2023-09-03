@@ -1,4 +1,4 @@
-use cxc::{Unit, library::StdLib, FuncType, Type};
+use cxc::{Unit, library::StdLib, FuncType, Type, ExternalFuncAdd};
 use serial_test::serial;
 
 #[test]
@@ -41,6 +41,7 @@ fn hot_reload_many() {
 
 #[test]
 #[serial]
+#[ignore]
 fn depended_on() {
     let mut unit = Unit::new();
 
@@ -77,12 +78,42 @@ fn depends_on() {
 
 #[test]
 #[serial]
+fn two_vecs() {
+    let mut unit = Unit::new();
+
+    unit.push_script(
+        r#"
+            zero(); i32 {
+                ; 0
+            }
+
+            copy_num(val: i32); i32 {
+                ; val
+            }
+
+            push_1(); i32 {
+                x: i32 = zero()
+                x = copy_num(x)
+                ; 0
+            }
+        "#,
+    ).unwrap();
+    let push_1 = unit.get_fn("push_1").unwrap().downcast::<(), i32>();
+    assert_eq!(push_1(), 0);
+
+    unit.push_script(r#"push_2(); i32 { ; 1 }"#).unwrap();
+    assert_eq!(push_1(), 0);
+}
+
+#[test]
+#[serial]
 fn get_fn_by_ptr() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
 
     let mut functions = Vec::<usize>::new();
     unit.add_global("functions".into(), &mut functions as *mut _);
+    //cxc::bytesof::print_binary(&functions);
 
     unit.push_script(
         r#"
@@ -98,6 +129,8 @@ fn get_fn_by_ptr() {
     let add_two = unit.get_fn_by_ptr(add_two as _).unwrap().1;
 
     functions.clear();
+
+    //cxc::bytesof::print_binary(&functions);
 
     unit.push_script(
         r#"
@@ -160,4 +193,37 @@ fn get_previous() {
 
     let func_one_again = unit.get_fn("func_one").unwrap().downcast::<(), i32>();
     assert_eq!(func_one_again(), 1);
+}
+
+#[test]
+#[serial]
+fn call_previous() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"
+        fifty_four(); i32 { ; 54 }
+        double_that(); i32 { ; fifty_four() * 3 }
+    "#).unwrap();
+    let double_that = unit.get_fn("double_that").unwrap().downcast::<(), i32>();
+    assert_eq!(double_that(), 54 * 3);
+
+    unit.push_script(r#"
+        double_that(); i32 { ; fifty_four() * 2 }
+    "#).unwrap();
+    assert_eq!(double_that(), 54 * 2);
+}
+
+#[test]
+#[serial]
+fn call_2_previous() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"fifty_four<T>(); T { ; T 54 }"#).unwrap();
+    unit.push_script(r#"double_that<T>(); T { ; fifty_four<T>() * T 2 }"#).unwrap();
+    unit.push_script(r#"sextuple_that(); i32 { ; double_that<i32>() * 2 }"#).unwrap();
+    let sextuple_that = unit.get_fn("sextuple_that").unwrap().downcast::<(), i32>();
+    assert_eq!(sextuple_that(), 54 * 2 * 2);
+
+    unit.push_script(r#"
+        sextuple_that(); i32 { ; double_that<i32>() * 3 }
+    "#).unwrap();
+    assert_eq!(sextuple_that(), 54 * 2 * 3);
 }

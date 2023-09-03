@@ -366,7 +366,7 @@ fn infer_array_len() {
             supposed_to_be_big = [432, 656, ++]
             takes_a_big_array(&supposed_to_be_big)
 
-            ; supposed_to_be_big.len()
+            ; (&supposed_to_be_big).len()
         }
         "#;
         200u64

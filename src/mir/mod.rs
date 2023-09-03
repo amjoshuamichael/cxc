@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::FuncOutput, expr_tree::{HNodeData, ExprTree}, hlr_data::{VariableInfo, ArgIndex}}, FuncType, TypeEnum, ArrayType};
+use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}, hlr_data::{VariableInfo, ArgIndex}}, FuncType, TypeEnum, ArrayType, unit::FuncId, FuncQuery, Type};
 
 pub use self::mir_data::*;
 
@@ -9,13 +9,15 @@ mod remove_post_return_statements;
 
 use remove_post_return_statements::remove_post_return_statements;
 
-pub fn mir(hlr: FuncOutput) -> MIR {
+pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
+    #[cfg(feature = "xc-debug")]
+    println!("--mir type: {:?}--", &hlr.func_type);
+
     let mut mir = MIR { 
-        dependencies: hlr.get_func_dependencies(),
         lines: Vec::new(), 
         variables: hlr.data_flow,
-        info: hlr.info,
         func_type: hlr.func_type,
+        dependencies,
         block_count: 0,
         reg_count: 0,
         addr_reg_count: 0,
@@ -168,6 +170,15 @@ fn build_as_operand(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MOper
             MOperand::Lit(MLit::Float { size: lit_type.size() as u32 * 8, val: value })
         },
         HNodeData::Bool { value } => MOperand::Lit(MLit::Bool(value)),
+        HNodeData::Call { ref f, ref generics, .. } if &*f.to_string() == "size_of" => {
+            MOperand::Lit(MLit::Int { size: 64, val: generics[0].size() as u64 })
+        },
+        HNodeData::Call { ref f, ref generics, .. } if &*f.to_string() == "typeobj" => {
+            MOperand::Lit(MLit::Int { 
+                size: 64, 
+                val: unsafe { std::mem::transmute(generics[0].clone()) },
+            })
+        },
         _ => {
             MOperand::MemLoc(build_as_memloc(node, tree, add_to))
         },
@@ -256,8 +267,30 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Void
         },
+        HNodeData::Call { ref f, ref a, .. } if &*f.to_string() == "memmove" => {
+            let from = build_as_operand(tree.get(a[0]), tree, mir);
+            let to = build_as_operand(tree.get(a[1]), tree, mir);
+            let len = build_as_operand(tree.get(a[2]), tree, mir);
+
+            mir.lines.push(MLine::MemMove {
+                from, 
+                to, 
+                len,
+            });
+
+            MExpr::Void
+        },
+        HNodeData::Call { ref f, ref a, .. } if &*f.to_string() == "free" => {
+            let ptr = build_as_operand(tree.get(a[0]), tree, mir);
+            MExpr::Free { ptr }
+        },
+        HNodeData::Call { ref f, ref a, .. } if &**f == "intrinsic_alloc" => {
+            let len = build_as_operand(tree.get(a[0]), tree, mir);
+            MExpr::Alloc { len }
+        },
         HNodeData::Call { ref a, ref ret_type, ref sret, .. } => {
-            let info = tree.unique_func_info_of_call(&node);
+            let func_query = tree.func_query_of_call(&node);
+            let func_id = mir.dependencies[&func_query];
 
             let typ = FuncType {
                 ret: ret_type.clone(),
@@ -267,7 +300,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
             let sret = sret.as_ref().map(|sret| build_as_memloc(tree.get(*sret), tree, mir));
 
-            MExpr::Call { typ, f: MCallable::Func(info), a, sret }
+            MExpr::Call { typ, f: MCallable::Func(func_id), a, sret }
         },
         HNodeData::IndirectCall { ref f, ref a, ref ret_type, ref sret, .. } => {
             let f = build_as_memloc(tree.get(*f), tree, mir);
@@ -286,10 +319,10 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let addr = build_as_addr(node, tree, mir);
 
             MExpr::Addr(addr)
-        }
+        },
         HNodeData::Ident { name, .. } => {
             MExpr::MemLoc(MMemLoc::Var(name))
-        }
+        },
         _ => todo!("{:?}", node),
     }
 }
@@ -319,6 +352,7 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
 
             MAddrExpr::Index { array_type, element_type, object, index }
         }
+        
         HNodeData::ArrayLit { .. } 
         | HNodeData::Number { .. } 
         | HNodeData::Float { .. } 

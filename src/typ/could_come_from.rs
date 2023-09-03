@@ -1,17 +1,20 @@
-use crate::{parse::TypeSpec, *, errors::TResult};
+use crate::{typ::TypeSpec, *};
 
 use super::fields_iter::FieldsIter;
 
 impl Type {
-    pub fn could_come_from(&self, spec: TypeSpec, comp_data: &CompData) -> TResult<bool> {
+    pub fn could_come_from(&self, spec: TypeSpec, comp_data: &CompData) -> bool {
         // we'll realize the spec with a temporary type to fill in the generics,
         // then we'll compare it to the self, and if we hit that
         // temporary type, we'll assume that that field is equal, and
         // move on.
         let filler = Type::empty().with_name("Filler".into());
-        let filled_spec = comp_data.get_spec(&spec, &vec![filler; 10])?;
+        let filled_spec = match comp_data.get_spec(&spec, &vec![filler; 10]) {
+            Ok(spec) => spec,
+            Err(_) => return false,
+        };
 
-        Ok(could_come_from_filled(self, &filled_spec))
+        could_come_from_filled(self, &filled_spec)
     }
 }
 
@@ -99,15 +102,15 @@ mod tests {
     fn type_could_come_from() -> CResult<()> {
         let mut unit = Unit::new();
 
-        assert!(Type::i(32).could_come_from("i32".into(), &unit.comp_data)?);
-        assert!(!Type::i(32).could_come_from("i64".into(), &unit.comp_data)?);
+        assert!(Type::i(32).could_come_from("i32".into(), &unit.comp_data));
+        assert!(!Type::i(32).could_come_from("i64".into(), &unit.comp_data));
 
         let i32i64 = Type::new_tuple(vec![Type::i(32), Type::i(64)]);
-        assert!(i32i64.could_come_from(TypeSpec::from("{ i32, i64 }"), &unit.comp_data)?);
-        assert!(!i32i64.could_come_from(TypeSpec::from("{ i32, i64, i8 }"), &unit.comp_data)?);
+        assert!(i32i64.could_come_from(TypeSpec::from("{ i32, i64 }"), &unit.comp_data));
+        assert!(!i32i64.could_come_from(TypeSpec::from("{ i32, i64, i8 }"), &unit.comp_data));
 
-        assert!(i32i64.could_come_from(TypeSpec::from("{ i32, T }"), &unit.comp_data)?);
-        assert!(!i32i64.could_come_from(TypeSpec::from("{ i32, T, i8 }"), &unit.comp_data)?);
+        assert!(i32i64.could_come_from(TypeSpec::from("{ i32, T }"), &unit.comp_data));
+        assert!(!i32i64.could_come_from(TypeSpec::from("{ i32, T, i8 }"), &unit.comp_data));
 
         unit.push_script("Vec<T> = { capacity: i64, data_loc: &T, len: i64 }")
             .unwrap();
@@ -116,19 +119,19 @@ mod tests {
             .comp_data
             .get_spec(&TypeSpec::from("Vec<i32>"), &Vec::new())
             .unwrap();
-        assert!(veci32.could_come_from(TypeSpec::from("Vec<i32>"), &unit.comp_data)?);
-        assert!(!veci32.could_come_from(TypeSpec::from("Vec<f32>"), &unit.comp_data)?);
-        assert!(veci32.could_come_from(TypeSpec::from("Vec<T>"), &unit.comp_data)?);
-        assert!(!veci32.could_come_from(TypeSpec::from("Vec<&T>"), &unit.comp_data)?);
+        assert!(veci32.could_come_from(TypeSpec::from("Vec<i32>"), &unit.comp_data));
+        assert!(!veci32.could_come_from(TypeSpec::from("Vec<f32>"), &unit.comp_data));
+        assert!(veci32.could_come_from(TypeSpec::from("Vec<T>"), &unit.comp_data));
+        assert!(!veci32.could_come_from(TypeSpec::from("Vec<&T>"), &unit.comp_data));
 
         unit.add_type_level_func("Copy".into(), |args, _| args[0].clone());
         let intified = unit
             .comp_data
             .get_spec(&"Copy({ i32, i64 })".into(), &Vec::new())
             .unwrap();
-        assert!(intified.could_come_from("Copy(T)".into(), &unit.comp_data)?);
-        assert!(intified.could_come_from("Copy({ i32, T })".into(), &unit.comp_data)?);
-        assert!(!intified.could_come_from("Copy(Vec<T>)".into(), &unit.comp_data)?);
+        assert!(intified.could_come_from("Copy(T)".into(), &unit.comp_data));
+        assert!(intified.could_come_from("Copy({ i32, T })".into(), &unit.comp_data));
+        assert!(!intified.could_come_from("Copy(Vec<T>)".into(), &unit.comp_data));
 
         Ok(())
     }

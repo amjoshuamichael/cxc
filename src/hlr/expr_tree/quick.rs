@@ -2,7 +2,7 @@ use crate::{
     hlr::hlr_data::FuncRep,
     lex::VarName,
     parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
-    Type, UniqueFuncInfo,
+    Type, FuncQuery,
 };
 
 use super::{ExprID, HNodeData};
@@ -154,7 +154,7 @@ impl<T: NodeDataGen> NodeDataGen for UnarOpGen<T> {
 
 #[derive(Debug, Default)]
 pub struct CallGen {
-    pub info: UniqueFuncInfo,
+    pub info: FuncQuery,
     pub args: Vec<Box<dyn NodeDataGen>>,
     pub sret: Option<Box<dyn NodeDataGen>>,
 }
@@ -190,7 +190,7 @@ impl NodeDataGen for CallGen {
 }
 
 // TODO: is this nescessary
-impl NodeDataGen for UniqueFuncInfo {
+impl NodeDataGen for FuncQuery {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let func_type = hlr.comp_data.get_func_type(self).unwrap();
 

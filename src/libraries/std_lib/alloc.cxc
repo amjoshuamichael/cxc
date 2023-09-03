@@ -1,0 +1,5 @@
+alloc<T>(count: u64); &T {
+    ptr: &u8 = intrinsic_alloc(size_of<T>() * count)
+
+    ; cast<&u8, &T>(ptr)
+}

@@ -1,7 +1,7 @@
 use std::{fmt::Debug, hash::Hash, iter::{once, empty}, sync::Arc};
 
 use crate::{
-    unit::{CompData, UniqueFuncInfo},
+    unit::{CompData, FuncQuery},
     Type, XcReflect,
 };
 
@@ -163,6 +163,7 @@ impl<T: Clone> TypeRelationGeneric<T> {
         }
     }
 
+    // TODO: return pointer here
     pub fn inner_type(&self) -> Option<T> {
         match self {
             Self::Static(inner) | Self::MethodOf(inner) => Some(inner.clone()),
@@ -195,13 +196,13 @@ pub struct FuncCode {
 }
 
 impl FuncCode {
-    pub fn to_unique_func_info(&self, comp_data: &CompData) -> UniqueFuncInfo {
+    pub fn to_unique_func_info(&self, comp_data: &CompData) -> FuncQuery {
         let relation = self
             .relation
             .clone()
             .map_inner_type(|spec| comp_data.get_spec(&spec, &Vec::new()).unwrap());
 
-        UniqueFuncInfo {
+        FuncQuery {
             name: self.name.clone(),
             relation,
             generics: Vec::new(),

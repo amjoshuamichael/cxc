@@ -1,30 +1,51 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{unit::{backends::IsBackend, callable::CallInput, Generations}, FuncDowncasted, Func, UniqueFuncInfo, FuncType, mir::MIR, VarName, Type};
+use crate::{unit::{backends::IsBackend, callable::CallInput, Generations, FuncId, ProcessedFuncInfo}, FuncDowncasted, Func, FuncQuery, FuncType, mir::MIR, VarName, Type};
 
-use cranelift::prelude::{*, isa::{TargetIsa, TargetFrontendConfig}};
+use cranelift::{prelude::{*, isa::{TargetIsa, TargetFrontendConfig}}, codegen::ir::SigRef};
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{Module, FuncId, Linkage, default_libcall_names};
+use cranelift_module::{Module, FuncId as ClFuncId, Linkage, default_libcall_names};
 use indexmap::IndexMap;
+use slotmap::SecondaryMap;
 
-use self::{to_cl_type::func_type_to_signature, external_function::ExternalFuncData};
+use self::{to_cl_type::func_type_to_signature, external_function::ExternalFuncData, alloc_and_free::AllocAndFree};
 
 mod to_cl_type;
 mod compile_function;
 mod variables_in_mline;
 mod global;
 mod external_function;
+mod alloc_and_free;
 
 pub struct CraneliftBackend { 
-    cl_function_data: IndexMap<UniqueFuncInfo, (codegen::Context, FuncId)>,
-    func_pointers: BTreeMap<UniqueFuncInfo, Func>,
+    // function data needed during compilation
+    temp_function_data: SecondaryMap<FuncId, TemporaryFunctionData>,
+    
+    // function pointers generated after compilation
+    func_pointers: SecondaryMap<FuncId, Func>,
+
     func_signatures: BTreeMap<FuncType, Signature>,
-    globals: BTreeMap<VarName, (Type, *const usize)>,
+    globals: BTreeMap<VarName, Global>,
     module: JITModule,
     isa: Box<Arc<dyn TargetIsa>>,
     frontend_config: TargetFrontendConfig,
     generations: Generations,
-    external_functions: BTreeMap<UniqueFuncInfo, ExternalFuncData>,
+    external_functions: SecondaryMap<FuncId, ExternalFuncData>,
+    alloc_and_free: AllocAndFree,
+}
+
+pub enum Global {
+    Value {
+        typ: Type,
+        ptr: *const usize,
+    },
+    Func(FuncId),
+}
+
+pub struct TemporaryFunctionData {
+    ctx: codegen::Context,
+    cl_func_id: ClFuncId,
+    name: String,
 }
 
 impl IsBackend for CraneliftBackend {
@@ -33,149 +54,133 @@ impl IsBackend for CraneliftBackend {
 
     fn create() -> Self {
         let isa = make_proper_isa();
+        let module = make_proper_module(&isa);
 
-        let mut new = Self {
-            cl_function_data: IndexMap::new(),
-            func_pointers: BTreeMap::new(),
+        let new = Self {
+            temp_function_data: SecondaryMap::new(),
+            func_pointers: SecondaryMap::new(),
             func_signatures: BTreeMap::new(),
             globals: BTreeMap::new(),
-            module: make_proper_module(&isa),
+            alloc_and_free: AllocAndFree::new(&module),
+            module,
             frontend_config: isa.frontend_config(),
             isa: Box::new(isa),
             generations: Generations::default(),
-            external_functions: BTreeMap::new(),
+            external_functions: SecondaryMap::new(),
         };
-
-        unsafe fn alloc_x_bytes(x: i32) -> *const u8 {
-            use std::alloc::*;
-            // TODO: use unchecked
-            alloc(Layout::from_size_align(x as usize, 4).unwrap())
-        }
-
-        new.add_external_func(
-            UniqueFuncInfo { name: "$alloc".into(), ..Default::default() },
-            FuncType { args: vec![Type::i(64)], ret: Type::u(8).get_ref() },
-            alloc_x_bytes as *const usize,
-        );
-
-        unsafe fn free(ptr: *mut u8) {
-            use std::alloc::*;
-            // this is undefined behavior!! we're using a layout that is only the size of 
-            // the type of the pointer. if the user allocates more than one of a type, 
-            // then this layout is wrong, which is undefined behavior under the rust 
-            // allocation API. because the cxc allocation api does not require that the 
-            // user specify the size of their deallocation, the only way to fix this in 
-            // this backend is to stash the size of allocation for every allocation.
-            let possibly_wrong_layout = Layout::from_size_align(4 as usize, 4).unwrap();
-            dealloc(ptr, possibly_wrong_layout)
-        }
-
-        new.add_external_func(
-            UniqueFuncInfo { name: "$free".into(), ..Default::default() },
-            FuncType { args: vec![Type::u(8).get_ref()], ret: Type::void() },
-            free as *const usize,
-        );
 
         new
     }
 
     fn begin_compilation_round(&mut self) {
-        if self.cl_function_data.len() == 0 { return; }
+        #[cfg(feature = "backend-debug")]
+        println!("---beginning compilation round---");
+
+        if self.temp_function_data.len() == 0 { return; }
 
         self.module = make_proper_module(&*self.isa);
 
-        for (info, (ctx, ref mut func_id)) in self.cl_function_data.iter_mut() {
+        for (_, TemporaryFunctionData { ctx, cl_func_id, name, }) 
+            in self.temp_function_data.iter_mut() {
             let new_id = self.module.declare_function(
-                &*info.to_string(&self.generations), 
+                &*name, 
                 Linkage::Local, 
                 &ctx.func.signature,
             ).unwrap();
+
             self.module.define_function(new_id, ctx).unwrap();
-            *func_id = new_id;
+
+            *cl_func_id = new_id;
         }
     }
 
-    fn register_function(&mut self, info: UniqueFuncInfo, func_type: FuncType) {
-        self.generations.update(info.clone());
+    fn register_function(&mut self, func_id: FuncId, func_info: &ProcessedFuncInfo) {
+        self.generations.update(func_id);
 
         let mut ctx = self.module.make_context();
 
-        func_type_to_signature(&func_type, &mut ctx.func.signature, false);
+        func_type_to_signature(&func_info.typ, &mut ctx.func.signature, false);
 
-        let id = self.module.declare_function(
-            &*info.to_string(&self.generations),
+        let name = func_info.to_string(&self.generations, func_id);
+        let cl_func_id = self.module.declare_function(
+            &*name,
             Linkage::Local,
             &ctx.func.signature,
         ).unwrap();
 
-        self.cl_function_data.insert(info.clone(), (ctx, id));
-        self.func_pointers
-            .entry(info.clone())
-            .or_insert_with(|| Func::new_compiled(info, func_type));
+        self.temp_function_data.insert(
+            func_id, 
+            TemporaryFunctionData { ctx, cl_func_id, name, }
+        );
+        self.globals.insert(func_info.name.clone(), Global::Func(func_id));
+
+        if !self.func_pointers.contains_key(func_id) {
+            self.func_pointers.insert(func_id, Func::new_compiled(func_info.typ.clone()));
+        }
     }
 
-    fn compile_function(&mut self, mir: MIR) {
-        #[cfg(feature = "backend-debug")]
-        println!("compiling {}", mir.info.to_string(&self.generations));
+    fn compile_function(&mut self, func_id: FuncId, mir: MIR) {
+        let mut temp_data = self.temp_function_data.remove(func_id).unwrap();
 
-        let info = mir.info.clone();
-        let (mut context, func_id) = self.cl_function_data.remove(&mir.info).unwrap();
+        #[cfg(feature = "backend-debug")]
+        println!("compiling {}", &temp_data.name);
 
         let mut func_builder_context = FunctionBuilderContext::new();
 
         let (fcs, lines) = compile_function::make_fcs(
             self, 
             &mut func_builder_context,
-            &mut context, 
+            &mut temp_data.ctx, 
             mir,
         );
 
         compile_function::compile(fcs, lines);
 
         #[cfg(feature = "backend-debug")]
-        println!("func {:?}:\n{}", info, context.func);
+        println!("func {:?}:\n{}", &temp_data.name, &temp_data.ctx.func);
 
-        self.module.define_function(func_id, &mut context).unwrap();
-        context.compile(&**self.isa).unwrap();
+        self.module.define_function(temp_data.cl_func_id, &mut temp_data.ctx).unwrap();
+        temp_data.ctx.compile(&**self.isa).unwrap();
 
-        self.cl_function_data.insert(info, (context, func_id));
+        self.temp_function_data.insert(func_id, temp_data);
     }
 
     fn end_compilation_round(&mut self) {
         self.module.finalize_definitions().unwrap();
 
-        for func_info in self.func_pointers.keys() {
-            let func_id = self.cl_function_data[func_info].1;
-            let address = self.module.get_finalized_function(func_id) as *const usize;
-            self.func_pointers[&func_info].set_pointer(address);
+        for func_id in self.func_pointers.keys() {
+            if let Some(temp_data) = self.temp_function_data.get(func_id) {
+                let cl_id = temp_data.cl_func_id;
+                let address = self.module.get_finalized_function(cl_id) as *const usize;
+                self.func_pointers[func_id].set_pointer(address);
+            }
         }
-        dbg!(&self.func_pointers);
     }
 
-    fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
-        if let Some(func) = self.func_pointers.get(info) {
+    fn has_been_compiled(&self, id: FuncId) -> bool {
+        if let Some(func) = self.func_pointers.get(id) {
             func.code().pointer().is_some()
         } else {
-            self.external_functions.contains_key(info)
+            self.external_functions.contains_key(id)
         }
     }
 
-    fn get_function(&self, info: impl Into<UniqueFuncInfo>) -> Option<&Self::LowerableFuncRef> {
-        self.func_pointers.get(&info.into())
+    fn get_function(&self, id: FuncId) -> Option<&Self::LowerableFuncRef> {
+        self.func_pointers.get(id)
     }
 
     fn compiled_iter<'a>(&'a self) -> 
-        Box<dyn Iterator<Item = (&UniqueFuncInfo, &Self::LowerableFuncRef)> + 'a> {
+        Box<dyn Iterator<Item = (FuncId, &Self::LowerableFuncRef)> + 'a> {
         Box::new(self.func_pointers.iter())
     }
 
-    fn add_global(&mut self, name: VarName, typ: Type, address: *mut usize) {
-        self.globals.insert(name, (typ, address));
+    fn add_global(&mut self, name: VarName, typ: Type, ptr: *mut usize) {
+        self.globals.insert(name, Global::Value { typ, ptr });
     }
 
     fn add_external_func(
         &mut self, 
-        info: UniqueFuncInfo, 
+        info: FuncId, 
         func_type: FuncType, 
         ptr: *const usize
     ) {

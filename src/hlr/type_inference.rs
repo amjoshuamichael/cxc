@@ -1,7 +1,7 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec},
-    Type, TypeRelation, UniqueFuncInfo, VarName, CompData, errors::TResult,
+    Type, TypeRelation, FuncQuery, VarName, CompData, errors::TResult,
 };
 use indexmap::{IndexSet, IndexMap};
 use std::{hash::Hash, collections::HashMap};
@@ -53,7 +53,7 @@ enum LastSetBy {
     Connection(usize),
     Known,
     ReturnTypeOfFunction,
-    ArgTypeOfFunction(UniqueFuncInfo, usize),
+    ArgTypeOfFunction(FuncQuery, usize),
     StructLiteral,
     #[default]
     None,
@@ -753,7 +753,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
         };
 
         let node_data = hlr.tree.get(id);
-        let func_info = hlr.tree.unique_func_info_of_call(&node_data);
+        let func_info = hlr.tree.func_query_of_call(&node_data);
 
         if func_info.relation.is_method() {
             let HNodeData::Call { a, .. } = node_data else { unreachable!() };
@@ -762,7 +762,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
             for deref in method_of.deref_chain(&*hlr.comp_data) {
                 let doing_deref = deref != method_of;
 
-                let dereffed_func_info = UniqueFuncInfo {
+                let dereffed_func_info = FuncQuery {
                     relation: TypeRelation::MethodOf(deref),
                     ..func_info.clone()
                 };
@@ -784,7 +784,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
 fn fill_in_call(
     infer_map: &mut InferMap,
     hlr: &mut FuncRep,
-    func_info: UniqueFuncInfo,
+    func_info: FuncQuery,
     id: &ExprID,
     doing_deref: bool,
 ) -> TResult<bool> {
@@ -817,7 +817,7 @@ fn fill_in_call(
         }
 
         Ok(true)
-    } else if let Some(code_id) = hlr.comp_data.get_declaration_of(&func_info)? {
+    } else if let Some(code_id) = hlr.comp_data.query_for_code(&func_info) {
         // Function has generics that we do not know, but because of the
         // signature of the function declaration (found by the
         // get_declaration_of) method, we can fill in some constraints

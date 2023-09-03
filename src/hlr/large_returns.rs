@@ -6,7 +6,7 @@ use crate::hlr::expr_tree::*;
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::Type;
-use crate::UniqueFuncInfo;
+use crate::FuncQuery;
 
 pub fn large_returns(hlr: &mut FuncRep) {
     handle_other_calls(hlr);
@@ -59,7 +59,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
             hlr.insert_statement_before(return_id, SetVarGen {
                 lhs: casted_ret.clone(),
                 rhs: CallGen {
-                    info: UniqueFuncInfo {
+                    info: FuncQuery {
                         name: VarName::from("cast"),
                         generics: vec![hlr.ret_type.clone(), f64.clone()],
                         ..Default::default()

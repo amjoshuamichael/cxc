@@ -1,6 +1,6 @@
 use crate::{
     parse::{Opcode, TypeSpec},
-    TypeRelation, UniqueFuncInfo, errors::CResultMany,
+    TypeRelation, FuncQuery, errors::CResultMany,
 };
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
@@ -40,7 +40,7 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_infallible(
         |callid, call_data, hlr| {
             let HNodeData::Call { ref mut a, .. } = call_data else { return };
-            let unique_func_info = hlr.tree.unique_func_info_of_call(&hlr.tree.get(callid));
+            let unique_func_info = hlr.tree.func_query_of_call(&hlr.tree.get(callid));
 
             if !unique_func_info.relation.is_method() {
                 return 
@@ -52,7 +52,7 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
             let deref_level_of_call = deref_chain
                 .iter()
                 .position(|deref| {
-                    let dereffed_func_info = UniqueFuncInfo {
+                    let dereffed_func_info = FuncQuery {
                         relation: TypeRelation::MethodOf(deref.clone()),
                         ..unique_func_info.clone()
                     };

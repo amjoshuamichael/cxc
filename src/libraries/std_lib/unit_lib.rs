@@ -1,4 +1,4 @@
-use crate::{libraries::Library, Func, unit::backends::function::FuncCodePtr, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, UniqueFuncInfo};
+use crate::{libraries::Library, Func, unit::backends::function::FuncCodePtr, FuncType, Type, Value, XcReflect, IntType, FloatType, StructType, RefType, BoolType, ArrayType, TypeData, TypeEnum, VarName, TypeName, TypeRelation, FuncQuery};
 
 pub struct UnitLib;
 

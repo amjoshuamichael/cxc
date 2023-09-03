@@ -2,7 +2,7 @@ use crate::cache::Cache;
 use crate::errors::{TErr, TResult};
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
-use crate::UniqueFuncInfo;
+use crate::FuncQuery;
 use crate::{CompData, TypeRelation};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
@@ -112,7 +112,7 @@ impl Type {
             Ok(base.clone())
         } else {
             Ok(comp_data
-                .get_func_type(&UniqueFuncInfo::new(
+                .get_func_type(&FuncQuery::new(
                     &"deref".into(),
                     &TypeRelation::MethodOf(self.get_ref()),
                     self.generics().clone(),

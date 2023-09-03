@@ -7,7 +7,7 @@ pub use self::value_api::Value;
 use crate::FuncType;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
-use crate::errors::TResult;
+use crate::hlr::hlr_data_output::HLR;
 use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::libraries::Library;
@@ -18,13 +18,15 @@ use crate::parse::*;
 use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
 pub use add_external::ExternalFuncAdd;
-pub use functions::UniqueFuncInfo;
+pub use functions::FuncQuery;
 pub use reflect::XcReflect;
+use slotmap::SecondaryMap;
 use slotmap::SlotMap;
 use slotmap::new_key_type;
 use std::any::TypeId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::pin::Pin;
 use crate::backend::Backend;
@@ -56,13 +58,46 @@ pub struct CompData {
     pub(crate) func_code: SlotMap<FuncCodeId, FuncCode>,
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncCodeId>,
+    processed: SlotMap<FuncId, ProcessedFuncInfo>,
     pub generations: Generations,
-    dependencies: BTreeMap<UniqueFuncInfo, BTreeSet<UniqueFuncInfo>>,
-    pub func_types: BTreeMap<UniqueFuncInfo, FuncType>,
     pub globals: BTreeMap<VarName, Type>,
 }
 
-new_key_type! { pub struct FuncCodeId; }
+#[derive(Debug, Clone)]
+pub struct ProcessedFuncInfo {
+    pub dependencies: HashSet<FuncQuery>,
+    pub name: VarName,
+    pub relation: TypeRelation,
+    pub generics: Vec<Type>,
+    pub typ: FuncType,
+}
+
+impl ProcessedFuncInfo {
+    pub fn to_string(&self, generations: &Generations, func_id: FuncId) -> String {
+        let gen = generations.get_gen_of(&func_id);
+        let gen_suffix = format!("{gen:x}");
+
+        match &self.relation {
+            TypeRelation::Static(typ) => {
+                format!("{:?}::{:?}{:?}", typ, self.name, self.generics)
+            },
+            TypeRelation::MethodOf(typ) => {
+                format!("M_{:?}{:?}{:?}", typ, self.name, self.generics)
+            },
+            TypeRelation::Unrelated => format!("{:?}{:?}", self.name, self.generics),
+        }
+        .replace("&", "ref")
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_')
+        .collect::<String>()
+            + &*gen_suffix
+    }
+}
+
+new_key_type! {
+    pub struct FuncCodeId; 
+    pub struct FuncId; 
+}
 
 impl Debug for CompData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -87,7 +122,7 @@ impl Unit {
         new
     }
 
-    pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<UniqueFuncInfo>> {
+    pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<FuncQuery>> {
         // TODO: make sure the global can only be accessed from a compilation script
 
         let lexed = lex(script);
@@ -124,24 +159,21 @@ impl Unit {
                 declarations.push(self.comp_data.insert_code(comp_script));
             }
 
-            let funcs_to_compile: Vec<UniqueFuncInfo> = { declarations }
+            let funcs_to_compile: Vec<FuncQuery> = { declarations }
                 .drain(..)
                 .map(|code_id| {
                     let code = &self.comp_data.func_code[code_id];
+
                     let relation = code
                         .relation
                         .clone()
                         .map_inner_type(|spec| self.comp_data.get_spec(&spec, &()).unwrap());
 
-                    let func_info = UniqueFuncInfo {
+                    FuncQuery {
                         name: code.name.clone(),
                         relation,
-                        ..Default::default()
-                    };
-
-                    self.comp_data.generations.update(func_info.clone());
-
-                    func_info
+                        generics: Vec::new(),
+                    }
                 })
                 .collect();
 
@@ -157,92 +189,117 @@ impl Unit {
         Ok(funcs_to_process)
     }
 
-    pub fn compile_func_set(&mut self, mut set: BTreeSet<UniqueFuncInfo>) -> CResultMany<()> {
+    pub fn compile_func_set(&mut self, mut set: HashSet<FuncQuery>) -> CResultMany<()> {
         if set.is_empty() {
             return Ok(());
         }
 
-        self.backend.begin_compilation_round();
-
-        let mut all_funcs_to_compile = Vec::new();
         let mut all_func_infos = Vec::new();
+
+        let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
 
         while !set.is_empty() {
             all_func_infos.extend(set.clone().into_iter());
 
-            for info in &set {
-                // register all functions
-                let code = self.comp_data.get_code(info.clone()).unwrap();
+            for query in &set {
+                // TODO: here, get code id, but also get code generics with id
+                let code = self.comp_data.get_code(query.clone()).unwrap();
 
                 let func_arg_types = code
                     .args
                     .iter()
                     .map(|VarDecl { type_spec, .. }| {
-                         self.comp_data.get_spec(type_spec, info)
+                         self.comp_data.get_spec(type_spec, query)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let func_ret_type = self.comp_data.get_spec(&code.ret_type, info)?;
+                let func_ret_type = self.comp_data.get_spec(&code.ret_type, query)?;
                 let func_type = func_ret_type.func_with_args(func_arg_types);
 
-                if info.generics.is_empty() {
+                if query.generics.is_empty() {
                     self.comp_data.globals.insert(
-                        info.name.clone(),
+                        query.name.clone(),
                         func_type.clone()
                     );
                 }
             }
-            
-            let func_reps: Vec<MIR> = { set }
-                .into_iter()
+
+            let current_func_ids: Vec<FuncId> = set
+                .drain()
                 .map(|info| {
                     let code = self.comp_data.get_code(info.clone()).unwrap();
 
-                    let hlr = hlr(info.clone(), &self.comp_data, code)?;
-                    let mir = mir(hlr);
+                    let (hlr, processed_func_info) = 
+                        hlr(info.clone(), &self.comp_data, code.as_ref())?;
 
-                    self.backend.register_function(info.clone(), mir.func_type.clone());
+                    let possibly_existing_id = self.comp_data.query_for_id(&FuncQuery {
+                        name: processed_func_info.name.clone(),
+                        relation: processed_func_info.relation.clone(),
+                        generics: processed_func_info.generics.clone(),
+                    });
 
-                    Ok(mir)
+                    let func_id = if let Some(id) = possibly_existing_id {
+                        self.comp_data.processed[id] = processed_func_info;
+                        id
+                    } else {
+                        self.comp_data.processed.insert(processed_func_info)
+                    };
+
+                    hlrs.insert(func_id, hlr);
+
+                    Ok(func_id)
                 })
-                .collect::<CResultMany<Vec<MIR>>>()?;
+                .collect::<CResultMany<Vec<FuncId>>>()?;
 
-            set = func_reps
+            let uncompiled_dependencies = current_func_ids
                 .iter()
-                .flat_map(|f| { f.dependencies.clone().into_iter() })
-                .filter(|f| 
-                    !self.has_been_compiled(f).unwrap() && !all_func_infos.contains(&f)
-                )
+                .flat_map(|f| { self.comp_data.processed[*f].dependencies.iter() })
+                .filter(|f| {
+                    !self.has_been_compiled(f) && !all_func_infos.contains(&f)
+                })
+                .cloned()
+                .collect::<BTreeSet<FuncQuery>>();
+
+            let dependents = BTreeSet::new();
+            for mir in current_func_ids.iter() {
+                // TODO: this needs to be redone
+                //let mut depended_on_by = self.comp_data.processed[&mir.id].depen
+                //    .dependencies
+                //    .get(&mir.info)
+                //    .cloned()
+                //    .unwrap_or_default(); // if dependencies aren't listed, assume 
+                //                          // there aren't any
+
+                //depended_on_by.retain(|f| self.comp_data.generations.update(f.clone()));
+
+                //set.extend(depended_on_by);
+            }
+
+            set.extend(uncompiled_dependencies);
+            set.extend(dependents);
+        }
+
+        self.backend.begin_compilation_round();
+
+        let mut mirs = SecondaryMap::<FuncId, MIR>::new();
+
+        for (func_id, hlr) in hlrs {
+            let processed_func_info = &self.comp_data.processed[func_id];
+            self.backend.register_function(func_id, processed_func_info);
+
+            let dependencies = processed_func_info
+                .dependencies
+                .iter()
+                .filter_map(|query| {
+                    Some((query.clone(), self.comp_data.query_for_id(query)?))
+                })
                 .collect();
-
-            for func in func_reps.iter() {
-                let depended_on_by = self.comp_data
-                    .dependencies
-                    .get(&func.info)
-                    .cloned()
-                    .unwrap_or_default(); // if dependencies aren't listed, assume 
-                                          // there aren't any
-
-                let depended_on_by = depended_on_by
-                    .into_iter()
-                    .filter(|f| self.comp_data.generations.update(f.clone()));
-
-                set.extend(depended_on_by);
-            }
-
-            all_funcs_to_compile.extend(func_reps.into_iter());
+            
+            let mir = mir(hlr, dependencies);
+            mirs.insert(func_id, mir);
         }
 
-        for func in &all_funcs_to_compile {
-            for depends_on in &func.dependencies {
-                let calling_set = self.comp_data.dependencies.entry(depends_on.clone()).or_default();
-                calling_set.insert(func.info.clone());
-            }
-
-            self.comp_data.func_types.insert(func.info.clone(), func.func_type.clone());
-        }
-
-        for mir in all_funcs_to_compile {
-            self.backend.compile_function(mir);
+        for (func_id, mir) in mirs {
+            self.backend.compile_function(func_id, mir);
         }
 
         self.backend.end_compilation_round();
@@ -254,26 +311,40 @@ impl Unit {
     }
     
     fn run_comp_script(&self) {
-        let func = self.backend.get_function(UniqueFuncInfo {
+        let comp_script_query = FuncQuery {
             name: VarName::None,
             ..Default::default()
-        }).unwrap();
+        };
 
-        func.downcast::<(), ()>()();
+        let comp_script_id = self.comp_data.query_for_id(&comp_script_query).unwrap();
+
+        let comp_script_fn = self.backend.get_function(comp_script_id).unwrap();
+
+        comp_script_fn.downcast::<(), ()>()();
     }
 
-    pub fn get_fn(&self, with: impl Into<UniqueFuncInfo>) -> Option<&Func> {
-        self.backend.get_function(with)
+    /// Gets a function from the unit. Returns none if that function doesn't already exist.
+    /// Note that if you have a generic function, and the specific variation of that
+    /// function hasn't been compiled, `get_fn` will also return None.
+    pub fn get_fn(&self, with: impl Into<FuncQuery>) -> Option<&Func> {
+        let with = with.into();
+
+        let id = self.comp_data.query_for_id(&with)?;
+
+        let correct_function_ptr = self.backend.get_function(id);
+        assert!(correct_function_ptr.is_some());
+        return correct_function_ptr;
     }
 
-    pub fn has_been_compiled(&self, info: &UniqueFuncInfo) -> TResult<bool> {
-        if let Some(decl) = self.comp_data.get_declaration_of(info)? && 
-            self.comp_data.intrinsics.contains(&decl) {
-            Ok(true)
-        } else if self.backend.has_been_compiled(&info) {
-            Ok(true)
+    pub fn has_been_compiled(&self, query: &FuncQuery) -> bool {
+        if let Some(id) = self.comp_data.query_for_id(query) &&
+            self.backend.has_been_compiled(id) {
+            true
+        } else if let Some(code_id) = self.comp_data.query_for_code(query) && 
+            self.comp_data.intrinsics.contains(&code_id) {
+            true
         } else {
-            Ok(false)
+            false
         }
     }
 
@@ -314,9 +385,9 @@ impl Unit {
         self.backend.add_global(name, typ.get_ref(), val as _);
     }
 
-    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Option<(UniqueFuncInfo, Func)> {
-        let (info, func): (&UniqueFuncInfo, &Func) = self.backend.compiled_iter().find(|(_, func)| func.get_pointer() == ptr)?;
+    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Option<(FuncId, Func)> {
+        let (id, func) = self.backend.compiled_iter().find(|(_, func)| func.get_pointer() == ptr)?;
 
-        Some((info.clone(), func.clone()))
+        Some((id.clone(), func.clone()))
     }
 }

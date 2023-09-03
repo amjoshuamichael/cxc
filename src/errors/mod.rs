@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    parse::{ParseErrorSpanned, TypeSpec}, StructType, Type, TypeName, UniqueFuncInfo, VarName, hlr::expr_tree::ExprID,
+    parse::{ParseErrorSpanned, TypeSpec}, StructType, Type, TypeName, FuncQuery, VarName, hlr::expr_tree::ExprID,
 };
 
 pub type CResultMany<T> = Result<T, Vec<CErr>>;
@@ -69,7 +69,7 @@ pub enum TErr {
 
 #[derive(Debug)]
 pub enum FErr {
-    NotFound(UniqueFuncInfo),
+    NotFound(FuncQuery),
 }
 
 #[derive(Debug)]

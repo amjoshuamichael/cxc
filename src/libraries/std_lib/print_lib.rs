@@ -1,4 +1,4 @@
-use crate::{libraries::Library, ExternalFuncAdd, Unit};
+use crate::{libraries::Library, ExternalFuncAdd, Unit, Type};
 
 pub struct PrintLib;
 
@@ -17,6 +17,15 @@ impl Library for PrintLib {
         );
 
         unit.add_rust_func_explicit(
+            "print_number",
+            print_number as *const usize,
+            ExternalFuncAdd {
+                arg_types: vec![Type::i(64)],
+                ..ExternalFuncAdd::empty()
+            },
+        );
+
+        unit.add_rust_func_explicit(
             "panic",
             panic as *const usize,
             ExternalFuncAdd {
@@ -28,4 +37,5 @@ impl Library for PrintLib {
 }
 
 fn external_print_string(string: &String) { println!("{string}") }
+fn print_number(num: i64) { println!("{num}") }
 fn panic(string: &String) { panic!("{string}") }
