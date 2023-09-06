@@ -44,6 +44,7 @@ impl Errable for FuncCode {
             generic_count: 0,
             code: Expr::err(),
             relation: TypeSpecRelation::Unrelated,
+            is_external: false,
         }
     }
 }

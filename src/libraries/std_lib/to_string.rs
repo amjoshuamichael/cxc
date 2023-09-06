@@ -213,5 +213,6 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         generic_count: 0,
         code: expr,
         relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
+        is_external: false,
     })
 }

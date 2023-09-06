@@ -60,6 +60,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 generic_count: 0,
                 code: struct_lit.wrap_in_block(),
                 relation,
+                is_external: false,
             })
         },
         _ => None,

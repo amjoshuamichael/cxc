@@ -15,6 +15,9 @@ use crate::typ::VoidType;
 use crate::{Type, IntType, FloatType, StructType};
 
 pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool) {
+    sig.params.clear();
+    sig.returns.clear();
+
     let return_style = if as_rust { 
         typ.ret.rust_return_style() 
     } else { 
@@ -70,7 +73,7 @@ impl ToCLType for TypeEnum {
             TypeEnum::Ref(t) => t.to_cl_type(),
             TypeEnum::Func(t) => t.to_cl_type(),
             TypeEnum::Array(t) => t.to_cl_type(),
-            TypeEnum::Bool(t) => t.to_cl_type(),
+            TypeEnum::Bool => (&BoolType).to_cl_type(),
             TypeEnum::Void => VoidType().to_cl_type(),
             TypeEnum::Unknown => UnknownType().to_cl_type(),
         }

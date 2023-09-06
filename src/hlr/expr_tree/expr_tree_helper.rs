@@ -128,16 +128,12 @@ impl ExprTree {
         new_space
     }
 
+    // TODO: remove
     pub fn func_query_of_call(&self, call: &HNodeData) -> FuncQuery {
-        let HNodeData::Call { f, generics, relation, .. } = call.clone()
+        let HNodeData::Call { ref query, .. } = &call
             else { panic!() };
 
-        FuncQuery {
-            name: f,
-            relation,
-            generics,
-            ..Default::default()
-        }
+        query.clone()
     }
 
     pub fn count(&self) -> usize { self.nodes.len() }

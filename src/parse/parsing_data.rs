@@ -190,9 +190,10 @@ pub struct FuncCode {
     pub name: VarName,
     pub ret_type: TypeSpec,
     pub args: Vec<VarDecl>,
-    pub generic_count: u32,
+    pub generic_count: usize,
     pub code: Expr,
     pub relation: TypeSpecRelation,
+    pub is_external: bool,
 }
 
 impl FuncCode {
@@ -214,10 +215,10 @@ impl FuncCode {
             name: VarName::None,
             ret_type: Type::unknown().into(),
             args: Vec::new(),
-
             generic_count: 0,
             code,
             relation: TypeSpecRelation::Unrelated,
+            is_external: false,
         }
     }
 

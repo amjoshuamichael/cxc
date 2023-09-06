@@ -1,4 +1,4 @@
-use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName};
+use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName, FuncQuery};
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
@@ -24,8 +24,13 @@ pub fn op_overloading(hlr: &mut FuncRep) {
                         ret_type: ret_type.clone(),
                         f: VarName::from("deref"),
                         generics: hs_type.generics().clone(),
-                        a: vec![reffed_hs],
                         relation: TypeRelation::MethodOf(hs_type.clone().get_ref()),
+                        query: FuncQuery {
+                            name: VarName::from("deref"),
+                            generics: hs_type.generics().clone(),
+                            relation: TypeRelation::MethodOf(hs_type.clone().get_ref()),
+                        },
+                        a: vec![reffed_hs],
                         sret: None,
                     };
                 },

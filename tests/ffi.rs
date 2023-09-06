@@ -20,7 +20,6 @@ fn return_arg() {
 fn multiple_args() {
     let mut unit = Unit::new();
 
-    unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
         add(a: i32, b: i32); i32 {
@@ -41,7 +40,6 @@ fn multiple_args() {
 fn basic_pointer() {
     let mut unit = Unit::new();
 
-    unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
         square(num: &i32) {

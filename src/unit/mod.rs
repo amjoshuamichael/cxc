@@ -2,7 +2,6 @@ use self::backends::IsBackend;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 use self::functions::TypeLevelFunc;
-pub use self::generations::Generations;
 pub use self::value_api::Value;
 use crate::FuncType;
 use crate::errors::CErr;
@@ -24,6 +23,7 @@ use slotmap::SecondaryMap;
 use slotmap::SlotMap;
 use slotmap::new_key_type;
 use std::any::TypeId;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -40,7 +40,6 @@ pub mod get_type_spec;
 mod reflect;
 mod rust_type_name_conversion;
 mod value_api;
-mod generations;
 pub mod backends;
 
 use crate as cxc;
@@ -57,16 +56,16 @@ pub struct CompData {
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     reflected_types: BTreeMap<TypeId, Type>,
     pub(crate) func_code: SlotMap<FuncCodeId, FuncCode>,
+    pub(crate) realizations: SecondaryMap<FuncCodeId, Vec<FuncId>>,
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncCodeId>,
     processed: SlotMap<FuncId, ProcessedFuncInfo>,
-    pub generations: Generations,
     pub globals: BTreeMap<VarName, Type>,
 }
 
 #[derive(Debug, Clone)]
 pub struct ProcessedFuncInfo {
-    pub dependencies: HashMap<FuncQuery, Option<(FuncId, u32)>>,
+    pub dependencies: HashMap<FuncQuery, Option<FuncCodeId>>,
     pub name: VarName,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
@@ -74,9 +73,8 @@ pub struct ProcessedFuncInfo {
 }
 
 impl ProcessedFuncInfo {
-    pub fn to_string(&self, generations: &Generations, func_id: FuncId) -> String {
-        let gen = generations.get_gen_of(func_id);
-        let gen_suffix = format!("{gen:x}");
+    pub fn to_string(&self, func_id: FuncId) -> String {
+        let id_suffix = format!("{func_id:?}");
 
         match &self.relation {
             TypeRelation::Static(typ) => {
@@ -91,7 +89,7 @@ impl ProcessedFuncInfo {
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '_')
         .collect::<String>()
-            + &*gen_suffix
+            + &*id_suffix
     }
 }
 
@@ -149,10 +147,10 @@ impl Unit {
             for code in parsed.funcs.iter() {
                 let is_generic = code.has_generics();
 
-                let decl = self.comp_data.insert_code(code.clone());
+                let code_id = self.comp_data.insert_code(code.clone());
 
                 if !is_generic {
-                    declarations.push(decl);
+                    declarations.push(code_id);
                 }
             }
 
@@ -191,15 +189,11 @@ impl Unit {
     }
 
     pub fn compile_func_set(&mut self, mut set: HashSet<FuncQuery>) -> CResultMany<()> {
-        if set.is_empty() {
-            return Ok(());
-        }
-
         let mut all_func_ids = Vec::<FuncId>::new();
 
         let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
 
-        while !set.is_empty() {
+        loop {
             for query in &set {
                 // TODO: here, get code id, but also get code generics with id
                 let code = self.comp_data.get_code(query.clone()).unwrap();
@@ -224,11 +218,17 @@ impl Unit {
 
             let current_func_ids: Vec<FuncId> = set
                 .drain()
-                .map(|id| {
-                    let code = self.comp_data.get_code(id.clone()).unwrap();
+                .map(|query| {
+                    let code_id = self.comp_data.query_for_code(&query);
+
+                    let code = if let Some(code_id) = code_id {
+                        Cow::Borrowed(&self.comp_data.func_code[code_id])
+                    } else {
+                        self.comp_data.get_code(query.clone()).unwrap()
+                    };
 
                     let (hlr, processed_func_info) = 
-                        hlr(id.clone(), &self.comp_data, code.as_ref())?;
+                        hlr(query.clone(), &self.comp_data, code.as_ref())?;
 
                     let possibly_existing_id = self.comp_data.query_for_id(&FuncQuery {
                         name: processed_func_info.name.clone(),
@@ -243,9 +243,16 @@ impl Unit {
                         self.comp_data.processed.insert(processed_func_info)
                     };
 
+                    if let Some(code_id) = code_id {
+                        if let Some(realizations) = self.comp_data.realizations.get_mut(code_id) {
+                            realizations.push(func_id);
+                        } else {
+                            self.comp_data.realizations.insert(code_id, vec![func_id]);
+                        }
+                    }
+
                     hlrs.insert(func_id, hlr);
                     all_func_ids.push(func_id);
-                    self.comp_data.generations.update(func_id);
 
                     Ok(func_id)
                 })
@@ -258,14 +265,24 @@ impl Unit {
                 .filter(|f| {
                     if !self.has_been_compiled(f) {
                         true
-                    } else if self.comp_data.query_for_id(f).is_some() {
+                    } else if let Some(func_id) = self.comp_data.query_for_id(f) &&
+                        all_func_ids.contains(&func_id) {
                         false
-                    } else if let Some(code_id) = self.comp_data.query_for_code(f) &&
-                        self.comp_data.intrinsics.contains(&code_id) {
-                        false
-                    } else {
-                        true
-                    }
+                    } else { match self.comp_data.query_for_code(f) {
+                        Some(code_id) => {
+                            if self.comp_data.intrinsics.contains(&code_id)  {
+                                false
+                            } else if self.comp_data.func_code[code_id].is_external {
+                                false
+                            } else {
+                                true
+                            }
+                        },
+                        None => {
+                            // function is external and has no code
+                            false
+                        }
+                    }}
                 })
                 .cloned()
                 .collect::<BTreeSet<FuncQuery>>();
@@ -273,7 +290,6 @@ impl Unit {
             let mut dependents = BTreeSet::new();
             for (dependent_id, ProcessedFuncInfo { dependencies, name, relation, generics, .. }) 
                 in &self.comp_data.processed {
-
                 if all_func_ids.contains(&dependent_id) {
                     continue; 
                 }
@@ -282,11 +298,9 @@ impl Unit {
                     if og_location.is_none() { continue }
                     let og_location = og_location.unwrap();
 
-                    let func_id = self.comp_data.query_for_id(&query).unwrap();
+                    let location = self.comp_data.query_for_code(&query).unwrap();
 
-                    let func_gen = self.comp_data.generations.get_gen_of(func_id);
-
-                    if og_location != (func_id, func_gen) {
+                    if og_location != location {
                         dependents.insert(FuncQuery {
                             name: name.clone(),  
                             relation: relation.clone(),  
@@ -299,18 +313,22 @@ impl Unit {
 
             set.extend(uncompiled_dependencies);
             set.extend(dependents);
+
+            if set.is_empty() {
+                break;
+            }
+        }
+
+        if all_func_ids.is_empty() {
+            return Ok(());
         }
 
         for id in &all_func_ids {
             let mut dependencies = self.comp_data.processed[*id].dependencies.clone();
 
             for (func_query, fn_loc) in &mut dependencies {
-                if let Some(func_id) = self.comp_data.query_for_id(&func_query) {
-                    dbg!(&func_query);
-                    dbg!(&func_id);
-
-                    let func_generation = self.comp_data.generations.get_gen_of(func_id);
-                    *fn_loc = Some((func_id, func_generation));
+                if let Some(code_id) = self.comp_data.query_for_code(&func_query) {
+                    *fn_loc = Some(code_id);
                 }
             }
 

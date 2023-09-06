@@ -197,7 +197,8 @@ impl CompData {
             TypeSpec::GenParam(index) => {
                 generics
                 .get_at_index(*index)
-                .ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics(), *index))?
+                .unwrap()
+                //.ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics(), *index))?
             }
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {

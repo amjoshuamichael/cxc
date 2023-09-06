@@ -205,7 +205,7 @@ pub fn parse_func_code(
 
     let code = parse_block(&mut lexer)?;
 
-    let generic_count = lexer.generic_count() as u32;
+    let generic_count = lexer.generic_count();
 
     if let TypeSpecRelation::MethodOf(relation) = &relation {
         args.insert(0, VarDecl {
@@ -221,6 +221,7 @@ pub fn parse_func_code(
         code,
         generic_count,
         relation,
+        is_external: false,
     })
 }
 

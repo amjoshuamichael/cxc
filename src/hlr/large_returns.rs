@@ -59,7 +59,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
             hlr.insert_statement_before(return_id, SetVarGen {
                 lhs: casted_ret.clone(),
                 rhs: CallGen {
-                    info: FuncQuery {
+                    query: FuncQuery {
                         name: VarName::from("cast"),
                         generics: vec![hlr.ret_type.clone(), f64.clone()],
                         ..Default::default()

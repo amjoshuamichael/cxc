@@ -1,5 +1,5 @@
 use crate::lex::{indent_parens, TypeName, VarName};
-use crate::parse::*;
+use crate::{parse::*, FuncQuery};
 use crate::Type;
 use crate::unit::FuncId;
 use std::fmt::{Debug, Formatter};
@@ -123,10 +123,11 @@ pub enum HNodeData {
     Call {
         ret_type: Type,
         f: VarName,
+        relation: TypeRelation,
         generics: Vec<Type>,
+        query: FuncQuery,
         a: Vec<ExprID>,
         sret: Option<ExprID>,
-        relation: TypeRelation,
     },
     IndirectCall {
         ret_type: Type,

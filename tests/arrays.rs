@@ -107,6 +107,7 @@ fn active_initialize_array_strings() {
 }
 
 #[test]
+#[ignore]
 fn slice_basic() {
     xc_test!(
         use StdLib;

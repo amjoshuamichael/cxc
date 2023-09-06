@@ -43,6 +43,7 @@ impl CompData {
             generic_count: 0,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
+            is_external: true,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -55,6 +56,7 @@ impl CompData {
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
+            is_external: true,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -74,10 +76,10 @@ impl CompData {
                     type_spec: Type::i(64).into(),
                 },
             ],
-
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
+            is_external: true,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -97,30 +99,30 @@ impl CompData {
                     type_spec: Type::i(64).into(),
                 },
             ],
-
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
+            is_external: true,
         });
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("size_of"),
             ret_type: Type::i(64).into(),
             args: Vec::new(),
-
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
+            is_external: true,
         });
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("alignment_of"),
             ret_type: Type::i(64).into(),
             args: Vec::new(),
-
             generic_count: 1,
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
+            is_external: true,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -131,6 +133,7 @@ impl CompData {
             }],
             ret_type: "U".into(),
             generic_count: 2,
+            is_external: true,
             ..Default::default()
         });
 
@@ -139,6 +142,7 @@ impl CompData {
             args: vec![],
             ret_type: "Type".into(),
             generic_count: 1,
+            is_external: true,
             ..Default::default()
         });
 
@@ -153,10 +157,10 @@ impl CompData {
     }
 
     pub fn insert_code(&mut self, code: FuncCode) -> FuncCodeId {
-        for (id, older_code) in &mut self.func_code {
-            if older_code.name == code.name && older_code.relation == code.relation {
-                *older_code = code;
-                return id;
+        for (code_id, old_code) in &self.func_code {
+            if old_code.name == code.name && old_code.relation == code.relation {
+                self.func_code.remove(code_id);
+                break;
             }
         }
 
@@ -172,17 +176,17 @@ impl CompData {
     pub fn query_for_code(&self, info: &FuncQuery) -> Option<FuncCodeId> {
         use std::mem::discriminant;
 
-        for (id, decl) in &self.func_code {
-            if decl.name != info.name {
+        for (id, code) in &self.func_code {
+            if code.name != info.name {
                 continue;
             }
 
-            if decl.relation.inner_type().is_none() && info.relation.inner_type().is_none()  {
+            if code.relation.inner_type().is_none() && info.relation.inner_type().is_none()  {
                 return Some(id);
-            } else if let Some(looking_at_relation) = decl.relation.inner_type() && 
+            } else if let Some(looking_at_relation) = code.relation.inner_type() && 
                 let Some(looking_for_relation) = info.relation.inner_type() &&
                 discriminant(&looking_at_relation) == discriminant(&looking_at_relation) &&
-                looking_for_relation.could_come_from(looking_at_relation, self) {
+                looking_for_relation.works_as_method_on(looking_at_relation, self) {
                 return Some(id);
             }
         }
@@ -191,25 +195,24 @@ impl CompData {
     }
 
     pub fn query_for_id(&self, query: &FuncQuery) -> Option<FuncId> {
-        Self::query_for_id_just_processed(&self.processed, query)
-    }
-
-    pub fn query_for_id_just_processed(
-        processed: &SlotMap<FuncId, ProcessedFuncInfo>, 
-        query: &FuncQuery,
-    ) -> Option<FuncId> {
-        for (id, info) in processed {
-            if &info.name != &query.name {
-                continue; 
+        if let Some(code_id) = self.query_for_code(query) &&
+            let Some(realizations) = self.realizations.get(code_id) {
+            for realization in realizations {
+                if self.processed[*realization].generics == query.generics {
+                    return Some(*realization);
+                }
             }
-
-            if (&info.name, &info.relation, &info.generics) == 
-                (&query.name, &query.relation, &query.generics) {
-                return Some(id);
+        } else {
+            for (func_id, info) in &self.processed {
+                if info.name == query.name && 
+                    info.relation == query.relation && 
+                    info.generics == query.generics {
+                    return Some(func_id);
+                }
             }
         }
 
-        None
+        return None;
     }
 
 

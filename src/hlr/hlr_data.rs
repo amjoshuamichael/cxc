@@ -7,7 +7,7 @@ use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::{parse::*, TypeEnum};
-use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo, FuncId};
+use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo, FuncId, FuncCodeId};
 use crate::Type;
 use indexmap::IndexMap;
 
@@ -154,7 +154,7 @@ impl<'a> FuncRep<'a> {
         let func_type = self.ret_type.clone().func_with_args(func_arg_types);
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
-        let mut dependencies = HashMap::<FuncQuery, Option<(FuncId, u32)>>::new();
+        let mut dependencies = HashMap::<FuncQuery, Option<FuncCodeId>>::new();
 
         for (_, node_data) in self.tree.iter() {
             let HNodeData::Call { .. } = node_data else { continue; };
@@ -246,9 +246,14 @@ impl<'a> FuncRep<'a> {
                 let call_data = HNodeData::Call {
                     ret_type: string_type.clone(),
                     f: "from_bytes".into(),
-                    a: vec![ref_space, len_arg],
+                    relation: TypeRelationGeneric::Static(string_type.clone()),
                     generics: vec![arr_type.clone()],
-                    relation: TypeRelationGeneric::Static(string_type),
+                    a: vec![ref_space, len_arg],
+                    query: FuncQuery {
+                        name: "from_bytes".into(),
+                        relation: TypeRelationGeneric::Static(string_type),
+                        generics: vec![arr_type.clone()],
+                    },
                     sret: None,
                 };
 
@@ -399,7 +404,7 @@ impl<'a> FuncRep<'a> {
                 let generics = generics
                     .iter()
                     .map(|spec| self.get_type_spec(spec).unwrap())
-                    .collect();
+                    .collect::<Vec<_>>();
 
                 let new_data = if let Expr::Ident(ref func_name) = &**name {
                     let relation = if *is_method {
@@ -411,9 +416,14 @@ impl<'a> FuncRep<'a> {
                     HNodeData::Call {
                         ret_type: Type::unknown(),
                         f: func_name.clone(),
-                        generics,
+                        generics: generics.clone(),
+                        relation: relation.clone(),
+                        query: FuncQuery {
+                            name: func_name.clone(),
+                            generics: generics.clone(),
+                            relation: relation.clone(),
+                        },
                         a: arg_ids,
-                        relation,
                         sret: None,
                     }
                 } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = 
@@ -423,9 +433,14 @@ impl<'a> FuncRep<'a> {
                     HNodeData::Call {
                         ret_type: Type::unknown(),
                         f: func_name.clone(),
-                        generics,
+                        generics: generics.clone(),
+                        relation: TypeRelation::Static(type_origin.clone()),
+                        query: FuncQuery {
+                            name: func_name.clone(),
+                            generics: generics.clone(),
+                            relation: TypeRelation::Static(type_origin),
+                        },
                         a: arg_ids,
-                        relation: TypeRelation::Static(type_origin),
                         sret: None,
                     }
                 } else {

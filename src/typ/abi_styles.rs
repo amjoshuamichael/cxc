@@ -95,7 +95,7 @@ impl Type {
         }
 
         match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
+            Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) => {
                 let size = self.size();
 
@@ -125,7 +125,7 @@ impl Type {
         use TypeEnum::*;
 
         match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ArgStyle::Direct,
+            Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
             _ => match self.size() {
                 0..=8 => {
                     // TODO: make i take usize or make size return u32

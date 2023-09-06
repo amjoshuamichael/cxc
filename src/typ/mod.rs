@@ -13,6 +13,7 @@ use std::sync::Arc;
 pub mod could_come_from;
 pub mod fields_iter;
 pub mod invalid_state;
+pub mod spec_from_type;
 mod kind;
 mod nested_field_count;
 mod size;
@@ -165,7 +166,7 @@ impl Type {
 
     pub fn f(size: impl Into<FloatType>) -> Type { Type::new(TypeEnum::Float(size.into())) }
 
-    pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
+    pub fn bool() -> Type { Type::new(TypeEnum::Bool) }
 
     pub fn empty() -> Type { Type::new_struct(Vec::new()) }
 
@@ -311,7 +312,7 @@ pub enum TypeEnum {
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
-    Bool(BoolType),
+    Bool,
     Void,
 
     #[default]
@@ -335,7 +336,7 @@ impl Deref for TypeEnum {
             TypeEnum::Struct(t) => t,
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
-            TypeEnum::Bool(t) => t,
+            TypeEnum::Bool => &BoolType,
             TypeEnum::Void => &VOID_STATIC,
             TypeEnum::Unknown => &UNKNOWN_STATIC,
         }

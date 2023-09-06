@@ -154,7 +154,7 @@ impl<T: NodeDataGen> NodeDataGen for UnarOpGen<T> {
 
 #[derive(Debug, Default)]
 pub struct CallGen {
-    pub info: FuncQuery,
+    pub query: FuncQuery,
     pub args: Vec<Box<dyn NodeDataGen>>,
     pub sret: Option<Box<dyn NodeDataGen>>,
 }
@@ -171,14 +171,15 @@ impl NodeDataGen for CallGen {
 
         let sret = self.sret.as_ref().map(|sret| sret.add_to_expr_tree(hlr, space));
 
-        let func_type = hlr.comp_data.get_func_type(&self.info).unwrap();
+        let func_type = hlr.comp_data.get_func_type(&self.query).unwrap();
 
         hlr.tree.replace(
             space,
             HNodeData::Call {
-                f: self.info.name.clone(),
-                generics: self.info.generics.clone(),
-                relation: self.info.relation.clone(),
+                f: self.query.name.clone(),
+                generics: self.query.generics.clone(),
+                relation: self.query.relation.clone(),
+                query: self.query.clone(),
                 ret_type: func_type.ret,
                 a: args,
                 sret,
@@ -200,6 +201,7 @@ impl NodeDataGen for FuncQuery {
                 f: self.name.clone(),
                 generics: self.generics.clone(),
                 relation: self.relation.clone(),
+                query: self.clone(),
                 ret_type: func_type.ret,
                 a: Vec::new(),
                 sret: None,
@@ -423,7 +425,12 @@ impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T
             HNodeData::Call {
                 f: "memcpy".into(),
                 relation: TypeRelationGeneric::Unrelated,
-                generics,
+                generics: generics.clone(),
+                query: FuncQuery {
+                    name: "memcpy".into(),
+                    relation: TypeRelationGeneric::Unrelated,
+                    generics,
+                },
                 ret_type: Type::void(),
                 a: vec![from, to, size],
                 sret: None,

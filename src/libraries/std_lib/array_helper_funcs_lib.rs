@@ -47,6 +47,7 @@ fn derive_array_deref(_: &CompData, typ: Type) -> Option<FuncCode> {
             InitOpts::NoFill
         ).wrap_in_block(),
         relation: TypeSpecRelation::MethodOf(typ.into()),
+        is_external: false,
     })
 }
 
@@ -65,6 +66,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
             Box::new(Expr::Number(*count as u64))
         ).wrap_in_block(),
         relation: TypeSpecRelation::Static(typ.into()),
+        is_external: false,
     })
 }
 
@@ -86,5 +88,6 @@ fn derive_array_len_m(_: &CompData, typ: Type) -> Option<FuncCode> {
             Box::new(Expr::Number(*count as u64))
         ).wrap_in_block(),
         relation: TypeSpecRelation::MethodOf(typ.into()),
+        is_external: false,
     })
 }

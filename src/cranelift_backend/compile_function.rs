@@ -6,7 +6,7 @@ use slotmap::SecondaryMap;
 
 use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}, RefType, IntType, unit::FuncId};
 
-use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, TemporaryFunctionData, Global, alloc_and_free::AllocAndFree};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, ClFunctionData, Global, alloc_and_free::AllocAndFree};
 
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -23,8 +23,8 @@ pub fn make_fcs<'a>(
 ) -> (FunctionCompilationState<'a>, Vec<MLine>) {
     let used_functions = mir.dependencies.iter().filter_map(|(_, func_id)| {
         let (cl_func_id, func_id) = 
-            if let Some(TemporaryFunctionData { cl_func_id, .. }) = 
-                backend.temp_function_data.get(*func_id) {
+            if let Some(ClFunctionData { cl_func_id, .. }) = 
+                backend.cl_function_data.get(*func_id) {
                 (*cl_func_id, *func_id)
             } else {
                 return None
@@ -70,8 +70,8 @@ pub fn make_fcs<'a>(
                         builder.ins().iconst(cl_types::I64, ptr as i64)
                     },
                     Global::Func(func_id) => {
-                        let TemporaryFunctionData { cl_func_id, .. } = 
-                            &backend.temp_function_data[func_id];
+                        let ClFunctionData { cl_func_id, .. } = 
+                            &backend.cl_function_data[func_id];
 
                         let func_ref = 
                             backend.module.declare_func_in_func(*cl_func_id, builder.func);
@@ -732,7 +732,7 @@ fn compile_unarop(
     let hs = one(compile_operand(fcs, hs));
 
     match ret_type.as_type_enum() {
-        TypeEnum::Bool(_) => {
+        TypeEnum::Bool => {
             match op {
                 Not => fcs.builder.ins().bnot(hs),
                 _ => unreachable!(),
@@ -754,10 +754,10 @@ fn compile_binop(
     let ins = fcs.builder.ins();
 
     match left_type.as_type_enum() {
-        TypeEnum::Int(_) | TypeEnum::Bool(_) => {
+        TypeEnum::Int(_) | TypeEnum::Bool => {
             let signed = match left_type.as_type_enum() {
                 TypeEnum::Int(IntType { signed, .. }) => *signed,
-                TypeEnum::Bool(_) => false,
+                TypeEnum::Bool => false,
                 _ => unreachable!()
             };
 

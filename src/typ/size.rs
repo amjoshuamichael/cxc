@@ -6,7 +6,7 @@ pub(super) fn size_of_type(typ: Type) -> usize {
         TypeEnum::Float(FloatType::F16) => 2,
         TypeEnum::Float(FloatType::F32) => 4,
         TypeEnum::Float(FloatType::F64) => 8,
-        TypeEnum::Bool(_) => 1,
+        TypeEnum::Bool => 1,
         TypeEnum::Struct(StructType { fields, .. }) => {
             if fields.len() == 0 {
                 return 0

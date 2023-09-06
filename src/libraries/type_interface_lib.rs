@@ -43,6 +43,7 @@ fn field_count(_: &CompData, typ: Type) -> Option<FuncCode> {
         generic_count: 0,
         code: Expr::Number(field_count as u64).wrap_in_block(),
         relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
+        is_external: false,
     })
 }
 
@@ -54,5 +55,6 @@ fn size_in_bytes(_: &CompData, typ: Type) -> Option<FuncCode> {
         generic_count: 0,
         code: Expr::Number(typ.size() as u64).wrap_in_block(),
         relation: TypeSpecRelation::Static(TypeSpec::Type(typ)),
+        is_external: false,
     })
 }

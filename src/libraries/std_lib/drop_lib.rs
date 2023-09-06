@@ -47,8 +47,9 @@ pub fn derive_drop(_: &CompData, typ: Type) -> Option<FuncCode> {
             name: VarName::from("self"),
             type_spec: typ.clone().into(),
         }],
-        generic_count: typ.generics().len() as u32,
+        generic_count: typ.generics().len(),
         code: expr,
         relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
+        is_external: false,
     })
 }

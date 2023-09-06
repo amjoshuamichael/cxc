@@ -12,8 +12,6 @@ pub fn add_external_func(
     func_type: FuncType, 
     ptr: *const usize
 ) {
-    backend.generations.update(info.clone());
-
     let mut ctx = backend.module.make_context();
 
     func_type_to_signature(&func_type, &mut ctx.func.signature, false);

@@ -33,7 +33,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                 SetVarGen {
                     lhs: new_default.clone(),
                     rhs: CallGen {
-                        info: FuncQuery {
+                        query: FuncQuery {
                             name: VarName::from("default"),
                             relation: TypeRelation::Static(var_type.clone()),
                             ..Default::default()

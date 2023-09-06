@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     FuncType, Type, TypeEnum,
-    TypeRelation, FuncQuery, Unit, XcReflect,
+    TypeRelation, FuncQuery, Unit, XcReflect, parse::{FuncCode, TypeSpec, VarDecl, Expr}, VarName, typ::spec_from_type::type_to_type_spec,
 };
 
 use super::{backends::IsBackend, ProcessedFuncInfo};
@@ -101,6 +101,19 @@ impl Unit {
             args: ext_add.arg_types,
         };
 
+        let func_code_id = self.comp_data.func_code.insert(FuncCode {
+            name: name.into(),
+            relation: ext_add.relation.clone().map_inner_type(type_to_type_spec),
+            args: func_type.args.iter().map(|a| VarDecl {
+                name: VarName::None,
+                type_spec: type_to_type_spec(a.clone()),
+            }).collect(),
+            ret_type: type_to_type_spec(func_type.ret.clone()),
+            generic_count: ext_add.generics.len(),
+            code: Expr::default(),
+            is_external: true,
+        });
+
         let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {
             dependencies: HashMap::new(),
             name: name.into(),
@@ -109,7 +122,7 @@ impl Unit {
             typ: func_type.clone(),
         });
 
-        self.comp_data.generations.update(func_id);
+        self.comp_data.realizations.insert(func_code_id, vec![func_id]);
 
         self.backend.add_external_func(
             func_id, 

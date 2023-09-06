@@ -59,6 +59,21 @@ fn depended_on() {
 
 #[test]
 #[serial]
+fn generic_depended_on() {
+    let mut unit = Unit::new();
+
+    unit.push_script("the_best_num<T>(); T { ; T 41 }").unwrap();
+    unit.push_script("double_that(); i32 { ; the_best_num<i32>() * 2 }")
+        .unwrap();
+    let doubled = unit.get_fn("double_that").unwrap().downcast::<(), i32>();
+    assert_eq!(doubled(), 82);
+
+    unit.push_script("the_best_num<T>(); T { ; T 42 }").unwrap();
+    assert_eq!(doubled(), 84);
+}
+
+#[test]
+#[serial]
 fn depends_on() {
     let mut unit = Unit::new();
 
@@ -222,4 +237,42 @@ fn call_2_previous() {
         sextuple_that(); i32 { ; double_that<i32>() * 3 }
     "#).unwrap();
     assert_eq!(sextuple_that(), 54 * 2 * 3);
+}
+
+#[test]
+#[serial]
+#[ignore]
+fn conversion_dependents() {
+    let mut unit = Unit::new();
+
+    fn print_number(num: i64) { println!("{num}") }
+    unit.add_rust_func_explicit(
+        "print_number",
+        print_number as *const usize,
+        ExternalFuncAdd {
+            arg_types: vec![Type::i(64)],
+            ..ExternalFuncAdd::empty()
+        },
+    );
+
+    unit.push_script(r#"
+        TwoNums = { i32, i32 }
+        &TwoNums:.fifty(); i32 { ; 40 }
+    "#).unwrap();
+
+    unit.push_script(r#"
+        main(); i32 {
+            print_number(20)
+            x = TwoNums { 0, 0 }
+            ; x.fifty()
+        }
+    "#).unwrap();
+
+    let main = unit.get_fn("main").unwrap().downcast::<(), i32>();
+    assert_eq!(main(), 40);
+
+    unit.push_script(r#"
+        TwoNums:.fifty(); i32 { ; 50 }
+    "#).unwrap();
+    assert_eq!(main(), 50);
 }
