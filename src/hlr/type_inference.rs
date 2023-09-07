@@ -1,7 +1,7 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec, VarDecl, FuncCode},
-    Type, FuncQuery, VarName, CompData, errors::TResult, unit::get_type_spec::GenericTable,
+    Type, FuncQuery, VarName, CompData, errors::TResult, unit::get_type_spec::GenericTable, TypeRelation,
 };
 use indexmap::{IndexSet, IndexMap};
 use std::{hash::Hash, collections::HashMap};
@@ -744,19 +744,18 @@ fn set_types_in_hlr(infer_map: InferMap, hlr: &mut FuncRep) {
                         *typ = set
                     }
                 },
+                Inferable::ReturnType => hlr.ret_type = set,
                 Inferable::Relation(id) => {
-                    let HNodeData::Call { ref mut relation, ref mut query, .. } = hlr.tree.get_mut(*id) else { panic!() };
-                    *relation.inner_type_mut().unwrap() = set.clone();
+                    let HNodeData::Call { ref mut query, .. } = hlr.tree.get_mut(*id) 
+                        else { unreachable!() };
                     *query.relation.inner_type_mut().unwrap() = set;
                 },
                 Inferable::CallGeneric(id, index) => {
-                    let HNodeData::Call { ref mut generics, ref mut query, .. } = hlr.tree.get_mut(*id) else { panic!() };
-                    generics[*index] = set.clone();
+                    let HNodeData::Call { ref mut query, .. } = hlr.tree.get_mut(*id) 
+                        else { unreachable!() };
                     query.generics[*index] = set;
                 },
-                Inferable::ReturnType => hlr.ret_type = set,
             }
-
         }
     }
 }
@@ -832,19 +831,20 @@ fn fill_in_call(
     // TODO: this is a hack
     let derive_code_storage;
 
-    let (code, known_generics) = 
+    let (code, code_id, known_generics) = 
         if let Some((code_id, known_generics)) = 
             hlr.comp_data.query_for_code_and_get_generics(func_query.code_query()) {
-            (&hlr.comp_data.func_code[code_id], known_generics)
+            (&hlr.comp_data.func_code[code_id], Some(code_id), known_generics)
         } else if let Some(code) = hlr.comp_data.get_derived_code(func_query.code_query()) {
             derive_code_storage = Some(code);
-            (derive_code_storage.as_ref().unwrap(), None)
+            (derive_code_storage.as_ref().unwrap(), None, None)
         } else {
             return Ok(false);
         };
 
     if func_query.generics.len() == code.generic_count {
         // we don't have to infer any generics.
+        hlr.specified_dependencies.insert(func_query.code_query().to_owned_fcq());
 
         let constraint = &mut infer_map.constraint_of(*call_id);
         constraint.is = hlr.comp_data.get_spec(&code.ret_type, &func_query)?;
@@ -896,14 +896,12 @@ fn fill_in_call(
         // signature of the function declaration (found by the
         // get_declaration_of) method, we can fill in some constraints
         // that will help us find the type
+        hlr.specified_dependencies.insert(func_query.code_query().to_owned_fcq());
 
         {
-            let HNodeData::Call {
-                ref mut generics,
-                ref mut query, ..
-            } = hlr.tree.get_mut(*call_id) else { unreachable!() };
+            let HNodeData::Call { ref mut query, .. } = hlr.tree.get_mut(*call_id) 
+                else { unreachable!() };
 
-            generics.resize(code.generic_count as usize, Type::unknown());
             query.generics.resize(code.generic_count as usize, Type::unknown());
         }
 

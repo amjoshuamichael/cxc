@@ -1,4 +1,3 @@
-
 use std::collections::{HashSet, HashMap};
 
 use super::expr_tree::*;
@@ -7,7 +6,7 @@ use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::{parse::*, TypeEnum};
-use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo, FuncId, FuncCodeId};
+use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId};
 use crate::Type;
 use indexmap::IndexMap;
 
@@ -20,6 +19,7 @@ pub struct FuncRep<'a> {
     pub generics: Vec<Type>,
     pub ret_type: Type,
     pub variables: Variables,
+    pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
 }
 
 pub type Variables = IndexMap<VarName, VariableInfo>;
@@ -71,6 +71,7 @@ impl<'a> FuncRep<'a> {
             tree: ExprTree::default(),
             comp_data,
             variables: IndexMap::new(),
+            specified_dependencies: HashSet::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
@@ -154,12 +155,18 @@ impl<'a> FuncRep<'a> {
         let func_type = self.ret_type.clone().func_with_args(func_arg_types);
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
-        let mut dependencies = HashMap::<FuncQuery, Option<FuncCodeId>>::new();
+        let mut specified_dependencies = 
+            HashMap::<OwnedFuncCodeQuery, Option<FuncCodeId>>::new();
 
-        for (_, node_data) in self.tree.iter() {
-            let HNodeData::Call { .. } = node_data else { continue; };
-            let func_query = self.tree.func_query_of_call(node_data);
-            dependencies.insert(func_query, None);
+        for code_query in self.specified_dependencies.drain() {
+            specified_dependencies.insert(code_query, None);
+        }
+
+        let mut dependencies = HashSet::<FuncQuery>::new();
+
+        for (call_id, call_data) in self.tree.iter() {
+            let HNodeData::Call { query, .. } = call_data else { continue };
+            dependencies.insert(query.clone());
         }
 
         (
@@ -168,12 +175,13 @@ impl<'a> FuncRep<'a> {
                 arg_names: self.arg_names(),
                 tree: self.tree,
                 data_flow: self.variables,
+                dependencies,
             },
             ProcessedFuncInfo {
                 name: self.name,
                 relation: self.relation,
                 generics: self.generics,
-                dependencies,
+                specified_dependencies,
                 typ: func_type,
             }
         )
@@ -245,9 +253,6 @@ impl<'a> FuncRep<'a> {
 
                 let call_data = HNodeData::Call {
                     ret_type: string_type.clone(),
-                    f: "from_bytes".into(),
-                    relation: TypeRelationGeneric::Static(string_type.clone()),
-                    generics: vec![arr_type.clone()],
                     a: vec![ref_space, len_arg],
                     query: FuncQuery {
                         name: "from_bytes".into(),
@@ -415,26 +420,20 @@ impl<'a> FuncRep<'a> {
 
                     HNodeData::Call {
                         ret_type: Type::unknown(),
-                        f: func_name.clone(),
-                        generics: generics.clone(),
-                        relation: relation.clone(),
                         query: FuncQuery {
                             name: func_name.clone(),
-                            generics: generics.clone(),
-                            relation: relation.clone(),
+                            generics,
+                            relation,
                         },
                         a: arg_ids,
                         sret: None,
                     }
                 } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = 
                     &**name {
-                    let type_origin = self.get_type_spec(type_spec).unwrap_or(Type::unknown());
+                    let type_origin = self.get_type_spec(type_spec).unwrap_or_default();
 
                     HNodeData::Call {
                         ret_type: Type::unknown(),
-                        f: func_name.clone(),
-                        generics: generics.clone(),
-                        relation: TypeRelation::Static(type_origin.clone()),
                         query: FuncQuery {
                             name: func_name.clone(),
                             generics: generics.clone(),

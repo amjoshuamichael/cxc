@@ -175,13 +175,13 @@ fn build_as_operand(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MOper
             MOperand::Lit(MLit::Float { size: lit_type.size() as u32 * 8, val: value })
         },
         HNodeData::Bool { value } => MOperand::Lit(MLit::Bool(value)),
-        HNodeData::Call { ref f, ref generics, .. } if &*f.to_string() == "size_of" => {
-            MOperand::Lit(MLit::Int { size: 64, val: generics[0].size() as u64 })
+        HNodeData::Call { ref query, .. } if &*query.name.to_string() == "size_of" => {
+            MOperand::Lit(MLit::Int { size: 64, val: query.generics[0].size() as u64 })
         },
-        HNodeData::Call { ref f, ref generics, .. } if &*f.to_string() == "typeobj" => {
+        HNodeData::Call { ref query, .. } if &*query.name.to_string() == "typeobj" => {
             MOperand::Lit(MLit::Int { 
                 size: 64, 
-                val: unsafe { std::mem::transmute(generics[0].clone()) },
+                val: unsafe { std::mem::transmute(query.generics[0].clone()) },
             })
         },
         _ => {
@@ -245,8 +245,8 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
                 },
             }
         },
-        HNodeData::Call { ref f, ref a, ref generics, .. } if &*f.to_string() == "cast" => {
-            let to_type = generics[1].clone();
+        HNodeData::Call { ref query, ref a, .. } if &*query.name == "cast" => {
+            let to_type = query.generics[1].clone();
 
             let val = build_as_addr(tree.get(a[0]), tree, mir);
             let new_cast_out = mir.new_variable("cast_out", to_type.clone());
@@ -259,7 +259,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::MemLoc(MMemLoc::Var(new_cast_out))
         },
-        HNodeData::Call { ref f, ref a, .. } if &*f.to_string() == "memcpy" => {
+        HNodeData::Call { ref query, ref a, .. } if &*query.name == "memcpy" => {
             let from = build_as_addr_reg_with_normal_expr(tree.get(a[0]), tree, mir);
             let to = build_as_addr_reg_with_normal_expr(tree.get(a[1]), tree, mir);
             let len = build_as_operand(tree.get(a[2]), tree, mir);
@@ -272,7 +272,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Void
         },
-        HNodeData::Call { ref f, ref a, .. } if &*f.to_string() == "memmove" => {
+        HNodeData::Call { ref query, ref a, .. } if &*query.name == "memmove" => {
             let from = build_as_operand(tree.get(a[0]), tree, mir);
             let to = build_as_operand(tree.get(a[1]), tree, mir);
             let len = build_as_operand(tree.get(a[2]), tree, mir);
@@ -285,11 +285,11 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Void
         },
-        HNodeData::Call { ref f, ref a, .. } if &*f.to_string() == "free" => {
+        HNodeData::Call { ref query, ref a, .. } if &*query.name == "free" => {
             let ptr = build_as_operand(tree.get(a[0]), tree, mir);
             MExpr::Free { ptr }
         },
-        HNodeData::Call { ref f, ref a, .. } if &**f == "intrinsic_alloc" => {
+        HNodeData::Call { ref query, ref a, .. } if &*query.name == "intrinsic_alloc" => {
             let len = build_as_operand(tree.get(a[0]), tree, mir);
             MExpr::Alloc { len }
         },

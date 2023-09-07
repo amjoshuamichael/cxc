@@ -7,7 +7,7 @@ pub mod bit_array;
 mod default;
 pub mod hash;
 mod print_lib;
-mod string;
+pub mod string;
 mod to_string;
 mod type_helpers;
 mod unit_lib;

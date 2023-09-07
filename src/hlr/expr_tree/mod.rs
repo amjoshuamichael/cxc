@@ -65,7 +65,7 @@ impl ToString for ExprNode {
             ArrayLit { parts, .. } => {
                 format!("{parts:?}")
             },
-            Call { f, a, .. } => format!("{f:?}({a:?})"),
+            Call { query, a, .. } => format!("{:?}({:?})", query.name, a),
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { name, .. } => format!("{name}"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
@@ -122,9 +122,6 @@ pub enum HNodeData {
     // HCallable enum
     Call {
         ret_type: Type,
-        f: VarName,
-        relation: TypeRelation,
-        generics: Vec<Type>,
         query: FuncQuery,
         a: Vec<ExprID>,
         sret: Option<ExprID>,
@@ -322,24 +319,22 @@ impl HNodeData {
                 lit
             },
             Call {
-                f,
-                generics,
                 a: args,
-                relation,
+                query,
                 sret,
                 ..
             } => {
-                let mut call = match relation {
+                let mut call = match &query.relation {
                     TypeRelation::Static(typ) => format!("{typ:?}") + "::",
                     TypeRelation::MethodOf(typ) => format!("({typ:?})") + ".",
                     TypeRelation::Unrelated => String::default(),
                 };
 
-                call += &*f.to_string();
+                call += &*query.name;
 
-                if !generics.is_empty() {
+                if !query.generics.is_empty() {
                     call += "<";
-                    for (g, generic) in generics.iter().enumerate() {
+                    for (g, generic) in query.generics.iter().enumerate() {
                         if g > 0 {
                             call += ", ";
                         }

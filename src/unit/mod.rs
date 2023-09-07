@@ -17,7 +17,7 @@ use crate::parse::*;
 use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
 pub use add_external::ExternalFuncAdd;
-pub use functions::FuncQuery;
+pub use functions::{FuncQuery, FuncCodeQuery, OwnedFuncCodeQuery};
 pub use reflect::XcReflect;
 use slotmap::SecondaryMap;
 use slotmap::SlotMap;
@@ -66,7 +66,7 @@ pub struct CompData {
 
 #[derive(Debug, Clone)]
 pub struct ProcessedFuncInfo {
-    pub dependencies: HashMap<FuncQuery, Option<FuncCodeId>>,
+    pub specified_dependencies: HashMap<OwnedFuncCodeQuery, Option<FuncCodeId>>,
     pub name: VarName,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
@@ -195,80 +195,78 @@ impl Unit {
         let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
 
         loop {
-            for query in &set {
-                // TODO: here, get code id, but also get code generics with id
-                let code = self.comp_data.get_code(query.code_query()).unwrap();
-
-                let func_arg_types = code
-                    .args
-                    .iter()
-                    .map(|VarDecl { type_spec, .. }| {
-                         self.comp_data.get_spec(type_spec, query)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                let func_ret_type = self.comp_data.get_spec(&code.ret_type, query)?;
-                let func_type = func_ret_type.func_with_args(func_arg_types);
-
-                if query.generics.is_empty() {
-                    self.comp_data.globals.insert(
-                        query.name.clone(),
-                        func_type.clone()
-                    );
-                }
-            }
-
-            let current_func_ids: Vec<FuncId> = set
-                .drain()
+            set = set
+                .into_iter()
                 .map(|query| {
-                    dbg!(&query);
+                    // TODO: here, get code id, but also get code generics with id
+                    let (code, _) = self.comp_data.get_code(query.code_query()).unwrap();
 
-                    let code_id = self.comp_data.query_for_code(query.code_query());
+                    let func_arg_types = code
+                        .args
+                        .iter()
+                        .map(|VarDecl { type_spec, .. }| {
+                             self.comp_data.get_spec(type_spec, &query)
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let func_ret_type = self.comp_data.get_spec(&code.ret_type, &query)?;
+                    let func_type = func_ret_type.func_with_args(func_arg_types);
 
-                    // TODO: this is a derivation hack and will be changed when derivations are
-                    // redone
-                    let code = if let Some(code_id) = code_id {
-                        Cow::Borrowed(&self.comp_data.func_code[code_id])
-                    } else {
-                        self.comp_data.get_code(query.code_query()).unwrap()
-                    };
-
-                    let (hlr, processed_func_info) = 
-                        hlr(query.clone(), &self.comp_data, code.as_ref())?;
-
-                    let possibly_existing_id = self.comp_data.query_for_id(&FuncQuery {
-                        name: processed_func_info.name.clone(),
-                        relation: processed_func_info.relation.clone(),
-                        generics: processed_func_info.generics.clone(),
-                    });
-
-                    let func_id = if let Some(id) = possibly_existing_id {
-                        self.comp_data.processed[id] = processed_func_info;
-                        id
-                    } else {
-                        self.comp_data.processed.insert(processed_func_info)
-                    };
-
-                    if let Some(code_id) = code_id {
-                        if let Some(realizations) = self.comp_data.realizations.get_mut(code_id) {
-                            realizations.insert(func_id);
-                        } else {
-                            self.comp_data.realizations.insert(
-                                code_id, 
-                                once(func_id).collect(),
-                            );
-                        }
+                    if query.generics.is_empty() {
+                        self.comp_data.globals.insert(
+                            query.name.clone(),
+                            func_type.clone()
+                        );
                     }
 
-                    hlrs.insert(func_id, hlr);
-                    all_func_ids.insert(func_id);
-
-                    Ok(func_id)
+                    Ok(query)
                 })
-                .collect::<CResultMany<Vec<FuncId>>>()?;
+                .collect::<Result<_, CErr>>()?;
 
-            let uncompiled_dependencies = current_func_ids
+            for query in set.drain() {
+                let code_id = self.comp_data.query_for_code(query.code_query());
+
+                // TODO: this is a derivation hack and will be changed when derivations are
+                // redone
+                let code = if let Some(code_id) = code_id {
+                    Cow::Borrowed(&self.comp_data.func_code[code_id])
+                } else {
+                    self.comp_data.get_code(query.code_query()).unwrap().0
+                };
+
+                let (hlr, processed_func_info) = 
+                    hlr(query.clone(), &self.comp_data, code.as_ref())?;
+
+                let possibly_existing_id = self.comp_data.query_for_id(&FuncQuery {
+                    name: processed_func_info.name.clone(),
+                    relation: processed_func_info.relation.clone(),
+                    generics: processed_func_info.generics.clone(),
+                });
+
+                let func_id = if let Some(id) = possibly_existing_id {
+                    self.comp_data.processed[id] = processed_func_info;
+                    id
+                } else {
+                    self.comp_data.processed.insert(processed_func_info)
+                };
+
+                if let Some(code_id) = code_id {
+                    if let Some(realizations) = self.comp_data.realizations.get_mut(code_id) {
+                        realizations.insert(func_id);
+                    } else {
+                        self.comp_data.realizations.insert(
+                            code_id, 
+                            once(func_id).collect(),
+                        );
+                    }
+                }
+
+                hlrs.insert(func_id, hlr);
+                all_func_ids.insert(func_id);
+            }
+
+            let uncompiled_dependencies = hlrs
                 .iter()
-                .flat_map(|f| { self.comp_data.processed[*f].dependencies.keys() })
+                .flat_map(|(_, hlr)| { hlr.dependencies.iter() })
                 .filter(|f| {
                     if let Some(func_id) = self.comp_data.query_for_id(f) &&
                         (all_func_ids.contains(&func_id) || self.backend.has_been_compiled(func_id)) {
@@ -283,12 +281,16 @@ impl Unit {
                                 false
                             } else {
                                 // function is not intrinsic, external, or compiled yet
+                                dbg!(&f);
+                                dbg!(&self.comp_data.query_for_id(f));
+                                dbg!(&self.comp_data.processed);
                                 true
                             }
                         },
                         None => {
                             if self.comp_data.get_code(f.code_query()).is_ok() {
                                 // TODO: deriver hack
+                                dbg!(&f);
                                 true
                             } else {
                                 // function is external and has no code
@@ -301,17 +303,22 @@ impl Unit {
                 .collect::<BTreeSet<FuncQuery>>();
 
             let mut dependents = BTreeSet::new();
-            for (dependent_id, ProcessedFuncInfo { dependencies, name, relation, generics, .. }) 
-                in &self.comp_data.processed {
+            for (
+                dependent_id, 
+                ProcessedFuncInfo { specified_dependencies, name, relation, generics, .. }
+            ) in &self.comp_data.processed {
                 if all_func_ids.contains(&dependent_id) {
                     continue; 
                 }
 
-                for (query, og_location) in dependencies {
+                for (query, og_location) in specified_dependencies {
                     if og_location.is_none() { continue }
                     let og_location = og_location.unwrap();
 
-                    let location = self.comp_data.query_for_code(query.code_query()).unwrap();
+                    let location = self
+                        .comp_data
+                        .query_for_code(query.to_borrowed_fcq())
+                        .unwrap();
 
                     if og_location != location {
                         dependents.insert(FuncQuery {
@@ -321,7 +328,6 @@ impl Unit {
                         });
                     }
                 }
-                
             }
 
             set.extend(uncompiled_dependencies);
@@ -337,15 +343,19 @@ impl Unit {
         }
 
         for id in &all_func_ids {
-            let mut dependencies = self.comp_data.processed[*id].dependencies.clone();
+            let mut spec_dependencies = self
+                .comp_data
+                .processed[*id]
+                .specified_dependencies
+                .clone();
 
-            for (func_query, fn_loc) in &mut dependencies {
-                if let Some(code_id) = self.comp_data.query_for_code(func_query.code_query()) {
+            for (func_query, fn_loc) in &mut spec_dependencies {
+                if let Some(code_id) = self.comp_data.query_for_code(func_query.to_borrowed_fcq()) {
                     *fn_loc = Some(code_id);
                 }
             }
 
-            self.comp_data.processed[*id].dependencies = dependencies;
+            self.comp_data.processed[*id].specified_dependencies = spec_dependencies;
         }
 
         self.backend.begin_compilation_round();
@@ -356,9 +366,9 @@ impl Unit {
             let processed_func_info = &self.comp_data.processed[func_id];
             self.backend.register_function(func_id, processed_func_info);
 
-            let dependencies = processed_func_info
+            let dependencies = hlr
                 .dependencies
-                .keys()
+                .iter()
                 .filter_map(|query| {
                     Some((query.clone(), self.comp_data.query_for_id(query)?))
                 })

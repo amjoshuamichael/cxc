@@ -115,7 +115,7 @@ impl Unit {
         });
 
         let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {
-            dependencies: HashMap::new(),
+            specified_dependencies: HashMap::new(),
             name: name.into(),
             relation: ext_add.relation,
             generics: ext_add.generics,

@@ -1,6 +1,6 @@
 mod test_utils;
 
-use cxc::{library::StdLib, Unit};
+use cxc::{library::{StdLib, StringLib}, Unit};
 use test_utils::xc_test;
 
 #[test]
@@ -94,7 +94,7 @@ fn string_array() {
 #[test]
 fn active_initialize_array_strings() {
     xc_test!(
-        use StdLib;
+        use StringLib;
         r#"
         main(); [5]String {
             numbers: [5]String = ["one", "two", "three", ++ ]

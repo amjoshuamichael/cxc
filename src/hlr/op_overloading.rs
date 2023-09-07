@@ -22,9 +22,6 @@ pub fn op_overloading(hlr: &mut FuncRep) {
                     );
                     *op_data = HNodeData::Call {
                         ret_type: ret_type.clone(),
-                        f: VarName::from("deref"),
-                        generics: hs_type.generics().clone(),
-                        relation: TypeRelation::MethodOf(hs_type.clone().get_ref()),
                         query: FuncQuery {
                             name: VarName::from("deref"),
                             generics: hs_type.generics().clone(),

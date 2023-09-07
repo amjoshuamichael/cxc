@@ -2,7 +2,7 @@ use crate::{ExternalFuncAdd, Type, TypeRelation};
 
 use crate::libraries::Library;
 
-pub(super) struct StringLib;
+pub struct StringLib;
 
 impl crate::XcReflect for String {
     fn alias_code() -> String { "String = { Vec<u8>, }".to_string() }
@@ -10,6 +10,10 @@ impl crate::XcReflect for String {
 
 impl Library for StringLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
+        if unit.comp_data.get_spec(&"Vec<u8>".into(), &()).is_err() {
+            unit.push_script(include_str!("vec.cxc")).unwrap();
+        }
+
         let string_type = unit.add_reflect_type::<String>().unwrap();
 
         unit.add_external_default::<String>();

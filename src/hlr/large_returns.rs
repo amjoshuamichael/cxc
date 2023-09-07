@@ -162,7 +162,8 @@ fn handle_other_calls(hlr: &mut FuncRep) {
     for call_id in hlr.tree.ids_in_order().drain(..).rev() {
         let data = hlr.tree.get(call_id);
 
-        if let HNodeData::Call { ref f, .. } = data && !hlr.comp_data.name_is_intrinsic(f) {
+        if let HNodeData::Call { ref query, .. } = data 
+            && !hlr.comp_data.name_is_intrinsic(&query.name) {
             match data.ret_type().return_style() {
                 ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::MoveIntoI64I64 => todo!(),

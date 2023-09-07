@@ -4,15 +4,15 @@ impl Type {
     pub fn works_as_method_on(
         &self, 
         spec: TypeSpec, 
-    ) -> Option<Vec<Type>> {
+    ) -> Option<(Vec<Type>, u32)> {
         let left = self.clone();
         let right = spec;
 
         let mut track_generics = Vec::new();
 
-        for left in left.deref_chain() {
+        for (dist, left) in left.deref_chain().into_iter().enumerate() {
             if left.is_equivalent(right.clone(), &mut track_generics) {
-                return Some(track_generics)
+                return Some((track_generics, dist as u32))
             }
 
             track_generics.clear();

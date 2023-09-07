@@ -176,9 +176,6 @@ impl NodeDataGen for CallGen {
         hlr.tree.replace(
             space,
             HNodeData::Call {
-                f: self.query.name.clone(),
-                generics: self.query.generics.clone(),
-                relation: self.query.relation.clone(),
                 query: self.query.clone(),
                 ret_type: func_type.ret,
                 a: args,
@@ -198,9 +195,6 @@ impl NodeDataGen for FuncQuery {
         hlr.tree.insert(
             parent,
             HNodeData::Call {
-                f: self.name.clone(),
-                generics: self.generics.clone(),
-                relation: self.relation.clone(),
                 query: self.clone(),
                 ret_type: func_type.ret,
                 a: Vec::new(),
@@ -423,9 +417,6 @@ impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T
         hlr.tree.replace(
             space,
             HNodeData::Call {
-                f: "memcpy".into(),
-                relation: TypeRelationGeneric::Unrelated,
-                generics: generics.clone(),
                 query: FuncQuery {
                     name: "memcpy".into(),
                     relation: TypeRelationGeneric::Unrelated,

@@ -212,7 +212,6 @@ fn call_2_previous() {
 
 #[test]
 #[serial]
-#[ignore]
 fn conversion_dependents() {
     let mut unit = Unit::new();
 
@@ -233,7 +232,6 @@ fn conversion_dependents() {
 
     unit.push_script(r#"
         main(); i32 {
-            print_number(20)
             x = TwoNums { 0, 0 }
             ; x.fifty()
         }
