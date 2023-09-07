@@ -12,10 +12,10 @@ pub struct DeriverInfo {
     pub is_static: bool,
 }
 
-impl TryFrom<FuncQuery> for DeriverInfo {
+impl<'a> TryFrom<FuncCodeQuery<'a>> for DeriverInfo {
     type Error = ();
 
-    fn try_from(info: FuncQuery) -> Result<Self, ()> {
+    fn try_from(info: FuncCodeQuery) -> Result<Self, ()> {
         let is_static = match info.relation {
             TypeRelation::MethodOf(_) => false,
             TypeRelation::Static(_) => true,
@@ -23,7 +23,7 @@ impl TryFrom<FuncQuery> for DeriverInfo {
         };
 
         Ok(DeriverInfo {
-            func_name: info.name,
+            func_name: info.name.clone(),
             is_static,
         })
     }
@@ -151,20 +151,28 @@ impl CompData {
         out
     }
 
-    fn insert_intrinsic(&mut self, code: FuncCode) {
-        let decl_info = self.insert_code(code);
-        self.intrinsics.insert(decl_info);
-    }
-
-    pub fn insert_code(&mut self, code: FuncCode) -> FuncCodeId {
+    pub fn insert_code(&mut self, code: FuncCode, backend: Option<&mut Backend>) -> FuncCodeId {
         for (code_id, old_code) in &self.func_code {
             if old_code.name == code.name && old_code.relation == code.relation {
                 self.func_code.remove(code_id);
+
+                if let Some(backend) = backend &&
+                    let Some(realizations) = self.realizations.remove(code_id) {
+                    for realization in realizations {
+                        backend.mark_as_uncompiled(realization);
+                    }
+                }
+
                 break;
             }
         }
 
         self.func_code.insert(code)
+    }
+
+    fn insert_intrinsic(&mut self, code: FuncCode) {
+        let decl_info = self.insert_code(code, None);
+        self.intrinsics.insert(decl_info);
     }
 
     pub fn name_is_intrinsic(&self, name: &VarName) -> bool {
@@ -173,32 +181,43 @@ impl CompData {
         })
     }
 
-    pub fn query_for_code(&self, info: &FuncQuery) -> Option<FuncCodeId> {
+    pub fn query_for_code_and_get_generics(
+        &self, 
+        info: FuncCodeQuery
+    ) -> Option<(FuncCodeId, Option<Vec<Type>>)> {
         use std::mem::discriminant;
 
         for (id, code) in &self.func_code {
-            if code.name != info.name {
+            if &code.name != info.name {
                 continue;
             }
 
             if code.relation.inner_type().is_none() && info.relation.inner_type().is_none()  {
-                return Some(id);
+                return Some((id, None));
             } else if let Some(looking_at_relation) = code.relation.inner_type() && 
                 let Some(looking_for_relation) = info.relation.inner_type() &&
                 discriminant(&looking_at_relation) == discriminant(&looking_at_relation) &&
-                looking_for_relation.works_as_method_on(looking_at_relation, self) {
-                return Some(id);
+                let Some(generics) = looking_for_relation.works_as_method_on(looking_at_relation) {
+                return Some((id, Some(generics)));
             }
         }
 
         None
     }
 
+    pub fn query_for_code(
+        &self, 
+        info: FuncCodeQuery,
+    ) -> Option<FuncCodeId> {
+        self.query_for_code_and_get_generics(info).map(|f| f.0)        
+    }
+
     pub fn query_for_id(&self, query: &FuncQuery) -> Option<FuncId> {
-        if let Some(code_id) = self.query_for_code(query) &&
+        if let Some(code_id) = self.query_for_code(query.code_query()) &&
             let Some(realizations) = self.realizations.get(code_id) {
             for realization in realizations {
-                if self.processed[*realization].generics == query.generics {
+                let realization_info = &self.processed[*realization];
+                if realization_info.generics == query.generics {
                     return Some(*realization);
                 }
             }
@@ -221,14 +240,14 @@ impl CompData {
             return Ok(self.processed[func_id].typ.clone());
         }
 
-        let code = self.get_code(query.clone())?;
+        let code = self.get_code(query.code_query())?;
 
-        let ret_type = self.get_spec(&code.ret_type, query)?;
+        let ret_type = self.get_spec(&code.ret_type, &query.generics)?;
 
         let arg_types = code
             .args
             .iter()
-            .map(|arg| self.get_spec(&arg.type_spec, query))
+            .map(|arg| self.get_spec(&arg.type_spec, &query.generics))
             .collect::<TResult<Vec<_>>>()?;
 
         Ok(FuncType {
@@ -237,7 +256,7 @@ impl CompData {
         })
     }
 
-    pub fn get_derived_code(&self, info: &FuncQuery) -> Option<FuncCode> {
+    pub fn get_derived_code(&self, info: FuncCodeQuery) -> Option<FuncCode> {
         if let Ok(deriver_info) = DeriverInfo::try_from(info.clone()) && 
             info.relation.inner_type()?.is_known() {
             let deriver = self.derivers.get(&deriver_info)?;
@@ -252,14 +271,16 @@ impl CompData {
     // the type signature is going to be because everything is done through traits.
     // Maybe alongside each deriver function there should be a shorter function that
     // just produces the type.
-    pub fn get_code(&self, query: FuncQuery) -> CResult<Cow<FuncCode>> {
-        if let Some(decl_info) = self.query_for_code(&query) {
+    //
+    // also, just based on some debug statistics, this function is called way too much.
+    pub fn get_code(&self, query: FuncCodeQuery) -> CResult<Cow<FuncCode>> {
+        if let Some(decl_info) = self.query_for_code(query) {
             return Ok(Cow::Borrowed(&self.func_code[decl_info]));
         };
 
-        self.get_derived_code(&query)
+        self.get_derived_code(query)
             .map(Cow::Owned)
-            .ok_or(FErr::NotFound(query.clone()).into())
+            .ok_or(FErr::NotFound(query.name.clone(), query.relation.clone()).into())
     }
 
     pub fn add_method_deriver(&mut self, func_name: VarName, func: DeriverFunc) {
@@ -305,41 +326,10 @@ use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
 #[repr(C)] // TODO: this shouldn't have to be here
-// TODO: maybe make a function query that uses a func_code_id with some generics?
 pub struct FuncQuery {
     pub name: VarName,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
-}
-
-impl FuncQuery {
-    pub fn new(
-        og_name: &VarName,
-        relation: &TypeRelation,
-        generics: Vec<Type>,
-    ) -> FuncQuery {
-        FuncQuery {
-            name: og_name.clone(),
-            relation: relation.clone(),
-            generics,
-        }
-    }
-
-    pub fn generics(&self) -> Vec<Type> {
-        let mut some_generics = self.generics.clone();
-
-        if let Some(typ) = self.relation.inner_type() {
-            let typ_generics = typ.generics().clone();
-            some_generics.extend(typ_generics);
-        }
-
-        some_generics
-    }
-
-    pub fn og_name(&self) -> VarName { self.name.clone() }
-    pub fn is_method(&self) -> bool { matches!(self.relation, TypeRelation::MethodOf(_)) }
-    pub fn is_static(&self) -> bool { matches!(self.relation, TypeRelation::Static(_)) }
-    pub fn has_generics(&self) -> bool { !self.generics().is_empty() }
 }
 
 impl From<&str> for FuncQuery {
@@ -358,4 +348,20 @@ impl From<VarName> for FuncQuery {
             ..Default::default()
         }
     }
+}
+
+impl FuncQuery {
+    pub fn code_query<'a>(&'a self) -> FuncCodeQuery<'a> {
+        FuncCodeQuery {
+            name: &self.name,
+            relation: &self.relation,
+        }
+    }
+}
+
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(C)]
+pub struct FuncCodeQuery<'a> {
+    pub name: &'a VarName,
+    pub relation: &'a TypeRelation,
 }

@@ -1,6 +1,6 @@
 use crate::{
     parse::{Opcode, TypeSpec},
-    TypeRelation, FuncQuery, errors::CResultMany,
+    errors::CResultMany,
 };
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
@@ -39,22 +39,26 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
 
     hlr.modify_many_infallible(
         |transform_id, transform_data, hlr| {
-            let HNodeData::UnarOp { ref mut hs, op: Opcode::Transform, ret_type } = 
-                transform_data else { return };
+            let HNodeData::UnarOp { 
+                ref mut hs, 
+                op: Opcode::Transform, 
+                ret_type: result_type,
+            } = transform_data else { return };
 
-            let method_of = hlr.tree.get(*hs).ret_type();
-            let deref_chain = method_of.deref_chain(&*hlr.comp_data);
+            let original_type = hlr.tree.get_ref(*hs).ret_type();
+
+            let deref_chain = original_type.deref_chain();
 
             let deref_level_of_call = deref_chain
                 .iter()
-                .position(|deref| deref == ret_type)
+                .position(|deref| &deref == &result_type)
                 .unwrap_or_else(|| todo!()) as i32 - 1;
 
             if deref_level_of_call == 0 {
                 *hs = hlr.insert_quick(
                     transform_id,
                     HNodeData::UnarOp {
-                        ret_type: method_of.get_ref(),
+                        ret_type: result_type.get_ref(),
                         op: Opcode::Ref,
                         hs: *hs,
                     },

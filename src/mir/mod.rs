@@ -29,9 +29,14 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
     remove_post_return_statements(&mut mir);
 
     #[cfg(feature = "xc-debug")]
-    for (l, line) in mir.lines.iter().enumerate() {
-        // print the index with three digits of space
-        println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
+    {
+        for (l, line) in mir.lines.iter().enumerate() {
+            // print the index with three digits of space
+            println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
+        }
+
+        println!("{}", format!("{:?}", &mir.reg_types).replace("\n", " "));
+        println!("{}", format!("{:?}", &mir.variables).replace("\n", " "));
     }
 
     mir

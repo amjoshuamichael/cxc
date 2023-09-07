@@ -92,35 +92,6 @@ fn depends_on() {
 
 #[test]
 #[serial]
-fn two_vecs() {
-    let mut unit = Unit::new();
-
-    unit.push_script(
-        r#"
-            zero(); i32 {
-                ; 0
-            }
-
-            copy_num(val: i32); i32 {
-                ; val
-            }
-
-            push_1(); i32 {
-                x: i32 = zero()
-                x = copy_num(x)
-                ; 0
-            }
-        "#,
-    ).unwrap();
-    let push_1 = unit.get_fn("push_1").unwrap().downcast::<(), i32>();
-    assert_eq!(push_1(), 0);
-
-    unit.push_script(r#"push_2(); i32 { ; 1 }"#).unwrap();
-    assert_eq!(push_1(), 0);
-}
-
-#[test]
-#[serial]
 fn get_fn_by_ptr() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);

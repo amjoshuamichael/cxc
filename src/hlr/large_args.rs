@@ -57,7 +57,6 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarName) {
             }
         }
     );
-        
 }
 
 fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {

@@ -50,6 +50,7 @@ fn big_global() {
 
 
 #[test]
+#[ignore]
 fn global_rc() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);

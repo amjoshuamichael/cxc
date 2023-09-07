@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{FuncType, FuncQuery, mir::MIR, VarName, Type};
+use crate::{FuncType, mir::MIR, VarName, Type};
 
 use super::{callable::CallInput, FuncId, ProcessedFuncInfo};
 
@@ -14,6 +14,7 @@ pub trait IsBackend: Sized {
 
     fn begin_compilation_round(&mut self);
     fn register_function(&mut self, id: FuncId, func_type: &ProcessedFuncInfo);
+    fn mark_as_uncompiled(&mut self, id: FuncId);
     fn compile_function(&mut self, id: FuncId, mir: MIR);
     fn end_compilation_round(&mut self);
 

@@ -29,6 +29,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::iter::once;
 use std::pin::Pin;
 use crate::backend::Backend;
 pub use backends::function::*;
@@ -56,7 +57,7 @@ pub struct CompData {
     pub(crate) type_level_funcs: BTreeMap<TypeName, TypeLevelFunc>,
     reflected_types: BTreeMap<TypeId, Type>,
     pub(crate) func_code: SlotMap<FuncCodeId, FuncCode>,
-    pub(crate) realizations: SecondaryMap<FuncCodeId, Vec<FuncId>>,
+    pub(crate) realizations: SecondaryMap<FuncCodeId, HashSet<FuncId>>, // TODO: use secondary set
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncCodeId>,
     processed: SlotMap<FuncId, ProcessedFuncInfo>,
@@ -147,7 +148,7 @@ impl Unit {
             for code in parsed.funcs.iter() {
                 let is_generic = code.has_generics();
 
-                let code_id = self.comp_data.insert_code(code.clone());
+                let code_id = self.comp_data.insert_code(code.clone(), Some(&mut self.backend));
 
                 if !is_generic {
                     declarations.push(code_id);
@@ -155,7 +156,7 @@ impl Unit {
             }
 
             if let Some(comp_script) = parsed.comp_script {
-                declarations.push(self.comp_data.insert_code(comp_script));
+                declarations.push(self.comp_data.insert_code(comp_script, Some(&mut self.backend)));
             }
 
             let funcs_to_compile: Vec<FuncQuery> = { declarations }
@@ -189,14 +190,14 @@ impl Unit {
     }
 
     pub fn compile_func_set(&mut self, mut set: HashSet<FuncQuery>) -> CResultMany<()> {
-        let mut all_func_ids = Vec::<FuncId>::new();
+        let mut all_func_ids = HashSet::<FuncId>::new();
 
         let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
 
         loop {
             for query in &set {
                 // TODO: here, get code id, but also get code generics with id
-                let code = self.comp_data.get_code(query.clone()).unwrap();
+                let code = self.comp_data.get_code(query.code_query()).unwrap();
 
                 let func_arg_types = code
                     .args
@@ -219,12 +220,16 @@ impl Unit {
             let current_func_ids: Vec<FuncId> = set
                 .drain()
                 .map(|query| {
-                    let code_id = self.comp_data.query_for_code(&query);
+                    dbg!(&query);
 
+                    let code_id = self.comp_data.query_for_code(query.code_query());
+
+                    // TODO: this is a derivation hack and will be changed when derivations are
+                    // redone
                     let code = if let Some(code_id) = code_id {
                         Cow::Borrowed(&self.comp_data.func_code[code_id])
                     } else {
-                        self.comp_data.get_code(query.clone()).unwrap()
+                        self.comp_data.get_code(query.code_query()).unwrap()
                     };
 
                     let (hlr, processed_func_info) = 
@@ -245,42 +250,50 @@ impl Unit {
 
                     if let Some(code_id) = code_id {
                         if let Some(realizations) = self.comp_data.realizations.get_mut(code_id) {
-                            realizations.push(func_id);
+                            realizations.insert(func_id);
                         } else {
-                            self.comp_data.realizations.insert(code_id, vec![func_id]);
+                            self.comp_data.realizations.insert(
+                                code_id, 
+                                once(func_id).collect(),
+                            );
                         }
                     }
 
                     hlrs.insert(func_id, hlr);
-                    all_func_ids.push(func_id);
+                    all_func_ids.insert(func_id);
 
                     Ok(func_id)
                 })
                 .collect::<CResultMany<Vec<FuncId>>>()?;
 
-
             let uncompiled_dependencies = current_func_ids
                 .iter()
                 .flat_map(|f| { self.comp_data.processed[*f].dependencies.keys() })
                 .filter(|f| {
-                    if !self.has_been_compiled(f) {
-                        true
-                    } else if let Some(func_id) = self.comp_data.query_for_id(f) &&
-                        all_func_ids.contains(&func_id) {
+                    if let Some(func_id) = self.comp_data.query_for_id(f) &&
+                        (all_func_ids.contains(&func_id) || self.backend.has_been_compiled(func_id)) {
+                        // function has already been compiled, either in this round or a 
+                        // previous round
                         false
-                    } else { match self.comp_data.query_for_code(f) {
+                    } else { match self.comp_data.query_for_code(f.code_query()) {
                         Some(code_id) => {
                             if self.comp_data.intrinsics.contains(&code_id)  {
                                 false
                             } else if self.comp_data.func_code[code_id].is_external {
                                 false
                             } else {
+                                // function is not intrinsic, external, or compiled yet
                                 true
                             }
                         },
                         None => {
-                            // function is external and has no code
-                            false
+                            if self.comp_data.get_code(f.code_query()).is_ok() {
+                                // TODO: deriver hack
+                                true
+                            } else {
+                                // function is external and has no code
+                                false
+                            }
                         }
                     }}
                 })
@@ -298,7 +311,7 @@ impl Unit {
                     if og_location.is_none() { continue }
                     let og_location = og_location.unwrap();
 
-                    let location = self.comp_data.query_for_code(&query).unwrap();
+                    let location = self.comp_data.query_for_code(query.code_query()).unwrap();
 
                     if og_location != location {
                         dependents.insert(FuncQuery {
@@ -327,7 +340,7 @@ impl Unit {
             let mut dependencies = self.comp_data.processed[*id].dependencies.clone();
 
             for (func_query, fn_loc) in &mut dependencies {
-                if let Some(code_id) = self.comp_data.query_for_code(&func_query) {
+                if let Some(code_id) = self.comp_data.query_for_code(func_query.code_query()) {
                     *fn_loc = Some(code_id);
                 }
             }
@@ -382,7 +395,7 @@ impl Unit {
 
     /// Gets a function from the unit. Returns none if that function doesn't already exist.
     /// Note that if you have a generic function, and the specific variation of that
-    /// function hasn't been compiled, `get_fn` will also return None.
+    /// function that you query for hasn't been compiled, `get_fn` will return None.
     pub fn get_fn(&self, with: impl Into<FuncQuery>) -> Option<&Func> {
         let with = with.into();
 
@@ -391,18 +404,6 @@ impl Unit {
         let correct_function_ptr = self.backend.get_function(id);
         assert!(correct_function_ptr.is_some());
         return correct_function_ptr;
-    }
-
-    pub fn has_been_compiled(&self, query: &FuncQuery) -> bool {
-        if let Some(id) = self.comp_data.query_for_id(query) &&
-            self.backend.has_been_compiled(id) {
-            true
-        } else if let Some(code_id) = self.comp_data.query_for_code(query) && 
-            self.comp_data.intrinsics.contains(&code_id) {
-            true
-        } else {
-            false
-        }
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

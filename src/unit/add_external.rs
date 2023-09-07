@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::once};
 
 use crate::{
     FuncType, Type, TypeEnum,
@@ -122,7 +122,7 @@ impl Unit {
             typ: func_type.clone(),
         });
 
-        self.comp_data.realizations.insert(func_code_id, vec![func_id]);
+        self.comp_data.realizations.insert(func_code_id, once(func_id).collect());
 
         self.backend.add_external_func(
             func_id, 

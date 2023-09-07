@@ -139,7 +139,7 @@ struct OutputType {
 }
 
 #[test]
-fn default() {
+fn basic_default() {
     xc_test!(
         use StdLib;
         "

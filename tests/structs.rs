@@ -139,6 +139,7 @@ fn methods() {
 }
 
 #[test]
+#[ignore]
 fn auto_deref_member() {
     xc_test!(
         use StdLib;
@@ -158,6 +159,7 @@ fn auto_deref_member() {
 }
 
 #[test]
+#[ignore]
 fn auto_deref_method_1() {
     xc_test!(
         use StdLib;

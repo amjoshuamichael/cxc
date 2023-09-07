@@ -1,7 +1,7 @@
 use crate::{
     errors::{TErr, TResult},
     parse::TypeSpec,
-    ArrayType, CompData, FuncType, Type, TypeEnum, TypeName, TypeRelation, FuncQuery,
+    ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
     VarName,
 };
 use std::fmt::Debug;
@@ -38,31 +38,18 @@ impl<T: GenericTable> GenericTable for (T, Type) {
     fn get_self(&self) -> Option<Type> { Some(self.1.clone()) }
 }
 
-impl<T: GenericTable> GenericTable for (&T, &TypeRelation) {
-    fn get_at_index(&self, index: u8) -> Option<Type> { 
-        if let Some(inner_type) = self.1.inner_type() {
-            inner_type
-                .clone()
-                .complete_deref()
-                .generics()
-                .get(index as usize)
-                .cloned()
-                .or_else(|| self.0.get_at_index(index + inner_type.generics().len() as u8))
-        } else {
-            self.0.get_at_index(index)
-        }
-    }
-    fn get_self(&self) -> Option<Type> { self.1.inner_type() }
-}
-
 impl GenericTable for FuncQuery {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
-        (&self.generics, &self.relation).get_at_index(index)
+        self.generics.get(index as usize).cloned()
     }
-    fn get_self(&self) -> Option<Type> { 
-        (&self.generics, &self.relation).get_self()
-    }
+    fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
+}
 
+impl GenericTable for (&Vec<Type>, &TypeRelation) {
+    fn get_at_index(&self, index: u8) -> Option<Type> { 
+        self.0.get(index as usize).cloned()
+    }
+    fn get_self(&self) -> Option<Type> { self.1.inner_type() }
 }
 
 impl<T: GenericTable> GenericTable for (T, Option<Type>) {
@@ -110,7 +97,7 @@ impl CompData {
             TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_auto_deref(&*self)?,
             TypeSpec::StructMember(struct_type, field_name) => {
                 let struct_type = self.get_spec(struct_type, generics)?;
-                let deref_chain = struct_type.deref_chain(self);
+                let deref_chain = struct_type.deref_chain();
 
                 let mut member = None;
 
@@ -127,7 +114,7 @@ impl CompData {
                 if let Some(member) = member {
                     member
                 } else {
-                    for typ in struct_type.deref_chain(self).into_iter() {
+                    for typ in struct_type.deref_chain().into_iter() {
                         let TypeEnum::Struct(struct_type) = typ.as_type_enum() 
                             else { continue };
                         return Err(TErr::FieldNotFound(struct_type.clone(), field_name.clone()));

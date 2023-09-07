@@ -65,7 +65,6 @@ pub fn hlr(
     // see the individual perf impact of each pass when using a flamegraph
 
     infer_types(&mut output);
-    println!("{}", &output.tree.to_string());
     auto_deref(&mut output)?;
     op_overloading(&mut output);
     active_initialization(&mut output);

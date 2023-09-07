@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::{BTreeMap, HashSet}, sync::Arc};
 
 use crate::{unit::{backends::IsBackend, callable::CallInput, FuncId, ProcessedFuncInfo}, FuncDowncasted, Func, FuncType, mir::MIR, VarName, Type};
 
@@ -23,6 +23,7 @@ pub struct CraneliftBackend {
     // function pointers generated after compilation
     func_pointers: SecondaryMap<FuncId, Func>,
 
+    marked_as_uncompiled: HashSet<FuncId>,
     func_signatures: BTreeMap<FuncType, Signature>,
     globals: BTreeMap<VarName, Global>,
     module: JITModule,
@@ -30,6 +31,7 @@ pub struct CraneliftBackend {
     frontend_config: TargetFrontendConfig,
     external_functions: SecondaryMap<FuncId, ExternalFuncData>,
     alloc_and_free: AllocAndFree,
+    func_counter: u32,
 }
 
 pub enum Global {
@@ -58,6 +60,7 @@ impl IsBackend for CraneliftBackend {
         let new = Self {
             cl_function_data: SecondaryMap::new(),
             func_pointers: SecondaryMap::new(),
+            marked_as_uncompiled: HashSet::new(),
             func_signatures: BTreeMap::new(),
             globals: BTreeMap::new(),
             alloc_and_free: AllocAndFree::new(&module),
@@ -65,6 +68,7 @@ impl IsBackend for CraneliftBackend {
             frontend_config: isa.frontend_config(),
             isa: Box::new(isa),
             external_functions: SecondaryMap::new(),
+            func_counter: 0,
         };
 
         new
@@ -76,25 +80,25 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn register_function(&mut self, func_id: FuncId, func_info: &ProcessedFuncInfo) {
-        let (mut ctx, cl_func_id, is_first_pass) = 
-            if let Some(ClFunctionData { mut ctx, cl_func_id, .. }) = 
+        let (mut ctx, is_first_pass) = 
+            if let Some(ClFunctionData { mut ctx, .. }) = 
                 self.cl_function_data.remove(func_id) {
                 ctx.func.clear();
-                (ctx, Some(cl_func_id), false)
+                (ctx, false)
             } else {
-                (self.module.make_context(), None, true)
+                (self.module.make_context(), true)
             };
 
         func_type_to_signature(&func_info.typ, &mut ctx.func.signature, false);
 
-        let name = func_info.to_string(func_id);
-        let cl_func_id = cl_func_id.unwrap_or_else(|| 
-           self.module.declare_function(
-                &*name,
-                Linkage::Local,
-                &ctx.func.signature,
-            ).unwrap()
-       );
+        let name = func_info.to_string(func_id) + &*self.func_counter.to_string();
+        self.func_counter += 1;
+
+        let cl_func_id = self.module.declare_function(
+            &*name,
+            Linkage::Local,
+            &ctx.func.signature,
+        ).unwrap();
 
         self.cl_function_data.insert(
             func_id, 
@@ -105,6 +109,10 @@ impl IsBackend for CraneliftBackend {
         if !self.func_pointers.contains_key(func_id) {
             self.func_pointers.insert(func_id, Func::new_compiled(func_info.typ.clone()));
         }
+    }
+
+    fn mark_as_uncompiled(&mut self, id: FuncId) {
+        self.marked_as_uncompiled.insert(id);
     }
 
     fn compile_function(&mut self, func_id: FuncId, mir: MIR) {
@@ -127,10 +135,6 @@ impl IsBackend for CraneliftBackend {
         #[cfg(feature = "backend-debug")]
         println!("func {:?}:\n{}", &cl_data.name, &cl_data.ctx.func);
 
-        if !cl_data.is_first_pass {
-            self.module.prepare_for_function_redefine(cl_data.cl_func_id).unwrap();
-        }
-
         self.module.define_function(cl_data.cl_func_id, &mut cl_data.ctx).unwrap();
 
         cl_data.ctx.compile(&**self.isa).unwrap();
@@ -140,10 +144,10 @@ impl IsBackend for CraneliftBackend {
 
     fn end_compilation_round(&mut self) {
         self.module.finalize_definitions().unwrap();
+        self.marked_as_uncompiled.clear();
 
         for func_id in self.func_pointers.keys() {
             if let Some(cl_data) = self.cl_function_data.get(func_id) {
-                println!("func {:?}:\n{}", &cl_data.name, &cl_data.ctx.func);
                 let cl_id = cl_data.cl_func_id;
                 let address = self.module.get_finalized_function(cl_id) as *const usize;
                 self.func_pointers[func_id].set_pointer(address);
@@ -152,6 +156,10 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn has_been_compiled(&self, id: FuncId) -> bool {
+        if self.marked_as_uncompiled.contains(&id) {
+            return false;
+        }
+
         if let Some(func) = self.func_pointers.get(id) {
             func.code().pointer().is_some()
         } else {
@@ -196,7 +204,6 @@ pub fn make_proper_isa() -> Arc<dyn TargetIsa> {
 
 pub fn make_proper_module(isa: &Arc<dyn TargetIsa>) -> JITModule {
     let mut builder = JITBuilder::with_isa(isa.clone(), default_libcall_names());
-    builder.hotswap(true);
 
     JITModule::new(builder)
 }
