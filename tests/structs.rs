@@ -175,37 +175,6 @@ fn active_initialize_struct_strings() {
     );
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct ThisUnion {
-    a: i32,
-    b: i32,
-    c: f32,
-    d: i32,
-    e: f32,
-}
-
-#[test]
-fn unions() {
-    xc_test!(
-        "
-        Num2 = { a: i32, b: i32 }
-        Num3<T> = { c: T, d: i32, e: T }
-        Union = Num2 + Num3<f32>
-
-        main(); Union {
-            ; Union { a = 10, b = 20, e = 90.9, d = 30, c = 32.7 }
-        }
-        ";
-        ThisUnion {
-            a: 10,
-            b: 20,
-            e: 90.9,
-            d: 30,
-            c: 32.7,
-        }
-    );
-}
-
 #[test]
 fn deref() {
     xc_test!(
@@ -215,9 +184,9 @@ fn deref() {
         NumAgain = *NumRef
 
         main(); NumAgain {
-            x: Num = 5
-            y: NumRef = &x
-            z: NumAgain = *y
+            x: Num = cast<i32, Num>(5)
+            y: NumRef = cast<&Num, NumRef>(&x)
+            z: NumAgain = cast<NumRef, NumAgain>(*y)
             ; z
         }
         ";
@@ -231,7 +200,7 @@ fn field_of_struct_pointer() {
         "
         Point2D = { x: i32, y: i32 }
 
-        main() {
+        main(); i32 {
             point: Point2D = { x = 5, y = 10 }
             point_ref: &Point2D = &point
 

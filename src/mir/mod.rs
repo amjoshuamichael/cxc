@@ -132,8 +132,8 @@ fn build_as_memloc(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MMemLo
 fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
     match node {
         HNodeData::Ident { name, .. } => {
-            if let ArgIndex::Some(_) = mir.variables[&name].arg_index {
-                let new_var_name = VarName::from(&*(name.to_string() + "addr"));
+            if !mir.variables.contains_key(&name) || mir.variables[&name].is_arg_or_sret() {
+                let new_var_name = VarName::from(&*(name.to_string() + "$addr"));
 
                 if !mir.variables.contains_key(&new_var_name) {
                     mir.lines.insert(0, MLine::Store {
@@ -141,11 +141,20 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
                         val: MOperand::MemLoc(MMemLoc::Var(name.clone())),
                     });
 
-                    mir.variables.insert(new_var_name.clone(), VariableInfo {
-                        typ: mir.variables[&name].typ.clone(),
-                        arg_index: ArgIndex::None,
-                        ..Default::default()
-                    });
+                    if mir.variables.contains_key(&name) {
+                        mir.variables.insert(new_var_name.clone(), VariableInfo {
+                            typ: mir.variables[&name].typ.clone(),
+                            arg_index: ArgIndex::None,
+                            ..Default::default()
+                        });
+                    } else {
+                        // pointer to a global
+                        mir.variables.insert(new_var_name.clone(), VariableInfo {
+                            typ: Type::u(8).get_ref(),
+                            arg_index: ArgIndex::None,
+                            ..Default::default()
+                        });
+                    }
                 }
 
                 MAddr::Var(new_var_name)

@@ -9,7 +9,6 @@ use std::{hash::Hash, collections::HashMap};
 #[cfg(feature ="xc-debug")]
 use crate::lex::indent_parens;
 
-mod holy_slot_map;
 mod unique_vec;
 
 use unique_vec::UniqueVec;
@@ -78,7 +77,7 @@ struct InferMap {
     constraints: Vec<Constraints>,
     inferables: Vec<Inferable>,
     inferable_index_to_constraint_index: Vec<ConstraintId>,
-    calls: IndexSet<ExprID>,
+    calls: UniqueVec<ExprID>,
     has_been_modified_since_last_round: bool,
 }
 
@@ -807,17 +806,12 @@ fn set_types_in_hlr(infer_map: InferMap, hlr: &mut FuncRep) {
 }
 
 fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
-    for call_index in 0.. {
-        let id = match infer_map.calls.get_index(call_index) {
-            Some(id) => *id,
-            None => break,
-        };
-
-        let node_data = hlr.tree.get(id);
+    for call_id in infer_map.calls.clone() {
+        let node_data = hlr.tree.get(call_id);
         let HNodeData::Call { query: FuncQuery { name, relation, generics }, .. } = node_data 
             else { unreachable!() };
 
-        let relation_typ = infer_map.constraint_index_of_option(Inferable::Relation(id))
+        let relation_typ = infer_map.constraint_index_of_option(Inferable::Relation(call_id))
             .map(|constraint_index| infer_map.constraints[constraint_index].is.clone());
 
         let func_query = FuncQuery {
@@ -826,10 +820,9 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
             generics: generics.clone(),
         };
 
-        if fill_in_call(infer_map, hlr, func_query.clone(), &id)? {
-            infer_map.calls.remove(&id);
+        if fill_in_call(infer_map, hlr, func_query.clone(), &call_id)? {
+            infer_map.calls.remove(&call_id);
             infer_map.has_been_modified_since_last_round = true;
-            break;
         }
     }
 
