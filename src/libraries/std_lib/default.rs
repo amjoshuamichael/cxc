@@ -3,7 +3,7 @@ use crate::{
     libraries::Library,
     parse::{Expr, FuncCode, InitOpts, TypeSpec, TypeSpecRelation},
     unit::CompData,
-    ExternalFuncAdd, Type, TypeEnum, TypeRelation,
+    ExternalFuncAdd, Type, TypeEnum, TypeRelation, typ::Field,
 };
 
 pub(super) struct DefaultLib;
@@ -32,7 +32,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
         TypeEnum::Struct(struct_type) => {
             let mut fields = Vec::<(VarName, Expr)>::new();
 
-            for (field_name, field_type) in &struct_type.fields {
+            for Field { name: field_name, typ: field_type, .. } in &struct_type.fields {
                 let other_default_call = Expr::Call {
                     func: Box::new(Expr::StaticMethodPath(
                         field_type.clone().into(),

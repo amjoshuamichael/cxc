@@ -1,5 +1,7 @@
 use crate::{Type, parse::TypeSpec, TypeEnum, StructType, IntType, RefType, FuncType, ArrayType, TypeName};
 
+use super::Field;
+
 pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     if typ.name() != &TypeName::Anonymous {
         if typ.generics().len() == 0 {
@@ -17,7 +19,8 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
         TypeEnum::Int(IntType { signed: false, size }) => TypeSpec::UInt(*size),
         TypeEnum::Float(float_type) => TypeSpec::Float(*float_type),
         TypeEnum::Struct(StructType { fields, .. }) => TypeSpec::Struct(
-            fields.iter().map(|(name, typ)| (
+            fields.iter().map(|Field { name, typ, inherited }| (
+                *inherited,
                 name.clone(),
                 type_to_type_spec(typ.clone()),
             )).collect()

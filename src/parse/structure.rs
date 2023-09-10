@@ -17,15 +17,15 @@ pub enum TypeSpec {
     Deref(Box<TypeSpec>),
     StructMember(Box<TypeSpec>, VarName),
     SumMember(Box<TypeSpec>, TypeName),
-    Struct(Vec<(VarName, TypeSpec)>),
+    Struct(Vec<(bool, VarName, TypeSpec)>),
     Sum(Vec<(TypeName, TypeSpec)>),
     Tuple(Vec<TypeSpec>),
     Function(Vec<TypeSpec>, Box<TypeSpec>),
     FuncReturnType(Box<TypeSpec>),
+    FuncArgType(Box<TypeSpec>, usize),
     TypeLevelFunc(TypeName, Vec<TypeSpec>),
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
-    Union(Box<TypeSpec>, Box<TypeSpec>),
     #[default]
     Void,
     Type(Type),
@@ -80,13 +80,7 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     }
 
     while let Some(plus_pos) = ops.iter().position(|a| *a == TypeOps::Plus) {
-        ops.remove(plus_pos);
-
-        let right = types_between_ops.remove(plus_pos + 1);
-        let left = types_between_ops.remove(plus_pos);
-
-        let new_union = TypeSpec::Union(Box::new(left), Box::new(right));
-        types_between_ops.insert(plus_pos, new_union);
+        todo!()
     }
 
     assert_eq!(types_between_ops.len(), 1, "fatal error when parsing type operations");
@@ -266,14 +260,23 @@ pub fn parse_type_decl(mut lexer: TypeParseContext) -> Result<TypeDecl, ParseErr
 }
 
 pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    fn parse_field(lexer: &mut TypeParseContext) -> ParseResult<(VarName, TypeSpec)> {
+    fn parse_field(
+        lexer: &mut TypeParseContext
+    ) -> ParseResult<(bool, VarName, TypeSpec)> {
+        let inherited = if lexer.peek_tok()? == &Tok::Plus {
+            lexer.next_tok()?;
+            true 
+        } else {
+            false
+        };
+
         let field_name = lexer.next_tok()?.var_name()?;
 
         lexer.assert_next_tok_is(Tok::Colon)?;
 
         let typ = lexer.recover(parse_type)?;
 
-        Ok((field_name, typ))
+        Ok((inherited, field_name, typ))
     }
 
     let fields = parse_list(Tok::curlys(), Some(Tok::Comma), parse_field, lexer)?;

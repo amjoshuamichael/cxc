@@ -173,7 +173,7 @@ impl Type {
 
     pub fn empty() -> Type { Type::new_struct(Vec::new()) }
 
-    pub fn new_struct(fields: Vec<(VarName, Type)>) -> Type {
+    pub fn new_struct(fields: Vec<Field>) -> Type {
         Type::new(TypeEnum::Struct(StructType {
             fields,
             repr: Repr::Rust,
@@ -184,7 +184,11 @@ impl Type {
         let indexed_fields = fields
             .into_iter()
             .enumerate()
-            .map(|(i, field)| (VarName::TupleIndex(i), field))
+            .map(|(i, field)| Field { 
+                name: VarName::TupleIndex(i), 
+                typ: field, 
+                inherited: false 
+            })
             .collect();
 
         Type::new(TypeEnum::Struct(StructType {
@@ -367,15 +371,22 @@ pub enum Repr {
 
 #[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
 pub struct StructType {
-    pub fields: Vec<(VarName, Type)>,
+    pub fields: Vec<Field>,
     pub repr: Repr,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
+pub struct Field {
+    pub name: VarName,
+    pub typ: Type,
+    pub inherited: bool,
 }
 
 impl StructType {
     pub fn get_field_type(&self, field_name: &VarName) -> TResult<Type> {
         for field in &self.fields {
-            if field.0 == *field_name {
-                return Ok(field.1.clone());
+            if field.name == *field_name {
+                return Ok(field.typ.clone());
             }
         }
 
@@ -385,18 +396,18 @@ impl StructType {
     pub fn get_field_index(&self, field_name: &VarName) -> TResult<usize> {
         self.fields
             .iter()
-            .position(|field| field.0 == *field_name)
+            .position(|field| field.name == *field_name)
             .ok_or(TErr::FieldNotFound(self.clone(), field_name.clone()))
     }
 
-    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].0, VarName::TupleIndex(0)) }
+    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].name, VarName::TupleIndex(0)) }
 
     pub fn largest_field(&self) -> Option<Type> {
         if self.fields.len() == 0 {
             return None
         }
 
-        let mut types = self.fields.iter().map(|(_, typ)| typ).collect::<Vec<_>>();
+        let mut types = self.fields.iter().map(|Field { typ, .. }| typ).collect::<Vec<_>>();
         types.sort_by(|a, b| b.size().cmp(&a.size()));
         types.reverse();
 

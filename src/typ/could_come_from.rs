@@ -1,5 +1,7 @@
 use crate::{typ::TypeSpec, *};
 
+use super::Field;
+
 impl Type {
     pub fn works_as_method_on(
         &self, 
@@ -74,8 +76,10 @@ impl Type {
                     return false;
                 }
 
-                for ((field_name, field), (field_spec_name, field_spec)) 
-                    in fields.iter().zip(field_specs.into_iter()) {
+                for (
+                    Field { name: field_name, typ: field, .. }, 
+                    (_, field_spec_name, field_spec)
+                ) in fields.iter().zip(field_specs.into_iter()) {
 
                     if field_name != &field_spec_name {
                         return false;
@@ -96,8 +100,10 @@ impl Type {
                     return false;
                 }
 
-                for ((field_name, field), (field_spec_index, field_spec)) 
-                    in fields.iter().zip(field_specs.into_iter().enumerate()) {
+                for (
+                    Field { name: field_name, typ: field, .. },
+                    (field_spec_index, field_spec),
+                ) in fields.iter().zip(field_specs.into_iter().enumerate()) {
                     let VarName::TupleIndex(index) = field_name else { return false };
 
                     if *index != field_spec_index {
@@ -141,13 +147,12 @@ impl Type {
             },
             TypeSpec::Void => type_enum == &TypeEnum::Void,
             TypeSpec::Type(typ) => self == &typ,
-            TypeSpec::Union(_, _) => todo!(),
-
             TypeSpec::GetGeneric(_, _) |
             TypeSpec::Deref(_) |
             TypeSpec::StructMember(_, _) |
             TypeSpec::SumMember(_, _) |
             TypeSpec::FuncReturnType(_) |
+            TypeSpec::FuncArgType(..) |
             TypeSpec::ArrayElem(_) |
             TypeSpec::TypeLevelFunc(_, _) |
             TypeSpec::Me => panic!(), // TODO: error

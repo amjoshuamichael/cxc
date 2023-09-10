@@ -105,7 +105,7 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(add_two)
+        functions.push(cast<(i32); i32, u64>(add_two))
         "#
     ).unwrap();
 
@@ -120,7 +120,7 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(ninety)
+        functions.push(cast<(); i32, u64>(ninety))
         "#
     ).unwrap();
 

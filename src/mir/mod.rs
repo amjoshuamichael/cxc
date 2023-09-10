@@ -24,6 +24,8 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
         reg_types: BTreeMap::new(),
     };
 
+    dbg!(&mir.variables);
+
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
 
     remove_post_return_statements(&mut mir);

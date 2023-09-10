@@ -11,6 +11,10 @@ impl Errable for () {
     fn err() -> Self {}
 }
 
+impl Errable for bool {
+    fn err() -> Self { false }
+}
+
 impl Errable for Expr {
     fn err() -> Self { Expr::Error }
 }
@@ -55,6 +59,10 @@ impl<T: Errable> Errable for Option<T> {
 
 impl<T: Errable, U: Errable> Errable for (T, U) {
     fn err() -> Self { (T::err(), U::err()) }
+}
+
+impl<T: Errable, U: Errable, V: Errable> Errable for (T, U, V) {
+    fn err() -> Self { (T::err(), U::err(), V::err()) }
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;

@@ -30,12 +30,17 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                     });
 
                 if type_is_not_accurate {
-                    let new_fields = field_exprs
-                        .iter()
-                        .map(|(name, id)| (name.clone(), hlr.tree.get(*id).ret_type()));
-                    let new_type = Type::new_struct(new_fields.collect());
+                    panic!();
+                    //let new_fields = field_exprs
+                    //    .iter()
+                    //    .map(|(name, id)| Field {
+                    //        name: name.clone(), 
+                    //        typ: hlr.tree.get(*id).ret_type(),
+                    //        inherited: false,
+                    //    });
+                    //let new_type = Type::new_struct(new_fields.collect());
 
-                    new_type
+                    //new_type
                 } else {
                     var_type.clone()
                 }

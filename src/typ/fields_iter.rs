@@ -105,7 +105,7 @@ impl Iterator for FieldsIter {
 
         let to_return: &Type = match self.over.as_type_enum() {
             TypeEnum::Struct(StructType { fields, .. }) => {
-                let iterating_over = &fields.get(self.index)?.1;
+                let iterating_over = &fields.get(self.index)?.typ;
                 self.inner = Some(Box::new(FieldsIter::new(iterating_over.clone())));
                 iterating_over
             },
@@ -158,8 +158,8 @@ mod tests {
         let mut iter = FieldsIter::new(
             Type::new(TypeEnum::Struct(StructType {
                 fields: vec![
-                    ("a".into(), Type::i(32).get_ref()),
-                    ("b".into(), Type::f32()),
+                    Field { name: "a".into(), typ: Type::i(32).get_ref(), inherited: false },
+                    Field { name: "b".into(), typ: Type::f(32), inherited: false },
                 ],
                 ..Default::default()
             }))

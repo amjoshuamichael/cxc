@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::lex::VarName;
 use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDecl};
-use crate::typ::{ArrayType, StructType};
+use crate::typ::{ArrayType, StructType, Field};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
 use crate::{ExternalFuncAdd, TypeEnum, Unit};
@@ -88,7 +88,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             );
             statements.push(make_var);
 
-            for (field_index, (field_name, _)) in fields.iter().enumerate() {
+            for (field_index, Field { name: field_name, .. }) in fields.iter().enumerate() {
                 let field_prefix = if field_index > 0 {
                     String::from(", ") + &*field_name.to_string() + " = "
                 } else {

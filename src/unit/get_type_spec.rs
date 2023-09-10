@@ -2,7 +2,7 @@ use crate::{
     errors::{TErr, TResult},
     parse::TypeSpec,
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
-    VarName,
+    VarName, typ::Field,
 };
 use std::fmt::Debug;
 
@@ -126,27 +126,32 @@ impl CompData {
                 todo!()
             },
             TypeSpec::Struct(fields) => {
-                let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
-
-                for field in fields {
-                    let field_type = self.get_spec(&field.1, generics)?;
-                    typed_fields.push((field.0.clone(), field_type));
-                }
-
-                Type::new_struct(typed_fields)
+                Type::new_struct(
+                    fields
+                        .iter()
+                        .map(|&(inherited, ref name, ref typ)| Ok(Field {
+                            name: name.clone(),
+                            typ: self.get_spec(&typ, generics)?,
+                            inherited,
+                        }))
+                        .collect::<Result<_, _>>()?
+                )
             },
             TypeSpec::Sum(variants) => {
                 todo!()
             },
             TypeSpec::Tuple(types) => {
-                let mut typed_fields: Vec<(VarName, Type)> = Vec::new();
-
-                for (i, typ) in types.iter().enumerate() {
-                    let field_type = self.get_spec(typ, generics)?;
-                    typed_fields.push((VarName::TupleIndex(i), field_type));
-                }
-
-                Type::new_struct(typed_fields)
+                Type::new_struct(
+                    types
+                        .iter()
+                        .enumerate()
+                        .map(|(f, &ref typ)| Ok(Field {
+                            name: VarName::TupleIndex(f),
+                            typ: self.get_spec(&typ, generics)?,
+                            inherited: false,
+                        }))
+                        .collect::<Result<_, _>>()?
+                )
             },
             TypeSpec::Function(args, ret_type) => {
                 let args = args
@@ -163,6 +168,14 @@ impl CompData {
                     else { Err(TErr::NotAFunction(func_type))? };
 
                 ret_type.clone()
+            },
+            TypeSpec::FuncArgType(func_type, index) => {
+                let func_type = self.get_spec(func_type, generics)?;
+
+                let TypeEnum::Func(FuncType { args, .. }) = func_type.as_type_enum()
+                    else { Err(TErr::NotAFunction(func_type))? };
+
+                args[*index].clone()
             },
             TypeSpec::Generic(name, generic_aliases) => {
                 let generics = generic_aliases
@@ -184,8 +197,7 @@ impl CompData {
             TypeSpec::GenParam(index) => {
                 generics
                 .get_at_index(*index)
-                .unwrap()
-                //.ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics(), *index))?
+                .ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics(), *index))?
             }
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {
@@ -193,24 +205,6 @@ impl CompData {
                 let TypeEnum::Array(ArrayType { base, .. }) = array.as_type_enum() 
                     else { return Err(TErr::NotAnArray(array)) };
                 base.clone()
-            },
-            TypeSpec::Union(left, right) => {
-                let left = self.get_spec(left, generics)?;
-                let right = self.get_spec(right, generics)?;
-
-                let TypeEnum::Struct(l_struct_type) = left.as_type_enum() 
-                    else { panic!() };
-                let TypeEnum::Struct(r_struct_type) = right.as_type_enum() 
-                    else { panic!() };
-
-                let new_fields = l_struct_type
-                    .fields
-                    .iter()
-                    .chain(r_struct_type.fields.iter())
-                    .cloned()
-                    .collect::<Vec<_>>();
-
-                Type::new_struct(new_fields)
             },
             TypeSpec::Void => Type::void(),
             TypeSpec::Type(typ) => typ.clone(),

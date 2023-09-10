@@ -17,6 +17,7 @@ fn basic_drop() {
     .unwrap();
 
     let the_rc = Rc::new(49);
+
     unit.get_fn("clone_rc").unwrap().downcast::<(&Rc<i32>,), ()>()(&the_rc);
 
     assert_eq!(Rc::<i32>::strong_count(&the_rc), 1);

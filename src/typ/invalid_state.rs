@@ -3,7 +3,7 @@ use crate::parse::InitOpts;
 use crate::{hlr::expr_tree::HNodeData, BoolType, FloatType, FuncType, IntType, RefType, Type};
 use crate::{ArrayType, Repr, StructType, TypeEnum};
 
-use super::{UnknownType, VoidType};
+use super::{UnknownType, VoidType, Field};
 
 pub trait InvalidState {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>>;
@@ -86,7 +86,7 @@ impl InvalidState for StructType {
             return None;
         }
 
-        for (field_name, field_type) in &self.fields {
+        for Field { name: field_name, typ: field_type, .. } in &self.fields {
             if field_type.invalid_state(0).is_some() {
                 return Some(Box::new(StructLitGen {
                     var_type: Type::new(TypeEnum::Struct(self.clone())),

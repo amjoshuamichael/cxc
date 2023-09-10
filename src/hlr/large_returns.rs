@@ -78,10 +78,9 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
 }
 
 fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
-    let i32i64 = Type::new_tuple(vec![Type::i(32), Type::i(64)]);
     let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
-    let output_var_name = hlr.add_variable("casted_ret", &i32i64);
+    let output_var_name = hlr.add_variable("casted_ret", &i64i64);
 
     hlr.modify_many_infallible(
         |return_id, mut data, hlr| {

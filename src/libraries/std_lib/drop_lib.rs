@@ -1,4 +1,4 @@
-use crate::{library::Library, CompData, Type, parse::{FuncCode, Expr, Opcode, TypeSpecRelation, TypeSpec, VarDecl}, TypeEnum, VarName};
+use crate::{library::Library, CompData, Type, parse::{FuncCode, Expr, Opcode, TypeSpecRelation, TypeSpec, VarDecl}, TypeEnum, VarName, typ::Field};
 
 pub struct DropLib;
 
@@ -17,13 +17,13 @@ pub fn derive_drop(_: &CompData, typ: Type) -> Option<FuncCode> {
         TypeEnum::Struct(struct_type) => {
             let mut statements = Vec::new();
 
-            for (field_name, field_type) in struct_type.fields.iter() {
+            for Field { name, typ, .. } in struct_type.fields.iter() {
                 let generics = 
-                    field_type.generics().clone().into_iter().map(|x| x.into()).collect();
+                    typ.generics().clone().into_iter().map(|x| x.into()).collect();
                 let args = vec![
                         Expr::UnarOp(
                             Opcode::Ref, 
-                            Box::new(Expr::Member(me.clone(), field_name.clone()))
+                            Box::new(Expr::Member(me.clone(), name.clone()))
                         )
                     ];
 

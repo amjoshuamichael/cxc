@@ -117,9 +117,6 @@ pub enum HNodeData {
         lhs: ExprID,
         rhs: ExprID,
     },
-    // TODO: combine Call and IndirectCall, making Call take a FuncQuery and 
-    // abstracting over the differences between ExprID and a FuncQuery using an 
-    // HCallable enum
     Call {
         ret_type: Type,
         query: FuncQuery,

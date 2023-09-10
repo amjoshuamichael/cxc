@@ -1,13 +1,18 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
-    parse::{InitOpts, Opcode, TypeSpec, VarDecl, FuncCode},
-    Type, FuncQuery, VarName, CompData, errors::TResult, unit::get_type_spec::GenericTable, TypeRelation,
+    parse::{InitOpts, Opcode, TypeSpec, VarDecl},
+    Type, FuncQuery, VarName, CompData, errors::TResult
 };
 use indexmap::{IndexSet, IndexMap};
 use std::{hash::Hash, collections::HashMap};
 
 #[cfg(feature ="xc-debug")]
 use crate::lex::indent_parens;
+
+mod holy_slot_map;
+mod unique_vec;
+
+use unique_vec::UniqueVec;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 enum Inferable {
@@ -27,23 +32,22 @@ impl From<ExprID> for Inferable {
 }
 
 type InferableIndex = usize;
-type ConstraintIndex = usize;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 struct InferableConnection {
     spec: TypeSpec,
-    gen_params: Vec<ConstraintIndex>,
+    gen_params: Vec<ConstraintId>,
     // Some functions use the Me keyword to reference the type that they are a
     // method of. This is that type, and it is used when doing type solving on
     // arguments and return types.
-    method_of: Option<ConstraintIndex>,
+    method_of: Option<ConstraintId>,
 }
 
 #[derive(Default, Debug)]
 struct Constraints {
-    acts_on: IndexSet<InferableIndex>,
-    connections: IndexSet<InferableConnection>,
-    used_as: UsageContext,
+    acts_on: UniqueVec<InferableIndex>,
+    connections: UniqueVec<InferableConnection>,
+    usages: Usages,
     is: Type,
     last_set_by: LastSetBy,
 }
@@ -60,54 +64,25 @@ enum LastSetBy {
     None,
 }
 
-#[derive(Default, Debug)]
-enum UsageContext {
-    Int,
-    Float,
-    Struct {
-        has_fields: IndexMap<VarName, Type>,
-        field_count: Option<usize>,
-    },
-    #[default]
-    None,
-}
-
-impl UsageContext {
-    fn has_fields(&mut self) -> &mut IndexMap<VarName, Type> {
-        self.has_fields_field_count().0
-    }
-
-    fn field_count(&mut self) -> &mut Option<usize> {
-        self.has_fields_field_count().1
-    }
-
-    fn has_fields_field_count(&mut self) -> (&mut IndexMap<VarName, Type>, &mut Option<usize>) {
-        match self {
-            UsageContext::Struct { has_fields, field_count, .. } =>
-                (has_fields, field_count),
-            UsageContext::None => {
-                *self = UsageContext::Struct {
-                    has_fields: IndexMap::new(),
-                    field_count: None,
-                };
-
-                let UsageContext::Struct { has_fields, field_count } = self
-                    else { unreachable!() };
-
-                (has_fields, field_count)
-            }
-            UsageContext::Int | UsageContext::Float => panic!(), // TODO: should be an error
-        }
-    }
+#[derive(PartialEq, Eq, Debug, Default)]
+struct Usages {
+    is_int: Vec<ExprID>,
+    is_float: Vec<ExprID>,
+    is_struct: Vec<ExprID>,
+    has_fields: IndexMap<VarName, Vec<ExprID>>,
+    fulfilled: bool,
 }
 
 #[derive(Default, Debug)]
 struct InferMap {
     constraints: Vec<Constraints>,
     inferables: Vec<Inferable>,
-    inferable_index_to_constraint_index: Vec<ConstraintIndex>,
+    inferable_index_to_constraint_index: Vec<ConstraintId>,
     calls: IndexSet<ExprID>,
+    has_been_modified_since_last_round: bool,
 }
+
+type ConstraintId = usize;
 
 impl InferMap {
     pub fn all_types_known(&self) -> bool {
@@ -117,32 +92,16 @@ impl InferMap {
             && self.calls.is_empty()
     }
 
-    // just a way to check if we've done anything since the last round
-    pub fn known_count(&self, hlr: &FuncRep) -> usize {
-        self.constraints
-            .iter()
-            .map(|Constraints { connections, used_as, is, .. }|
-                 connections.len() +
-                 if let UsageContext::Struct { ref has_fields, .. } = used_as {
-                     has_fields.len()
-                 } else {
-                     0
-                 } +
-                 if is.is_known() { 0 } else { 1 }
-             ).sum::<usize>() +
-        (hlr.tree.count() - self.calls.len())
-    }
-
     pub fn constraint_of(&mut self, inferable: impl Into<Inferable>) -> &mut Constraints {
         let constraint_index = self.constraint_index_of(inferable);
         &mut self.constraints[constraint_index]
     }
 
-    pub fn constraint_index_of(&self, inferable: impl Into<Inferable>) -> ConstraintIndex {
+    pub fn constraint_index_of(&self, inferable: impl Into<Inferable>) -> ConstraintId {
         self.constraint_index_of_option(inferable).unwrap()
     }
 
-    pub fn constraint_index_of_option(&self, inferable: impl Into<Inferable>) -> Option<ConstraintIndex> {
+    pub fn constraint_index_of_option(&self, inferable: impl Into<Inferable>) -> Option<ConstraintId> {
         let inferable = inferable.into();
 
         let inferable_index = self.inferables.iter().position(|i| i == &inferable)?;
@@ -151,16 +110,21 @@ impl InferMap {
     }
 
     pub fn register_new_inferable(&mut self, inferable: impl Into<Inferable>) ->
-        ConstraintIndex {
+        ConstraintId {
         let inferable = inferable.into();
 
         self.inferables.push(inferable);
-        let mut new_constraints = Constraints::default();
-        new_constraints.acts_on.insert(self.inferables.len() - 1);
-        self.constraints.push(new_constraints);
-        self.inferable_index_to_constraint_index.push(self.constraints.len() - 1);
 
-        self.constraints.len() - 1
+        self.constraints.push({
+            let mut new_constraints = Constraints::default();
+            new_constraints.acts_on.push(self.inferables.len() - 1);
+            new_constraints
+        });
+
+        let new_constraint_index = self.constraints.len() - 1;
+        self.inferable_index_to_constraint_index.push(new_constraint_index);
+
+        new_constraint_index
     }
 
     pub fn detach_inferables(
@@ -180,19 +144,90 @@ impl InferMap {
             .iter()
             .position(|i| i == &remove)
             .unwrap();
-        shared_constraint.acts_on.shift_remove(&remove_inferable_index);
+        shared_constraint.acts_on.remove(&remove_inferable_index);
 
         self.constraints.push(Constraints {
             acts_on: {
-                let mut acts_on = IndexSet::new();
-                acts_on.insert(remove_inferable_index);
+                let mut acts_on = UniqueVec::new();
+                acts_on.push(remove_inferable_index);
                 acts_on
             },
             ..Default::default()
         });
+        let new_constaint_id = self.constraints.len() - 1;
+        self.inferable_index_to_constraint_index[remove_inferable_index] = new_constaint_id;
+    }
 
-        self.inferable_index_to_constraint_index[remove_inferable_index] = 
-            self.constraints.len() - 1;
+    pub fn join_constraints(
+        &mut self,
+        mut constraints_to_join: Vec<ConstraintId>,
+    ) -> ConstraintId {
+        // sort indices in reverse order, so that removing them from the constraints
+        // vector doesn't lead to any indexing errors
+        constraints_to_join.sort_by(|a, b| b.cmp(a));
+        let constraints_to_join = constraints_to_join; // remove mutability
+
+        let shared_type = constraints_to_join
+            .iter()
+            .map(|c| &self.constraints[*c].is)
+            .find(|typ| typ.is_known())
+            .cloned()
+            .unwrap_or_else(|| Type::unknown());
+
+        assert!(
+            constraints_to_join
+                .iter()
+                .map(|c| &self.constraints[*c].is)
+                .all(|typ| typ == &shared_type || typ.is_unknown()
+             )
+        );
+
+        let mut new = Constraints::default();
+
+        for joining_id in &constraints_to_join {
+            let joining = std::mem::replace(
+                &mut self.constraints[*joining_id],
+                Constraints {
+                    is: Type::void(),
+                    ..Default::default()
+                },
+            );
+
+            new.acts_on.extend(joining.acts_on.into_iter());
+            new.connections.extend(joining.connections.into_iter());
+            new.usages.is_int.extend(joining.usages.is_int.into_iter());
+            new.usages.is_float.extend(joining.usages.is_float.into_iter());
+            new.usages.is_struct.extend(joining.usages.is_struct.into_iter());
+            new.usages.has_fields.extend(joining.usages.has_fields.into_iter());
+        }
+
+        new.is = shared_type;
+
+        self.constraints.push(new);
+        let new_constraint_index = self.constraints.len() - 1;
+
+        for constraint in &mut self.constraints {
+            for connection in constraint.connections.iter_mut() {
+                for gen_param in &mut connection.gen_params {
+                    if constraints_to_join.contains(gen_param) {
+                        *gen_param = new_constraint_index;
+                    }
+                }
+
+                if let Some(method_of) = connection.method_of.as_mut() &&
+                    constraints_to_join.contains(method_of) {
+                    *method_of = new_constraint_index;
+                }
+            }
+        }
+
+        for constraint_index in &mut self.inferable_index_to_constraint_index {
+            if constraints_to_join.contains(&constraint_index) {
+                *constraint_index = new_constraint_index;
+            }
+        }
+
+        new_constraint_index
     }
 }
 
@@ -210,13 +245,14 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
     setup_initial_constraints(hlr, &mut infer_map);
    
-    let mut previous_known_count = 0;
     let mut step = InferenceSteps::Start;
     let mut x_steps = 0;
 
     loop {
-        type_solving_round(&mut infer_map, &hlr.comp_data);
-        fill_known_information(&mut infer_map, hlr);
+        match type_solving_round(&mut infer_map, &hlr.comp_data) {
+            Err(_) => break,
+            _ => {},
+        }
         infer_calls(&mut infer_map, hlr).unwrap();
 
         introduce_reverse_constraints(&mut infer_map);
@@ -226,19 +262,18 @@ pub fn infer_types(hlr: &mut FuncRep) {
             return;
         }
 
-        let current_known_count = infer_map.known_count(hlr);
-
-        if previous_known_count != current_known_count {
-            previous_known_count = current_known_count;
-        } else {
+        if !infer_map.has_been_modified_since_last_round {
             advance_inference_step(&mut step, &mut infer_map);
             if step == InferenceSteps::Failure {
                 x_steps += 1;
             }
-            if x_steps == 20 {
+
+            if x_steps == 2 {
                 break;
             }
         }
+
+        infer_map.has_been_modified_since_last_round = false;
     }
 
     #[cfg(feature = "xc-debug")]
@@ -432,22 +467,23 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
     graph.verify_all_roots();
 
-    let mut parent_to_constraint_index = HashMap::<usize, ConstraintIndex>::new();
-    let mut inferable_index_to_constraint_index: Vec::<ConstraintIndex> =
-        vec![0; graph.all_inferables.len()];
-    let mut constraints_set = Vec::<Constraints>::new();
+    let mut root_to_constraint_index = HashMap::<usize, ConstraintId>::new();
+    let mut inferable_index_to_constraint_index: Vec::<ConstraintId> =
+        vec![Default::default(); graph.all_inferables.len()];
+    let mut constraints_set = Vec::<Constraints>::default();
 
-    for (child, parent) in graph.root.into_iter().enumerate() {
-        let (constraints_index, constraints) =
-            if let Some(constraints_index) = parent_to_constraint_index.get(&parent) {
-                (*constraints_index, &mut constraints_set[*constraints_index])
+    for (node, root) in graph.root.into_iter().enumerate() {
+        let (constraints_id, constraints) =
+            if let Some(constraints_id) = root_to_constraint_index.get(&root) {
+                (*constraints_id, &mut constraints_set[*constraints_id])
             } else {
-                parent_to_constraint_index.insert(parent, constraints_set.len());
                 constraints_set.push(Constraints::default());
-                (constraints_set.len() - 1, constraints_set.last_mut().unwrap())
+                let new_index = constraints_set.len() - 1;
+                root_to_constraint_index.insert(root, new_index);
+                (new_index, &mut constraints_set[new_index])
             };
 
-        if let Some(known_type) = graph.knowns.remove(&child) {
+        if let Some(known_type) = graph.knowns.remove(&node) {
             if constraints.is.is_known() && known_type != constraints.is {
                 panic!() // TODO: error
             }
@@ -456,8 +492,8 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             constraints.last_set_by = LastSetBy::Known;
         }
 
-        inferable_index_to_constraint_index[child] = constraints_index;
-        constraints.acts_on.insert(child);
+        inferable_index_to_constraint_index[node] = constraints_id;
+        constraints.acts_on.insert(node);
     }
 
     infer_map.inferable_index_to_constraint_index = inferable_index_to_constraint_index;
@@ -467,10 +503,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
     for id in ids_in_order.into_iter().rev() {
         match hlr.tree.get_ref(id) {
             HNodeData::Number { .. } => {
-                infer_map.constraint_of(id).used_as = UsageContext::Int;
+                infer_map.constraint_of(id).usages.is_int.push(id);
             }
             HNodeData::Float { .. } => {
-                infer_map.constraint_of(id).used_as = UsageContext::Float;
+                infer_map.constraint_of(id).usages.is_float.push(id);
             }
             HNodeData::UnarOp { op, hs, .. } => {
                 let spec = match op {
@@ -487,44 +523,21 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     method_of: None,
                 });
             }
-            HNodeData::StructLit { var_type, fields, initialize, .. } => {
-                if var_type.is_unknown() && *initialize == InitOpts::NoFill {
-                    let infer_fields = fields
-                        .iter()
-                        .enumerate()
-                        .map(|(index, (field_name, _))| {
-                            (field_name.clone(), TypeSpec::GenParam(index as u8))
-                        })
-                        .collect();
+            HNodeData::StructLit { fields, .. } => {
+                infer_map.constraint_of(id).usages.is_struct.push(id);
 
-                    let spec = TypeSpec::Struct(infer_fields);
-
-                    let gen_params = fields
-                        .iter()
-                        .map(|(_, id)| {
-                            infer_map.constraint_index_of(*id)
-                        }).collect();
-
-                    let constraints = infer_map.constraint_of(id);
-                    constraints.connections.insert(
-                        InferableConnection {
-                            spec,
-                            gen_params,
-                            method_of: None,
-                        }
-                    );
-
-                    *constraints.used_as.field_count() = Some(fields.len());
-                } else {
-                    infer_map.constraint_of(id).used_as.has_fields();
+                for (field_name, field) in fields {
+                    infer_map.constraint_of(id).usages.has_fields
+                        .entry(field_name.clone())
+                        .or_insert_with(|| Vec::new())
+                        .push(*field);
                 }
             },
             HNodeData::ArrayLit { parts, initialize, .. } => {
-                if *initialize == InitOpts::NoFill {
-                    let first_element = *parts.first().unwrap();
-                    let parts_constraint_index =
-                        infer_map.constraint_index_of(first_element);
+                let first_element = *parts.first().unwrap();
+                let parts_constraint_index = infer_map.constraint_index_of(first_element);
 
+                if *initialize == InitOpts::NoFill {
                     infer_map.constraint_of(id).connections.insert(
                         InferableConnection {
                             spec: TypeSpec::Array(
@@ -535,9 +548,19 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                             method_of: None,
                         },
                     );
+                } else {
+                    let array_constraint_index = infer_map.constraint_index_of(id);
+
+                    infer_map.constraints[parts_constraint_index].connections.insert(
+                        InferableConnection {
+                            spec: TypeSpec::ArrayElem(Box::new(TypeSpec::GenParam(0))),
+                            gen_params: vec![array_constraint_index],
+                            method_of: None,
+                        }
+                    );
                 }
             },
-            HNodeData::IndirectCall { f, .. } => {
+            HNodeData::IndirectCall { f, a: args, .. } => {
                 let f_constraint_index = infer_map.constraint_index_of(*f);
 
                 infer_map.constraint_of(id).connections.insert(
@@ -547,6 +570,16 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         method_of: None,
                     }.into(),
                 );
+
+                for (a, arg) in args.iter().enumerate() {
+                    infer_map.constraint_of(*arg).connections.insert(
+                        InferableConnection {
+                            spec: TypeSpec::FuncArgType(Box::new(TypeSpec::GenParam(0)), a),
+                            gen_params: vec![f_constraint_index],
+                            method_of: None,
+                        }.into(),
+                    );
+                }
             },
             HNodeData::Member { object, field, .. } => {
                 let object_constraint_index =
@@ -564,9 +597,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     }.into(),
                 );
 
-                infer_map.constraints[object_constraint_index].used_as.has_fields().insert(
-                    field.clone(), Type::unknown()
-                );
+                infer_map.constraints[object_constraint_index].usages.has_fields
+                    .entry(field.clone())
+                    .or_insert_with(|| Vec::new())
+                    .push(id);
             },
             HNodeData::Index { object, .. } => {
                 let object_constraint_index = infer_map.constraint_index_of(*object);
@@ -634,7 +668,7 @@ fn spec_from_perspective_of_generic(
             Struct(fields) => {
                 let mut found_field = false;
 
-                for (field_name, field_spec) in fields.iter() {
+                for (_, field_name, field_spec) in fields {
                     if spec_from_perspective_of_generic(field_spec, generic_index).is_some() {
                         lhs = StructMember(Box::new(lhs), field_name.clone());
                         rhs = field_spec.clone();
@@ -692,7 +726,7 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap) {
     }
 }
 
-fn type_solving_round(infer_map: &mut InferMap, comp_data: &CompData) {
+fn type_solving_round(infer_map: &mut InferMap, comp_data: &CompData) -> Result<(), ()> {
     for constraint_index in 0..infer_map.constraints.len() {
         let constraints = &infer_map.constraints[constraint_index];
 
@@ -712,28 +746,40 @@ fn type_solving_round(infer_map: &mut InferMap, comp_data: &CompData) {
             {
                 let found_type = comp_data
                     .get_spec(
-                        spec,
+                        &spec,
                         &(
                             gen_params.into_iter().cloned().collect::<Vec<Type>>(),
                             method_of.cloned()
                         )
                     )
-                    .unwrap(); // TODO: throw error
+                    .unwrap(); // TODO: error
 
-                infer_map.constraints[constraint_index].is = found_type;
-                infer_map.constraints[constraint_index].last_set_by = 
-                    LastSetBy::Connection(connections_index);
+                if constraints.is.is_known() { 
+                    if constraints.is != found_type {
+                        println!("{:?} is not {:?}", constraints.is, found_type);
+                        return Err(())
+                    }
+                } else {
+                    infer_map.constraints[constraint_index].is = found_type;
+                    infer_map.constraints[constraint_index].last_set_by = 
+                        LastSetBy::Connection(connections_index);
+
+                    infer_map.has_been_modified_since_last_round = true;
+                }
+                
                 break;
             };
         }
     }
+
+    Ok(())
 }
 
 fn set_types_in_hlr(infer_map: InferMap, hlr: &mut FuncRep) {
-    for constraint in infer_map.constraints {
-        for inferable_index in constraint.acts_on {
+    for constraint in &infer_map.constraints {
+        for inferable_index in &constraint.acts_on {
             let set = constraint.is.clone();
-            match &infer_map.inferables[inferable_index] {
+            match &infer_map.inferables[*inferable_index] {
                 Inferable::Expr(id) => {
                     if let Some(typ) = hlr.tree.get_mut(*id).ret_type_mut() {
                         *typ = set;
@@ -760,38 +806,6 @@ fn set_types_in_hlr(infer_map: InferMap, hlr: &mut FuncRep) {
     }
 }
 
-fn fill_known_information(infer_map: &mut InferMap, hlr: &mut FuncRep) {
-    for id in hlr.tree.ids_unordered() {
-        let node_data = hlr.tree.get_ref(id);
-
-        match node_data {
-            HNodeData::Member { object, field, .. } => {
-                let member_type = infer_map.constraint_of(id).is.clone();
-
-                if member_type.is_known() {
-                    infer_map.constraint_of(*object).used_as.has_fields()
-                        .insert(field.clone(), member_type);
-                }
-            }
-            HNodeData::StructLit { fields, .. } => {
-                for field in fields {
-                    let field_type = &infer_map.constraint_of(field.1).is;
-
-                    if field_type.is_unknown() { continue }
-
-                    let field_type = field_type.clone();
-                    infer_map
-                        .constraint_of(id)
-                        .used_as
-                        .has_fields()
-                        .insert(field.0.clone(), field_type);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
     for call_index in 0.. {
         let id = match infer_map.calls.get_index(call_index) {
@@ -814,7 +828,7 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
 
         if fill_in_call(infer_map, hlr, func_query.clone(), &id)? {
             infer_map.calls.remove(&id);
-                        
+            infer_map.has_been_modified_since_last_round = true;
             break;
         }
     }
@@ -994,38 +1008,84 @@ fn advance_inference_step(
         InferenceSteps::Failure => InferenceSteps::Failure, // should be caught by infer_types
     };
 
+    let mut fulfilled_usages = Vec::<ConstraintId>::new();
+
     if *step >= InferenceSteps::FillStructLiterals {
         for constraint_index in 0..infer_map.constraints.len() {
-            let constraints = &infer_map.constraints[constraint_index];
+            let constraints = &mut infer_map.constraints[constraint_index];
 
-            if constraints.is.is_known() { continue }
+            if constraints.usages.fulfilled { continue }
 
-            let UsageContext::Struct { ref has_fields, field_count, .. } =
-                constraints.used_as else { continue };
-
-            if let Some(field_count) = field_count && has_fields.len() != field_count {
+            if constraints.usages.has_fields.is_empty() && 
+                constraints.usages.is_struct.is_empty() {
                 continue;
             }
 
-            if has_fields.iter().any(|(_, typ)| typ.is_unknown()) {
-                continue;
-            }
+            fulfilled_usages.push(constraint_index);
 
-            infer_map.constraints[constraint_index].is =
-                Type::new_struct(has_fields.iter().map(|(n, t)| (n.clone(), t.clone())).collect());
-            infer_map.constraints[constraint_index].last_set_by = LastSetBy::StructLiteral;
+            let only_set_members = constraints.is.is_known();
+
+            let has_fields = std::mem::replace(
+                &mut constraints.usages.has_fields, 
+                IndexMap::default()
+            );
+
+            for (name, ids) in &has_fields {
+                let field_constraint = infer_map.join_constraints(
+                    ids.iter().map(|id| infer_map.constraint_index_of(*id)).collect()
+                );
+
+                infer_map.constraints[field_constraint].connections.insert(
+                    InferableConnection {
+                        spec: TypeSpec::StructMember(
+                            Box::new(TypeSpec::GenParam(0)), 
+                            name.clone()
+                        ),
+                        gen_params: vec![constraint_index],
+                        method_of: None,
+                    }
+                );
+            }
+            
+            if !only_set_members {
+                let mut struct_fields = Vec::<(bool, VarName, TypeSpec)>::new();
+                let mut gen_params = Vec::<ConstraintId>::new();
+
+                for (f, (name, ids)) in has_fields.into_iter().enumerate() {
+                    let field_constraint_index = infer_map.constraint_index_of(ids[0]);
+                    struct_fields.push((false, name.clone(), TypeSpec::GenParam(f as u8)));
+                    dbg!(&field_constraint_index);
+                    gen_params.push(field_constraint_index);
+                }
+
+                infer_map.constraints[constraint_index].connections.insert(
+                    InferableConnection {
+                        spec: TypeSpec::Struct(struct_fields),
+                        gen_params,
+                        method_of: None,
+                    }
+                );
+            }
         }
     }
 
     if *step >= InferenceSteps::FillIntsAndFloats {
-        for constraints in &mut infer_map.constraints {
+        for (constraint_index, constraints) in infer_map.constraints.iter_mut().enumerate() {
             if constraints.is.is_known() { continue }
 
-            constraints.is = match constraints.used_as {
-                UsageContext::Int => Type::i(32),
-                UsageContext::Float => Type::f(32),
-                _ => { continue }
-            }
+            constraints.is = if !constraints.usages.is_int.is_empty() {
+                 Type::i(32)
+            } else if !constraints.usages.is_int.is_empty() {
+                Type::f(32)
+            } else { 
+                continue;
+            };
+
+            fulfilled_usages.push(constraint_index);
         }
+    }
+
+    for constraint_id in fulfilled_usages {
+        infer_map.constraints[constraint_id].usages.fulfilled = true;
     }
 }

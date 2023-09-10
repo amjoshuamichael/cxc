@@ -148,8 +148,8 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(add_two)
-        functions.push(fifty_four)
+        functions.push(cast<(i32); i32, u64>(add_two))
+        functions.push(cast<(); i32, u64>(fifty_four))
         "#
     ).unwrap();
 

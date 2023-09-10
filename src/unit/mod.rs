@@ -281,16 +281,12 @@ impl Unit {
                                 false
                             } else {
                                 // function is not intrinsic, external, or compiled yet
-                                dbg!(&f);
-                                dbg!(&self.comp_data.query_for_id(f));
-                                dbg!(&self.comp_data.processed);
                                 true
                             }
                         },
                         None => {
                             if self.comp_data.get_code(f.code_query()).is_ok() {
                                 // TODO: deriver hack
-                                dbg!(&f);
                                 true
                             } else {
                                 // function is external and has no code

@@ -66,12 +66,12 @@ fn vec_push_and_check() {
                 current_index = current_index + i64 1
             }
 
-            #current_index = i64 0
-            #@ current_index < number_of_checks {
-            #    assert_eq<i64>(num_vec.get<i64>(current_index), current_index)
+            current_index = i64 0
+            @ current_index < number_of_checks {
+                assert_eq<i64>(num_vec.get<i64>(current_index), current_index)
 
-            #    current_index = current_index + i64 1
-            #}
+                current_index = current_index + i64 1
+            }
 
             current_index = i64 0
             @ current_index < number_of_checks {
@@ -80,15 +80,15 @@ fn vec_push_and_check() {
                 current_index = current_index + i64 1
             }
 
-            #current_index = i64 0
-            #@ current_index < i64 1 {
-            #    in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
-            #    corresponding: TwoNums = two_nums_from_one(current_index)
+            current_index = i64 0
+            @ current_index < i64 1 {
+                in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
+                corresponding: TwoNums = two_nums_from_one(current_index)
 
-            #    assert_eq<i64>(in_vec.num_two, corresponding.num_two)
+                assert_eq<i64>(in_vec.num_two, corresponding.num_two)
 
-            #    current_index = current_index + i64 1
-            #}
+                current_index = current_index + i64 1
+            }
         }"
     )
 }

@@ -9,6 +9,7 @@ use crate::FuncType;
 use crate::RefType;
 use crate::TypeEnum;
 use crate::typ::ArgStyle;
+use crate::typ::Field;
 use crate::typ::ReturnStyle;
 use crate::typ::UnknownType;
 use crate::typ::VoidType;
@@ -115,7 +116,7 @@ impl ToCLType for StructType {
     fn to_cl_type(&self) -> Vec<ClType> {
         self.fields
             .iter()
-            .map(|(_, typ)| typ.to_cl_type())
+            .map(|Field { typ, .. }| typ.to_cl_type())
             .flatten()
             .collect()
     }

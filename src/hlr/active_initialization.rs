@@ -1,4 +1,4 @@
-use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, FuncQuery};
+use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, FuncQuery, typ::Field};
 
 use super::{
     expr_tree::{CallGen, MemberGen, HNodeData, SetVarGen},
@@ -43,7 +43,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
                 },
             );
 
-            for (field_name, _) in &struct_type.fields {
+            for Field { name: field_name, .. } in &struct_type.fields {
                 if field_ids.iter().any(|(name, _)| name == field_name) {
                     // struct already has this field, it does not need to be set
                     // to its default value
