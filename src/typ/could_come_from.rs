@@ -7,6 +7,7 @@ pub enum TransformationStep {
     Ref(i32),
     Field(VarName),
     Fields(Box<[VarName]>),
+    ArrayToSlice,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
@@ -115,17 +116,33 @@ impl Type {
                 for Field { inherited, name, typ } in &struct_type.fields {
                     if !inherited { continue }
                     
-                    if let Some(equivalence) = typ.can_transform_to(spec.clone()) {
+                    if let Some(transformation) = typ.can_transform_to(spec.clone()) {
                         return Some(Transformation {
                             steps: TransformationList::Cons(
                                 TransformationStep::Field(name.clone()),
-                                Box::new(equivalence.steps),
+                                Box::new(transformation.steps),
                             ),
-                            generics: equivalence.generics,
+                            generics: transformation.generics,
                         });
                     }
                 }
-            }
+            },
+            TypeEnum::Array(ArrayType { base, count }) => {
+                let slice = Type::new_struct(vec![
+                    Field { inherited: true, name: "ptr".into(), typ: base.get_ref() },
+                    Field { inherited: true, name: "len".into(), typ: Type::u(64) },
+                ]);
+
+                if let Some(transformation) = slice.can_transform_to(spec.clone()) {
+                    return Some(Transformation {
+                        steps: TransformationList::Cons(
+                            TransformationStep::ArrayToSlice,
+                            Box::new(transformation.steps),
+                        ),
+                        generics: transformation.generics,
+                    });
+                }
+            },
             _ => { }
         }
 

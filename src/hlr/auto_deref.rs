@@ -1,9 +1,9 @@
 use crate::{
     parse::{Opcode, TypeSpec, InitOpts},
-    errors::CResultMany, typ::{could_come_from::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum,
+    errors::CResultMany, typ::{could_come_from::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum, ArrayType,
 };
 
-use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen}, hlr_data::FuncRep};
+use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, get_ref}, hlr_data::FuncRep};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
@@ -112,7 +112,33 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
                             }
                         );
 
-                    }
+                    },
+                    TransformationStep::ArrayToSlice => {
+                        let array_type = hlr.tree.get_ref(*hs).ret_type();
+                        let TypeEnum::Array(ArrayType { base, count }) = 
+                            array_type.as_type_enum() else { unreachable!() };
+
+                        *hs = hlr.insert_quick(
+                            transform_parent,
+                            StructLitGen {
+                                var_type: Type::new_struct(vec![
+                                    Field { inherited: true, name: "ptr".into(), typ: base.get_ref() },
+                                    Field { inherited: true, name: "len".into(), typ: Type::u(64) },
+                                ]),
+                                fields: vec![
+                                    ("ptr".into(), get_ref(hlr.tree.get(*hs))),
+                                    (
+                                        "len".into(), 
+                                        Box::new(HNodeData::Number { 
+                                            lit_type: Type::u(64),
+                                            value: *count as u64,
+                                        })
+                                    ),
+                                ],
+                                initialize: InitOpts::NoFill,
+                            }
+                        );
+                    },
                 }
             }
 

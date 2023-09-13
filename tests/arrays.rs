@@ -107,7 +107,6 @@ fn active_initialize_array_strings() {
 }
 
 #[test]
-#[ignore]
 fn slice_basic() {
     xc_test!(
         use StdLib;
@@ -116,7 +115,7 @@ fn slice_basic() {
             numbers: [5]u32 = [543, 60, 44, 222, 994]
 
             range: Range<u64> = Range<u64>:from(u64 2, u64 4)
-            slice: Slice<u32> = numbers.slice(range)
+            slice: { +ptr: &u32, len: u64 } = numbers.slice(range)
             ; { slice.len, *slice.ptr }
         }
         "#;
@@ -125,13 +124,12 @@ fn slice_basic() {
 }
 
 #[test]
-#[ignore]
 fn pass_in_slice() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
 
     unit.push_script("
-        section_of(array_ptr: &[6]u32); Slice<u32> {
+        section_of(array_ptr: &[6]u32); { +ptr: &u32, len: u64 } {
             ; array_ptr.slice(Range<u64>:from(u64 1, u64 4))
         }
     ").unwrap();
