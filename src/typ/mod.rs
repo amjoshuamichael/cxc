@@ -101,7 +101,7 @@ impl Type {
 
     pub fn get_ref(&self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self.clone() })) }
 
-    pub fn get_deref(self) -> Option<Type> {
+    pub fn get_deref(&self) -> Option<Type> {
         match &self.0.type_enum {
             TypeEnum::Ref(t) => Some(t.base.clone()),
             _ => None,

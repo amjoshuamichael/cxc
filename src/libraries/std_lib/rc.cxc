@@ -1,11 +1,11 @@
 RcBox<T> = {
     strong: i64,
     weak: i64,
-    value: T,
+    +value: T,
 }
 
 Rc<T> = {
-    inner: &RcBox<T>,
+    +inner: &RcBox<T>,
 }
 
 <T> &RcBox<T>:. {

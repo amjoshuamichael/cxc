@@ -94,11 +94,15 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {
-        Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2)) {
-            (Ok(Tok::VarName(_)), Ok(Tok::Colon)) => parse_struct(lexer)?,
-            (Ok(Tok::TypeName(_)), Ok(Tok::Colon)) => parse_sum(lexer)?,
+        Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2), lexer.peek_by(3)) {
+            (Ok(Tok::VarName(_)), Ok(Tok::Colon), _) |
+            (Ok(Tok::Plus), Ok(Tok::VarName(_)), Ok(Tok::Colon))
+                => parse_struct(lexer)?,
+            (Ok(Tok::TypeName(_)), Ok(Tok::Colon), _) |
+            (Ok(Tok::Plus), Ok(Tok::TypeName(_)), Ok(Tok::Colon))
+                => parse_sum(lexer)?,
             _ => {
-                lexer.assert_next_tok_is(Tok::LCurly)?;
+                lexer.next_tok()?;
 
                 let mut elems = Vec::new();
 

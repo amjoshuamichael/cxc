@@ -1,6 +1,6 @@
 use crate::{
     errors::{CResult, FErr, TErr, TResult},
-    FuncType, Type, TypeRelation,
+    FuncType, Type, TypeRelation, typ::could_come_from::{transformation_steps_dist, Transformation},
 };
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
@@ -181,12 +181,12 @@ impl CompData {
         })
     }
 
-    pub fn query_for_code_and_get_generics(
+    pub fn query_for_code_with_transformation(
         &self, 
         query: FuncCodeQuery
-    ) -> Option<(FuncCodeId, Option<Vec<Type>>)> {
+    ) -> Option<(FuncCodeId, Option<Transformation>)> {
         if let Some(looking_for_relation) = query.relation.inner_type() {
-            let mut closest_function: Option<(FuncCodeId, Option<Vec<Type>>)> = None;
+            let mut closest_function: Option<(FuncCodeId, Option<Transformation>)> = None;
             let mut closest_function_dist = u32::MAX;
 
             for (id, code) in &self.func_code {
@@ -197,10 +197,11 @@ impl CompData {
                 let Some(looking_at_relation) = code.relation.inner_type() else { continue };
 
                 if let Some(result) = 
-                    looking_for_relation.works_as_method_on(looking_at_relation.clone()) {
-                    if closest_function_dist > result.1 {
-                        closest_function_dist = result.1;
-                        closest_function = Some((id, Some(result.0)));
+                    looking_for_relation.can_transform_to(looking_at_relation.clone()) {
+                    let result_dist = transformation_steps_dist(&result.steps);
+                    if closest_function_dist > result_dist {
+                        closest_function_dist = result_dist;
+                        closest_function = Some((id, Some(result)));
                     }
                 }
             }
@@ -223,15 +224,15 @@ impl CompData {
         &self, 
         info: FuncCodeQuery,
     ) -> Option<FuncCodeId> {
-        self.query_for_code_and_get_generics(info).map(|f| f.0)        
+        self.query_for_code_with_transformation(info).map(|f| f.0)        
     }
 
     pub fn query_for_id(&self, query: &FuncQuery) -> Option<FuncId> {
-        if let Some((code_id, generics)) = 
-            self.query_for_code_and_get_generics(query.code_query()) &&
+        if let Some((code_id, transformation)) = 
+            self.query_for_code_with_transformation(query.code_query()) &&
             let Some(realizations) = self.realizations.get(code_id) {
 
-            let generics = generics.unwrap_or_default();
+            let generics = transformation.map(|t| t.generics).unwrap_or_default();
 
             for realization in realizations {
                 let realization_info = &self.processed[*realization];
@@ -292,13 +293,13 @@ impl CompData {
     //
     // also, just based on some debug statistics, this function is called way too much.
     pub fn get_code(&self, query: FuncCodeQuery) -> CResult<(Cow<FuncCode>, FuncQuery)> {
-        if let Some((decl_info, generics)) = self.query_for_code_and_get_generics(query) {
+        if let Some((decl_info, trans)) = self.query_for_code_with_transformation(query) {
             return Ok((
                 Cow::Borrowed(&self.func_code[decl_info]), 
                 FuncQuery {
                     name: query.name.clone(),
                     relation: query.relation.clone(),
-                    generics: generics.unwrap_or_default(),
+                    generics: trans.map(|t| t.generics).unwrap_or_default(),
                 },
             ));
         };

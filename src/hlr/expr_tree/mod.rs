@@ -1,4 +1,5 @@
 use crate::lex::{indent_parens, TypeName, VarName};
+use crate::typ::could_come_from::TransformationList;
 use crate::{parse::*, FuncQuery};
 use crate::Type;
 use crate::unit::FuncId;
@@ -72,6 +73,7 @@ impl ToString for ExprNode {
             Member { object, field, .. } => format!("{object:?}.{field}"),
             Index { object, index, .. } => format!("{object:?}[{index:?}]"),
             UnarOp { op, hs, .. } => format!("{op:?} {hs:?}"),
+            Transform { hs, .. } => format!("+{hs:?}"),
             BinOp { lhs, op, rhs, .. } => format!("{lhs:?} {op:?} {rhs:?}"),
             IfThen { i, t, .. } => format!("? {i:?} {t:?}"),
             IfThenElse { i, t, e, .. } => {
@@ -144,6 +146,11 @@ pub enum HNodeData {
         op: Opcode,
         hs: ExprID,
     },
+    Transform {
+        hs: ExprID,
+        ret_type: Type,
+        steps: TransformationList,
+    },
     BinOp {
         ret_type: Type,
         lhs: ExprID,
@@ -190,6 +197,7 @@ impl HNodeData {
             BinOp { ret_type, .. }
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
+            | Transform { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
             | Call { ret_type, .. }
@@ -202,53 +210,24 @@ impl HNodeData {
 
     pub fn ret_type_mut(&mut self) -> Option<&mut Type> {
         match self {
-            Number {
-                ref mut lit_type, ..
-            }
-            | Float {
-                ref mut lit_type, ..
-            } => Some(lit_type),
+            Number { ref mut lit_type, .. }
+            | Float { ref mut lit_type, .. } => Some(lit_type),
             Bool { .. } => None,
             While { .. } | Set { .. } => None,
-            Ident {
-                ref mut var_type, ..
-            }
-            | StructLit {
-                ref mut var_type, ..
-            }
-            | ArrayLit {
-                ref mut var_type, ..
-            } => Some(var_type),
-            BinOp {
-                ref mut ret_type, ..
-            }
-            | Return {
-                ref mut ret_type, ..
-            }
-            | UnarOp {
-                ref mut ret_type, ..
-            }
-            | IfThen {
-                ref mut ret_type, ..
-            }
-            | IfThenElse {
-                ref mut ret_type, ..
-            }
-            | Call {
-                ref mut ret_type, ..
-            }
-            | IndirectCall {
-                ref mut ret_type, ..
-            }
-            | Block {
-                ref mut ret_type, ..
-            }
-            | Index {
-                ref mut ret_type, ..
-            }
-            | Member {
-                ref mut ret_type, ..
-            } => Some(ret_type),
+            Ident { ref mut var_type, .. }
+            | StructLit { ref mut var_type, .. }
+            | ArrayLit { ref mut var_type, .. } => Some(var_type),
+            BinOp { ref mut ret_type, .. }
+            | Return { ref mut ret_type, .. }
+            | UnarOp { ref mut ret_type, .. }
+            | Transform { ref mut ret_type, .. }
+            | IfThen { ref mut ret_type, .. }
+            | IfThenElse { ref mut ret_type, .. }
+            | Call { ref mut ret_type, .. }
+            | IndirectCall { ref mut ret_type, .. }
+            | Block { ref mut ret_type, .. }
+            | Index { ref mut ret_type, .. }
+            | Member { ref mut ret_type, .. } => Some(ret_type),
         }
     }
 
@@ -390,6 +369,9 @@ impl HNodeData {
             },
             UnarOp { op, hs, .. } => {
                 op.to_string() + &*tree.get(*hs).to_string(tree)
+            },
+            Transform { hs, .. } => {
+                "+".to_string() + &*tree.get(*hs).to_string(tree)
             },
             BinOp { lhs, op, rhs, .. } => {
                 let mut binop = tree.get(*lhs).to_string(tree);

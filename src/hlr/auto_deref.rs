@@ -1,9 +1,9 @@
 use crate::{
     parse::{Opcode, TypeSpec},
-    errors::CResultMany,
+    errors::CResultMany, typ::could_come_from::TransformationStep,
 };
 
-use super::{expr_tree::HNodeData, hlr_data::FuncRep};
+use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen}, hlr_data::FuncRep};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
@@ -39,40 +39,43 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
 
     hlr.modify_many_infallible(
         |transform_id, transform_data, hlr| {
-            let HNodeData::UnarOp { 
+            let HNodeData::Transform { 
                 ref mut hs, 
-                op: Opcode::Transform, 
-                ret_type: result_type,
+                steps,
+                ..
             } = transform_data else { return };
 
-            let original_type = hlr.tree.get_ref(*hs).ret_type();
+            let steps = steps.clone().to_vec();
+            let transform_parent = hlr.tree.parent(transform_id);
 
-            let deref_chain = original_type.deref_chain();
-
-            let deref_level_of_call = deref_chain
-                .iter()
-                .position(|deref| &deref == &result_type)
-                .unwrap_or_else(|| todo!()) as i32 - 1;
-
-            if deref_level_of_call == 0 {
-                *hs = hlr.insert_quick(
-                    transform_id,
-                    HNodeData::UnarOp {
-                        ret_type: result_type.get_ref(),
-                        op: Opcode::Ref,
-                        hs: *hs,
+            for step in steps {
+                match step {
+                    TransformationStep::Ref(count) => {
+                        if count > 0 {
+                            for _ in 0..count {
+                                *hs = hlr.insert_quick(
+                                    transform_parent,
+                                    RefGen { object: *hs },
+                                );
+                            }
+                        } else {
+                            for _ in 0..(-count) {
+                                *hs = hlr.insert_quick(
+                                    transform_parent,
+                                    DerefGen { object: *hs },
+                                );
+                            }
+                        }
                     },
-                );
-            } else {
-                for d in 0..deref_level_of_call {
-                    *hs = hlr.insert_quick(
-                        transform_id,
-                        HNodeData::UnarOp {
-                            ret_type: deref_chain[(d + 1) as usize].clone(),
-                            op: Opcode::Deref,
-                            hs: *hs,
-                        },
-                    );
+                    TransformationStep::Field(field) => {
+                        *hs = hlr.insert_quick(
+                            transform_parent,
+                            MemberGen {
+                                object: *hs,
+                                field,
+                            },
+                        );
+                    }
                 }
             }
 

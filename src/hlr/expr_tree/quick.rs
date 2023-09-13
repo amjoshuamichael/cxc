@@ -378,7 +378,7 @@ impl<T: NodeDataGen> NodeDataGen for DerefGen<T> {
         let space = hlr.tree.make_one_space(parent);
 
         let object = self.object.add_to_expr_tree(hlr, space);
-        let obj_typ = hlr.tree.get(object).ret_type();
+        let obj_typ = dbg!(hlr.tree.get(object)).ret_type();
         let obj_typ_deref = obj_typ.get_deref().unwrap();
 
         hlr.tree.replace(

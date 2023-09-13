@@ -51,6 +51,7 @@ impl ExprTree {
                     .chain(ids_of(tree, r).drain(..))
                     .collect(),
                 UnarOp { hs: one, .. }
+                | Transform { hs: one, .. }
                 | Member { object: one, .. } => ids_of(tree, one),
                 IfThenElse { i, t, e, .. } => ids_of(tree, i)
                     .drain(..)

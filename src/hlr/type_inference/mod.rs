@@ -1,9 +1,9 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec, VarDecl},
-    Type, FuncQuery, VarName, CompData, errors::TResult
+    Type, FuncQuery, VarName, CompData, errors::TResult, typ::could_come_from::Transformation
 };
-use indexmap::{IndexSet, IndexMap};
+use indexmap::IndexMap;
 use std::{hash::Hash, collections::HashMap};
 
 #[cfg(feature ="xc-debug")]
@@ -54,13 +54,23 @@ struct Constraints {
 #[derive(Default, Debug)]
 enum LastSetBy {
     Connection(usize),
-    Known,
+    Known(KnownBy),
     ReturnTypeOfFunction,
     ArgTypeOfFunction(FuncQuery, usize),
     StructLiteral,
     Call,
     #[default]
-    None,
+    None, // TODO: do we need this?
+}
+
+#[derive(Debug)]
+enum KnownBy {
+    IsBlock,
+    IsReturn,
+    Specified,
+    Comparison,
+    Condition,
+    VarType,
 }
 
 #[derive(PartialEq, Eq, Debug, Default)]
@@ -299,7 +309,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
         root: Vec<usize>,
         size: Vec<usize>,
         all_inferables: Vec<Inferable>,
-        knowns: HashMap<usize, Type>,
+        knowns: HashMap<usize, (Type, KnownBy)>,
     }
 
     impl SimilarityGraph {
@@ -340,10 +350,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             }
         }
 
-        fn mark_known(&mut self, set: impl Into<Inferable>, to: Type) {
+        fn mark_known(&mut self, set: impl Into<Inferable>, to: Type, known_by: KnownBy) {
             let set = set.into();
             let set_index = self.index_of(set);
-            self.knowns.insert(set_index, to);
+            self.knowns.insert(set_index, (to, known_by));
         }
 
         fn add_to_inferables_list(&mut self, add: impl Into<Inferable>) -> usize {
@@ -369,12 +379,12 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
     for (var, info) in &hlr.variables {
         if info.typ.is_known() {
-            graph.mark_known(var, info.typ.clone());
+            graph.mark_known(var, info.typ.clone(), KnownBy::VarType);
         }
     }
 
     if hlr.ret_type.is_known() {
-        graph.mark_known(Inferable::ReturnType, hlr.ret_type.clone());
+        graph.mark_known(Inferable::ReturnType, hlr.ret_type.clone(), KnownBy::Specified);
     }
 
     let ids_in_order = hlr.tree.ids_in_order();
@@ -387,7 +397,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
         match node_data {
             HNodeData::Ident { ref name, .. } => {
                 if let Some(global_type) = hlr.comp_data.globals.get(name) {
-                    graph.mark_known(name, global_type.clone());
+                    graph.mark_known(name, global_type.clone(), KnownBy::VarType);
                 }
 
                 graph.join(id, name)
@@ -396,7 +406,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 graph.join(*lhs, *rhs);
 
                 if op.is_cmp() {
-                    graph.mark_known(id, Type::bool());
+                    graph.mark_known(id, Type::bool(), KnownBy::Comparison);
                 } else {
                     graph.join(id, *lhs);
                 }
@@ -413,7 +423,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 graph.add_to_inferables_list(id);
 
                 if let Some(rel_type) = query.relation.inner_type() && rel_type.is_known() {
-                    graph.mark_known(Inferable::Relation(id), rel_type);
+                    graph.mark_known(Inferable::Relation(id), rel_type, KnownBy::Specified);
                 } else if query.relation.is_method() {
                     graph.join(a[0], Inferable::Relation(id));
                 } else if query.relation.inner_type().is_some() {
@@ -421,10 +431,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 }
             },
             HNodeData::Block { .. } => {
-                graph.mark_known(id, Type::void())
+                graph.mark_known(id, Type::void(), KnownBy::IsBlock)
             }
             HNodeData::Return { to_return, .. } => {
-                graph.mark_known(id, Type::void());
+                graph.mark_known(id, Type::void(), KnownBy::IsReturn);
 
                 if let Some(to_return) = to_return {
                     graph.join(*to_return, Inferable::ReturnType);
@@ -432,7 +442,11 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             },
             HNodeData::StructLit { var_type, .. } => { 
                 if var_type.is_known() {
-                    graph.mark_known(id, var_type.clone());
+                    graph.mark_known(
+                        id, 
+                        var_type.clone(),
+                        KnownBy::Specified,
+                    );
                 } else {
                     graph.add_to_inferables_list(id);
                 }
@@ -445,6 +459,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Set { lhs, rhs, .. } => {
                 graph.join(*lhs, *rhs);
             },
+            HNodeData::Transform { .. } |
             HNodeData::Member { .. } |
             HNodeData::IndirectCall { .. } |
             HNodeData::Number { .. } |
@@ -455,12 +470,16 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             }
             HNodeData::IfThen { i: cond, .. } |
             HNodeData::IfThenElse { i: cond, .. } |
-            HNodeData::While { w: cond, .. } => graph.mark_known(*cond, Type::bool()),
+            HNodeData::While { w: cond, .. } => graph.mark_known(
+                *cond, 
+                Type::bool(), 
+                KnownBy::Condition,
+            ),
         }
 
         let node_data_ret_type = node_data.ret_type();
         if node_data_ret_type.is_known() {
-            graph.mark_known(id, node_data_ret_type);
+            graph.mark_known(id, node_data_ret_type, KnownBy::Specified);
         }
     }
 
@@ -482,13 +501,13 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 (new_index, &mut constraints_set[new_index])
             };
 
-        if let Some(known_type) = graph.knowns.remove(&node) {
+        if let Some((known_type, known_by)) = graph.knowns.remove(&node) {
             if constraints.is.is_known() && known_type != constraints.is {
                 panic!() // TODO: error
             }
 
             constraints.is = known_type;
-            constraints.last_set_by = LastSetBy::Known;
+            constraints.last_set_by = LastSetBy::Known(known_by);
         }
 
         inferable_index_to_constraint_index[node] = constraints_id;
@@ -613,9 +632,14 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 );
             },
             HNodeData::Bool { .. } |
-            HNodeData::Ident { .. } | HNodeData::Set { .. } | HNodeData::Call { .. } |
-            HNodeData::BinOp { .. } | HNodeData::IfThen { .. } |
-            HNodeData::IfThenElse { .. } | HNodeData::While { .. } |
+            HNodeData::Ident { .. } | 
+            HNodeData::Set { .. } | 
+            HNodeData::Call { .. } |
+            HNodeData::BinOp { .. } | 
+            HNodeData::Transform { .. } | 
+            HNodeData::IfThen { .. } |
+            HNodeData::IfThenElse { .. } | 
+            HNodeData::While { .. } |
             HNodeData::Block { .. } | HNodeData::Return { .. } => {},
         }
     }
@@ -838,13 +862,13 @@ fn fill_in_call(
     // TODO: this is a hack
     let derive_code_storage;
 
-    let (code, code_id, known_generics) = 
-        if let Some((code_id, known_generics)) = 
-            hlr.comp_data.query_for_code_and_get_generics(func_query.code_query()) {
-            (&hlr.comp_data.func_code[code_id], Some(code_id), known_generics)
+    let (code, trans) = 
+        if let Some((code_id, trans)) = 
+            hlr.comp_data.query_for_code_with_transformation(func_query.code_query()) {
+            (&hlr.comp_data.func_code[code_id], trans)
         } else if let Some(code) = hlr.comp_data.get_derived_code(func_query.code_query()) {
             derive_code_storage = Some(code);
-            (derive_code_storage.as_ref().unwrap(), None, None)
+            (derive_code_storage.as_ref().unwrap(), None)
         } else {
             return Ok(false);
         };
@@ -864,9 +888,9 @@ fn fill_in_call(
             let relation_inferable = Inferable::Relation(*call_id);
             infer_map.detach_inferables(a[0], relation_inferable.clone());
 
-            let transform = hlr.tree.insert(*call_id, HNodeData::UnarOp {
+            let transform = hlr.tree.insert(*call_id, HNodeData::Transform {
                 hs: a[0],
-                op: Opcode::Transform,
+                steps: trans.map(|trans| trans.steps).unwrap_or_default(),
                 ret_type: Type::unknown(),
             });
 
@@ -926,9 +950,9 @@ fn fill_in_call(
             let relation_inferable = Inferable::Relation(*call_id);
             infer_map.detach_inferables(a[0], relation_inferable.clone());
 
-            let transform = hlr.tree.insert(*call_id, HNodeData::UnarOp {
+            let transform = hlr.tree.insert(*call_id, HNodeData::Transform {
                 hs: a[0],
-                op: Opcode::Transform,
+                steps: trans.as_ref().map(|trans| trans.steps.clone()).unwrap_or_default(),
                 ret_type: Type::unknown(),
             });
 
@@ -980,7 +1004,7 @@ fn fill_in_call(
             },
         );
 
-        if let Some(generics) = known_generics {
+        if let Some(Transformation { generics, .. }) = trans {
             for (g, generic_constraint) in call_generic_constraints.iter().enumerate() {
                 infer_map.constraints[*generic_constraint].is = generics[g].clone();
             }
@@ -1047,7 +1071,6 @@ fn advance_inference_step(
                 for (f, (name, ids)) in has_fields.into_iter().enumerate() {
                     let field_constraint_index = infer_map.constraint_index_of(ids[0]);
                     struct_fields.push((false, name.clone(), TypeSpec::GenParam(f as u8)));
-                    dbg!(&field_constraint_index);
                     gen_params.push(field_constraint_index);
                 }
 

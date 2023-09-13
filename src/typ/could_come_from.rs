@@ -2,28 +2,129 @@ use crate::{typ::TypeSpec, *};
 
 use super::Field;
 
-impl Type {
-    pub fn works_as_method_on(
-        &self, 
-        spec: TypeSpec, 
-    ) -> Option<(Vec<Type>, u32)> {
-        let left = self.clone();
-        let right = spec;
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum TransformationStep {
+    Ref(i32),
+    Field(VarName),
+}
 
-        let mut track_generics = Vec::new();
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
+pub enum TransformationList {
+    Cons(TransformationStep, Box<Self>),
 
-        for (dist, left) in left.deref_chain().into_iter().enumerate() {
-            if left.is_equivalent(right.clone(), &mut track_generics) {
-                return Some((track_generics, dist as u32))
-            }
+    #[default]
+    Nil,
+}
 
-            track_generics.clear();
+impl TransformationList {
+    pub fn to_vec(mut self) -> Vec<TransformationStep> {
+        let mut steps = Vec::new();
+
+        while let TransformationList::Cons(step, rest) = self {
+            steps.push(step);
+            self = *rest;
         }
 
-        None        
+        steps
+    }
+}
+
+pub struct Transformation {
+    pub generics: Vec<Type>,
+    pub steps: TransformationList,
+}
+
+pub fn transformation_steps_dist(list: &TransformationList) -> u32 {
+    let mut rest = list;
+    let mut sum = 0;
+
+    while let TransformationList::Cons(step, new_rest) = rest {
+        rest = new_rest;
+
+        sum += match step {
+            TransformationStep::Ref(count) => count.abs() as u32,
+            TransformationStep::Field(_) => 1,
+        };
+    }
+    
+    sum
+}
+
+impl Type {
+    pub fn can_transform_to(
+        &self, 
+        spec: TypeSpec, 
+    ) -> Option<Transformation> {
+        match self.as_type_enum() {
+            TypeEnum::Ref(RefType { base }) => {
+                let mut base = base.clone();
+                let mut reference_count = 1;
+
+                while let Some(dereffed) = base.get_deref() {
+                    base = dereffed.clone();
+                    reference_count += 1;
+                }
+
+                return base.can_transform_to(spec).map(|equivalence|
+                    Transformation {
+                        steps: TransformationList::Cons(
+                            TransformationStep::Ref(-reference_count), 
+                            Box::new(equivalence.steps),
+                        ),
+                        generics: equivalence.generics,
+                    }
+                )
+            },
+            TypeEnum::Struct(StructType { fields, .. }) => {
+                for Field { inherited, name, typ } in fields {
+                    if !inherited { continue }
+                    
+                    if let Some(equivalence) = typ.can_transform_to(spec.clone()) {
+                        return Some(Transformation {
+                            steps: TransformationList::Cons(
+                                TransformationStep::Field(name.clone()),
+                                Box::new(equivalence.steps),
+                            ),
+                            generics: equivalence.generics,
+                        });
+                    }
+                }
+            }
+            _ => { }
+        }
+
+        if let TypeSpec::Ref(mut spec) = spec {
+            let mut reference_count = 1;
+
+            while let TypeSpec::Ref(base) = *spec {
+                reference_count += 1;
+                spec = base;
+            }
+
+            return self.can_transform_to(*spec).map(|equivalence| 
+                Transformation {
+                    steps: TransformationList::Cons(
+                        TransformationStep::Ref(reference_count), 
+                        Box::new(equivalence.steps),
+                    ),
+                    generics: equivalence.generics,
+                }
+            );
+        }
+        
+        let mut generics = Vec::new();
+
+        self.is_equivalent(spec, &mut generics).then(|| Transformation {
+            steps: TransformationList::Nil,
+            generics,
+        })
     }
 
-    fn is_equivalent(&self, spec: TypeSpec, track_generics: &mut Vec<Type>) -> bool {
+    fn is_equivalent(
+        &self, 
+        spec: TypeSpec, 
+        generics: &mut Vec<Type>,
+    ) -> bool {
         let type_enum = self.as_type_enum();
 
         match spec {
@@ -34,14 +135,14 @@ impl Type {
             TypeSpec::Float(float_type) => 
                 type_enum == &TypeEnum::Float(float_type),
             TypeSpec::Named(name) => self.name() == &name,
-            TypeSpec::Generic(name, generics) => {
+            TypeSpec::Generic(name, set_generics) => {
                 if self.name() != &name {
                     return false;
                 }
 
                 for (generic, generic_spec) 
-                    in self.generics().iter().zip(generics.into_iter()) {
-                    if !generic.is_equivalent(generic_spec, track_generics) {
+                    in self.generics().iter().zip(set_generics.into_iter()) {
+                    if !generic.is_equivalent(generic_spec, generics) {
                         return false;
                     }
                 }
@@ -51,22 +152,24 @@ impl Type {
             TypeSpec::GenParam(index) => {
                 let index = index as usize;
 
-                if let Some(found_generic) = track_generics.get(index)
+                if let Some(found_generic) = generics.get(index)
+                    && found_generic != &Type::unknown()
                     && found_generic != self {
                     false
                 } else {
-                    if track_generics.len() <= index as usize {
-                        track_generics.resize(index + 1, Type::default());
+                    if generics.len() <= index as usize {
+                        generics.resize(index + 1, Type::unknown());
                     }
 
-                    track_generics[index] = self.clone();
+                    generics[index] = self.clone();
                     true
                 }
             },
             TypeSpec::Bool => type_enum == &TypeEnum::Bool,
             TypeSpec::Ref(spec) => {
-                let TypeEnum::Ref(ref_type) = type_enum else { return false };
-                ref_type.base.is_equivalent(*spec, track_generics)
+                let TypeEnum::Ref(RefType { base }) = self.as_type_enum() 
+                    else { return false };
+                base.is_equivalent(*spec, generics)
             },
             TypeSpec::Struct(field_specs) => {
                 let TypeEnum::Struct(StructType { fields, .. }) = type_enum 
@@ -85,12 +188,12 @@ impl Type {
                         return false;
                     }
 
-                    if !field.is_equivalent(field_spec, track_generics) {
+                    if !field.is_equivalent(field_spec, generics) {
                         return false;
                     }
                 }
 
-                return true;
+                true
             },
             TypeSpec::Tuple(field_specs) => {
                 let TypeEnum::Struct(StructType { fields, .. }) = type_enum 
@@ -110,7 +213,7 @@ impl Type {
                         return false;
                     }
 
-                    if !field.is_equivalent(field_spec, track_generics) {
+                    if !field.is_equivalent(field_spec, generics) {
                         return false;
                     }
                 }
@@ -126,24 +229,23 @@ impl Type {
                     return false;
                 }
 
-                if !ret.is_equivalent(*ret_spec, track_generics) {
+                if !ret.is_equivalent(*ret_spec, generics) {
                     return false;
                 }
 
                 for (arg, arg_spec) in args.iter().zip(arg_specs.into_iter()) {
-                    if !arg.is_equivalent(arg_spec, track_generics) {
+                    if !arg.is_equivalent(arg_spec, generics) {
                         return false;
                     }
                 }
 
-                return true;
-
+                true
             },
             TypeSpec::Array(base_spec, count_spec) => {
                 let TypeEnum::Array(ArrayType { base, count }) = type_enum 
                     else { return false };
 
-                *count == count_spec && base.is_equivalent(*base_spec, track_generics)
+                *count == count_spec && base.is_equivalent(*base_spec, generics)
             },
             TypeSpec::Void => type_enum == &TypeEnum::Void,
             TypeSpec::Type(typ) => self == &typ,
@@ -162,34 +264,99 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse::TypeSpec, Type, Unit, errors::CResult};
+    use crate::{parse::TypeSpec, Type, Unit, errors::CResult, typ::could_come_from::{Transformation, TransformationStep}};
 
     #[test]
     fn works_as_method_on() -> CResult<()> {
         let mut unit = Unit::new();
 
-        assert!(Type::i(32).works_as_method_on("i32".into()).is_some());
-        assert!(!Type::i(32).works_as_method_on("i64".into()).is_some());
-
-        let i32i64 = Type::new_tuple(vec![Type::i(32), Type::i(64)]);
-        assert!(i32i64.works_as_method_on(TypeSpec::from("{ i32, i64 }")).is_some());
-        assert!(!i32i64.works_as_method_on(TypeSpec::from("{ i32, i64, i8 }")).is_some());
-
-        assert!(i32i64.works_as_method_on(TypeSpec::from("{ i32, T }")).is_some());
-        assert!(!i32i64.works_as_method_on(TypeSpec::from("{ i32, T, i8 }")).is_some());
-
-        unit.push_script("Vec<T> = { capacity: i64, data_loc: &T, len: i64 }")
+        unit.push_script("Vec<T> = { ptr: &T, capacity: i64, len: i64 }")
             .unwrap();
 
-        let veci32 = unit
+        let to_typ = |code| unit
             .comp_data
-            .get_spec(&TypeSpec::from("Vec<i32>"), &Vec::new())
+            .get_spec(&TypeSpec::from(code), &Vec::new())
             .unwrap();
-        assert!(veci32.works_as_method_on(TypeSpec::from("Vec<i32>")).is_some());
-        assert!(!veci32.works_as_method_on(TypeSpec::from("Vec<f32>")).is_some());
-        assert!(veci32.works_as_method_on(TypeSpec::from("Vec<T>")).is_some());
-        assert!(!veci32.works_as_method_on(TypeSpec::from("Vec<&T>")).is_some());
 
+        let comp = |code, spec| 
+            to_typ(code)
+            .can_transform_to(TypeSpec::from(spec))
+            .map(|Transformation { generics, steps }| (generics, steps.to_vec()));
+
+        let refstp = |ref_count| TransformationStep::Ref(ref_count);
+        let fldstp = |field_name: &str| TransformationStep::Field(field_name.into());
+
+        assert_eq!(comp("i32", "i32"), Some((vec![], vec![])));
+        assert_eq!(comp("i32", "i64"), None);
+
+        assert_eq!(comp("{i32, i64}", "{i32, i64}"), Some((vec![], vec![])));
+        assert_eq!(comp("{i32, i64}", "{i32, i64, i8}"), None);
+
+        assert_eq!(comp("{i32, i64}", "{i32, T}"), Some((vec![Type::i(64)], vec![])));
+        assert_eq!(comp("{i32, i64}", "{i32, T, i8}"), None);
+
+        assert_eq!(
+            comp("{i32, i64}", "{T, U}"), 
+            Some((vec![Type::i(32), Type::i(64)], vec![]))
+        );
+        assert_eq!(comp("{i32, i64}", "{T, U, V}"), None);
+
+        assert_eq!(
+            comp("{i32, i64}", "{U, T}"), 
+            Some((vec![Type::i(64), Type::i(32)], vec![]))
+        );
+        assert_eq!(comp("{i32, i64}", "{V, U, T}"), None);
+
+        assert_eq!(comp("{i64, i64}", "{T, T}"), Some((vec![Type::i(64)], vec![])));
+        assert_eq!(comp("{i32, i64}", "{T, T}"), None);
+
+        assert_eq!(comp("Vec<i32>", "Vec<i32>"), Some((vec![], vec![])));
+        assert_eq!(comp("Vec<i32>", "Vec<f32>"), None);
+        assert_eq!(comp("Vec<i32>", "Vec<T>"), Some((vec![Type::i(32)], vec![])));
+        assert_eq!(comp("Vec<i32>", "Vec<&T>"), None);
+
+
+        assert_eq!(comp("Vec<i32>", "&Vec<i32>"), Some((vec![], vec![refstp(1)])));
+        assert_eq!(comp("Vec<i32>", "&Vec<f32>"), None);
+        assert_eq!(comp("Vec<i32>", "&Vec<T>"), Some((vec![Type::i(32)], vec![refstp(1)])));
+        assert_eq!(comp("Vec<i32>", "&Vec<&T>"), None);
+
+        assert_eq!(comp("&Vec<i32>", "Vec<i32>"), Some((vec![], vec![refstp(-1)])));
+        assert_eq!(comp("&Vec<i32>", "Vec<f32>"), None);
+        assert_eq!(comp("&Vec<i32>", "Vec<T>"), Some((vec![Type::i(32)], vec![refstp(-1)])));
+        assert_eq!(comp("&Vec<i32>", "Vec<&T>"), None);
+
+        assert_eq!(
+            comp("{+x: {i32, i64}}", "{i32, i64}"), 
+            Some((vec![], vec![fldstp("x")]))
+        );
+        assert_eq!(
+            comp("&{+x: {i32, i64}}", "{i32, i64}"), 
+            Some((vec![], vec![refstp(-1), fldstp("x")]))
+        );
+        assert_eq!(
+            comp("{+x: {i32, i64}}", "&{i32, i64}"), 
+            Some((vec![], vec![fldstp("x"), refstp(1)]))
+        );
+        assert_eq!(comp("{+x: {i32, i32}}", "{i32, i64}"), None);
+
+        assert_eq!(
+            comp("{+y: {+x: {i32, i64}}}", "{i32, i64}"), 
+            Some((vec![], vec![fldstp("y"), fldstp("x")]))
+        );
+        assert_eq!(
+            comp("{+y: {+x: {i32, i64}}}", "&{T, i64}"), 
+            Some((vec![Type::i(32)], vec![fldstp("y"), fldstp("x"), refstp(1)]))
+        );
+        assert_eq!(
+            comp("{+y: {+x: {i32, i64}}}", "&{i32, i64}"), 
+            Some((vec![], vec![fldstp("y"), fldstp("x"), refstp(1)]))
+        );
+        assert_eq!(
+            comp("{+y: {+x: {i32, i64}}}", "&{T, i64}"), 
+            Some((vec![Type::i(32)], vec![fldstp("y"), fldstp("x"), refstp(1)]))
+        );
+        
         Ok(())
     }
 }
