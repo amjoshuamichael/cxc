@@ -156,7 +156,7 @@ impl<'a> FuncRep<'a> {
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
         let mut specified_dependencies = 
-            HashMap::<OwnedFuncCodeQuery, Option<FuncCodeId>>::new();
+            IndexMap::<OwnedFuncCodeQuery, Option<FuncCodeId>>::new();
 
         for code_query in self.specified_dependencies.drain() {
             specified_dependencies.insert(code_query, None);

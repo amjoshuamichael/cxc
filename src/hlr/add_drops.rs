@@ -47,7 +47,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
         });
 
         if should_not_drop {
-            return;
+            continue;
         }
 
         let (first_use, _) = hlr.tree

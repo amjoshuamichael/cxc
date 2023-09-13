@@ -6,6 +6,7 @@ use super::Field;
 pub enum TransformationStep {
     Ref(i32),
     Field(VarName),
+    Fields(Box<[VarName]>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
@@ -29,6 +30,7 @@ impl TransformationList {
     }
 }
 
+#[derive(Debug)]
 pub struct Transformation {
     pub generics: Vec<Type>,
     pub steps: TransformationList,
@@ -43,7 +45,7 @@ pub fn transformation_steps_dist(list: &TransformationList) -> u32 {
 
         sum += match step {
             TransformationStep::Ref(count) => count.abs() as u32,
-            TransformationStep::Field(_) => 1,
+            _ => 1,
         };
     }
     
@@ -75,8 +77,42 @@ impl Type {
                     }
                 )
             },
-            TypeEnum::Struct(StructType { fields, .. }) => {
-                for Field { inherited, name, typ } in fields {
+            TypeEnum::Struct(struct_type) => {
+                if let TypeSpec::Struct(field_specs) = spec.clone()
+                    && struct_type.fields.len() != field_specs.len()
+                    && field_specs.iter().all(|(inherited, _, _)| *inherited) {
+                    let mut generics = Vec::new();
+
+                    let mut field_names = Vec::new();
+
+                    let mut failure = false;
+
+                    for (_, name, spec) in field_specs {
+                        let Ok(field_index) = struct_type.get_field_index(&name)
+                            else { failure = true; break };
+
+                        let field = &struct_type.fields[field_index];
+
+                        if !field.inherited || !field.typ.is_equivalent(spec, &mut generics) {
+                             failure = true;
+                             break;
+                        }
+
+                        field_names.push(name);
+                    }
+
+                    if !failure {
+                        return Some(Transformation {
+                            generics,
+                            steps: TransformationList::Cons(
+                                TransformationStep::Fields(field_names.into_boxed_slice()),
+                                Box::new(TransformationList::Nil),
+                            ),
+                        })
+                    }
+                }
+
+                for Field { inherited, name, typ } in &struct_type.fields {
                     if !inherited { continue }
                     
                     if let Some(equivalence) = typ.can_transform_to(spec.clone()) {
@@ -248,7 +284,6 @@ impl Type {
                 *count == count_spec && base.is_equivalent(*base_spec, generics)
             },
             TypeSpec::Void => type_enum == &TypeEnum::Void,
-            TypeSpec::Type(typ) => self == &typ,
             TypeSpec::GetGeneric(_, _) |
             TypeSpec::Deref(_) |
             TypeSpec::StructMember(_, _) |
@@ -257,6 +292,7 @@ impl Type {
             TypeSpec::FuncArgType(..) |
             TypeSpec::ArrayElem(_) |
             TypeSpec::TypeLevelFunc(_, _) |
+            TypeSpec::Unknown |
             TypeSpec::Me => panic!(), // TODO: error
         }
     }
@@ -264,7 +300,7 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse::TypeSpec, Type, Unit, errors::CResult, typ::could_come_from::{Transformation, TransformationStep}};
+    use crate::{parse::TypeSpec, Type, Unit, errors::CResult, typ::could_come_from::{Transformation, TransformationStep}, VarName};
 
     #[test]
     fn works_as_method_on() -> CResult<()> {
@@ -285,6 +321,14 @@ mod tests {
 
         let refstp = |ref_count| TransformationStep::Ref(ref_count);
         let fldstp = |field_name: &str| TransformationStep::Field(field_name.into());
+        let flsstp = |field_names: &[&str]| TransformationStep::Fields(
+            field_names
+                .into_iter()
+                .copied()
+                .map(VarName::from)
+                .collect::<Vec<_>>()
+                .into_boxed_slice()
+        );
 
         assert_eq!(comp("i32", "i32"), Some((vec![], vec![])));
         assert_eq!(comp("i32", "i64"), None);
@@ -356,6 +400,16 @@ mod tests {
             comp("{+y: {+x: {i32, i64}}}", "&{T, i64}"), 
             Some((vec![Type::i(32)], vec![fldstp("y"), fldstp("x"), refstp(1)]))
         );
+
+        assert_eq!(
+            comp("{+x: i32, +y: i64}", "{+x: i32, +y: i64}"), 
+            Some((vec![], vec![]))
+        );
+        assert_eq!(
+            comp("{+x: i32, +y: i64, z: u32}", "{+x: i32, +y: i64}"), 
+            Some((vec![], vec![flsstp(&["x", "y"])]))
+        );
+        assert_eq!(comp("{+x: i32, y: i64, z: u32}", "{+x: i32, +y: i64}"), None);
         
         Ok(())
     }

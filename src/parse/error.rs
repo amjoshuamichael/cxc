@@ -20,7 +20,7 @@ impl Errable for Expr {
 }
 
 impl Errable for TypeSpec {
-    fn err() -> Self { TypeSpec::Type(Type::unknown()) }
+    fn err() -> Self { TypeSpec::Unknown }
 }
 
 impl Errable for VarDecl {

@@ -2,7 +2,7 @@ use crate::{
     hlr::hlr_data::FuncRep,
     lex::VarName,
     parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
-    Type, FuncQuery,
+    Type, FuncQuery, typ::spec_from_type::type_to_type_spec,
 };
 
 use super::{ExprID, HNodeData};
@@ -290,7 +290,7 @@ impl<T: NodeDataGen> NodeDataGen for MemberGen<T> {
         let object_type = hlr.tree.get(object).ret_type();
         let member_type = 
             hlr.get_type_spec(&TypeSpec::StructMember(
-                    Box::new(object_type.into()),
+                    Box::new(type_to_type_spec(object_type)),
                     self.field.clone()
                 ))
                 .unwrap();
@@ -378,7 +378,7 @@ impl<T: NodeDataGen> NodeDataGen for DerefGen<T> {
         let space = hlr.tree.make_one_space(parent);
 
         let object = self.object.add_to_expr_tree(hlr, space);
-        let obj_typ = dbg!(hlr.tree.get(object)).ret_type();
+        let obj_typ = hlr.tree.get(object).ret_type();
         let obj_typ_deref = obj_typ.get_deref().unwrap();
 
         hlr.tree.replace(

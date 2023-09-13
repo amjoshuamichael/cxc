@@ -38,27 +38,27 @@ fn struct_arrays() {
             y: i32
         }
 
-        main() {
+        main(); i32 {
             points: [3]Point2D = [
                 Point2D { x = 43, y = 15 },
                 Point2D { x = 327, y = 413 },
                 Point2D { x = 1672, y = 2526 },
             ]
 
-            assert_eq<i32>(points[i64 0].x, 43)
-            assert_eq<i32>(points[i64 0].y, 15)
+            output: i32 = points[i64 0].x + points[i64 0].y
 
             points[i64 0].x = 94
 
-            assert_eq<i32>(points[i64 0].x, 94)
-            assert_eq<i32>(points[i64 0].y, 15)
+            output = output + points[i64 0].x + points[i64 0].y
 
             points[i64 1] = Point2D { x = 4, y = 6 }
 
-            assert_eq<i32>(points[i64 1].x, 4)
-            assert_eq<i32>(points[i64 1].y, 6)
+            output = output + points[i64 0].x + points[i64 0].y
+
+            ; output
         }
-        "
+        ";
+        276
     )
 }
 

@@ -77,6 +77,19 @@ impl IsBackend for CraneliftBackend {
     fn begin_compilation_round(&mut self) {
         #[cfg(feature = "backend-debug")]
         println!("---beginning compilation round---");
+        println!("---beginning compilation round---");
+
+        self.module = make_proper_module(&*self.isa);
+
+        for (id, ClFunctionData { ctx, name, cl_func_id, .. }) in self.cl_function_data.iter_mut() {
+            let new_id = self.module.declare_function(
+                &*name, 
+                Linkage::Local, 
+                &ctx.func.signature,
+            ).unwrap();
+            self.module.define_function(new_id, ctx).unwrap();
+            *cl_func_id = new_id;
+        }
     }
 
     fn register_function(&mut self, func_id: FuncId, func_info: &ProcessedFuncInfo) {

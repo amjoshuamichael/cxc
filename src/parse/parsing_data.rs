@@ -213,7 +213,7 @@ impl FuncCode {
     pub fn from_expr(code: Expr) -> Self {
         Self {
             name: VarName::None,
-            ret_type: Type::unknown().into(),
+            ret_type: TypeSpec::Unknown,
             args: Vec::new(),
             generic_count: 0,
             code,

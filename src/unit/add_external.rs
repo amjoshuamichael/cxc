@@ -1,5 +1,7 @@
 use std::{collections::HashMap, iter::once};
 
+use indexmap::IndexMap;
+
 use crate::{
     FuncType, Type, TypeEnum,
     TypeRelation, FuncQuery, Unit, XcReflect, parse::{FuncCode, TypeSpec, VarDecl, Expr}, VarName, typ::spec_from_type::type_to_type_spec,
@@ -115,7 +117,7 @@ impl Unit {
         });
 
         let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {
-            specified_dependencies: HashMap::new(),
+            specified_dependencies: IndexMap::new(),
             name: name.into(),
             relation: ext_add.relation,
             generics: ext_add.generics,

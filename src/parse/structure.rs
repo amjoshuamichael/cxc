@@ -28,14 +28,13 @@ pub enum TypeSpec {
     ArrayElem(Box<TypeSpec>),
     #[default]
     Void,
-    Type(Type),
+    Unknown,
     Me,
 }
 
 impl TypeSpec {
     pub fn get_ref(self) -> TypeSpec { TypeSpec::Ref(Box::new(self)) }
     pub fn get_deref(self) -> TypeSpec { TypeSpec::Deref(Box::new(self)) }
-    pub fn unknown() -> TypeSpec { TypeSpec::Type(Type::unknown()) }
 }
 
 impl From<&str> for TypeSpec {

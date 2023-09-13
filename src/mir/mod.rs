@@ -10,7 +10,7 @@ mod remove_post_return_statements;
 use remove_post_return_statements::remove_post_return_statements;
 
 pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
-    #[cfg(feature = "xc-debug")]
+    #[cfg(feature = "mir-debug")]
     println!("--mir type: {:?}--", &hlr.func_type);
 
     let mut mir = MIR { 
@@ -28,7 +28,7 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
 
     remove_post_return_statements(&mut mir);
 
-    #[cfg(feature = "xc-debug")]
+    #[cfg(feature = "mir-debug")]
     {
         for (l, line) in mir.lines.iter().enumerate() {
             // print the index with three digits of space

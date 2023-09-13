@@ -260,10 +260,6 @@ impl Type {
     }
 }
 
-impl From<Type> for TypeSpec {
-    fn from(typ: Type) -> TypeSpec { TypeSpec::Type(typ) }
-}
-
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Clone, Ord, XcReflect)]
 #[xc_opaque]
 pub struct TypeData {

@@ -15,7 +15,7 @@ fn hot_reload_one() {
 
 #[test]
 #[serial]
-fn hot_reload_many() {
+fn hot_reload_many_1() {
     let mut unit = Unit::new();
 
     unit.push_script("the_best_num(); i32 { ; 41 }").unwrap();
@@ -141,7 +141,7 @@ fn get_fn_by_ptr() {
 
 #[test]
 #[serial]
-fn hot_reload_many_times() {
+fn hot_reload_many_2() {
     let mut unit = Unit::new();
     unit.push_script("the_best_num(); i32 { ; 200 } ").unwrap();
     let cached_func = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();

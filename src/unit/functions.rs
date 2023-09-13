@@ -73,7 +73,7 @@ impl CompData {
                 },
                 VarDecl {
                     name: VarName::None,
-                    type_spec: Type::u(64).into(),
+                    type_spec: TypeSpec::UInt(64),
                 },
             ],
             generic_count: 1,
@@ -96,7 +96,7 @@ impl CompData {
                 },
                 VarDecl {
                     name: VarName::None,
-                    type_spec: Type::u(64).into(),
+                    type_spec: TypeSpec::UInt(64),
                 },
             ],
             generic_count: 1,
@@ -107,7 +107,7 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("size_of"),
-            ret_type: Type::u(64).into(),
+            ret_type: TypeSpec::UInt(64),
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),
@@ -117,7 +117,7 @@ impl CompData {
 
         out.insert_intrinsic(FuncCode {
             name: VarName::from("alignment_of"),
-            ret_type: Type::i(64).into(),
+            ret_type: TypeSpec::UInt(64),
             args: Vec::new(),
             generic_count: 1,
             code: Expr::Block(Vec::new()),

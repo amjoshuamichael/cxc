@@ -1,11 +1,18 @@
-Slice<T> = {
-    ptr: &T,
-    len: u64, # TODO: usize
-}
+<T> { +ptr: &T, +len: u64 }:. {
+    get(index: u64); T {
+        ptr: &T = self.ptr.ptr_add(index)
+        ; *ptr
+    }
 
-<T> Slice<T>:.slice(range: Range<u64>); Me {
-    ; Me {
-        ptr = self.ptr.ptr_add(range.start),
-        len = range.end - range.start,
+    get_ref(index: u64); &T {
+        ptr: &T = self.ptr.ptr_add(index)
+        ; ptr
+    }
+
+    slice(range: Range<u64>); Me {
+        ; Me {
+            ptr = self.ptr.ptr_add(range.start),
+            len = range.end - range.start,
+        }
     }
 }

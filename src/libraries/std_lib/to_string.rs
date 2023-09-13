@@ -5,7 +5,7 @@ use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDe
 use crate::typ::{ArrayType, StructType, Field};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
-use crate::{ExternalFuncAdd, TypeEnum, Unit};
+use crate::{ExternalFuncAdd, TypeEnum, Unit, typ::spec_from_type::type_to_type_spec};
 
 use crate::libraries::Library;
 
@@ -58,6 +58,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
     let typ = typ.complete_deref().get_ref();
 
     let string_type = comp_data.get_by_name(&"String".into()).unwrap();
+    let string_spec = TypeSpec::Named("String".into());
 
     let to_string = Expr::ident("to_string");
     let input_var = Expr::ident("input");
@@ -82,7 +83,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let make_var = Expr::SetVar(
                 VarDecl {
                     name: output_var,
-                    type_spec: string_type.into(),
+                    type_spec: string_spec.clone(),
                 },
                 Expr::string(&*prefix),
             );
@@ -143,7 +144,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             let make_var = Expr::SetVar(
                 VarDecl {
                     name: output_var,
-                    type_spec: string_type.into(),
+                    type_spec: string_spec.clone(),
                 },
                 Expr::string("["),
             );
@@ -210,11 +211,11 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         ret_type: TypeSpec::Named("String".into()),
         args: vec![VarDecl {
             name: VarName::from("input"),
-            type_spec: typ.clone().into(),
+            type_spec: type_to_type_spec(typ.clone()),
         }],
         generic_count: 0,
         code: expr,
-        relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
+        relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
     })
 }

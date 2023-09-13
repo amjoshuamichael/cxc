@@ -207,7 +207,7 @@ impl CompData {
                 base.clone()
             },
             TypeSpec::Void => Type::void(),
-            TypeSpec::Type(typ) => typ.clone(),
+            TypeSpec::Unknown => Type::unknown(),
             TypeSpec::Me => {
                 if let Some(me) = generics.get_self() {
                     me

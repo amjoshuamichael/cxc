@@ -32,6 +32,7 @@ fn big_global() {
     let mut unit = Unit::new();
 
     let mut large_value = Numbers5::default();
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
     unit.push_script(
@@ -78,6 +79,7 @@ fn comp_script() {
 
     unit.add_lib(StdLib);
     let mut large_value = Numbers5::default();
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
     unit.push_script(
@@ -105,6 +107,7 @@ fn first_class_void() {
 
     let mut large_value = Numbers5::default();
     large_value.a = 9;
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
     unit.push_script(
@@ -139,6 +142,7 @@ fn get_fn_by_ptr() {
     unit.add_lib(StdLib);
 
     let mut functions = Vec::<usize>::new();
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("functions".into(), &mut functions as *mut _);
 
     unit.push_script(

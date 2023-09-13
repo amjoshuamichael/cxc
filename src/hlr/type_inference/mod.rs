@@ -1,6 +1,6 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
-    parse::{InitOpts, Opcode, TypeSpec, VarDecl},
+    parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation},
     Type, FuncQuery, VarName, CompData, errors::TResult, typ::could_come_from::Transformation
 };
 use indexmap::IndexMap;
@@ -867,13 +867,27 @@ fn fill_in_call(
             hlr.comp_data.query_for_code_with_transformation(func_query.code_query()) {
             (&hlr.comp_data.func_code[code_id], trans)
         } else if let Some(code) = hlr.comp_data.get_derived_code(func_query.code_query()) {
+            let trans = if let TypeSpecRelation::MethodOf(ref relation) = &code.relation {
+                Some(
+                    func_query
+                        .relation
+                        .inner_type()
+                        .unwrap()
+                        .can_transform_to(relation.clone())
+                        .unwrap()
+                )
+            } else {
+                None
+            };
+
             derive_code_storage = Some(code);
-            (derive_code_storage.as_ref().unwrap(), None)
+            
+            (derive_code_storage.as_ref().unwrap(), trans)
         } else {
             return Ok(false);
         };
 
-    if func_query.generics.len() == code.generic_count {
+    if func_query.generics.len() >= code.generic_count {
         // we don't have to infer any generics.
         hlr.specified_dependencies.insert(func_query.code_query().to_owned_fcq());
 

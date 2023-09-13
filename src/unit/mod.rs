@@ -18,6 +18,7 @@ use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
 pub use add_external::ExternalFuncAdd;
 pub use functions::{FuncQuery, FuncCodeQuery, OwnedFuncCodeQuery};
+use indexmap::IndexMap;
 pub use reflect::XcReflect;
 use slotmap::SecondaryMap;
 use slotmap::SlotMap;
@@ -66,7 +67,7 @@ pub struct CompData {
 
 #[derive(Debug, Clone)]
 pub struct ProcessedFuncInfo {
-    pub specified_dependencies: HashMap<OwnedFuncCodeQuery, Option<FuncCodeId>>,
+    pub specified_dependencies: IndexMap<OwnedFuncCodeQuery, Option<FuncCodeId>>,
     pub name: VarName,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,

@@ -158,7 +158,16 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
 #[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
-    for call_id in hlr.tree.ids_in_order().drain(..).rev() {
+
+    let calls = hlr
+        .tree
+        .ids_in_order()
+        .into_iter()
+        .rev()
+        .filter(|id| matches!(hlr.tree.get_ref(*id), HNodeData::Call { .. }))
+        .collect::<Vec<_>>();
+
+    for call_id in calls {
         let data = hlr.tree.get(call_id);
 
         if let HNodeData::Call { ref query, .. } = data 
@@ -228,15 +237,22 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let HNodeData::Call { ref mut sret, ref mut ret_type, .. } = 
         &mut new_data else { unreachable!(); };
 
-    let call_var = hlr.add_variable("_call_out", ret_type);
+    let parent = hlr.tree.parent(og_call_id);
 
-    let new_arg = hlr.insert_quick(og_call_id, get_ref(call_var.clone()));
+    if let HNodeData::Set { ref lhs, .. } = hlr.tree.get(parent) {
+        let new_sret = hlr.insert_quick(og_call_id, get_ref(*lhs));
+        *sret = Some(new_sret);
+        *ret_type = Type::void();
+        hlr.replace_quick(parent, new_data);
+    } else {
+        let call_var = hlr.add_variable("_call_out", ret_type);
 
-    *sret = Some(new_arg);
+        let new_arg = hlr.insert_quick(og_call_id, get_ref(call_var.clone()));
 
-    *ret_type = Type::void();
-    hlr.insert_statement_before(og_call_id, new_data);
-    hlr.replace_quick(og_call_id, call_var);
+        *sret = Some(new_arg);
 
-
+        *ret_type = Type::void();
+        hlr.insert_statement_before(og_call_id, new_data);
+        hlr.replace_quick(og_call_id, call_var);
+    }
 }

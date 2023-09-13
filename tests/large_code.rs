@@ -1,6 +1,6 @@
 mod test_utils;
 
-use cxc::library::StdLib;
+use cxc::{library::StdLib, Unit, ExternalFuncAdd, Type};
 use test_utils::{xc_test, TwoOf};
 
 #[test]
@@ -197,4 +197,23 @@ fn push_string() {
         "#;
         String::from("transformers was directed by michael bay")
     )
+}
+
+#[test]
+fn extern_and_local() {
+    let mut unit = Unit::new();
+
+    fn twenty_nine() -> i32 { 29 }
+
+    unit.push_script("fourty_three(); i32 { ; 43 }").unwrap();
+    unit.add_rust_func_explicit(
+        "twenty_nine", 
+        twenty_nine as *const usize,
+        ExternalFuncAdd {
+            ret_type: Type::i(32),
+            ..ExternalFuncAdd::empty()
+        },
+    );
+    unit.push_script("sum(); i32 { ; fourty_three() + twenty_nine() }").unwrap();
+    unit.get_fn("fourty_three").unwrap().downcast::<(), i32>()();
 }

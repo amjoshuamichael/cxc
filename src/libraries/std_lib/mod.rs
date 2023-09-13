@@ -31,7 +31,6 @@ impl Library for StdLib {
         // TODO: this is a hack
         unit.push_script("str = u8").unwrap();
 
-        unit.push_script(include_str!("drop.cxc")).unwrap();
         unit.add_lib(DropLib);
 
         unit.push_script(include_str!("ptr.cxc")).unwrap();

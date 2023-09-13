@@ -3,7 +3,7 @@ use crate::{
     libraries::Library,
     parse::{Expr, FuncCode, InitOpts, TypeSpec, TypeSpecRelation},
     unit::CompData,
-    ExternalFuncAdd, Type, TypeEnum, TypeRelation, typ::Field,
+    ExternalFuncAdd, Type, TypeEnum, TypeRelation, typ::{Field, spec_from_type::type_to_type_spec},
 };
 
 pub(super) struct DefaultLib;
@@ -28,6 +28,7 @@ impl Library for DefaultLib {
 }
 
 fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
+    let type_spec = type_to_type_spec(typ.clone());
     match typ.as_type_enum() {
         TypeEnum::Struct(struct_type) => {
             let mut fields = Vec::<(VarName, Expr)>::new();
@@ -35,7 +36,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
             for Field { name: field_name, typ: field_type, .. } in &struct_type.fields {
                 let other_default_call = Expr::Call {
                     func: Box::new(Expr::StaticMethodPath(
-                        field_type.clone().into(),
+                        type_to_type_spec(field_type.clone()),
                         "default".into(),
                     )),
                     generics: Vec::new(),
@@ -47,15 +48,15 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
             }
 
             let struct_lit = Expr::TypedValue(
-                typ.clone().into(),
+                type_spec.clone(),
                 Box::new(Expr::Struct(fields, InitOpts::NoFill)),
             );
 
-            let relation = TypeSpecRelation::Static(TypeSpec::Type(typ.clone()));
+            let relation = TypeSpecRelation::Static(type_spec.clone());
 
             Some(FuncCode {
                 name: VarName::from("default"),
-                ret_type: typ.into(),
+                ret_type: type_spec.clone(),
                 args: Vec::new(),
                 generic_count: 0,
                 code: struct_lit.wrap_in_block(),

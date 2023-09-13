@@ -234,7 +234,7 @@ fn parse_var_decl(lexer: &mut FuncParseContext) -> ParseResult<VarDecl> {
 
             parse_type_spec(lexer)?
         },
-        _ => TypeSpec::unknown(),
+        _ => TypeSpec::Unknown,
     };
 
     Ok(VarDecl {
@@ -257,7 +257,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             let var = match lexer.next_tok()? {
                 Tok::Assignment => VarDecl {
                     name: var_name,
-                    type_spec: TypeSpec::Type(Type::unknown()),
+                    type_spec: TypeSpec::Unknown,
                 },
                 Tok::Colon => {
                     let type_spec =

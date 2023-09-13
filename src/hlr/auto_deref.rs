@@ -1,9 +1,9 @@
 use crate::{
-    parse::{Opcode, TypeSpec},
-    errors::CResultMany, typ::could_come_from::TransformationStep,
+    parse::{Opcode, TypeSpec, InitOpts},
+    errors::CResultMany, typ::{could_come_from::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum,
 };
 
-use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen}, hlr_data::FuncRep};
+use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen}, hlr_data::FuncRep};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
@@ -14,7 +14,10 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
             let object_type = hlr.tree.get(*object).ret_type();
 
             let report = hlr.comp_data.get_spec_report(
-                &TypeSpec::StructMember(Box::new(object_type.into()), field.clone()), 
+                &TypeSpec::StructMember(
+                    Box::new(type_to_type_spec(object_type)),
+                    field.clone(),
+                ), 
                 &()
             )?;
 
@@ -75,6 +78,40 @@ pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
                                 field,
                             },
                         );
+                    },
+                    TransformationStep::Fields(fields) => {
+                        let struct_type = hlr.tree.get_ref(*hs).ret_type();
+                        let TypeEnum::Struct(struct_type) = struct_type.as_type_enum() 
+                            else { unreachable!() };
+
+                        let mut field_nodes = Vec::<(VarName, Box<dyn NodeDataGen>)>::new();
+                        let mut field_types = Vec::<Field>::new();
+
+                        for field in fields.into_iter() {
+                            field_nodes.push((
+                                field.clone(),
+                                Box::new(MemberGen {
+                                    object: *hs,
+                                    field: field.clone(),
+                                }),
+                            ));
+
+                            field_types.push(Field {
+                                inherited: false,
+                                typ: struct_type.get_field_type(field).unwrap(),
+                                name: field.clone(),
+                            });
+                        }
+
+                        *hs = hlr.insert_quick(
+                            transform_parent,
+                            StructLitGen {
+                                var_type: Type::new_struct(field_types),
+                                fields: field_nodes,
+                                initialize: InitOpts::NoFill,
+                            }
+                        );
+
                     }
                 }
             }
