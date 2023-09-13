@@ -2,6 +2,7 @@ use crate::{Type, errors::{UErr, CResult}};
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn add_void_return_if_ret_type_is_void(hlr: &mut FuncRep) -> CResult<()> {
     if hlr.ret_type.is_void() {
         let new_return = hlr.tree.insert(

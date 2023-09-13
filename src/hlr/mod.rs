@@ -1,11 +1,10 @@
 mod add_void_return;
 mod active_initialization;
-mod auto_deref;
+mod do_transformations;
 mod remove_redundant_derefs;
 mod op_overloading;
 mod struct_literals;
 mod array_literals;
-mod variant_literals;
 mod large_returns;
 mod large_args;
 mod type_inference;
@@ -18,7 +17,7 @@ pub mod expr_tree;
 use crate::errors::CResultMany;
 use crate::hlr::add_void_return::add_void_return_if_ret_type_is_void;
 use crate::parse::*;
-use crate::unit::{CompData, UniqueFuncInfo};
+use crate::unit::{CompData, FuncQuery, ProcessedFuncInfo};
 use type_inference::infer_types;
 
 pub mod prelude {
@@ -30,23 +29,23 @@ pub mod prelude {
 use prelude::*;
 
 use self::active_initialization::active_initialization;
-use self::auto_deref::auto_deref;
+use self::do_transformations::do_transformations;
 use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
 use self::array_literals::array_literals;
-use self::variant_literals::variant_literals;
-use self::hlr_data_output::FuncOutput;
+use self::hlr_data_output::HLR;
 use self::large_returns::large_returns;
 use self::large_set_to_memcpy::large_set_to_memcpy;
 use self::large_args::large_args;
 use self::add_drops::add_drops;
 use self::remove_redundant_derefs::remove_redundant_derefs;
 
+
 pub fn hlr(
-    info: UniqueFuncInfo,
+    info: FuncQuery,
     comp_data: &CompData,
-    code: FuncCode,
-) -> CResultMany<FuncOutput> {
+    code: &FuncCode,
+) -> CResultMany<(HLR, ProcessedFuncInfo)> {
     #[cfg(feature = "xc-debug")]
     {
         println!();
@@ -60,10 +59,14 @@ pub fn hlr(
     #[cfg(feature = "xc-debug")]
     println!("{}", &output.tree.to_string());
 
+    // the following hlr passes are nescessary, not just optimization
+    //
+    // each hlr pass is marked with #[cfg_attr(debug_assertions, inline(never))] so we can 
+    // see the individual perf impact of each pass when using a flamegraph
+
     infer_types(&mut output);
-    auto_deref(&mut output)?;
+    do_transformations(&mut output)?;
     op_overloading(&mut output);
-    variant_literals(&mut output);
     active_initialization(&mut output);
     struct_literals(&mut output);
     array_literals(&mut output);

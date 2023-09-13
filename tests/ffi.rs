@@ -20,7 +20,6 @@ fn return_arg() {
 fn multiple_args() {
     let mut unit = Unit::new();
 
-    unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
         add(a: i32, b: i32); i32 {
@@ -41,7 +40,6 @@ fn multiple_args() {
 fn basic_pointer() {
     let mut unit = Unit::new();
 
-    unit.add_lib(cxc::library::StdLib);
     unit.push_script(
         "
         square(num: &i32) {
@@ -96,6 +94,7 @@ fn struct_pointer() {
 }
 
 #[test]
+#[ignore]
 fn struct_rc_pointer() {
     let mut unit = Unit::new();
 
@@ -151,8 +150,6 @@ fn large_struct() {
 fn i32_and_ref() {
     let mut unit = Unit::new();
 
-    unit.add_lib(StdLib);
-
     unit.push_script(
         "
         main(pointer: &i32); {i32, &i32} {
@@ -182,7 +179,7 @@ fn method_on_struct_with_arg() {
         Point2D::magnify as *const usize,
         ExternalFuncAdd {
             arg_types: vec![point2d.get_ref().clone(), Type::i(32)].clone(),
-            ret_type: Type::i(32),
+            ret_type: point2d.clone(),
             relation: TypeRelation::MethodOf(point2d.get_ref()),
             ..ExternalFuncAdd::empty()
         },

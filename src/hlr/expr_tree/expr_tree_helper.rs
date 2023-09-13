@@ -1,6 +1,6 @@
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex};
-use crate::{Type, UniqueFuncInfo, VarName};
+use crate::{Type, FuncQuery, VarName};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
 use super::{ExprNode, HNodeData::*};
@@ -51,6 +51,7 @@ impl ExprTree {
                     .chain(ids_of(tree, r).drain(..))
                     .collect(),
                 UnarOp { hs: one, .. }
+                | Transform { hs: one, .. }
                 | Member { object: one, .. } => ids_of(tree, one),
                 IfThenElse { i, t, e, .. } => ids_of(tree, i)
                     .drain(..)
@@ -70,6 +71,10 @@ impl ExprTree {
         }
 
         ids_of(self, self.root)
+    }
+    
+    pub fn ids_unordered(&self) -> slotmap::basic::Keys<ExprID, ExprNode> {
+        self.nodes.keys()
     }
 
     pub fn insert(&mut self, parent: ExprID, data: HNodeData) -> ExprID {
@@ -124,44 +129,42 @@ impl ExprTree {
         new_space
     }
 
-    pub fn unique_func_info_of_call(&self, call: &HNodeData) -> UniqueFuncInfo {
-        let HNodeData::Call { f, generics, relation, .. } = call.clone()
+    // TODO: remove
+    pub fn func_query_of_call(&self, call: &HNodeData) -> FuncQuery {
+        let HNodeData::Call { ref query, .. } = &call
             else { panic!() };
 
-        UniqueFuncInfo {
-            name: f,
-            relation,
-            generics,
-            ..Default::default()
-        }
+        query.clone()
     }
+
+    pub fn count(&self) -> usize { self.nodes.len() }
 }
 
 impl<'a> FuncRep<'a> {
     pub fn modify_many(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         self.modify_many_inner(self.tree.ids_in_order().drain(..), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_rev(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), |a, b, c| { modifier(a, b, c) })
     }
 
     pub fn modify_many_infallible(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep),
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep),
     ) {
         self.modify_many(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
 
     pub fn modify_many_infallible_rev(
         &mut self,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep),
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep),
     ) {
         self.modify_many_rev(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
     }
@@ -169,7 +172,7 @@ impl<'a> FuncRep<'a> {
     fn modify_many_inner(
         &mut self,
         id_iterator: impl Iterator<Item = ExprID>,
-        modifier: impl Fn(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         for index in id_iterator {
             let mut data_copy = self.tree.get(index);

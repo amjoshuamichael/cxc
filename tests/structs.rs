@@ -1,8 +1,6 @@
 mod test_utils;
 
-use std::rc::Rc;
-
-use cxc::{library::StdLib, Unit};
+use cxc::library::StdLib;
 use test_utils::{xc_test, Numbers5, Strings4};
 
 #[test]
@@ -139,83 +137,6 @@ fn methods() {
 }
 
 #[test]
-fn auto_deref_member() {
-    xc_test!(
-        use StdLib;
-        "
-        MyPoint = { x: f32, y: f32 }
-
-        main(); f32 {
-            x: {&&&MyPoint}.x = 4.0
-            y: {&&Rc<MyPoint>}.x = 4.0
-            z: {&&Rc<&MyPoint>}.x = 4.0
-
-            ; x + y + z
-        }
-        ";
-        12.0f32
-    )
-}
-
-#[test]
-fn auto_deref_method_1() {
-    xc_test!(
-        use StdLib;
-        r#"
-        MyPoint = { x: f32, y: f32 }
-
-        &MyPoint:.sqr_hypotenuse(); f32 {
-            ; self.x * self.x + self.y * self.y
-        }
-
-        main(); f32 {
-            rc_point: Rc<MyPoint> = Rc<MyPoint>:new(MyPoint { x = 4.0, y = 3.0 })
-            sqr_hyp: f32 = rc_point.sqr_hypotenuse()
-            ; sqr_hyp
-        }
-        "#;
-        25.0f32
-    )
-}
-
-#[derive(Debug, PartialEq)]
-struct MyPoint {
-    x: f32,
-    y: f32,
-}
-
-#[test]
-fn auto_deref_method_2() {
-    let mut unit = Unit::new();
-    unit.add_lib(StdLib);
-
-    unit.push_script(
-        r#"
-        MyPoint = { x: f32, y: f32 }
-
-        &MyPoint:.sqr_hypotenuse(); f32 {
-            ; self.x * self.x + self.y * self.y
-        }
-
-        main(rc_point: Rc<MyPoint>); f32 {
-            sqr_hypotenuse: f32 = rc_point.sqr_hypotenuse()
-
-            ; sqr_hypotenuse
-        }
-        "#,
-    )
-    .unwrap();
-
-    let func = unit
-        .get_fn("main")
-        .unwrap()
-        .downcast::<(Rc<MyPoint>,), f32>();
-
-    let rc = Rc::new(MyPoint { x: 4.0, y: 3.0 });
-    assert_eq!(func(rc), 25.0);
-}
-
-#[test]
 fn active_initialize_struct_ints() {
     xc_test!(
         use StdLib;
@@ -254,37 +175,6 @@ fn active_initialize_struct_strings() {
     );
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-struct ThisUnion {
-    a: i32,
-    b: i32,
-    c: f32,
-    d: i32,
-    e: f32,
-}
-
-#[test]
-fn unions() {
-    xc_test!(
-        "
-        Num2 = { a: i32, b: i32 }
-        Num3<T> = { c: T, d: i32, e: T }
-        Union = Num2 + Num3<f32>
-
-        main(); Union {
-            ; Union { a = 10, b = 20, e = 90.9, d = 30, c = 32.7 }
-        }
-        ";
-        ThisUnion {
-            a: 10,
-            b: 20,
-            e: 90.9,
-            d: 30,
-            c: 32.7,
-        }
-    );
-}
-
 #[test]
 fn deref() {
     xc_test!(
@@ -293,10 +183,10 @@ fn deref() {
         NumRef = &Num
         NumAgain = *NumRef
 
-        main() {
-            x: Num = 5
-            y: NumRef = &x
-            z: NumAgain = *y
+        main(); NumAgain {
+            x: Num = cast<i32, Num>(5)
+            y: NumRef = cast<&Num, NumRef>(&x)
+            z: NumAgain = cast<NumRef, NumAgain>(*y)
             ; z
         }
         ";
@@ -310,7 +200,7 @@ fn field_of_struct_pointer() {
         "
         Point2D = { x: i32, y: i32 }
 
-        main() {
+        main(); i32 {
             point: Point2D = { x = 5, y = 10 }
             point_ref: &Point2D = &point
 

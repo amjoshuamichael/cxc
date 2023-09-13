@@ -2,26 +2,19 @@ use crate::parse::Opcode;
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn remove_redundant_derefs(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |_, ref_data, hlr| {
-            let HNodeData::UnarOp { op, hs, .. } = &ref_data else { return };
-            match op {
-                Opcode::Deref => {
-                    let HNodeData::UnarOp { op, hs, .. } = &hlr.tree.get(*hs) else { return };
+            use Opcode::*;
 
-                    if *op == Opcode::Ref {
-                        *ref_data = hlr.tree.get(*hs);
-                    };
-                }
-                Opcode::Ref => {
-                    let HNodeData::UnarOp { op, hs, .. } = &hlr.tree.get(*hs) else { return };
+            let HNodeData::UnarOp { op: first_op, hs: first_hs, .. } = 
+                &ref_data else { return };
+            let HNodeData::UnarOp { op: second_op, hs: second_hs, .. } = 
+                &hlr.tree.get(*first_hs) else { return };
 
-                    if *op == Opcode::Deref {
-                        *ref_data = hlr.tree.get(*hs);
-                    };
-                }
-                _ => {}
+            if matches!((*second_op, *first_op), (Deref, Ref) | (Ref, Deref)) {
+                *ref_data = hlr.tree.get(*second_hs);
             }
         }
     );

@@ -1,11 +1,12 @@
+use std::collections::{HashSet};
 
 use super::expr_tree::*;
-use super::hlr_data_output::FuncOutput;
+use super::hlr_data_output::HLR;
 use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::{parse::*, TypeEnum};
-use crate::unit::{CompData, UniqueFuncInfo};
+use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId};
 use crate::Type;
 use indexmap::IndexMap;
 
@@ -13,11 +14,12 @@ use indexmap::IndexMap;
 pub struct FuncRep<'a> {
     pub tree: ExprTree,
     pub comp_data: &'a CompData,
-    pub info: UniqueFuncInfo,
+    pub name: VarName,
+    pub relation: TypeRelation,
+    pub generics: Vec<Type>,
     pub ret_type: Type,
-
-    // used to find where variables are declared.
     pub variables: Variables,
+    pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
 }
 
 pub type Variables = IndexMap<VarName, VariableInfo>;
@@ -47,22 +49,33 @@ impl VariableInfo {
 
 impl<'a> FuncRep<'a> {
     pub fn from_code(
-        code: FuncCode,
+        code: &FuncCode,
         comp_data: &'a CompData,
-        info: UniqueFuncInfo,
+        info: FuncQuery, // TODO
     ) -> CResult<Self> {
         let mut new = FuncRep {
-            tree: ExprTree::default(),
+            name: code.name.clone(),
+            relation: match code.relation.clone() {
+                TypeSpecRelation::MethodOf(typ) => {
+                    TypeRelation::MethodOf(comp_data.get_spec(&typ, &info)?)
+                },
+                TypeSpecRelation::Static(typ) => {
+                    TypeRelation::Static(comp_data.get_spec(&typ, &info)?)
+                },
+                TypeSpecRelation::Unrelated => TypeRelation::Unrelated,
+            },
             ret_type: comp_data
                 .get_spec(&code.ret_type, &info)
                 .unwrap(),
+            generics: info.generics,
+            tree: ExprTree::default(),
             comp_data,
-            info,
             variables: IndexMap::new(),
+            specified_dependencies: HashSet::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
-            let typ = new.comp_data.get_spec(&arg.type_spec, &new.info)?;
+            let typ = new.get_type_spec(&arg.type_spec)?;
 
             new.variables.insert(
                 arg.name.clone(),
@@ -77,7 +90,7 @@ impl<'a> FuncRep<'a> {
         for expr in code.code.into_iter() {
             let (var_name, typ) = match expr {
                 Expr::SetVar(VarDecl { name, type_spec }, _) => 
-                    (name, comp_data.get_spec(type_spec, &new.info)?),
+                    (name, new.get_type_spec(type_spec)?),
                 _ => continue,
             };
 
@@ -90,7 +103,7 @@ impl<'a> FuncRep<'a> {
             }
         }
 
-        let new_root = new.add_expr(code.code, new.tree.root);
+        let new_root = new.add_expr(&code.code, new.tree.root);
         new.tree.root = new_root;
 
         Ok(new)
@@ -129,10 +142,10 @@ impl<'a> FuncRep<'a> {
     pub fn arg_count(&mut self) -> u32 { self.args().len() as u32 }
 
     pub fn get_type_spec(&self, alias: &TypeSpec) -> TResult<Type> {
-        self.comp_data.get_spec(alias, &self.info)
+        self.comp_data.get_spec(alias, &(&self.generics, &self.relation))
     }
 
-    pub fn output(mut self) -> FuncOutput {
+    pub fn output(mut self) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
         if self.ret_type.return_style() == ReturnStyle::Sret {
@@ -142,32 +155,55 @@ impl<'a> FuncRep<'a> {
         let func_type = self.ret_type.clone().func_with_args(func_arg_types);
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
-        FuncOutput {
-            func_type,
-            arg_names: self.arg_names(),
-            tree: self.tree,
-            data_flow: self.variables,
-            info: self.info,
+        let mut specified_dependencies = 
+            IndexMap::<OwnedFuncCodeQuery, Option<FuncCodeId>>::new();
+
+        for code_query in self.specified_dependencies.drain() {
+            specified_dependencies.insert(code_query, None);
         }
+
+        let mut dependencies = HashSet::<FuncQuery>::new();
+
+        for (_call_id, call_data) in self.tree.iter() {
+            let HNodeData::Call { query, .. } = call_data else { continue };
+            dependencies.insert(query.clone());
+        }
+
+        (
+            HLR {
+                func_type: func_type.clone(),
+                arg_names: self.arg_names(),
+                tree: self.tree,
+                data_flow: self.variables,
+                dependencies,
+            },
+            ProcessedFuncInfo {
+                name: self.name,
+                relation: self.relation,
+                generics: self.generics,
+                specified_dependencies,
+                typ: func_type,
+            }
+        )
     }
 
-    fn add_expr(&mut self, expr: Expr, parent: ExprID) -> ExprID {
+    fn add_expr(&mut self, expr: &Expr, parent: ExprID) -> ExprID {
         match expr {
             Expr::Number(value) => self.tree.insert(
                 parent,
                 HNodeData::Number {
-                    value,
-                    lit_type: Type::i(32),
+                    value: *value,
+                    lit_type: Type::unknown(),
                 },
             ),
             Expr::Float(value) => self.tree.insert(
                 parent,
                 HNodeData::Float {
-                    lit_type: Type::f32(),
-                    value,
+                    value: *value,
+                    lit_type: Type::unknown(),
                 },
             ),
-            Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value }),
+            Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value: *value }),
             Expr::String(value) => {
                 let call_space = self.tree.make_one_space(parent);
                 let ref_space = self.tree.make_one_space(call_space);
@@ -217,10 +253,12 @@ impl<'a> FuncRep<'a> {
 
                 let call_data = HNodeData::Call {
                     ret_type: string_type.clone(),
-                    f: "from_bytes".into(),
                     a: vec![ref_space, len_arg],
-                    generics: Vec::new(),
-                    relation: TypeRelationGeneric::Static(string_type),
+                    query: FuncQuery {
+                        name: "from_bytes".into(),
+                        relation: TypeRelationGeneric::Static(string_type),
+                        generics: vec![arr_type.clone()],
+                    },
                     sret: None,
                 };
 
@@ -228,20 +266,19 @@ impl<'a> FuncRep<'a> {
                 call_space
             },
             Expr::Ident(name) => {
-                let var_type = match self.variables.get(&name) {
+                let var_type = match self.variables.get(name) {
                     Some(variables) => variables.typ.clone(),
-                    None => dbg!(&self
+                    None => self
                         .comp_data
-                        .globals)
+                        .globals
                         .get(&name.clone())
                         .unwrap_or_else(|| {
-                            println!("variables: {:?}", &self.variables); 
-                            panic!("could not find identifier {name}") // TODO: throw error
+                            panic!("could not find identifier {} in {:?}", name, self.variables) // TODO: throw error
                         })
                         .clone(),
                 };
 
-                self.tree.insert(parent, HNodeData::Ident { var_type, name })
+                self.tree.insert(parent, HNodeData::Ident { var_type, name: name.clone() })
             },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
@@ -252,13 +289,13 @@ impl<'a> FuncRep<'a> {
                     space,
                     HNodeData::Ident {
                         var_type: ret_type.clone(),
-                        name: decl.name,
+                        name: decl.name.clone(),
                     },
                 );
 
                 let statement = HNodeData::Set {
                     lhs: ident,
-                    rhs: self.add_expr(*e, space),
+                    rhs: self.add_expr(&**e, space),
                 };
 
                 self.tree.replace(space, statement);
@@ -269,8 +306,8 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_set = HNodeData::Set {
-                    lhs: self.add_expr(*lhs, space),
-                    rhs: self.add_expr(*rhs, space),
+                    lhs: self.add_expr(&**lhs, space),
+                    rhs: self.add_expr(&**rhs, space),
                 };
 
                 self.tree.replace(space, new_set);
@@ -282,8 +319,8 @@ impl<'a> FuncRep<'a> {
 
                 let new_binop = HNodeData::UnarOp {
                     ret_type: Type::unknown(),
-                    op,
-                    hs: self.add_expr(*hs, space),
+                    op: *op,
+                    hs: self.add_expr(&**hs, space),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -294,9 +331,9 @@ impl<'a> FuncRep<'a> {
 
                 let new_binop = HNodeData::BinOp {
                     ret_type: Type::unknown(),
-                    lhs: self.add_expr(*lhs, space),
-                    op,
-                    rhs: self.add_expr(*rhs, space),
+                    lhs: self.add_expr(&**lhs, space),
+                    op: *op,
+                    rhs: self.add_expr(&**rhs, space),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -307,8 +344,8 @@ impl<'a> FuncRep<'a> {
 
                 let new_binop = HNodeData::IfThen {
                     ret_type: Type::void(),
-                    i: self.add_expr(*i, space),
-                    t: self.add_expr(*t, space),
+                    i: self.add_expr(&**i, space),
+                    t: self.add_expr(&**t, space),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -319,9 +356,9 @@ impl<'a> FuncRep<'a> {
 
                 let new_binop = HNodeData::IfThenElse {
                     ret_type: Type::unknown(),
-                    i: self.add_expr(*i, space),
-                    t: self.add_expr(*t, space),
-                    e: self.add_expr(*e, space),
+                    i: self.add_expr(&**i, space),
+                    t: self.add_expr(&**t, space),
+                    e: self.add_expr(&**e, space),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -331,8 +368,8 @@ impl<'a> FuncRep<'a> {
                 let space = self.tree.make_one_space(parent);
 
                 let new_binop = HNodeData::While {
-                    w: self.add_expr(*w, space),
-                    d: self.add_expr(*d, space),
+                    w: self.add_expr(&**w, space),
+                    d: self.add_expr(&**d, space),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -372,10 +409,10 @@ impl<'a> FuncRep<'a> {
                 let generics = generics
                     .iter()
                     .map(|spec| self.get_type_spec(spec).unwrap())
-                    .collect();
+                    .collect::<Vec<_>>();
 
-                let new_data = if let Expr::Ident(ref func_name) = *name {
-                    let relation = if is_method {
+                let new_data = if let Expr::Ident(ref func_name) = &**name {
+                    let relation = if *is_method {
                         TypeRelation::MethodOf(Type::unknown())
                     } else {
                         TypeRelation::Unrelated
@@ -383,25 +420,30 @@ impl<'a> FuncRep<'a> {
 
                     HNodeData::Call {
                         ret_type: Type::unknown(),
-                        f: func_name.clone(),
-                        generics,
+                        query: FuncQuery {
+                            name: func_name.clone(),
+                            generics,
+                            relation,
+                        },
                         a: arg_ids,
-                        relation,
                         sret: None,
                     }
-                } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = *name {
-                    let type_origin = self.get_type_spec(type_spec).unwrap_or(Type::unknown());
+                } else if let Expr::StaticMethodPath(ref type_spec, ref func_name) = 
+                    &**name {
+                    let type_origin = self.get_type_spec(type_spec).unwrap_or_default();
 
                     HNodeData::Call {
                         ret_type: Type::unknown(),
-                        f: func_name.clone(),
-                        generics,
+                        query: FuncQuery {
+                            name: func_name.clone(),
+                            generics: generics.clone(),
+                            relation: TypeRelation::Static(type_origin),
+                        },
                         a: arg_ids,
-                        relation: TypeRelation::Static(type_origin),
                         sret: None,
                     }
                 } else {
-                    let f = self.add_expr(*name, space);
+                    let f = self.add_expr(&**name, space);
                     HNodeData::IndirectCall {
                         ret_type: Type::unknown(),
                         f,
@@ -418,8 +460,8 @@ impl<'a> FuncRep<'a> {
 
                 let new_member = HNodeData::Member {
                     ret_type: Type::unknown(),
-                    object: self.add_expr(*object, space),
-                    field,
+                    object: self.add_expr(&**object, space),
+                    field: field.clone(),
                 };
 
                 self.tree.replace(space, new_member);
@@ -431,13 +473,13 @@ impl<'a> FuncRep<'a> {
                 let mut fields = Vec::new();
 
                 for field in expr_fields {
-                    fields.push((field.0, self.add_expr(field.1, space)));
+                    fields.push((field.0.clone(), self.add_expr(&field.1, space)));
                 }
 
                 let new_struct = HNodeData::StructLit {
                     var_type: Type::unknown(),
                     fields,
-                    initialize,
+                    initialize: *initialize,
                 };
 
                 self.tree.replace(space, new_struct);
@@ -455,7 +497,7 @@ impl<'a> FuncRep<'a> {
                 let new_struct = HNodeData::StructLit {
                     var_type: Type::unknown(),
                     fields,
-                    initialize,
+                    initialize: *initialize,
                 };
 
                 self.tree.replace(space, new_struct);
@@ -466,7 +508,7 @@ impl<'a> FuncRep<'a> {
 
                 let new_return = HNodeData::Return {
                     ret_type: Type::unknown(),
-                    to_return: Some(self.add_expr(*to_return, space)),
+                    to_return: Some(self.add_expr(&**to_return, space)),
                 };
 
                 self.tree.replace(space, new_return);
@@ -484,7 +526,7 @@ impl<'a> FuncRep<'a> {
                 let new_array = HNodeData::ArrayLit {
                     var_type: Type::unknown(),
                     parts,
-                    initialize,
+                    initialize: *initialize,
                 };
 
                 self.tree.replace(space, new_array);
@@ -495,17 +537,17 @@ impl<'a> FuncRep<'a> {
 
                 let new_index = HNodeData::Index {
                     ret_type: Type::unknown(),
-                    object: self.add_expr(*object, space),
-                    index: self.add_expr(*index, space),
+                    object: self.add_expr(&**object, space),
+                    index: self.add_expr(&**index, space),
                 };
 
                 self.tree.replace(space, new_index);
                 space
             },
-            Expr::Enclosed(expr) => self.add_expr(*expr, parent),
+            Expr::Enclosed(expr) => self.add_expr(&**expr, parent),
             Expr::TypedValue(type_spec, expr) => {
                 let typ = self.get_type_spec(&type_spec).unwrap();
-                let expr_id = self.add_expr(*expr, parent);
+                let expr_id = self.add_expr(&**expr, parent);
 
                 let node = self.tree.get_mut(expr_id);
                 *node.ret_type_mut().unwrap() = typ;

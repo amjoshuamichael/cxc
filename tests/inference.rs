@@ -1,3 +1,5 @@
+#![allow(arithmetic_overflow)]
+
 mod test_utils;
 use cxc::library::StdLib;
 use test_utils::xc_test;
@@ -102,13 +104,15 @@ fn hello_world() {
 #[test]
 fn infer_vec_push() {
     xc_test!(
+        use StdLib;
         r#"
         main() {
-            x = Vec<i32>:new()
+            x = Vec<i32>:new<i32>()
             x.push(432)
-            assert_eq(x.get(0), 432)
+            x.get(0)
         }
-        "#
+        "#;
+        432
     )
 }
 
@@ -142,6 +146,7 @@ fn infer_default_struct() {
 #[test]
 fn infer_default_array() {
     xc_test!(
+        use StdLib;
         r#"
         main() {
             x: [4]i32 = [ 90, 43, ++ ]
@@ -150,7 +155,8 @@ fn infer_default_array() {
             assert_eq(x[i64 2], 0)
             assert_eq(x[i64 3], 0)
         }
-        "#
+        "#;
+        ()
     )
 }
 
@@ -164,5 +170,205 @@ fn infer_cast() {
         }
         "#;
         unsafe { std::mem::transmute::<(i32, i32), i64>((90, 8943)) }
+    )
+}
+
+#[test]
+fn infer_int_size_u8() {
+    xc_test!(
+        r#"
+        # notifies the compiler that whatever variable is passed into this function is a u8
+        takes_a_u8(a: u8) { }
+
+        main(); bool {
+            x = 90
+
+            takes_a_u8(x)
+
+            # this 250 should become a u8, and so should y. y should overflow, 
+            # causing it to be less than x
+            y = 250 + x
+
+            ; x > y
+        }
+        "#;
+        true
+    )
+}
+
+#[test]
+fn infer_float_size_f64_1() {
+    xc_test!(
+        r#"
+        takes_an_f64(a: f64) { }
+
+        size_of_val<T>(val: &T); u64 {
+            ; size_of<T>()
+        }
+
+        main(); bool {
+            x = 90.0
+
+            takes_an_f64(x)
+
+            y = 250.0 + x
+
+            ; size_of_val(&y) == 8
+        }
+        "#;
+        true
+    )
+}
+
+#[test]
+fn infer_float_size_f64_2() {
+    xc_test!(
+        r#"
+        takes_an_f64(a: f64) { }
+
+        main(); f64 {
+            x = 90.0
+
+            takes_an_f64(x)
+
+            y = 250.0 + x
+
+            ? y > 250.0 + 80.0 {
+                ; y
+            }
+
+            ; 0.0
+        }
+        "#;
+        250.0f64 + 90.0f64
+    )
+}
+
+#[test]
+fn infer_struct_fields_with_arg() {
+    xc_test!(
+        use StdLib;
+        r#"
+        takes_3_nums(me: {x: i32, y: i32, z: i32}) {}
+
+        main(); i32 {
+            three = { x = 43, y = 65, ++ }
+
+            takes_3_nums(three)
+
+            x = three.x + three.y + three.z
+
+            ; x
+        }
+        "#;
+        43 + 65
+    )
+}
+
+#[test]
+fn infer_struct_fields_with_member() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); i32 {
+            three = { x = 43, y = 65, ++ }
+
+            x = three.x + three.y + three.z
+
+            ; x
+        }
+        "#;
+        43 + 65
+    )
+}
+
+#[test]
+fn infer_set_struct_fields_basic() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); i32 { ; cast(size_of<T>()) }
+
+        main(); i32 {
+            three = { -- }
+            three.x = 90
+            three.y = 48
+            three.z = 39
+
+            ; three.x + three.y + three.z + size_of_val(&three)
+        }
+        "#;
+        90 + 48 + 39 + 12
+    )
+}
+
+#[test]
+fn infer_set_struct_fields_and_infer_number_size() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); u64 { ; size_of<T>() }
+
+        main(); u64 {
+            three = { -- }
+            three.x = 90
+            three.y = 48
+            three.z = 39
+
+            ; three.x + three.y + three.z + size_of_val(&three)
+        }
+        "#;
+        90u64 + 48u64 + 39u64 + 24u64
+    )
+}
+
+#[test]
+fn infer_number_u32_in_struct() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); u64 { ; size_of<T>() }
+
+        main(); u64 {
+            twonums = { 30, 40 }
+
+            ; size_of_val(&twonums)
+        }
+        "#;
+        8u64
+    )
+}
+
+#[test]
+fn infer_number_u8_in_struct() {
+    xc_test!(
+        r#"
+        size_of_val<T>(val: &T); u64 { ; size_of<T>() }
+        takes_a_u8(val: u8) {}
+
+        main(); u64 {
+            twonums = { 30, 40 }
+            takes_a_u8(twonums.0)
+            takes_a_u8(twonums.1)
+
+            ; size_of_val(&twonums)
+        }
+        "#;
+        2u64
+    )
+}
+
+#[test]
+fn infer_array_len() {
+    xc_test!(
+        use StdLib;
+        r#"
+        takes_a_big_array(val: &[200]u8) {}
+
+        main(); u64 {
+            supposed_to_be_big = [432, 656, ++]
+            takes_a_big_array(&supposed_to_be_big)
+
+            ; (&supposed_to_be_big).len()
+        }
+        "#;
+        200u64
     )
 }

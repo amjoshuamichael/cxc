@@ -1,11 +1,13 @@
-use crate::parse::TypeSpec;
+use std::{iter::once};
+
+use indexmap::IndexMap;
+
 use crate::{
     FuncType, Type, TypeEnum,
-    TypeRelation, UniqueFuncInfo, Unit, XcReflect,
+    TypeRelation, Unit, XcReflect, parse::{FuncCode, VarDecl, Expr}, VarName, typ::spec_from_type::type_to_type_spec,
 };
 
-use super::FuncDeclInfo;
-use super::backends::IsBackend;
+use super::{backends::IsBackend, ProcessedFuncInfo};
 
 pub struct ExternalFuncAdd {
     pub ret_type: Type,
@@ -96,31 +98,39 @@ impl Unit {
         function_ptr: *const usize,
         ext_add: ExternalFuncAdd,
     ) {
-        let func_info = UniqueFuncInfo {
-            name: name.into(),
-            relation: ext_add.relation.clone(),
-            generics: ext_add.generics.clone(),
-            ..Default::default()
+        let func_type = FuncType {
+            ret: ext_add.ret_type,
+            args: ext_add.arg_types,
         };
 
-        let func_type = ext_add
-            .ret_type
-            .clone()
-            .func_with_args(ext_add.arg_types.clone());
-        let TypeEnum::Func(func_type) = func_type.as_type_enum() else { panic!() };
+        let func_code_id = self.comp_data.func_code.insert(FuncCode {
+            name: name.into(),
+            relation: ext_add.relation.clone().map_inner_type(type_to_type_spec),
+            args: func_type.args.iter().map(|a| VarDecl {
+                name: VarName::None,
+                type_spec: type_to_type_spec(a.clone()),
+            }).collect(),
+            ret_type: type_to_type_spec(func_type.ret.clone()),
+            generic_count: ext_add.generics.len(),
+            code: Expr::default(),
+            is_external: true,
+        });
 
-        self.comp_data.func_types.insert(func_info.clone(), func_type.clone());
+        let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {
+            specified_dependencies: IndexMap::new(),
+            name: name.into(),
+            relation: ext_add.relation,
+            generics: ext_add.generics,
+            typ: func_type.clone(),
+        });
+
+        self.comp_data.realizations.insert(func_code_id, once(func_id).collect());
 
         self.backend.add_external_func(
-            func_info.clone(), 
-            func_type.clone(), 
+            func_id, 
+            func_type,
+            &self.comp_data.processed[func_id],
             function_ptr, 
         );
-
-        // TODO: figure out what this does and put it somewhere else
-        self.comp_data.append_type_for_name(&FuncDeclInfo {
-            name: func_info.name.clone(),
-            relation: func_info.relation.map_inner_type(TypeSpec::from),
-        });
     }
 }

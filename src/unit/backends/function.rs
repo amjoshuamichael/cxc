@@ -1,5 +1,5 @@
 use std::ptr::NonNull;
-use crate::UniqueFuncInfo;
+
 use core::fmt::Debug;
 use std::sync::{Arc, RwLock};
 
@@ -103,7 +103,7 @@ impl Func {
         self.lower::<A, R>()
     }
 
-    pub fn new_compiled(_: UniqueFuncInfo, typ: FuncType) -> Func {
+    pub fn new_compiled(typ: FuncType) -> Func {
         Self::new(FuncInner {
             typ,
             code: FuncCodePtr::Compiled { pointer: None },
@@ -111,7 +111,6 @@ impl Func {
     }
 
     pub fn new_external(
-        _: UniqueFuncInfo,
         typ: FuncType,
         pointer: *const usize,
     ) -> Func {

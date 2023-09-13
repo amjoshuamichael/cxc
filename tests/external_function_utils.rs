@@ -1,7 +1,8 @@
 #![allow(unused_must_use)]
 mod test_utils;
+
 use cxc::{
-    library::StdLib, CompData, ExternalFuncAdd, StructType, Type, TypeEnum, Unit, VarName,
+    library::StdLib, CompData, ExternalFuncAdd, StructType, Type, TypeEnum, Unit, VarName, Field,
 };
 
 #[test]
@@ -52,7 +53,11 @@ fn a_cool_string() -> String { String::from("coolman") }
 
 fn add_an_i32(args: Vec<Type>, _: &CompData) -> Type {
     let TypeEnum::Struct(StructType { mut fields, .. }) = args[0].clone_type_enum() else { panic!() };
-    fields.push((VarName::from("thei32"), Type::i(32)));
+    fields.push(Field { 
+        name: VarName::from("thei32"), 
+        typ: Type::i(32), 
+        inherited: false 
+    });
     Type::new_struct(fields)
 }
 

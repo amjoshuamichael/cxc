@@ -18,10 +18,17 @@ pub fn variables_in(mline: &MLine) -> Vec<VarInMIR> {
         MLine::Set { r, .. } => variables_in_expr(r),
         MLine::SetAddr { r, .. } => variables_in_addr_expr(r),
         MLine::Store { val, .. } => variables_in_operand(val),
-        MLine::MemCpy { from, to, .. } => {
+        MLine::MemCpy { from, to, len } => {
             let from = variables_in_addr(from);
             let to = variables_in_addr(to);
-            from.into_iter().chain(to.into_iter()).collect()
+            let len = variables_in_operand(len);
+            from.into_iter().chain(to.into_iter()).chain(len.into_iter()).collect()
+        },
+        MLine::MemMove { from, to, len } => {
+            let from = variables_in_operand(from);
+            let to = variables_in_operand(to);
+            let len = variables_in_operand(len);
+            from.into_iter().chain(to.into_iter()).chain(len.into_iter()).collect()
         },
         MLine::Return(Some(on)) => variables_in_operand(on),
         MLine::Return(None) => Vec::new(),
@@ -47,9 +54,11 @@ fn variables_in_expr(mexpr: &MExpr) -> Vec<VarInMIR> {
             let a = a.into_iter().map(variables_in_operand).flatten();
             a.chain(f.into_iter()).collect()
         },
+        MExpr::Free { ptr } => variables_in_operand(ptr),
         MExpr::Ref { on } => variables_in_addr(on),
         MExpr::Deref { on, .. } => variables_in_operand(on),
         MExpr::Void => Vec::new(),
+        MExpr::Alloc { len } => variables_in_operand(len),
     }
 }
 

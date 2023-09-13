@@ -7,7 +7,7 @@ pub mod bit_array;
 mod default;
 pub mod hash;
 mod print_lib;
-mod string;
+pub mod string;
 mod to_string;
 mod type_helpers;
 mod unit_lib;
@@ -31,8 +31,9 @@ impl Library for StdLib {
         // TODO: this is a hack
         unit.push_script("str = u8").unwrap();
 
-        unit.push_script(include_str!("drop.cxc")).unwrap();
         unit.add_lib(DropLib);
+
+        unit.push_script(include_str!("ptr.cxc")).unwrap();
 
         unit.add_lib(ArrayHelperLib);
 
@@ -40,9 +41,9 @@ impl Library for StdLib {
         unit.push_script(include_str!("hashmap.cxc")).unwrap();
         unit.push_script(include_str!("rc.cxc")).unwrap();
         unit.push_script(include_str!("lucid.cxc")).unwrap();
-        unit.push_script(include_str!("option.cxc")).unwrap();
         unit.push_script(include_str!("range.cxc")).unwrap();
         unit.push_script(include_str!("slice.cxc")).unwrap();
+        unit.push_script(include_str!("alloc.cxc")).unwrap();
 
         unit.add_lib(StringLib);
         unit.add_lib(ToStringLib);

@@ -29,37 +29,29 @@ impl Kind for FuncType {
 
 impl Kind for StructType {
     fn to_string(&self) -> String {
-        let mut name = String::new();
-        let mut fields_iter = self.fields.iter();
+        let mut output = String::new();
+        let fields_iter = self.fields.iter().enumerate();
 
-        name += "{ ";
+        output += "{ ";
 
         if self.is_tuple() {
-            if let Some((_, first_typ)) = fields_iter.next() {
-                name += &*first_typ.to_string();
-                for (_, typ) in fields_iter {
-                    name += &*format!(", {}", &*typ.to_string());
-                }
+            for (f, Field { typ, .. }) in fields_iter {
+                if f != 0 { output += ", "; }
+
+                output += &*format!("{}", &*typ.to_string());
             }
-        } else if let Some((first_name, first_typ)) = fields_iter.next() {
-            name += &*format!("{first_name}: {first_typ:?}");
-            for (field_name, typ) in fields_iter {
-                name += &*format!(", {field_name}: {typ:?}");
+        } else {
+            for (f, Field { name, typ, .. }) in fields_iter {
+                if f != 0 { output += ", "; }
+
+                output += &*format!("{name}: {typ:?}");
             }
         }
 
-        name += " }";
+        output += " }";
 
-        name
+        output
     }
-}
-
-impl Kind for SumType {
-    fn to_string(&self) -> String { format!("/{:?}/", self.variants) }
-}
-
-impl Kind for VariantType {
-    fn to_string(&self) -> String { format!("{:?}.{}", self.parent, self.tag) }
 }
 
 impl Kind for IntType {

@@ -1,5 +1,5 @@
 use crate::lex::{Tok, TypeName, VarName};
-use crate::Type;
+
 pub use context::{FuncParseContext, GlobalParseContext, ParseContext, TypeParseContext};
 pub use opcode::Opcode;
 use std::collections::HashMap;
@@ -205,15 +205,13 @@ pub fn parse_func_code(
 
     let code = parse_block(&mut lexer)?;
 
-    let generic_count = lexer.generic_count() as u32;
+    let generic_count = lexer.generic_count();
 
     if let TypeSpecRelation::MethodOf(relation) = &relation {
-        let mut new_args = vec![VarDecl {
+        args.insert(0, VarDecl {
             name: VarName::from("self"),
             type_spec: relation.clone(),
-        }];
-        new_args.append(&mut args);
-        args = new_args;
+        });
     }
 
     Ok(FuncCode {
@@ -223,6 +221,7 @@ pub fn parse_func_code(
         code,
         generic_count,
         relation,
+        is_external: false,
     })
 }
 
@@ -235,7 +234,7 @@ fn parse_var_decl(lexer: &mut FuncParseContext) -> ParseResult<VarDecl> {
 
             parse_type_spec(lexer)?
         },
-        _ => TypeSpec::unknown(),
+        _ => TypeSpec::Unknown,
     };
 
     Ok(VarDecl {
@@ -258,7 +257,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             let var = match lexer.next_tok()? {
                 Tok::Assignment => VarDecl {
                     name: var_name,
-                    type_spec: TypeSpec::Type(Type::unknown()),
+                    type_spec: TypeSpec::Unknown,
                 },
                 Tok::Colon => {
                     let type_spec =

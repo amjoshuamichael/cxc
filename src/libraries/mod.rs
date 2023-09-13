@@ -3,7 +3,7 @@ pub mod std_lib;
 mod test_lib;
 mod type_interface_lib;
 pub use crates::*;
-pub use std_lib::StdLib;
+pub use std_lib::{StdLib, string::StringLib};
 pub use type_interface_lib::TypeInterfaceLib;
 
 use crate::Unit;

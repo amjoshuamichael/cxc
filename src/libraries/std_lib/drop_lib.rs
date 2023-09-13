@@ -1,4 +1,4 @@
-use crate::{library::Library, CompData, Type, parse::{FuncCode, Expr, Opcode, TypeSpecRelation, TypeSpec, VarDecl}, TypeEnum, VarName};
+use crate::{library::Library, CompData, Type, parse::{FuncCode, Expr, Opcode, TypeSpecRelation, TypeSpec, VarDecl}, TypeEnum, VarName, typ::{Field, spec_from_type::type_to_type_spec}};
 
 pub struct DropLib;
 
@@ -11,21 +11,22 @@ impl Library for DropLib {
 pub fn derive_drop(_: &CompData, typ: Type) -> Option<FuncCode> {
     let drop = Expr::ident("drop");
     let me = Expr::ident("self");
+    let typ = typ.complete_deref(); 
 
-    let expr = match typ.clone().get_deref()?.as_type_enum() {
+    let expr = match typ.clone().as_type_enum() {
         _ if typ.is_shallow() => Expr::Block(Vec::new()),
         TypeEnum::Struct(struct_type) => {
             let mut statements = Vec::new();
 
-            for (field_name, field_type) in struct_type.fields.iter() {
+            for Field { name, typ, .. } in struct_type.fields.iter() {
                 let generics = 
-                    field_type.generics().clone().into_iter().map(|x| x.into()).collect();
+                    typ.generics().clone().into_iter().map(|x| type_to_type_spec(x)).collect();
                 let args = vec![
-                        Expr::UnarOp(
-                            Opcode::Ref, 
-                            Box::new(Expr::Member(me.clone(), field_name.clone()))
-                        )
-                    ];
+                    Expr::UnarOp(
+                        Opcode::Ref, 
+                        Box::new(Expr::Member(me.clone(), name.clone()))
+                    )
+                ];
 
                 statements.push(Expr::Call {
                     func: drop.clone(),
@@ -40,15 +41,17 @@ pub fn derive_drop(_: &CompData, typ: Type) -> Option<FuncCode> {
         _ => return None,
     };
 
+    let type_spec = type_to_type_spec(typ.clone()).get_ref();
     Some(FuncCode {
         name: VarName::from("drop"),
         ret_type: TypeSpec::Void,
+        relation: TypeSpecRelation::MethodOf(type_spec.clone()),
         args: vec![VarDecl {
             name: VarName::from("self"),
-            type_spec: typ.clone().into(),
+            type_spec,
         }],
-        generic_count: typ.generics().len() as u32,
+        generic_count: 0,
         code: expr,
-        relation: TypeSpecRelation::MethodOf(TypeSpec::Type(typ)),
+        is_external: false,
     })
 }

@@ -2,18 +2,16 @@ use cranelift::prelude::{types as cl_types, FunctionBuilder, InstBuilder, StackS
 use cranelift_module::Module;
 
 
-use crate::{UniqueFuncInfo, FuncType, cranelift_backend::to_cl_type::{func_type_to_signature, ToCLType}, typ::ReturnStyle};
+use crate::{FuncType, cranelift_backend::to_cl_type::{func_type_to_signature, ToCLType}, typ::ReturnStyle, unit::FuncId};
 
 use super::CraneliftBackend;
 
 pub fn add_external_func(
     backend: &mut CraneliftBackend, 
-    info: UniqueFuncInfo, 
+    info: FuncId, 
     func_type: FuncType, 
     ptr: *const usize
 ) {
-    backend.generations.update(info.clone());
-
     let mut ctx = backend.module.make_context();
 
     func_type_to_signature(&func_type, &mut ctx.func.signature, false);

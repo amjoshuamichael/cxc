@@ -1,4 +1,4 @@
-use crate::{lex::Tok, Type, TypeName, VarName};
+use crate::{lex::Tok, TypeName, VarName};
 use std::fmt::{Debug, Display};
 
 use super::{Expr, FuncCode, TypeSpec, TypeSpecRelation, VarDecl};
@@ -11,12 +11,16 @@ impl Errable for () {
     fn err() -> Self {}
 }
 
+impl Errable for bool {
+    fn err() -> Self { false }
+}
+
 impl Errable for Expr {
     fn err() -> Self { Expr::Error }
 }
 
 impl Errable for TypeSpec {
-    fn err() -> Self { TypeSpec::Type(Type::unknown()) }
+    fn err() -> Self { TypeSpec::Unknown }
 }
 
 impl Errable for VarDecl {
@@ -44,6 +48,7 @@ impl Errable for FuncCode {
             generic_count: 0,
             code: Expr::err(),
             relation: TypeSpecRelation::Unrelated,
+            is_external: false,
         }
     }
 }
@@ -54,6 +59,10 @@ impl<T: Errable> Errable for Option<T> {
 
 impl<T: Errable, U: Errable> Errable for (T, U) {
     fn err() -> Self { (T::err(), U::err()) }
+}
+
+impl<T: Errable, U: Errable, V: Errable> Errable for (T, U, V) {
+    fn err() -> Self { (T::err(), U::err(), V::err()) }
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;

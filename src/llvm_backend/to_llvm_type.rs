@@ -4,7 +4,7 @@ use inkwell::types::{BasicMetadataTypeEnum, FunctionType};
 use std::collections::btree_map::BTreeMap;
 
 use crate::*;
-use crate::typ::{UnknownType, VoidType, VariantType, SumType, ReturnStyle};
+use crate::typ::{UnknownType, VoidType, ReturnStyle};
 use inkwell::AddressSpace;
 use inkwell::context::Context;
 use inkwell::types::{AnyTypeEnum, BasicTypeEnum, AnyType, BasicType};
@@ -50,12 +50,10 @@ impl ToLLVMType for TypeEnum {
             TypeEnum::Int(t) => t.to_any_type(context),
             TypeEnum::Float(t) => t.to_any_type(context),
             TypeEnum::Struct(t) => t.to_any_type(context),
-            TypeEnum::Sum(t) => t.to_any_type(context),
-            TypeEnum::Variant(t) => t.to_any_type(context),
             TypeEnum::Ref(t) => t.to_any_type(context),
             TypeEnum::Func(t) => t.to_any_type(context),
             TypeEnum::Array(t) => t.to_any_type(context),
-            TypeEnum::Bool(t) => t.to_any_type(context),
+            TypeEnum::Bool => BoolType.to_any_type(context),
             TypeEnum::Void => VoidType().to_any_type(context),
             TypeEnum::Unknown => UnknownType().to_any_type(context),
         }
@@ -118,39 +116,12 @@ impl ToLLVMType for StructType {
         let field_types: Vec<BasicTypeEnum> = self
             .fields
             .iter()
-            .map(|(_, typ)| typ.to_basic_type(context))
+            .map(|Field { typ, .. }| typ.to_basic_type(context))
             .collect();
 
         context
             .struct_type(&field_types[..], false)
             .as_any_type_enum()
-    }
-}
-
-impl ToLLVMType for SumType {
-    fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        let size = self.largest_variant_as_struct().size() as u32;
-        match size {
-            0..=8 => context.custom_width_int_type(size * 8).into(),
-            9..=16 => context
-                .struct_type(&vec![context.i32_type().into(); size as usize / 4], false)
-                .into(),
-            17.. => {
-                // TODO: enum variants like i1, i32, i32, i32, i32 won't work here
-                let padding_size = size as usize - 4;
-                let mut struct_fields = vec![context.i32_type().as_basic_type_enum()];
-                struct_fields.extend(
-                    vec![context.i32_type().as_basic_type_enum(); padding_size / 4].into_iter(),
-                );
-                context.struct_type(&struct_fields, false).into()
-            },
-        }
-    }
-}
-
-impl ToLLVMType for VariantType {
-    fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        self.as_struct().to_basic_type(context).as_any_type_enum()
     }
 }
 

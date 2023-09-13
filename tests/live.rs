@@ -1,4 +1,4 @@
-use cxc::{Unit, library::StdLib, FuncType, Type};
+use cxc::{Unit, library::StdLib, FuncType, Type, ExternalFuncAdd};
 use serial_test::serial;
 
 #[test]
@@ -15,7 +15,7 @@ fn hot_reload_one() {
 
 #[test]
 #[serial]
-fn hot_reload_many() {
+fn hot_reload_many_1() {
     let mut unit = Unit::new();
 
     unit.push_script("the_best_num(); i32 { ; 41 }").unwrap();
@@ -59,6 +59,21 @@ fn depended_on() {
 
 #[test]
 #[serial]
+fn generic_depended_on() {
+    let mut unit = Unit::new();
+
+    unit.push_script("the_best_num<T>(); T { ; T 41 }").unwrap();
+    unit.push_script("double_that(); i32 { ; the_best_num<i32>() * 2 }")
+        .unwrap();
+    let doubled = unit.get_fn("double_that").unwrap().downcast::<(), i32>();
+    assert_eq!(doubled(), 82);
+
+    unit.push_script("the_best_num<T>(); T { ; T 42 }").unwrap();
+    assert_eq!(doubled(), 84);
+}
+
+#[test]
+#[serial]
 fn depends_on() {
     let mut unit = Unit::new();
 
@@ -70,8 +85,7 @@ fn depends_on() {
     assert_eq!(best(), 42);
     assert_eq!(worse(), 41);
 
-    unit.push_script("worse_num(); i32 { ; the_best_num() - 2 }")
-        .unwrap();
+    unit.push_script("worse_num(); i32 { ; the_best_num() - 2 }").unwrap();
     assert_eq!(best(), 42);
     assert_eq!(worse(), 40);
 }
@@ -91,7 +105,7 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(add_two)
+        functions.push(cast<(i32); i32, u64>(add_two))
         "#
     ).unwrap();
 
@@ -106,7 +120,7 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(ninety)
+        functions.push(cast<(); i32, u64>(ninety))
         "#
     ).unwrap();
 
@@ -127,7 +141,7 @@ fn get_fn_by_ptr() {
 
 #[test]
 #[serial]
-fn hot_reload_many_times() {
+fn hot_reload_many_2() {
     let mut unit = Unit::new();
     unit.push_script("the_best_num(); i32 { ; 200 } ").unwrap();
     let cached_func = unit.get_fn("the_best_num").unwrap().downcast::<(), i32>();
@@ -161,4 +175,73 @@ fn get_previous() {
 
     let func_one_again = unit.get_fn("func_one").unwrap().downcast::<(), i32>();
     assert_eq!(func_one_again(), 1);
+}
+
+#[test]
+#[serial]
+fn call_previous() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"
+        fifty_four(); i32 { ; 54 }
+        double_that(); i32 { ; fifty_four() * 3 }
+    "#).unwrap();
+    let double_that = unit.get_fn("double_that").unwrap().downcast::<(), i32>();
+    assert_eq!(double_that(), 54 * 3);
+
+    unit.push_script(r#"
+        double_that(); i32 { ; fifty_four() * 2 }
+    "#).unwrap();
+    assert_eq!(double_that(), 54 * 2);
+}
+
+#[test]
+#[serial]
+fn call_2_previous() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"fifty_four<T>(); T { ; T 54 }"#).unwrap();
+    unit.push_script(r#"double_that<T>(); T { ; fifty_four<T>() * T 2 }"#).unwrap();
+    unit.push_script(r#"sextuple_that(); i32 { ; double_that<i32>() * 2 }"#).unwrap();
+    let sextuple_that = unit.get_fn("sextuple_that").unwrap().downcast::<(), i32>();
+    assert_eq!(sextuple_that(), 54 * 2 * 2);
+
+    unit.push_script(r#"
+        sextuple_that(); i32 { ; double_that<i32>() * 3 }
+    "#).unwrap();
+    assert_eq!(sextuple_that(), 54 * 2 * 3);
+}
+
+#[test]
+#[serial]
+fn conversion_dependents() {
+    let mut unit = Unit::new();
+
+    fn print_number(num: i64) { println!("{num}") }
+    unit.add_rust_func_explicit(
+        "print_number",
+        print_number as *const usize,
+        ExternalFuncAdd {
+            arg_types: vec![Type::i(64)],
+            ..ExternalFuncAdd::empty()
+        },
+    );
+
+    unit.push_script(r#"
+        TwoNums = { i32, i32 }
+        &TwoNums:.fifty(); i32 { ; 40 }
+    "#).unwrap();
+
+    unit.push_script(r#"
+        main(); i32 {
+            x = TwoNums { 0, 0 }
+            ; x.fifty()
+        }
+    "#).unwrap();
+
+    let main = unit.get_fn("main").unwrap().downcast::<(), i32>();
+    assert_eq!(main(), 40);
+
+    unit.push_script(r#"
+        TwoNums:.fifty(); i32 { ; 50 }
+    "#).unwrap();
+    assert_eq!(main(), 50);
 }

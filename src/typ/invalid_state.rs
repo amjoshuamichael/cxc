@@ -3,7 +3,7 @@ use crate::parse::InitOpts;
 use crate::{hlr::expr_tree::HNodeData, BoolType, FloatType, FuncType, IntType, RefType, Type};
 use crate::{ArrayType, Repr, StructType, TypeEnum};
 
-use super::{SumType, UnknownType, VariantType, VoidType};
+use super::{UnknownType, VoidType, Field};
 
 pub trait InvalidState {
     fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>>;
@@ -86,7 +86,7 @@ impl InvalidState for StructType {
             return None;
         }
 
-        for (field_name, field_type) in &self.fields {
+        for Field { name: field_name, typ: field_type, .. } in &self.fields {
             if field_type.invalid_state(0).is_some() {
                 return Some(Box::new(StructLitGen {
                     var_type: Type::new(TypeEnum::Struct(self.clone())),
@@ -98,41 +98,6 @@ impl InvalidState for StructType {
 
         None
     }
-}
-
-impl InvalidState for SumType {
-    fn invalid_state(&self, index: u32) -> Option<Box<dyn NodeDataGen>> {
-        let variant_count = self.variants.len() as u32;
-
-        if self.has_internal_discriminant() {
-            self.largest_variant_data()
-                .invalid_state(index + variant_count - 1)
-        } else if variant_count + index < 256 {
-            Some(Box::new(StructLitGen {
-                var_type: self.largest_variant_as_struct(),
-                fields: vec![(
-                    "tag".into(),
-                    Box::new(HNodeData::Number {
-                        value: (variant_count + index) as u64,
-                        lit_type: Type::i(8),
-                    }),
-                )],
-                initialize: InitOpts::Uninit,
-            }))
-        } else {
-            None
-        }
-    }
-}
-
-impl SumType {
-    pub fn tag_data(&self, index: u32) -> Box<dyn NodeDataGen> {
-        self.largest_variant_data().invalid_state(index).unwrap()
-    }
-}
-
-impl InvalidState for VariantType {
-    fn invalid_state(&self, _: u32) -> Option<Box<dyn NodeDataGen>> { unreachable!() }
 }
 
 impl InvalidState for UnknownType {

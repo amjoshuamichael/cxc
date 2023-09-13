@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    parse::ParseErrorSpanned, typ::SumType, StructType, Type, TypeName, UniqueFuncInfo, VarName, hlr::expr_tree::ExprID,
+    parse::{ParseErrorSpanned, TypeSpec}, StructType, Type, TypeName, VarName, hlr::expr_tree::ExprID, TypeRelation,
 };
 
 pub type CResultMany<T> = Result<T, Vec<CErr>>;
@@ -58,10 +58,9 @@ pub enum TErr {
     UnknownFunc(TypeName),
     FieldNotFound(StructType, VarName),
     NoFieldOnNonStruct(Type, VarName),
-    VariantNotFound(SumType, TypeName),
     NoVariantOnNonEnum(Type, TypeName),
     CantGetGeneric(Type, Vec<Type>, u32),
-    TooFewGenerics(Vec<Type>, u8),
+    TooFewGenerics(TypeSpec, Vec<Type>, u8),
     CantDeref(Type),
     NotAFunction(Type),
     NotAStruct(Type),
@@ -70,7 +69,7 @@ pub enum TErr {
 
 #[derive(Debug)]
 pub enum FErr {
-    NotFound(UniqueFuncInfo),
+    NotFound(VarName, TypeRelation),
 }
 
 #[derive(Debug)]

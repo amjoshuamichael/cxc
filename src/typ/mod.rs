@@ -2,7 +2,7 @@ use crate::cache::Cache;
 use crate::errors::{TErr, TResult};
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
-use crate::UniqueFuncInfo;
+use crate::FuncQuery;
 use crate::{CompData, TypeRelation};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
@@ -10,16 +10,17 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
 
-pub mod could_come_from;
+pub mod can_transform;
 pub mod fields_iter;
 pub mod invalid_state;
+pub mod spec_from_type;
 mod kind;
 mod nested_field_count;
 mod size;
 mod abi_styles;
 
 use cxc_derive::XcReflect;
-use invalid_state::InvalidState;
+
 pub use kind::Kind;
 pub use abi_styles::{ReturnStyle, realize_return_style, realize_arg_style, ArgStyle};
 use crate::xc_opaque;
@@ -45,11 +46,7 @@ impl Type {
     }
 
     pub fn is_subtype_of(&self, of: &Type) -> bool {
-        match self.as_type_enum() {
-            TypeEnum::Variant(VariantType { parent, .. }) 
-                if let TypeEnum::Sum(of_sum) = of.as_type_enum() => parent == of_sum,
-            other => other == of.as_type_enum(),
-        }
+        self == of
     }
 
     pub fn are_subtypes(lhs: &Self, rhs: &Self) -> bool {
@@ -104,35 +101,40 @@ impl Type {
 
     pub fn get_ref(&self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self.clone() })) }
 
-    pub fn get_deref(self) -> Option<Type> {
+    pub fn get_deref(&self) -> Option<Type> {
         match &self.0.type_enum {
             TypeEnum::Ref(t) => Some(t.base.clone()),
             _ => None,
         }
     }
 
+    // TODO: remove
     pub fn get_auto_deref(&self, comp_data: &CompData) -> TResult<Type> {
         if let TypeEnum::Ref(RefType { base }) = self.as_type_enum() {
             Ok(base.clone())
         } else {
             Ok(comp_data
-                .get_func_type(&UniqueFuncInfo::new(
-                    &"deref".into(),
-                    &TypeRelation::MethodOf(self.get_ref()),
-                    self.generics().clone(),
-                ))
+                .get_func_type(&FuncQuery {
+                    name: "deref".into(),
+                    relation: TypeRelation::MethodOf(self.get_ref()),
+                    generics: self.generics().clone(),
+                })
                 .map_err(|_| TErr::CantDeref(self.clone()))?
-                .ret)
+                .ret
+                )
         }
     }
 
-    pub fn deref_chain(&self, comp_data: &CompData) -> Vec<Type> {
+    // TODO: remove
+    pub fn deref_chain(&self) -> Vec<Type> {
         let mut chain = Vec::new();
         chain.push(self.clone());
 
-        while let Ok(derefed) = chain.last().cloned().unwrap().get_auto_deref(comp_data) {
+        while let Some(derefed) = chain.last().cloned().unwrap().get_deref() {
             chain.push(derefed);
         }
+
+        chain.insert(1, self.get_ref());
 
         chain
     }
@@ -167,11 +169,11 @@ impl Type {
 
     pub fn f(size: impl Into<FloatType>) -> Type { Type::new(TypeEnum::Float(size.into())) }
 
-    pub fn bool() -> Type { Type::new(TypeEnum::Bool(BoolType)) }
+    pub fn bool() -> Type { Type::new(TypeEnum::Bool) }
 
     pub fn empty() -> Type { Type::new_struct(Vec::new()) }
 
-    pub fn new_struct(fields: Vec<(VarName, Type)>) -> Type {
+    pub fn new_struct(fields: Vec<Field>) -> Type {
         Type::new(TypeEnum::Struct(StructType {
             fields,
             repr: Repr::Rust,
@@ -182,33 +184,16 @@ impl Type {
         let indexed_fields = fields
             .into_iter()
             .enumerate()
-            .map(|(i, field)| (VarName::TupleIndex(i), field))
+            .map(|(i, field)| Field { 
+                name: VarName::TupleIndex(i), 
+                typ: field, 
+                inherited: false 
+            })
             .collect();
 
         Type::new(TypeEnum::Struct(StructType {
             fields: indexed_fields,
             repr: Repr::Rust,
-        }))
-    }
-
-    pub fn new_sum(mut variants: Vec<(TypeName, Type)>) -> Type {
-        if variants.len() == 2
-            && variants[0].1 != Type::empty()
-            && variants[1].1 == Type::empty()
-        {
-            variants.swap(0, 1);
-        }
-
-        let largest_variant_index = variants
-            .iter()
-            .enumerate()
-            .max_by_key(|(_, (_, typ))| typ.size())
-            .unwrap()
-            .0;
-
-        Type::new(TypeEnum::Sum(SumType {
-            variants,
-            largest_variant_index,
         }))
     }
 
@@ -270,15 +255,9 @@ impl Type {
         !matches!(
             self.as_type_enum(), 
             TypeEnum::Struct(_) | 
-            TypeEnum::Array(_) | 
-            TypeEnum::Sum(_) | 
-            TypeEnum::Variant(_)
+            TypeEnum::Array(_)
         )
     }
-}
-
-impl From<Type> for TypeSpec {
-    fn from(typ: Type) -> TypeSpec { TypeSpec::Type(typ) }
 }
 
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Clone, Ord, XcReflect)]
@@ -333,12 +312,10 @@ pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
     Struct(StructType),
-    Sum(SumType),
-    Variant(VariantType),
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
-    Bool(BoolType),
+    Bool,
     Void,
 
     #[default]
@@ -362,9 +339,7 @@ impl Deref for TypeEnum {
             TypeEnum::Struct(t) => t,
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
-            TypeEnum::Bool(t) => t,
-            TypeEnum::Sum(t) => t,
-            TypeEnum::Variant(t) => t,
+            TypeEnum::Bool => &BoolType,
             TypeEnum::Void => &VOID_STATIC,
             TypeEnum::Unknown => &UNKNOWN_STATIC,
         }
@@ -392,15 +367,22 @@ pub enum Repr {
 
 #[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
 pub struct StructType {
-    pub fields: Vec<(VarName, Type)>,
+    pub fields: Vec<Field>,
     pub repr: Repr,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
+pub struct Field {
+    pub name: VarName,
+    pub typ: Type,
+    pub inherited: bool,
 }
 
 impl StructType {
     pub fn get_field_type(&self, field_name: &VarName) -> TResult<Type> {
         for field in &self.fields {
-            if field.0 == *field_name {
-                return Ok(field.1.clone());
+            if field.name == *field_name {
+                return Ok(field.typ.clone());
             }
         }
 
@@ -410,140 +392,22 @@ impl StructType {
     pub fn get_field_index(&self, field_name: &VarName) -> TResult<usize> {
         self.fields
             .iter()
-            .position(|field| field.0 == *field_name)
+            .position(|field| field.name == *field_name)
             .ok_or(TErr::FieldNotFound(self.clone(), field_name.clone()))
     }
 
-    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].0, VarName::TupleIndex(0)) }
+    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].name, VarName::TupleIndex(0)) }
 
     pub fn largest_field(&self) -> Option<Type> {
         if self.fields.len() == 0 {
             return None
         }
 
-        let mut types = self.fields.iter().map(|(_, typ)| typ).collect::<Vec<_>>();
+        let mut types = self.fields.iter().map(|Field { typ, .. }| typ).collect::<Vec<_>>();
         types.sort_by(|a, b| b.size().cmp(&a.size()));
         types.reverse();
 
         Some(types[0].clone())
-    }
-}
-
-// TODO: is not interroperable with a rust sum type with 0 variants.
-#[derive(PartialEq, Clone, Eq, Hash, Debug, PartialOrd, Ord, XcReflect)]
-pub struct SumType {
-    pub variants: Vec<(TypeName, Type)>,
-    largest_variant_index: usize,
-}
-
-impl SumType {
-    pub fn get_variant_type(
-        &self,
-        variant_name: &TypeName,
-    ) -> TResult<Type> {
-        let (variant_index, variant_type) = self
-            .variants
-            .iter()
-            .enumerate()
-            .find(|(_, (name, _))| name == variant_name)
-            .ok_or(TErr::VariantNotFound(self.clone(), variant_name.clone()))
-            .map(|(index, (_, t))| (index, t.clone()))?;
-
-        Ok(Type::new(TypeEnum::Variant(VariantType {
-            tag: variant_index as u32,
-            parent: self.clone(),
-            variant_type,
-        })))
-    }
-
-    pub fn get_variant_index(&self, field_name: &TypeName) -> usize {
-        self.variants
-            .iter()
-            .position(|field| &field.0 == field_name)
-            .unwrap()
-    }
-
-    pub fn largest_variant_data(&self) -> Type {
-        self.variants[self.largest_variant_index].1.clone()
-    }
-
-    pub fn largest_variant_as_struct(&self) -> Type {
-        VariantType::as_struct_no_parent(self, &self.largest_variant_data())
-    }
-
-    pub fn largest_variant_index(&self) -> usize { self.largest_variant_index }
-
-    pub fn has_internal_discriminant(&self) -> bool {
-        if self.variants.is_empty() {
-            return false;
-        }
-
-        let mut nonempty_variants = self.variants.iter().filter(|(_, typ)| !typ.is_empty());
-        if let Some((_, nonempty_variant)) = nonempty_variants.next() {
-            if nonempty_variants.count() != 0 {
-                return false;
-            }
-
-            nonempty_variant
-                .invalid_state((self.variants.len() - 2) as u32)
-                .is_some()
-        } else {
-            false
-        }
-    }
-}
-
-#[derive(PartialEq, Eq, Hash, Debug, Clone, PartialOrd, Ord, XcReflect)]
-pub struct VariantType {
-    pub tag: u32,
-    pub parent: SumType,
-    pub variant_type: Type,
-}
-
-impl VariantType {
-    pub fn as_struct(&self) -> Type {
-        Self::as_struct_no_parent(&self.parent, &self.variant_type)
-    }
-
-    pub fn parent_type(&self) -> Type {
-        Type::new(TypeEnum::Sum(self.parent.clone()))
-    }
-
-    pub fn as_struct_no_parent(parent: &SumType, variant_data: &Type) -> Type {
-        let mut fields = match variant_data.as_type_enum() {
-            TypeEnum::Struct(StructType { fields, .. }) => fields.clone(),
-            _ => vec![("data".into(), variant_data.clone())],
-        };
-
-        // TODO: add ability to get alignment of a type
-        let tag_should_copy_alignment_of = match fields.get(0) {
-            Some(field) => field.1.clone(),
-            None => parent.largest_variant_data(),
-        };
-        let tag_size = match tag_should_copy_alignment_of.size() {
-            0..=1 => 8,
-            2..4 => 16,
-            _ => 32,
-        };
-        let tag = ("tag".into(), Type::i(tag_size));
-
-        if !parent.has_internal_discriminant() {
-            fields.insert(0, tag);
-        }
-
-        let as_struct_no_padding = Type::new_struct(fields.clone());
-
-        let padding_amount = if &parent.largest_variant_data() != variant_data {
-            parent.largest_variant_as_struct().size() - as_struct_no_padding.size()
-        } else {
-            0
-        };
-
-        if padding_amount > 0 {
-            fields.push(("padding".into(), Type::i(8).get_array(padding_amount as u32)));
-        }
-
-        Type::new_struct(fields)
     }
 }
 

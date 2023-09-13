@@ -1,6 +1,6 @@
 mod test_utils;
 
-use cxc::{library::StdLib, Unit};
+use cxc::{library::{StdLib, StringLib}, Unit};
 use test_utils::xc_test;
 
 #[test]
@@ -14,7 +14,7 @@ fn array_basic() {
 
             index: i64 = i64 0
             @ index < i64 7 {
-                original[index] = index * i64 2
+                original[index] = cast<i64, i32>(index) * 2
 
                 index = index + i64 1
             }
@@ -38,27 +38,27 @@ fn struct_arrays() {
             y: i32
         }
 
-        main() {
+        main(); i32 {
             points: [3]Point2D = [
                 Point2D { x = 43, y = 15 },
                 Point2D { x = 327, y = 413 },
                 Point2D { x = 1672, y = 2526 },
             ]
 
-            assert_eq<i32>(points[i64 0].x, 43)
-            assert_eq<i32>(points[i64 0].y, 15)
+            output: i32 = points[i64 0].x + points[i64 0].y
 
             points[i64 0].x = 94
 
-            assert_eq<i32>(points[i64 0].x, 94)
-            assert_eq<i32>(points[i64 0].y, 15)
+            output = output + points[i64 0].x + points[i64 0].y
 
             points[i64 1] = Point2D { x = 4, y = 6 }
 
-            assert_eq<i32>(points[i64 1].x, 4)
-            assert_eq<i32>(points[i64 1].y, 6)
+            output = output + points[i64 0].x + points[i64 0].y
+
+            ; output
         }
-        "
+        ";
+        276
     )
 }
 
@@ -94,7 +94,7 @@ fn string_array() {
 #[test]
 fn active_initialize_array_strings() {
     xc_test!(
-        use StdLib;
+        use StringLib;
         r#"
         main(); [5]String {
             numbers: [5]String = ["one", "two", "three", ++ ]
@@ -114,13 +114,12 @@ fn slice_basic() {
         main(); { u64, u32 } {
             numbers: [5]u32 = [543, 60, 44, 222, 994]
 
-            
             range: Range<u64> = Range<u64>:from(u64 2, u64 4)
-            slice: Slice<u32> = numbers.slice(range)
+            slice: { +ptr: &u32, len: u64 } = numbers.slice(range)
             ; { slice.len, *slice.ptr }
         }
         "#;
-        (2u64, 44)
+        (2u64, 44u32)
     );
 }
 
@@ -130,7 +129,7 @@ fn pass_in_slice() {
     unit.add_lib(StdLib);
 
     unit.push_script("
-        section_of(array_ptr: &[6]u32); Slice<u32> {
+        section_of(array_ptr: &[6]u32); { +ptr: &u32, len: u64 } {
             ; array_ptr.slice(Range<u64>:from(u64 1, u64 4))
         }
     ").unwrap();

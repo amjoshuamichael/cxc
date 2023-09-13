@@ -8,6 +8,7 @@ pub fn large_args(hlr: &mut FuncRep) {
     handle_own_args(hlr);
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_args(hlr: &mut FuncRep) {
     let args: Vec<_> = hlr
         .args()
@@ -56,7 +57,6 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarName) {
             }
         }
     );
-        
 }
 
 fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
@@ -79,12 +79,13 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_name: VarName) {
     );
 }
 
+#[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         move |call_id, data, hlr| {
-            let HNodeData::Call { a: args, f, .. } = data else { return };
+            let HNodeData::Call { a: args, query, .. } = data else { return };
 
-            if f == &VarName::from("cast") {
+            if &*query.name == "cast" {
                 return;
             }
 
@@ -95,7 +96,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 if arg_style == ArgStyle::Pointer {
                     args[0] = hlr.insert_quick(call_id, get_ref(arg));
                 } else if let ArgStyle::Ints(..) = arg_style {
-                    let new_arg_name = format!("{f}_arg_{a}");
+                    let new_arg_name = format!("{}_arg_{}", query.name, a);
                     let new_arg = hlr.add_variable(&*new_arg_name, &old_arg_type.raw_arg_type());
 
                     hlr.insert_statement_before(call_id, SetVarGen {

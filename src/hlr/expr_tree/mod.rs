@@ -1,6 +1,8 @@
 use crate::lex::{indent_parens, TypeName, VarName};
-use crate::parse::*;
+use crate::typ::can_transform::TransformationList;
+use crate::{parse::*, FuncQuery};
 use crate::Type;
+
 use std::fmt::{Debug, Formatter};
 
 mod expr_tree_helper;
@@ -11,7 +13,7 @@ pub use quick::*;
 #[derive(Default, Clone)]
 pub struct ExprTree {
     pub root: ExprID,
-    nodes: SlotMap<ExprID, ExprNode>,
+    pub nodes: SlotMap<ExprID, ExprNode>,
 }
 
 impl ToString for ExprTree {
@@ -45,7 +47,7 @@ new_key_type! {
 }
 
 #[derive(Clone)]
-struct ExprNode {
+pub struct ExprNode {
     parent: ExprID,
     data: HNodeData,
 }
@@ -64,13 +66,14 @@ impl ToString for ExprNode {
             ArrayLit { parts, .. } => {
                 format!("{parts:?}")
             },
-            Call { f, a, .. } => format!("{f:?}({a:?})"),
+            Call { query, a, .. } => format!("{:?}({:?})", query.name, a),
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { name, .. } => format!("{name}"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => format!("{object:?}.{field}"),
             Index { object, index, .. } => format!("{object:?}[{index:?}]"),
             UnarOp { op, hs, .. } => format!("{op:?} {hs:?}"),
+            Transform { hs, .. } => format!("+{hs:?}"),
             BinOp { lhs, op, rhs, .. } => format!("{lhs:?} {op:?} {rhs:?}"),
             IfThen { i, t, .. } => format!("? {i:?} {t:?}"),
             IfThenElse { i, t, e, .. } => {
@@ -116,16 +119,11 @@ pub enum HNodeData {
         lhs: ExprID,
         rhs: ExprID,
     },
-    // TODO: combine Call and IndirectCall, making Call take a UniqueFuncInfo and 
-    // abstracting over the differences between ExprID and a UniqueFuncInfo using an 
-    // HCallable enum
     Call {
         ret_type: Type,
-        f: VarName,
-        generics: Vec<Type>,
+        query: FuncQuery,
         a: Vec<ExprID>,
         sret: Option<ExprID>,
-        relation: TypeRelation,
     },
     IndirectCall {
         ret_type: Type,
@@ -147,6 +145,11 @@ pub enum HNodeData {
         ret_type: Type,
         op: Opcode,
         hs: ExprID,
+    },
+    Transform {
+        hs: ExprID,
+        ret_type: Type,
+        steps: TransformationList,
     },
     BinOp {
         ret_type: Type,
@@ -194,6 +197,7 @@ impl HNodeData {
             BinOp { ret_type, .. }
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
+            | Transform { ret_type, .. }
             | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
             | Call { ret_type, .. }
@@ -206,53 +210,24 @@ impl HNodeData {
 
     pub fn ret_type_mut(&mut self) -> Option<&mut Type> {
         match self {
-            Number {
-                ref mut lit_type, ..
-            }
-            | Float {
-                ref mut lit_type, ..
-            } => Some(lit_type),
+            Number { ref mut lit_type, .. }
+            | Float { ref mut lit_type, .. } => Some(lit_type),
             Bool { .. } => None,
             While { .. } | Set { .. } => None,
-            Ident {
-                ref mut var_type, ..
-            }
-            | StructLit {
-                ref mut var_type, ..
-            }
-            | ArrayLit {
-                ref mut var_type, ..
-            } => Some(var_type),
-            BinOp {
-                ref mut ret_type, ..
-            }
-            | Return {
-                ref mut ret_type, ..
-            }
-            | UnarOp {
-                ref mut ret_type, ..
-            }
-            | IfThen {
-                ref mut ret_type, ..
-            }
-            | IfThenElse {
-                ref mut ret_type, ..
-            }
-            | Call {
-                ref mut ret_type, ..
-            }
-            | IndirectCall {
-                ref mut ret_type, ..
-            }
-            | Block {
-                ref mut ret_type, ..
-            }
-            | Index {
-                ref mut ret_type, ..
-            }
-            | Member {
-                ref mut ret_type, ..
-            } => Some(ret_type),
+            Ident { ref mut var_type, .. }
+            | StructLit { ref mut var_type, .. }
+            | ArrayLit { ref mut var_type, .. } => Some(var_type),
+            BinOp { ref mut ret_type, .. }
+            | Return { ref mut ret_type, .. }
+            | UnarOp { ref mut ret_type, .. }
+            | Transform { ref mut ret_type, .. }
+            | IfThen { ref mut ret_type, .. }
+            | IfThenElse { ref mut ret_type, .. }
+            | Call { ref mut ret_type, .. }
+            | IndirectCall { ref mut ret_type, .. }
+            | Block { ref mut ret_type, .. }
+            | Index { ref mut ret_type, .. }
+            | Member { ref mut ret_type, .. } => Some(ret_type),
         }
     }
 
@@ -320,24 +295,22 @@ impl HNodeData {
                 lit
             },
             Call {
-                f,
-                generics,
                 a: args,
-                relation,
+                query,
                 sret,
                 ..
             } => {
-                let mut call = match relation {
+                let mut call = match &query.relation {
                     TypeRelation::Static(typ) => format!("{typ:?}") + "::",
                     TypeRelation::MethodOf(typ) => format!("({typ:?})") + ".",
                     TypeRelation::Unrelated => String::default(),
                 };
 
-                call += &*f.to_string();
+                call += &*query.name;
 
-                if !generics.is_empty() {
+                if !query.generics.is_empty() {
                     call += "<";
-                    for (g, generic) in generics.iter().enumerate() {
+                    for (g, generic) in query.generics.iter().enumerate() {
                         if g > 0 {
                             call += ", ";
                         }
@@ -396,6 +369,9 @@ impl HNodeData {
             },
             UnarOp { op, hs, .. } => {
                 op.to_string() + &*tree.get(*hs).to_string(tree)
+            },
+            Transform { hs, .. } => {
+                "+".to_string() + &*tree.get(*hs).to_string(tree)
             },
             BinOp { lhs, op, rhs, .. } => {
                 let mut binop = tree.get(*lhs).to_string(tree);

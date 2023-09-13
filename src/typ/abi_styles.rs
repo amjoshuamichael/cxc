@@ -95,8 +95,8 @@ impl Type {
         }
 
         match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ReturnStyle::Direct,
-            Struct(_) | Array(_) | Variant(_) => {
+            Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
+            Struct(_) | Array(_) => {
                 let size = self.size();
 
                 if size > 16 {
@@ -116,19 +116,6 @@ impl Type {
                     ReturnStyle::Direct
                 }
             },
-            Sum(sum_type) => {
-                let size = self.size();
-
-                if size > 16 {
-                    return ReturnStyle::Sret;
-                }
-
-                if sum_type.has_internal_discriminant() {
-                    sum_type.largest_variant_data().return_style()
-                } else {
-                    return_style_from_size(size)
-                }
-            },
             Void => ReturnStyle::Void,
             Unknown => panic!("cannot return unknown type"),
         }
@@ -138,7 +125,7 @@ impl Type {
         use TypeEnum::*;
 
         match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool(_) | Func(_) => ArgStyle::Direct,
+            Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
             _ => match self.size() {
                 0..=8 => {
                     // TODO: make i take usize or make size return u32

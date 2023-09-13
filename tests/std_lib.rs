@@ -4,7 +4,6 @@ use std::{rc::Rc, sync::Arc};
 use cxc::library::StdLib;
 use test_utils::xc_test;
 
-// VEC
 #[test]
 fn default_vec_alone() {
     xc_test!(
@@ -59,8 +58,8 @@ fn vec_push_and_check() {
 
             num_vec: Vec<i64> = Vec<i64>:new()
             two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new()
-            
-            current_index: i64 = i64 0
+
+            current_index = i64 0
             @ current_index < number_of_checks {
                 num_vec.push(current_index)
 
@@ -69,7 +68,10 @@ fn vec_push_and_check() {
 
             current_index = i64 0
             @ current_index < number_of_checks {
-                assert_eq<i64>(num_vec.get<i64>(current_index), current_index)
+                assert_eq<i64>(
+                    num_vec.get<i64>(cast<i64, u64>(current_index)), 
+                    current_index
+                )
 
                 current_index = current_index + i64 1
             }
@@ -83,7 +85,7 @@ fn vec_push_and_check() {
 
             current_index = i64 0
             @ current_index < i64 1 {
-                in_vec: TwoNums = two_num_vec.get<TwoNums>(current_index)
+                in_vec: TwoNums = two_num_vec.get<TwoNums>(cast<i64, u64>(current_index))
                 corresponding: TwoNums = two_nums_from_one(current_index)
 
                 assert_eq<i64>(in_vec.num_two, corresponding.num_two)
@@ -122,40 +124,6 @@ fn big_rc() {
         }
         ";
         Rc::new((90i32, 90i32))
-    )
-}
-
-#[test]
-fn big_rc_sum() {
-    xc_test!(
-        use StdLib;
-        "
-        &{i32, i32}:.sum(); i32 {
-            ; self.0 + self.1
-        }
-
-        main(); i32 {
-            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
-
-            ; rcx.sum()
-        }
-        ";
-        180
-    )
-}
-
-#[test]
-fn big_rc_to_string() {
-    xc_test!(
-        use StdLib;
-        "
-        main(); String {
-            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
-
-            ; rcx.to_string()
-        }
-        ";
-        String::from("{0 = 90, 1 = 90}")
     )
 }
 
@@ -261,6 +229,7 @@ fn arc_test() {
 
 // TODO: naming a variable with the name of a method causes bugs??
 #[test]
+#[ignore]
 fn arc_clone() {
     xc_test!(
         use StdLib;

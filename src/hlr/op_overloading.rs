@@ -1,7 +1,8 @@
-use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName};
+use crate::{parse::Opcode, TypeEnum, TypeRelation, VarName, FuncQuery};
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
+#[cfg_attr(debug_assertions, inline(never))]
 pub fn op_overloading(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |op_id, op_data, hlr| {
@@ -21,10 +22,12 @@ pub fn op_overloading(hlr: &mut FuncRep) {
                     );
                     *op_data = HNodeData::Call {
                         ret_type: ret_type.clone(),
-                        f: VarName::from("deref"),
-                        generics: hs_type.generics().clone(),
+                        query: FuncQuery {
+                            name: VarName::from("deref"),
+                            generics: hs_type.generics().clone(),
+                            relation: TypeRelation::MethodOf(hs_type.clone().get_ref()),
+                        },
                         a: vec![reffed_hs],
-                        relation: TypeRelation::MethodOf(hs_type.clone().get_ref()),
                         sret: None,
                     };
                 },

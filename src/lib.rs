@@ -1,15 +1,11 @@
 #![feature(type_name_of_val)]
 #![feature(int_roundings)]
 #![feature(let_chains)]
-#![feature(type_alias_impl_trait)]
-#![feature(type_changing_struct_update)]
 #![feature(if_let_guard)]
-#![feature(min_specialization)]
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 #![feature(tuple_trait)]
 #![feature(exclusive_range_pattern)]
-#![feature(yeet_expr)]
 
 // HOW THE DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
@@ -21,10 +17,10 @@ pub use lex::{TypeName, VarName};
 pub use parse::{TypeDecl, TypeRelation};
 pub use typ::{
     ArrayType, BoolType, FloatType, FuncType, IntType, Kind, RefType, Repr, StructType, Type,
-    TypeData, TypeEnum,
+    TypeData, TypeEnum, Field
 };
 pub use unit::{
-    CompData, ExternalFuncAdd, Func, FuncDowncasted, UniqueFuncInfo, Unit, XcReflect, Value,
+    CompData, ExternalFuncAdd, Func, FuncDowncasted, FuncQuery, Unit, XcReflect, Value
 };
 
 pub mod library {

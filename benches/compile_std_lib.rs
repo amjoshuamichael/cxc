@@ -11,6 +11,19 @@ pub fn compile_std_lib(b: &mut Bencher) {
         //for _ in 0..10000 {
             let mut unit = black_box(Unit::new());
             black_box(unit.add_lib(StdLib));
+            unit.push_script("
+                main() {
+                    # use some stdlib stuff
+                    rcint = Rc<i32>:new(32)
+                    rcfloat = Rc<f32>:new(32.0)
+                    arcint = Arc<i32>:new(34)
+                    arcfloat = Arc<f32>:new(34.0)
+                    vecint = Vec<i32>:new()
+                    vecint.push(234)
+                    vecfloat = Vec<f32>:new()
+                    vecfloat.push(234.0)
+                }
+            ").unwrap();
         //}
     });
 }

@@ -9,14 +9,16 @@ use crate::FuncType;
 use crate::RefType;
 use crate::TypeEnum;
 use crate::typ::ArgStyle;
+use crate::typ::Field;
 use crate::typ::ReturnStyle;
-use crate::typ::SumType;
 use crate::typ::UnknownType;
-use crate::typ::VariantType;
 use crate::typ::VoidType;
 use crate::{Type, IntType, FloatType, StructType};
 
 pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool) {
+    sig.params.clear();
+    sig.returns.clear();
+
     let return_style = if as_rust { 
         typ.ret.rust_return_style() 
     } else { 
@@ -69,12 +71,10 @@ impl ToCLType for TypeEnum {
             TypeEnum::Int(t) => t.to_cl_type(),
             TypeEnum::Float(t) => t.to_cl_type(),
             TypeEnum::Struct(t) => t.to_cl_type(),
-            TypeEnum::Sum(t) => t.to_cl_type(),
-            TypeEnum::Variant(t) => t.to_cl_type(),
             TypeEnum::Ref(t) => t.to_cl_type(),
             TypeEnum::Func(t) => t.to_cl_type(),
             TypeEnum::Array(t) => t.to_cl_type(),
-            TypeEnum::Bool(t) => t.to_cl_type(),
+            TypeEnum::Bool => (&BoolType).to_cl_type(),
             TypeEnum::Void => VoidType().to_cl_type(),
             TypeEnum::Unknown => UnknownType().to_cl_type(),
         }
@@ -116,31 +116,9 @@ impl ToCLType for StructType {
     fn to_cl_type(&self) -> Vec<ClType> {
         self.fields
             .iter()
-            .map(|(_, typ)| typ.to_cl_type())
+            .map(|Field { typ, .. }| typ.to_cl_type())
             .flatten()
             .collect()
-    }
-}
-
-impl ToCLType for SumType {
-    fn to_cl_type(&self) -> Vec<ClType> {
-        let size = self.largest_variant_as_struct().size() as u32;
-
-        match size {
-            0..=8 => vec![ClType::int((size * 8) as u16).unwrap()],
-            9..=16 => vec![cl_types::I32; size as usize / 4],
-            17.. => {
-                // TODO: enum variants like i1, i32, i32, i32, i32 won't work here
-                let padding_size = size as usize - 4;
-                vec![cl_types::I32; padding_size / 4 + 1]
-            },
-        }
-    }
-}
-
-impl ToCLType for VariantType {
-    fn to_cl_type(&self) -> Vec<ClType> {
-        self.as_struct().to_cl_type()
     }
 }
 

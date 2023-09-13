@@ -2,10 +2,11 @@ use std::{collections::{BTreeMap, BTreeSet}, iter::once};
 
 use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
 use cranelift_module::Module;
+use slotmap::SecondaryMap;
 
-use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, UniqueFuncInfo, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}, RefType, IntType};
+use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}, RefType, IntType, unit::FuncId};
 
-use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, ClFunctionData, Global, alloc_and_free::AllocAndFree};
 
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -20,17 +21,18 @@ pub fn make_fcs<'a>(
     context: &'a mut codegen::Context,
     mir: MIR,
 ) -> (FunctionCompilationState<'a>, Vec<MLine>) {
-    let used_functions = mir.dependencies.iter().filter_map(|info| {
-        let (func_id, info) = 
-            if let Some((_, func_id)) = backend.cl_function_data.get(info) {
-                (*func_id, info.clone())
+    let used_functions = mir.dependencies.iter().filter_map(|(_, func_id)| {
+        let (cl_func_id, func_id) = 
+            if let Some(ClFunctionData { cl_func_id, .. }) = 
+                backend.cl_function_data.get(*func_id) {
+                (*cl_func_id, *func_id)
             } else {
                 return None
             };
 
-        let func_ref = backend.module.declare_func_in_func(func_id, &mut context.func);
+        let func_ref = backend.module.declare_func_in_func(cl_func_id, &mut context.func);
 
-        Some((info, func_ref))
+        Some((func_id, func_ref))
     }).collect();
 
     let mut builder = FunctionBuilder::new(&mut context.func, func_builder_context);
@@ -63,17 +65,18 @@ pub fn make_fcs<'a>(
             }
 
             let val = if !mir.variables.contains_key(&var.name) {
-                if let Some((_, ptr)) = backend.globals.get(&var.name) {
-                    builder.ins().iconst(cl_types::I64, *ptr as i64)
-                } else {
-                    // global is a function
-                    let info = UniqueFuncInfo::from(var.name.clone());
+                match backend.globals[&var.name] {
+                    Global::Value { ptr, .. } => {
+                        builder.ins().iconst(cl_types::I64, ptr as i64)
+                    },
+                    Global::Func(func_id) => {
+                        let ClFunctionData { cl_func_id, .. } = 
+                            &backend.cl_function_data[func_id];
 
-                    let (_, func_id) = &backend.cl_function_data[&info];
-
-                    let func_ref = 
-                        backend.module.declare_func_in_func(*func_id, builder.func);
-                    builder.ins().func_addr(cl_types::I64, func_ref)
+                        let func_ref = 
+                            backend.module.declare_func_in_func(*cl_func_id, builder.func);
+                        builder.ins().func_addr(cl_types::I64, func_ref)
+                    }
                 }
             } else {
                 continue;
@@ -113,6 +116,7 @@ pub fn make_fcs<'a>(
         function_signatures: &backend.func_signatures,
         external_functions: &backend.external_functions,
         frontend_config: &backend.frontend_config,
+        alloc_and_free: &backend.alloc_and_free,
         ret_type: mir.func_type.ret.clone(),
     };
 
@@ -156,11 +160,12 @@ pub struct FunctionCompilationState<'a> {
     entry_block: BlockData,
     other_blocks: Vec<BlockData>,
     reg_types: BTreeMap<MReg, Type>,
-    used_functions: BTreeMap<UniqueFuncInfo, FuncRef>,
+    used_functions: SecondaryMap<FuncId, FuncRef>,
     used_globals: BTreeMap<VarName, CLValue>,
     function_signatures: &'a BTreeMap<FuncType, Signature>,
-    external_functions: &'a BTreeMap<UniqueFuncInfo, ExternalFuncData>,
+    external_functions: &'a SecondaryMap<FuncId, ExternalFuncData>,
     frontend_config: &'a TargetFrontendConfig,
+    alloc_and_free: &'a AllocAndFree,
     ret_type: Type,
 }
 
@@ -294,13 +299,11 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
 
         if *location == VarLocation::Reg {
             let writeable = if let ArgIndex::Some(arg_index) = arg_index {
-                dbg!(&arg_index);
-                dbg!(&name);
                 let raw_arg_types = typ.raw_arg_type().to_cl_type();
                 let raw_arg_type_count = raw_arg_types.len();
 
                 let writeable = Writeable::Arg { 
-                    index: dbg!(*arg_index + arg_offset), 
+                    index: *arg_index + arg_offset, 
                     types: raw_arg_types,
                     entry_block: fcs.entry_block.block,
                 };
@@ -475,8 +478,19 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
                 len,
             );
         },
-        MLine::Return(operand) => {
+        MLine::MemMove { from, to, len } => {
+            let from = one(compile_operand(fcs, from));
+            let to = one(compile_operand(fcs, to));
+            let len = one(compile_operand(fcs, len));
 
+            fcs.builder.call_memmove(
+                *fcs.frontend_config,
+                to,
+                from,
+                len,
+            );
+        },
+        MLine::Return(operand) => {
             if let Some(operand) = operand {
                 build_some_return(fcs, operand);
             } else {
@@ -588,7 +602,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
         ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => {
             vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I64, 8)]
         },
-        _ => unreachable!(),
+        _ => unreachable!("{return_style:?}"),
     };
 
     fcs.builder.ins().return_(&*ret);
@@ -617,6 +631,7 @@ fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr) -> CLVa
 
             offset_addr
         },
+        
     }
 }
 
@@ -642,16 +657,16 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
 
             let call_inst = match f {
                 MCallable::Func(info) => {
-                    if let Some(func_ref) = fcs.used_functions.get(&info) {
+                    if let Some(func_ref) = fcs.used_functions.get(*info) {
                         fcs.builder.ins().call(*func_ref, &*all_args)
-                    } else if let Some(ext_func_data) = fcs.external_functions.get(&info) {
+                    } else if let Some(ext_func_data) = fcs.external_functions.get(*info) {
                         return Some(build_external_func_call(
                             &mut fcs.builder, 
                             all_args, 
                             ext_func_data
                         ));
                     } else {
-                        return build_intrinsic_function(fcs, info, all_args);
+                        panic!("{info:?}");
                     }
                 },
                 MCallable::FirstClass(memloc) => {
@@ -664,7 +679,34 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
 
             let ret = fcs.builder.inst_results(call_inst).to_vec();
             if ret.len() == 0 { None } else { Some(ret) }
-        }
+        },
+        MExpr::Alloc { len } => {
+            let alloc_func = 
+                fcs.builder.ins().iconst(cl_types::I64, fcs.alloc_and_free.alloc_ptr as i64);
+            let size = one(compile_operand(fcs, len));
+            let alloc_sigref = 
+                fcs.builder.import_signature(fcs.alloc_and_free.alloc_sig.clone());
+            let call_inst = fcs.builder.ins().call_indirect(
+                alloc_sigref,
+                alloc_func, 
+                &[size],
+            );
+            Some(fcs.builder.inst_results(call_inst).to_vec())
+        },
+        MExpr::Free { ptr } => {
+            let alloc_func = 
+                fcs.builder.ins().iconst(cl_types::I64, fcs.alloc_and_free.free_ptr as i64);
+            let ptr = one(compile_operand(fcs, ptr));
+            let free_sigref = 
+                fcs.builder.import_signature(fcs.alloc_and_free.alloc_sig.clone());
+            let call_inst = fcs.builder.ins().call_indirect(
+                free_sigref,
+                alloc_func, 
+                &[ptr],
+            );
+            let ret = fcs.builder.inst_results(call_inst)[0];
+            Some(vec![ret])
+        },
         MExpr::MemLoc(memloc) => Some(load_memloc(fcs, memloc)),
         MExpr::UnarOp { ret_type, op, hs } => {
             Some(vec![compile_unarop(fcs, ret_type, *op, hs)])
@@ -679,59 +721,6 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
     }
 }
 
-fn build_intrinsic_function(
-    fcs: &mut FunctionCompilationState, 
-    info: &UniqueFuncInfo, 
-    a: Vec<CLValue>
-) -> Option<Vec<CLValue>> {
-    match &*info.name.to_string() {
-        "memmove" => {
-            fcs.builder.call_memmove(
-                fcs.frontend_config.clone(), 
-                a[1],
-                a[0],
-                a[2],
-            );
-            None
-        },
-        "alloc" => {
-            let alloc_info = UniqueFuncInfo::from(VarName::from("$alloc"));
-            let ext_alloc = &fcs.external_functions[&alloc_info];
-            let alloc_func = fcs.builder.ins().iconst(cl_types::I64, ext_alloc.ptr as i64);
-            let alloc_sigref = fcs.builder.import_signature(ext_alloc.sig.clone());
-            let size_multiplier = info.generics[0].size() as i64;
-            let size_multiplier = fcs.builder.ins().iconst(cl_types::I64, size_multiplier);
-            let proper_size = fcs.builder.ins().imul(a[0], size_multiplier);
-            let call_inst = fcs.builder.ins().call_indirect(
-                alloc_sigref, 
-                alloc_func, 
-                &[proper_size]
-            );
-            let ret = fcs.builder.inst_results(call_inst)[0];
-            Some(vec![ret])
-        },
-        "free" => {
-            let free_info = UniqueFuncInfo::from(VarName::from("$free"));
-            let ext_free = &fcs.external_functions[&free_info];
-            let free_func = fcs.builder.ins().iconst(cl_types::I64, ext_free.ptr as i64);
-            let free_sigref = fcs.builder.import_signature(ext_free.sig.clone());
-
-            fcs.builder.ins().call_indirect(free_sigref, free_func, &[a[0]]);
-            None
-        },
-        "size_of" => {
-            Some(vec![fcs.builder.ins().iconst(cl_types::I64, info.generics[0].size() as i64)])
-        },
-        "typeobj" => {
-            let typ = info.generics[0].clone();
-            let typusize: i64 = unsafe { std::mem::transmute(typ) };
-
-            Some(vec![fcs.builder.ins().iconst(cl_types::I64,typusize)])
-        },
-        _ => panic!(),
-    }
-}
-
 fn compile_unarop(
     fcs: &mut FunctionCompilationState, 
     ret_type: &Type, 
@@ -743,7 +732,7 @@ fn compile_unarop(
     let hs = one(compile_operand(fcs, hs));
 
     match ret_type.as_type_enum() {
-        TypeEnum::Bool(_) => {
+        TypeEnum::Bool => {
             match op {
                 Not => fcs.builder.ins().bnot(hs),
                 _ => unreachable!(),
@@ -765,10 +754,10 @@ fn compile_binop(
     let ins = fcs.builder.ins();
 
     match left_type.as_type_enum() {
-        TypeEnum::Int(_) | TypeEnum::Bool(_) => {
+        TypeEnum::Int(_) | TypeEnum::Bool => {
             let signed = match left_type.as_type_enum() {
                 TypeEnum::Int(IntType { signed, .. }) => *signed,
-                TypeEnum::Bool(_) => false,
+                TypeEnum::Bool => false,
                 _ => unreachable!()
             };
 

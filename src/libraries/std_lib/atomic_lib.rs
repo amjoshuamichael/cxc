@@ -115,14 +115,15 @@ macro_rules! add_atomic_to_unit {
 
 impl XcReflect for Ordering {
     fn alias_code() -> String {
-        "Ordering = { 
-            Relaxed: {} / 
-            Release: {} / 
-            Acquire: {} / 
-            AcqRel: {} / 
-            SeqCst: {} 
-        }"
-        .into()
+        //"Ordering = { 
+        //    Relaxed: {} / 
+        //    Release: {} / 
+        //    Acquire: {} / 
+        //    AcqRel: {} / 
+        //    SeqCst: {} 
+        //}"
+        //.into()
+        "Ordering = u8".into()
     }
 }
 

@@ -57,10 +57,6 @@ pub struct FieldsIter {
 
 impl FieldsIter {
     pub fn new(from: Type) -> FieldsIter {
-        if let TypeEnum::Variant(variant_type) = from.as_type_enum() {
-            return variant_type.as_struct().fields_iter()
-        }
-
         FieldsIter {
             over: from,
             index: 0,
@@ -109,7 +105,7 @@ impl Iterator for FieldsIter {
 
         let to_return: &Type = match self.over.as_type_enum() {
             TypeEnum::Struct(StructType { fields, .. }) => {
-                let iterating_over = &fields.get(self.index)?.1;
+                let iterating_over = &fields.get(self.index)?.typ;
                 self.inner = Some(Box::new(FieldsIter::new(iterating_over.clone())));
                 iterating_over
             },
@@ -120,7 +116,6 @@ impl Iterator for FieldsIter {
                 self.inner = Some(Box::new(FieldsIter::new(base.clone())));
                 base
             },
-            TypeEnum::Variant(_) => unreachable!(),
             TypeEnum::Array(ArrayType { base, count }) => {
                 if self.index as u32 > *count {
                     return None;
@@ -154,12 +149,17 @@ mod tests {
     }
 
     #[test]
+    fn fields_iter_single_tuple() {
+        let  _iter = FieldsIter::new(Type::new_tuple(vec![Type::i(32)]));
+    }
+
+    #[test]
     fn fields_iter_ref() {
         let mut iter = FieldsIter::new(
             Type::new(TypeEnum::Struct(StructType {
                 fields: vec![
-                    ("a".into(), Type::i(32).get_ref()),
-                    ("b".into(), Type::f32()),
+                    Field { name: "a".into(), typ: Type::i(32).get_ref(), inherited: false },
+                    Field { name: "b".into(), typ: Type::f(32), inherited: false },
                 ],
                 ..Default::default()
             }))
@@ -227,4 +227,5 @@ mod tests {
         assert_eq!(iter.next(), Some(Type::f32()));
         assert_eq!(iter.next(), None);
     }
+
 }

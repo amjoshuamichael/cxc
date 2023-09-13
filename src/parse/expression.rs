@@ -204,7 +204,7 @@ fn parse_call(
 
     let call_expr = match func {
         Atom::Expr(Expr::Member(object, method_name)) => {
-            args.insert(0, Expr::UnarOp(Opcode::Ref, object));
+            args.insert(0, *object);
 
             Expr::Call {
                 func: Box::new(Expr::Ident(method_name)),

@@ -2,7 +2,7 @@ use crate::{
     hlr::hlr_data::FuncRep,
     lex::VarName,
     parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
-    Type, UniqueFuncInfo,
+    Type, FuncQuery, typ::spec_from_type::type_to_type_spec,
 };
 
 use super::{ExprID, HNodeData};
@@ -154,7 +154,7 @@ impl<T: NodeDataGen> NodeDataGen for UnarOpGen<T> {
 
 #[derive(Debug, Default)]
 pub struct CallGen {
-    pub info: UniqueFuncInfo,
+    pub query: FuncQuery,
     pub args: Vec<Box<dyn NodeDataGen>>,
     pub sret: Option<Box<dyn NodeDataGen>>,
 }
@@ -171,14 +171,12 @@ impl NodeDataGen for CallGen {
 
         let sret = self.sret.as_ref().map(|sret| sret.add_to_expr_tree(hlr, space));
 
-        let func_type = hlr.comp_data.get_func_type(&self.info).unwrap();
+        let func_type = hlr.comp_data.get_func_type(&self.query).unwrap();
 
         hlr.tree.replace(
             space,
             HNodeData::Call {
-                f: self.info.name.clone(),
-                generics: self.info.generics.clone(),
-                relation: self.info.relation.clone(),
+                query: self.query.clone(),
                 ret_type: func_type.ret,
                 a: args,
                 sret,
@@ -190,16 +188,14 @@ impl NodeDataGen for CallGen {
 }
 
 // TODO: is this nescessary
-impl NodeDataGen for UniqueFuncInfo {
+impl NodeDataGen for FuncQuery {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let func_type = hlr.comp_data.get_func_type(self).unwrap();
 
         hlr.tree.insert(
             parent,
             HNodeData::Call {
-                f: self.name.clone(),
-                generics: self.generics.clone(),
-                relation: self.relation.clone(),
+                query: self.clone(),
                 ret_type: func_type.ret,
                 a: Vec::new(),
                 sret: None,
@@ -294,7 +290,7 @@ impl<T: NodeDataGen> NodeDataGen for MemberGen<T> {
         let object_type = hlr.tree.get(object).ret_type();
         let member_type = 
             hlr.get_type_spec(&TypeSpec::StructMember(
-                    Box::new(object_type.into()),
+                    Box::new(type_to_type_spec(object_type)),
                     self.field.clone()
                 ))
                 .unwrap();
@@ -421,9 +417,11 @@ impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T
         hlr.tree.replace(
             space,
             HNodeData::Call {
-                f: "memcpy".into(),
-                relation: TypeRelationGeneric::Unrelated,
-                generics,
+                query: FuncQuery {
+                    name: "memcpy".into(),
+                    relation: TypeRelationGeneric::Unrelated,
+                    generics,
+                },
                 ret_type: Type::void(),
                 a: vec![from, to, size],
                 sret: None,

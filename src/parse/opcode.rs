@@ -27,6 +27,7 @@ pub enum Opcode {
     Ref,
     Deref,
     Dot,
+    Transform,
 }
 
 use Opcode::*;
@@ -85,6 +86,7 @@ impl ToString for Opcode {
             BitShiftR => ">>",
             Not => "!",
             Or => "||",
+            Transform => "+",
             And => "&&",
             LessThan => "<",
             GrtrThan => ">",

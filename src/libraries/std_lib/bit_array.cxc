@@ -2,7 +2,6 @@ BitArray<T> = {
     inner: NumOfSize(T)
 }
 
-
 <T> &BitArray<T>:. {
     get(index: Me.inner); bool {
         ; (self.inner & (Me.inner 1 << index)) > Me.inner 0

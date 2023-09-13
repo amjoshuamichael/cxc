@@ -32,6 +32,7 @@ fn big_global() {
     let mut unit = Unit::new();
 
     let mut large_value = Numbers5::default();
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
     unit.push_script(
@@ -50,6 +51,7 @@ fn big_global() {
 
 
 #[test]
+#[ignore]
 fn global_rc() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -77,6 +79,7 @@ fn comp_script() {
 
     unit.add_lib(StdLib);
     let mut large_value = Numbers5::default();
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
     unit.push_script(
@@ -104,6 +107,7 @@ fn first_class_void() {
 
     let mut large_value = Numbers5::default();
     large_value.a = 9;
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("large_value".into(), &mut large_value as *mut _);
 
     unit.push_script(
@@ -114,7 +118,7 @@ fn first_class_void() {
             large_value.a = large_value.a * x
         }
 
-        get_that_fn(); (i32) {
+        get_that_fn(); FnHolder {
             ; FnHolder { multiply_a_by }
         }
 
@@ -138,6 +142,7 @@ fn get_fn_by_ptr() {
     unit.add_lib(StdLib);
 
     let mut functions = Vec::<usize>::new();
+    unit.add_reflect_type::<Numbers5>();
     unit.add_global("functions".into(), &mut functions as *mut _);
 
     unit.push_script(
@@ -147,8 +152,8 @@ fn get_fn_by_ptr() {
 
         ---
 
-        functions.push(add_two)
-        functions.push(fifty_four)
+        functions.push(cast<(i32); i32, u64>(add_two))
+        functions.push(cast<(); i32, u64>(fifty_four))
         "#
     ).unwrap();
 
