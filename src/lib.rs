@@ -7,8 +7,6 @@
 #![feature(tuple_trait)]
 #![feature(exclusive_range_pattern)]
 
-#![allow(warnings)]
-
 // HOW THE DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself
 // 2. backend-debug: enables debug printing for backend, like LLVM or Cranelift

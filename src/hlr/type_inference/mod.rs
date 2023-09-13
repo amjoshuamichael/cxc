@@ -57,8 +57,6 @@ enum LastSetBy {
     Known(KnownBy),
     ReturnTypeOfFunction,
     ArgTypeOfFunction(FuncQuery, usize),
-    StructLiteral,
-    Call,
     #[default]
     None, // TODO: do we need this?
 }

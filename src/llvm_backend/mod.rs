@@ -8,8 +8,8 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-use inkwell::{values::*, AddressSpace};
-use inkwell::types::*;
+use inkwell::{values::*};
+
 use slotmap::SecondaryMap;
 use std::collections::BTreeMap;
 use operations::compile_bin_op;
@@ -136,7 +136,7 @@ fn create_blocks(
 
 fn get_used_functions(
     fcs: &mut FunctionCompilationState,
-    module: &Module<'static>,
+    _module: &Module<'static>,
 ) {
     for id in fcs.mir.dependencies.values() {
         let function_value = fcs.compiled[*id].value;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
-use crate::Type;
+
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TypeSpec {
@@ -78,7 +78,7 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         ops.push(op);
     }
 
-    while let Some(plus_pos) = ops.iter().position(|a| *a == TypeOps::Plus) {
+    while let Some(_plus_pos) = ops.iter().position(|a| *a == TypeOps::Plus) {
         todo!()
     }
 

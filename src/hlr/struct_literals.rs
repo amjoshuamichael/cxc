@@ -1,4 +1,4 @@
-use crate::{Type, TypeEnum};
+use crate::{Type};
 
 use super::{
     expr_tree::{MemberGen, HNodeData, SetVarGen},

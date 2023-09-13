@@ -122,7 +122,7 @@ impl CompData {
                     return Err(TErr::NotAStruct(struct_type.clone()))
                 }
             },
-            TypeSpec::SumMember(sum_type, type_name) => {
+            TypeSpec::SumMember(_sum_type, _type_name) => {
                 todo!()
             },
             TypeSpec::Struct(fields) => {
@@ -137,7 +137,7 @@ impl CompData {
                         .collect::<Result<_, _>>()?
                 )
             },
-            TypeSpec::Sum(variants) => {
+            TypeSpec::Sum(_variants) => {
                 todo!()
             },
             TypeSpec::Tuple(types) => {

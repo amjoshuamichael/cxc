@@ -2,7 +2,7 @@ use crate::lex::{indent_parens, TypeName, VarName};
 use crate::typ::can_transform::TransformationList;
 use crate::{parse::*, FuncQuery};
 use crate::Type;
-use crate::unit::FuncId;
+
 use std::fmt::{Debug, Formatter};
 
 mod expr_tree_helper;

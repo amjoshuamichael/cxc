@@ -4,7 +4,7 @@ use self::functions::DeriverInfo;
 use self::functions::TypeLevelFunc;
 pub use self::value_api::Value;
 use crate::FuncType;
-use crate::TypeEnum;
+
 use crate::errors::CErr;
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data_output::HLR;
@@ -28,7 +28,7 @@ use std::any::TypeId;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
+
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::iter::once;
@@ -421,7 +421,7 @@ impl Unit {
                     .args
                     .iter()
                     .all(|param_type| 
-                         !matches!(param_type.as_type_enum(), TypeEnum::Array(_))
+                         !matches!(param_type.as_type_enum(), crate::TypeEnum::Array(_))
                      ),
                 "Cannot run function that has array value as parameter. Pass in an array pointer instead."
             );

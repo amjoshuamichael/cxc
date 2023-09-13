@@ -46,7 +46,6 @@ pub struct ClFunctionData {
     ctx: codegen::Context,
     cl_func_id: ClFuncId,
     name: String,
-    is_first_pass: bool,
 }
 
 impl IsBackend for CraneliftBackend {
@@ -81,7 +80,7 @@ impl IsBackend for CraneliftBackend {
 
         self.module = make_proper_module(&*self.isa);
 
-        for (id, ClFunctionData { ctx, name, cl_func_id, .. }) in self.cl_function_data.iter_mut() {
+        for (_id, ClFunctionData { ctx, name, cl_func_id, .. }) in self.cl_function_data.iter_mut() {
             let new_id = self.module.declare_function(
                 &*name, 
                 Linkage::Local, 
@@ -93,13 +92,13 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn register_function(&mut self, func_id: FuncId, func_info: &ProcessedFuncInfo) {
-        let (mut ctx, is_first_pass) = 
+        let mut ctx = 
             if let Some(ClFunctionData { mut ctx, .. }) = 
                 self.cl_function_data.remove(func_id) {
                 ctx.func.clear();
-                (ctx, false)
+                ctx
             } else {
-                (self.module.make_context(), true)
+                self.module.make_context()
             };
 
         func_type_to_signature(&func_info.typ, &mut ctx.func.signature, false);
@@ -115,7 +114,7 @@ impl IsBackend for CraneliftBackend {
 
         self.cl_function_data.insert(
             func_id, 
-            ClFunctionData { ctx, cl_func_id, name, is_first_pass }
+            ClFunctionData { ctx, cl_func_id, name }
         );
         self.globals.insert(func_info.name.clone(), Global::Func(func_id));
 
@@ -215,7 +214,7 @@ pub fn make_proper_isa() -> Arc<dyn TargetIsa> {
 }
 
 pub fn make_proper_module(isa: &Arc<dyn TargetIsa>) -> JITModule {
-    let mut builder = JITBuilder::with_isa(isa.clone(), default_libcall_names());
+    let builder = JITBuilder::with_isa(isa.clone(), default_libcall_names());
 
     JITModule::new(builder)
 }

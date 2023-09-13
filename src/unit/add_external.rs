@@ -1,10 +1,10 @@
-use std::{collections::HashMap, iter::once};
+use std::{iter::once};
 
 use indexmap::IndexMap;
 
 use crate::{
     FuncType, Type, TypeEnum,
-    TypeRelation, FuncQuery, Unit, XcReflect, parse::{FuncCode, TypeSpec, VarDecl, Expr}, VarName, typ::spec_from_type::type_to_type_spec,
+    TypeRelation, Unit, XcReflect, parse::{FuncCode, VarDecl, Expr}, VarName, typ::spec_from_type::type_to_type_spec,
 };
 
 use super::{backends::IsBackend, ProcessedFuncInfo};

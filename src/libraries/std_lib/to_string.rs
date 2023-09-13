@@ -57,7 +57,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
 
     let typ = typ.complete_deref().get_ref();
 
-    let string_type = comp_data.get_by_name(&"String".into()).unwrap();
+    let _string_type = comp_data.get_by_name(&"String".into()).unwrap();
     let string_spec = TypeSpec::Named("String".into());
 
     let to_string = Expr::ident("to_string");

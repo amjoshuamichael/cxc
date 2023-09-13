@@ -1,5 +1,5 @@
 use crate::lex::{Tok, TypeName, VarName};
-use crate::Type;
+
 pub use context::{FuncParseContext, GlobalParseContext, ParseContext, TypeParseContext};
 pub use opcode::Opcode;
 use std::collections::HashMap;

@@ -1,9 +1,8 @@
 use crate::{
     lex::VarName,
     libraries::Library,
-    parse::{Expr, FuncCode, InitOpts, TypeSpec, TypeSpecRelation},
-    unit::CompData,
-    ExternalFuncAdd, Type, TypeEnum, TypeRelation, typ::{Field, spec_from_type::type_to_type_spec},
+    parse::{Expr, FuncCode, InitOpts, TypeSpecRelation},
+    unit::CompData, Type, TypeEnum, typ::{Field, spec_from_type::type_to_type_spec},
 };
 
 pub(super) struct DefaultLib;

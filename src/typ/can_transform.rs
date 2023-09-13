@@ -127,7 +127,7 @@ impl Type {
                     }
                 }
             },
-            TypeEnum::Array(ArrayType { base, count }) => {
+            TypeEnum::Array(ArrayType { base, count: _ }) => {
                 let slice = Type::new_struct(vec![
                     Field { inherited: true, name: "ptr".into(), typ: base.get_ref() },
                     Field { inherited: true, name: "len".into(), typ: Type::u(64) },

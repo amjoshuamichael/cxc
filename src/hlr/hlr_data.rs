@@ -1,4 +1,4 @@
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet};
 
 use super::expr_tree::*;
 use super::hlr_data_output::HLR;
@@ -164,7 +164,7 @@ impl<'a> FuncRep<'a> {
 
         let mut dependencies = HashSet::<FuncQuery>::new();
 
-        for (call_id, call_data) in self.tree.iter() {
+        for (_call_id, call_data) in self.tree.iter() {
             let HNodeData::Call { query, .. } = call_data else { continue };
             dependencies.insert(query.clone());
         }

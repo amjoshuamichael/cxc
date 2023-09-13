@@ -9,7 +9,7 @@ use slotmap::SecondaryMap;
 use crate::TypeEnum;
 use crate::typ::ReturnStyle;
 use crate::unit::{FuncId, ProcessedFuncInfo};
-use crate::{VarName, Type, unit::backends::IsBackend, mir::MIR, FuncQuery, FuncType};
+use crate::{VarName, Type, unit::backends::IsBackend, mir::MIR, FuncType};
 
 use crate::unit::backends::function::{Func, FuncDowncasted};
 use super::to_llvm_type::ToLLVMType;
@@ -118,7 +118,7 @@ impl IsBackend for LLVMBackend {
     }
 
     fn end_compilation_round(&mut self) {
-        for LLVMFunctionData { func, name, value } in self.compiled.values() {
+        for LLVMFunctionData { func, name, value: _ } in self.compiled.values() {
             func.set_pointer(
                 self.execution_engine.get_function_address(&name).unwrap() as _
             );

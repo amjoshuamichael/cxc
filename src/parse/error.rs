@@ -1,4 +1,4 @@
-use crate::{lex::Tok, Type, TypeName, VarName};
+use crate::{lex::Tok, TypeName, VarName};
 use std::fmt::{Debug, Display};
 
 use super::{Expr, FuncCode, TypeSpec, TypeSpecRelation, VarDecl};

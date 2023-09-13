@@ -20,7 +20,7 @@ mod size;
 mod abi_styles;
 
 use cxc_derive::XcReflect;
-use invalid_state::InvalidState;
+
 pub use kind::Kind;
 pub use abi_styles::{ReturnStyle, realize_return_style, realize_arg_style, ArgStyle};
 use crate::xc_opaque;

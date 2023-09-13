@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    parse::{ParseErrorSpanned, TypeSpec}, StructType, Type, TypeName, FuncQuery, VarName, hlr::expr_tree::ExprID, TypeRelation,
+    parse::{ParseErrorSpanned, TypeSpec}, StructType, Type, TypeName, VarName, hlr::expr_tree::ExprID, TypeRelation,
 };
 
 pub type CResultMany<T> = Result<T, Vec<CErr>>;

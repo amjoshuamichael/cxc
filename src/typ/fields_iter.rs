@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn fields_iter_single_tuple() {
-        let  mut iter = FieldsIter::new(Type::new_tuple(vec![Type::i(32)]));
+        let  _iter = FieldsIter::new(Type::new_tuple(vec![Type::i(32)]));
     }
 
     #[test]

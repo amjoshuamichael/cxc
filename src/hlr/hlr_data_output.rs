@@ -1,9 +1,9 @@
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{HashSet};
 
-use crate::{lex::VarName, unit::FuncQuery, FuncType, TypeRelation, Type};
+use crate::{lex::VarName, unit::FuncQuery, FuncType};
 
 use super::{
-    expr_tree::{ExprTree, HNodeData},
+    expr_tree::{ExprTree},
     hlr_data::Variables,
 };
 

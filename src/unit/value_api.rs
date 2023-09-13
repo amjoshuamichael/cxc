@@ -1,16 +1,15 @@
 use crate::{
     errors::CResultMany,
-    hlr::hlr,
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation},
     typ::ReturnStyle,
-    Unit, XcReflect, mir::mir,
+    Unit, XcReflect,
 };
-use std::{collections::{HashMap, BTreeSet, HashSet}, mem::transmute, sync::Mutex};
+use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
 
 use crate::Type;
 
-use super::{FuncQuery, backends::IsBackend, FuncId};
+use super::{FuncQuery, backends::IsBackend};
 
 use crate as cxc;
 
@@ -145,7 +144,7 @@ impl Unit {
         {
             let mut func_set = HashSet::new();
             func_set.insert(value_function_query.clone());
-            self.compile_func_set(func_set);
+            self.compile_func_set(func_set).unwrap();
         }
 
         let value_func_id = self.comp_data.query_for_id(&value_function_query).unwrap();

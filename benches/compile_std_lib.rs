@@ -23,7 +23,7 @@ pub fn compile_std_lib(b: &mut Bencher) {
                     vecfloat = Vec<f32>:new()
                     vecfloat.push(234.0)
                 }
-            ");
+            ").unwrap();
         //}
     });
 }
