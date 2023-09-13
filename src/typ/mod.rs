@@ -10,7 +10,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::sync::Arc;
 
-pub mod could_come_from;
+pub mod can_transform;
 pub mod fields_iter;
 pub mod invalid_state;
 pub mod spec_from_type;

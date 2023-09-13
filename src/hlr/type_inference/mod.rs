@@ -1,7 +1,7 @@
 use super::{prelude::*, hlr_data::VariableInfo};
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation},
-    Type, FuncQuery, VarName, CompData, errors::TResult, typ::could_come_from::Transformation
+    Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation
 };
 use indexmap::IndexMap;
 use std::{hash::Hash, collections::HashMap};

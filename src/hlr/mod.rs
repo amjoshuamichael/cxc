@@ -1,6 +1,6 @@
 mod add_void_return;
 mod active_initialization;
-mod auto_deref;
+mod do_transformations;
 mod remove_redundant_derefs;
 mod op_overloading;
 mod struct_literals;
@@ -29,7 +29,7 @@ pub mod prelude {
 use prelude::*;
 
 use self::active_initialization::active_initialization;
-use self::auto_deref::auto_deref;
+use self::do_transformations::do_transformations;
 use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
 use self::array_literals::array_literals;
@@ -65,7 +65,7 @@ pub fn hlr(
     // see the individual perf impact of each pass when using a flamegraph
 
     infer_types(&mut output);
-    auto_deref(&mut output)?;
+    do_transformations(&mut output)?;
     op_overloading(&mut output);
     active_initialization(&mut output);
     struct_literals(&mut output);

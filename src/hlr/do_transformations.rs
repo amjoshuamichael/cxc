@@ -1,12 +1,12 @@
 use crate::{
     parse::{Opcode, TypeSpec, InitOpts},
-    errors::CResultMany, typ::{could_come_from::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum, ArrayType,
+    errors::CResultMany, typ::{can_transform::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum, ArrayType,
 };
 
 use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, get_ref}, hlr_data::FuncRep};
 
 #[cfg_attr(debug_assertions, inline(never))]
-pub fn auto_deref(hlr: &mut FuncRep) -> CResultMany<()> {
+pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many(
         |memberlit, member_data, hlr| {
             let HNodeData::Member { ref mut object, field, .. } = member_data 

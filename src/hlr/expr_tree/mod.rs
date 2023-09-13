@@ -1,5 +1,5 @@
 use crate::lex::{indent_parens, TypeName, VarName};
-use crate::typ::could_come_from::TransformationList;
+use crate::typ::can_transform::TransformationList;
 use crate::{parse::*, FuncQuery};
 use crate::Type;
 use crate::unit::FuncId;

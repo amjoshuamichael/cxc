@@ -10,9 +10,11 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::{values::*, AddressSpace};
 use inkwell::types::*;
+use slotmap::SecondaryMap;
 use std::collections::BTreeMap;
 use operations::compile_bin_op;
 
+use self::backend::LLVMFunctionData;
 use self::operations::compile_unar_op;
 use self::to_llvm_type::ToLLVMType;
 
@@ -21,12 +23,12 @@ pub struct FunctionCompilationState<'a> {
     pub memlocs: BTreeMap<MMemLoc, BasicValueEnum<'static>>,
     pub addresses: BTreeMap<MAddr, PointerValue<'static>>,
     pub blocks: Vec<BasicBlock<'static>>,
-    pub used_functions: BTreeMap<UniqueFuncInfo, FunctionValue<'static>>,
+    pub used_functions: SecondaryMap<FuncId, FunctionValue<'static>>,
     pub function: FunctionValue<'static>,
     pub builder: Builder<'static>,
     pub context: &'static Context,
     pub globals: &'a BTreeMap<VarName, (Type, PointerValue<'static>)>,
-    pub generations: &'a Generations,
+    pub compiled: &'a SecondaryMap<FuncId, LLVMFunctionData>,
 }
 
 mod operations;
@@ -46,12 +48,12 @@ impl LLVMBackend {
             memlocs: BTreeMap::new(),
             addresses: BTreeMap::new(),
             blocks: Vec::new(),
-            used_functions: BTreeMap::new(),
+            used_functions: SecondaryMap::new(),
             function,
             builder: self.context.create_builder(),
             context: self.context,
             globals: &self.globals,
-            generations: &self.generations,
+            compiled: &self.compiled,
         }
     }
 }
@@ -136,18 +138,15 @@ fn get_used_functions(
     fcs: &mut FunctionCompilationState,
     module: &Module<'static>,
 ) {
-    for info in fcs.mir.dependencies.iter() {
-        if let Some(function_value) = 
-            module.get_function(&info.to_string(&fcs.generations)) {
-
-            fcs.used_functions.insert(info.clone(), function_value);
-        }
+    for id in fcs.mir.dependencies.values() {
+        let function_value = fcs.compiled[*id].value;
+        fcs.used_functions.insert(*id, function_value);
     }
 }
 
 pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'static>) {
     #[cfg(feature = "backend-debug")]
-    println!("Compiling: {}", fcs.mir.info.name);
+    println!("Compiling: {}", fcs.function.get_name().to_str().unwrap().to_string());
 
     build_stack_allocas(fcs);
     create_blocks(fcs);
@@ -165,7 +164,7 @@ pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'stat
 }
 
 pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
-    #[cfg(feature = "backend-debug")]
+    #[cfg(feature = "mir-debug")]
     println!("{:?}", fcs.mir.lines[index]);
 
     match &fcs.mir.lines[index] {
@@ -210,7 +209,14 @@ pub fn compile_mline(fcs: &mut FunctionCompilationState, index: usize) {
             let len = compile_operand(fcs, len).into_int_value();
             
             fcs.builder.build_memcpy(to, 1, from, 1, len).unwrap();
-        }
+        },
+        MLine::MemMove { from, to, len } => {
+            let src = compile_operand(fcs, &from).into_pointer_value();
+            let dest = compile_operand(fcs, &to).into_pointer_value();
+            let size = compile_operand(fcs, &len).into_int_value();
+
+            fcs.builder.build_memmove(dest, 1, src, 1, size).unwrap();
+        },
     }
 }
 
@@ -228,7 +234,7 @@ pub fn compile_expr(
             let reg_type = &fcs.mir.reg_types[reg.unwrap()];
             let loaded = fcs.builder.build_load(reg_type.to_basic_type(fcs.context), addr, reg_name);
             Some(loaded) 
-        },
+        }
         MExpr::Ref { on } => {
             Some(get_addr(fcs, on).as_basic_value_enum())
         }
@@ -256,115 +262,47 @@ pub fn compile_expr(
                 hs,
                 reg_name,
             ))
+        },
+        MExpr::Alloc { len } => {
+            let alloc_count = compile_operand(fcs, &len).into_int_value();
+
+            Some(
+                fcs.builder
+                    .build_array_malloc(fcs.context.i8_type(), alloc_count, "malloc")
+                    .unwrap()
+                    .as_basic_value_enum(),
+            )
+        },
+        MExpr::Free { ptr } => {
+            let ptr = compile_operand(fcs, &ptr).into_pointer_value();
+            fcs.builder.build_free(ptr);
+            None
         }
         MExpr::Call { typ, f: MCallable::Func(f), a, sret } => {
-            match &*f.name.to_string() {
-                "memcpy" => {
-                    let src = compile_operand(fcs, &a[0]).into_pointer_value();
-                    let dest = compile_operand(fcs, &a[1]).into_pointer_value();
-                    let size = compile_operand(fcs, &a[2]).into_int_value();
+            let func = fcs.used_functions[*f];
 
-                    fcs.builder.build_memcpy(dest, 1, src, 1, size).unwrap();
+            let mut arg_vals = a.into_iter()
+                .map(|arg| {
+                    let basic_arg = compile_operand(fcs, arg);
+                    BasicMetadataValueEnum::try_from(basic_arg).unwrap()
+                })
+                .collect::<Vec<_>>();
 
-                    None
-                },
-                "memmove" => {
-                    let src = compile_operand(fcs, &a[0]).into_pointer_value();
-                    let dest = compile_operand(fcs, &a[1]).into_pointer_value();
-                    let size = compile_operand(fcs, &a[2]).into_int_value();
-
-                    fcs.builder.build_memmove(dest, 1, src, 1, size).unwrap();
-
-                    None
-
-                },
-                "alloc" => {
-                    let alloc_typ = f.generics[0].to_basic_type(fcs.context);
-                    let alloc_count = compile_operand(fcs, &a[0]).into_int_value();
-
-                    Some(
-                        fcs.builder
-                            .build_array_malloc(alloc_typ, alloc_count, "malloc")
-                            .unwrap()
-                            .as_basic_value_enum(),
-                    )
-                },
-                "free" => {
-                    let ptr = compile_operand(fcs, &a[0]).into_pointer_value();
-                    let free_type = f.generics[0].get_ref().to_basic_type(fcs.context);
-                    let casted_ptr = ptr.const_cast(free_type.try_into().unwrap());
-
-                    fcs.builder.build_free(casted_ptr);
-
-                    None
-                },
-                "size_of" => {
-                    let typ = f.generics[0].to_basic_type(fcs.context);
-                    let size = typ.size_of().unwrap().as_basic_value_enum();
-
-                    Some(size)
-                },
-                "cast" => {
-                    let src = compile_operand(fcs, &a[0]);
-
-                    let src_type = f.generics[0].to_basic_type(fcs.context);
-                    let src_var = fcs.builder.build_alloca(src_type, "castsrc");
-
-                    let dest_type = f.generics[1].to_basic_type(fcs.context);
-                    let dest_var = fcs.builder.build_alloca(dest_type, "castdest");
-
-                    fcs.builder.build_store(src_var, src);
-
-                    fcs.builder
-                        .build_memcpy(dest_var, 1, src_var, 1, dest_type.size_of().unwrap())
-                        .unwrap();
-                    let casted_loaded = fcs.builder.build_load(dest_type, dest_var, "cast-load");
-
-                    Some(casted_loaded.as_basic_value_enum())
-                },
-                "typeobj" => {
-                    let typ = f.generics[0].clone();
-                    let typusize: u64 = unsafe { std::mem::transmute(typ) };
-
-                    Some(
-                        fcs.context
-                             .i64_type()
-                             .const_int(typusize, false)
-                             .const_to_pointer(
-                                 fcs.context
-                                     .i64_type()
-                                     .ptr_type(AddressSpace::default())
-                             )
-                             .as_basic_value_enum()
-                    )
-                }
-                _ => {
-                    let func = fcs.used_functions.get(f).unwrap();
-
-                    let mut arg_vals = a.into_iter()
-                        .map(|arg| {
-                            let basic_arg = compile_operand(fcs, arg);
-                            BasicMetadataValueEnum::try_from(basic_arg).unwrap()
-                        })
-                        .collect::<Vec<_>>();
-
-                    if let Some(sret) = sret {
-                        arg_vals.insert(0, load_memloc(fcs, sret).into());
-                    }
-
-                    let mut callsite = fcs.builder.build_call(
-                        *func, 
-                        &*arg_vals,
-                        &*reg.map(MReg::to_string).unwrap_or_default(),
-                    );
-
-                    if typ.ret.return_style() == ReturnStyle::Sret {
-                        add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
-                    }
-
-                    callsite.try_as_basic_value().left()
-                }
+            if let Some(sret) = sret {
+                arg_vals.insert(0, load_memloc(fcs, sret).into());
             }
+
+            let mut callsite = fcs.builder.build_call(
+                func, 
+                &*arg_vals,
+                &*reg.map(MReg::to_string).unwrap_or_default(),
+            );
+
+            if typ.ret.return_style() == ReturnStyle::Sret {
+                add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
+            }
+
+            callsite.try_as_basic_value().left()
         },
         MExpr::Call { typ, f: MCallable::FirstClass(loc), a, sret } => {
             let func = load_memloc(fcs, loc).into_pointer_value();

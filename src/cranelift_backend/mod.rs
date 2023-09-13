@@ -23,7 +23,7 @@ pub struct CraneliftBackend {
     // function pointers generated after compilation
     func_pointers: SecondaryMap<FuncId, Func>,
 
-    marked_as_uncompiled: HashSet<FuncId>,
+    to_recompile: HashSet<FuncId>,
     func_signatures: BTreeMap<FuncType, Signature>,
     globals: BTreeMap<VarName, Global>,
     module: JITModule,
@@ -60,7 +60,7 @@ impl IsBackend for CraneliftBackend {
         let new = Self {
             cl_function_data: SecondaryMap::new(),
             func_pointers: SecondaryMap::new(),
-            marked_as_uncompiled: HashSet::new(),
+            to_recompile: HashSet::new(),
             func_signatures: BTreeMap::new(),
             globals: BTreeMap::new(),
             alloc_and_free: AllocAndFree::new(&module),
@@ -124,8 +124,8 @@ impl IsBackend for CraneliftBackend {
         }
     }
 
-    fn mark_as_uncompiled(&mut self, id: FuncId) {
-        self.marked_as_uncompiled.insert(id);
+    fn mark_to_recompile(&mut self, id: FuncId) {
+        self.to_recompile.insert(id);
     }
 
     fn compile_function(&mut self, func_id: FuncId, mir: MIR) {
@@ -157,7 +157,7 @@ impl IsBackend for CraneliftBackend {
 
     fn end_compilation_round(&mut self) {
         self.module.finalize_definitions().unwrap();
-        self.marked_as_uncompiled.clear();
+        self.to_recompile.clear();
 
         for func_id in self.func_pointers.keys() {
             if let Some(cl_data) = self.cl_function_data.get(func_id) {
@@ -169,9 +169,7 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn has_been_compiled(&self, id: FuncId) -> bool {
-        if self.marked_as_uncompiled.contains(&id) {
-            return false;
-        }
+        if self.to_recompile.contains(&id) { return false; }
 
         if let Some(func) = self.func_pointers.get(id) {
             func.code().pointer().is_some()
@@ -195,11 +193,12 @@ impl IsBackend for CraneliftBackend {
 
     fn add_external_func(
         &mut self, 
-        info: FuncId, 
+        func_id: FuncId, 
         func_type: FuncType, 
+        _: &ProcessedFuncInfo,
         ptr: *const usize
     ) {
-        external_function::add_external_func(self, info, func_type, ptr);
+        external_function::add_external_func(self, func_id, func_type, ptr);
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     errors::{CResult, FErr, TErr, TResult},
-    FuncType, Type, TypeRelation, typ::could_come_from::{transformation_steps_dist, Transformation},
+    FuncType, Type, TypeRelation, typ::can_transform::{transformation_steps_dist, Transformation},
 };
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
@@ -159,7 +159,7 @@ impl CompData {
                 if let Some(backend) = backend &&
                     let Some(realizations) = self.realizations.remove(code_id) {
                     for realization in realizations {
-                        backend.mark_as_uncompiled(realization);
+                        backend.mark_to_recompile(realization);
                     }
                 }
 

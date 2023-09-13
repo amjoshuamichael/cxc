@@ -1,14 +1,15 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use inkwell::OptimizationLevel;
 use inkwell::types::BasicType;
 
 use inkwell::values::{BasicMetadataValueEnum, BasicValue};
 use inkwell::{values::{PointerValue, FunctionValue}, context::Context, module::Module, execution_engine::ExecutionEngine, AddressSpace};
+use slotmap::SecondaryMap;
 
 use crate::TypeEnum;
 use crate::typ::ReturnStyle;
-use crate::unit::Generations;
-use crate::{VarName, Type, unit::backends::IsBackend, mir::MIR, UniqueFuncInfo, FuncType};
+use crate::unit::{FuncId, ProcessedFuncInfo};
+use crate::{VarName, Type, unit::backends::IsBackend, mir::MIR, FuncQuery, FuncType};
 
 use crate::unit::backends::function::{Func, FuncDowncasted};
 use super::to_llvm_type::ToLLVMType;
@@ -20,8 +21,15 @@ pub struct LLVMBackend {
     module: Module<'static>,
     pub context: &'static Context,
     execution_engine: ExecutionEngine<'static>,
-    compiled: BTreeMap<UniqueFuncInfo, Func>,
-    pub generations: Generations,
+    pub compiled: SecondaryMap<FuncId, LLVMFunctionData>,
+    pub to_recompile: HashSet<FuncId>,
+    func_counter: u32,
+}
+
+pub struct LLVMFunctionData {
+    func: Func,
+    name: String,
+    pub value: FunctionValue<'static>,
 }
 
 fn make_context() -> &'static Context {
@@ -48,8 +56,9 @@ impl IsBackend for LLVMBackend {
             module,
             execution_engine,
             globals: BTreeMap::new(),
-            compiled: BTreeMap::new(),
-            generations: Generations::default(),
+            compiled: SecondaryMap::new(),
+            func_counter: 0,
+            to_recompile: HashSet::new(),
         }
     }
 
@@ -60,33 +69,45 @@ impl IsBackend for LLVMBackend {
             .expect("unable to recreate execution engine");
     }
 
-    fn register_function(&mut self, info: UniqueFuncInfo, func_type: FuncType) {
-        self.generations.update(info.clone());
-        
+    fn register_function(&mut self, func_id: FuncId, func_info: &ProcessedFuncInfo) {
+        let name = func_info.to_string(func_id) + &*self.func_counter.to_string();
+        self.func_counter += 1;
+
         let mut empty_function =
             self.module.add_function(
-                &info.to_string(&self.generations), 
-                func_type.llvm_func_type(self.context, false), 
+                &*name, 
+                func_info.typ.llvm_func_type(self.context, false), 
                 None
             );
 
-        add_nescessary_attributes_to_func(&mut empty_function, &self.context, &func_type);
+        add_nescessary_attributes_to_func(&mut empty_function, &self.context, &func_info.typ);
 
-        self.compiled
-            .entry(info.clone())
-            .or_insert_with(|| Func::new_compiled(info.clone(), func_type.clone()));
+        if let Some(LLVMFunctionData { name: ref mut old_name, ref mut value, .. }) = 
+            self.compiled.get_mut (func_id) {
+            *value = empty_function;
+            *old_name = name;
+        } else {
+            self.compiled.insert(
+                func_id,
+                LLVMFunctionData {
+                    func: Func::new_compiled(func_info.typ.clone()),
+                    name,
+                    value: empty_function,
+                }
+            );
+        }
 
         self.globals.insert(
-            info.name.clone(),
+            func_info.name.clone(),
             (
-                Type::new(TypeEnum::Func(func_type)),
+                Type::new(TypeEnum::Func(func_info.typ.clone())),
                 empty_function.as_global_value().as_pointer_value(),
             ),
         );
     }
 
-    fn compile_function(&mut self, mir: MIR) {
-        let function = self.get_func_value(&mir.info).unwrap();
+    fn compile_function(&mut self, func_id: FuncId, mir: MIR) {
+        let function = self.compiled[func_id].value;
 
         let mut fcs = self.new_func_comp_state(mir, function);
 
@@ -97,44 +118,36 @@ impl IsBackend for LLVMBackend {
     }
 
     fn end_compilation_round(&mut self) {
-        for func_info in self.compiled.keys() {
-            let name = func_info.to_string(&self.generations);
-
-            self.compiled.get(func_info).unwrap().set_pointer(
+        for LLVMFunctionData { func, name, value } in self.compiled.values() {
+            func.set_pointer(
                 self.execution_engine.get_function_address(&name).unwrap() as _
             );
         }
+
+        self.to_recompile.clear();
     }
 
-    fn has_been_compiled(&self, info: &UniqueFuncInfo) -> bool {
-        if let Some(func) = self.compiled.get(info) {
+    fn has_been_compiled(&self, id: FuncId) -> bool {
+        if self.to_recompile.contains(&id) { return false }
+
+        if let Some(LLVMFunctionData { func, .. }) = self.compiled.get(id) {
             func.code().pointer().is_some()
         } else { 
             false 
         }
     }
 
-    fn get_function(&self, with: impl Into<UniqueFuncInfo>) -> Option<&Self::LowerableFuncRef> {
-        let info = with.into();
-
-        #[cfg(feature = "ffi-assertions")]
-        {
-            assert!(
-                self.
-                    module
-                    .get_function(&info.to_string(&self.generations))?
-                    .get_param_iter()
-                    .all(|param_type| !param_type.is_array_value()),
-                "Cannot run function that has array value as parameter. Pass in an array pointer instead."
-            );
-        }
-
-        self.compiled.get(&info)
+    fn get_function(&self, id: FuncId) -> Option<&Self::LowerableFuncRef> {
+        self.compiled.get(id).map(|LLVMFunctionData { func, .. }| func)
     }
 
     fn compiled_iter<'a>(&'a self) -> 
-        Box<dyn Iterator<Item = (&UniqueFuncInfo, &Self::LowerableFuncRef)> + 'a> {
-        Box::new(self.compiled.iter())
+        Box<dyn Iterator<Item = (FuncId, &Self::LowerableFuncRef)> + 'a> {
+        Box::new(self
+            .compiled
+            .iter()
+            .map(|(id, LLVMFunctionData { func, .. })| (id, func))
+        )
     }
 
     fn add_global(&mut self, name: VarName, typ: Type, address: *mut usize) {
@@ -152,8 +165,9 @@ impl IsBackend for LLVMBackend {
 
     fn add_external_func(
         &mut self, 
-        func_info: UniqueFuncInfo, 
+        func_id: FuncId, 
         func_type: FuncType, 
+        func_info: &ProcessedFuncInfo,
         function_ptr: *const usize,
     ) {
         let ret_type = func_type.ret.clone();
@@ -163,12 +177,11 @@ impl IsBackend for LLVMBackend {
 
         let outer_func_type = func_type.llvm_func_type(self.context, false);
 
-        self.generations.update(func_info.clone());
-
+        let name = func_info.to_string(func_id);
         let mut function =
             self.module
                 .add_function(
-                    &func_info.to_string(&self.generations), 
+                    &*name,
                     outer_func_type, 
                     None
                 );
@@ -236,19 +249,26 @@ impl IsBackend for LLVMBackend {
             builder.build_return(Some(&out));
         }
 
-        self.compiled.insert(
-            func_info.clone(),
-            Func::new_external(
-                func_info.clone(),
-                func_type.clone(),
-                function_ptr,
-            ),
-        );
+        if let Some(LLVMFunctionData { name: ref mut old_name, ref mut value, .. }) = 
+            self.compiled.get_mut(func_id) {
+            *value = function;
+            *old_name = name;
+        } else {
+            self.compiled.insert(
+                func_id,
+                LLVMFunctionData {
+                    value: function,
+                    name,
+                    func: Func::new_external(
+                        func_type.clone(),
+                        function_ptr,
+                    ),
+                }
+            );
+        }
     }
-}
 
-impl LLVMBackend {
-    fn get_func_value(&self, func_info: &UniqueFuncInfo) -> Option<FunctionValue<'static>> {
-        self.module.get_function(&func_info.to_string(&self.generations))
+    fn mark_to_recompile(&mut self, id: FuncId) { 
+        self.to_recompile.insert(id);
     }
 }

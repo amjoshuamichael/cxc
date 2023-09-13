@@ -4,6 +4,7 @@ use self::functions::DeriverInfo;
 use self::functions::TypeLevelFunc;
 pub use self::value_api::Value;
 use crate::FuncType;
+use crate::TypeEnum;
 use crate::errors::CErr;
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data_output::HLR;
@@ -410,6 +411,22 @@ impl Unit {
 
         let correct_function_ptr = self.backend.get_function(id);
         assert!(correct_function_ptr.is_some());
+
+        #[cfg(feature = "ffi-assertions")]
+        {
+            assert!(
+                correct_function_ptr
+                    .unwrap()
+                    .typ()
+                    .args
+                    .iter()
+                    .all(|param_type| 
+                         !matches!(param_type.as_type_enum(), TypeEnum::Array(_))
+                     ),
+                "Cannot run function that has array value as parameter. Pass in an array pointer instead."
+            );
+        }
+
         return correct_function_ptr;
     }
 

@@ -14,7 +14,7 @@ pub trait IsBackend: Sized {
 
     fn begin_compilation_round(&mut self);
     fn register_function(&mut self, id: FuncId, func_type: &ProcessedFuncInfo);
-    fn mark_as_uncompiled(&mut self, id: FuncId);
+    fn mark_to_recompile(&mut self, id: FuncId);
     fn compile_function(&mut self, id: FuncId, mir: MIR);
     fn end_compilation_round(&mut self);
 
@@ -25,7 +25,13 @@ pub trait IsBackend: Sized {
         Box<dyn Iterator<Item = (FuncId, &Self::LowerableFuncRef)> + 'a>;
 
     fn add_global(&mut self, name: VarName, typ: Type, address: *mut usize);
-    fn add_external_func(&mut self, id: FuncId, func_type: FuncType, ptr: *const usize);
+    fn add_external_func(
+        &mut self, 
+        id: FuncId, 
+        func_type: FuncType, 
+        func_info: &ProcessedFuncInfo, 
+        ptr: *const usize
+    );
 }
 
 pub trait CallableFunc<A, R> where A: CallInput<R> { }

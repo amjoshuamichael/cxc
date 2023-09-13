@@ -111,7 +111,6 @@ impl Func {
     }
 
     pub fn new_external(
-        _: FuncQuery,
         typ: FuncType,
         pointer: *const usize,
     ) -> Func {

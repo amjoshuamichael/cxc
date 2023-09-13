@@ -129,6 +129,7 @@ impl Unit {
         self.backend.add_external_func(
             func_id, 
             func_type,
+            &self.comp_data.processed[func_id],
             function_ptr, 
         );
     }
