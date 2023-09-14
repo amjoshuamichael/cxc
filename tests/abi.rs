@@ -17,13 +17,16 @@ fn pass_8_byte_sep() {
     );
 }
 
-//TODO
 #[test]
-#[ignore]
 fn pass_12_byte_2sep() {
     xc_test!(
         "
-        sum(of: {i64, i32}); i64 { ; cast<i32, i64>(of.1) }
+        # we don't have proper casting yet, unfortunately
+        i32_to_i64(x: i32); i64 {
+            ; cast<{i32, i32}, i64>({x, 0})
+        }
+
+        sum(of: {i64, i32}); i64 { ; of.0 + i32_to_i64(of.1) }
 
         main(); i64 {
             # a little over the 32 bit integer limit, to make sure this is *really* an i64

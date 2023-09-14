@@ -1,44 +1,30 @@
 use crate::{
-    parse::{Opcode, TypeSpec, InitOpts},
-    errors::CResultMany, typ::{can_transform::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum, ArrayType,
+    parse::InitOpts,
+    errors::CResultMany, typ::can_transform::TransformationStep, VarName, Type, Field, TypeEnum, ArrayType,
 };
 
 use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, get_ref}, hlr_data::FuncRep};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
-    hlr.modify_many(
-        |memberlit, member_data, hlr| {
-            let HNodeData::Member { ref mut object, field, .. } = member_data 
-                else { return  Ok(()) };
-            let object_type = hlr.tree.get(*object).ret_type();
+    hlr.modify_many_infallible(
+        |member_id, member_data, hlr| {
+            let HNodeData::Member { object, field, .. } = member_data
+                else { return };
+            let object_type = hlr.tree.get_ref(*object).ret_type();
 
-            let report = hlr.comp_data.get_spec_report(
-                &TypeSpec::StructMember(
-                    Box::new(type_to_type_spec(object_type)),
-                    field.clone(),
-                ), 
-                &()
-            )?;
-
-            let deref_count = report.deref_count - 1;
-
-            for _ in 0..deref_count {
-                let object_type = hlr.tree.get(*object).ret_type();
-
+            if let Some((steps, _)) = object_type.route_to(field.clone()) {
                 *object = hlr.insert_quick(
-                    memberlit,
-                    HNodeData::UnarOp {
-                        ret_type: object_type.get_auto_deref(&hlr.comp_data)?.clone(),
-                        op: Opcode::Deref,
+                    member_id,
+                    HNodeData::Transform {
                         hs: *object,
-                    },
+                        ret_type: Type::unknown(),
+                        steps,
+                    }
                 );
             }
-
-            Ok(())
-        },
-    ).unwrap();
+        }
+    );
 
     hlr.modify_many_infallible(
         |transform_id, transform_data, hlr| {

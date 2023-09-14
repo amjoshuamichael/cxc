@@ -3,14 +3,14 @@
 extern crate test;
 
 use cxc::{library::StdLib, Unit};
-use test::{black_box, Bencher};
+use test::Bencher;
 
 #[bench]
 pub fn compile_std_lib(b: &mut Bencher) {
     b.iter(|| {
-        //for _ in 0..10000 {
-            let mut unit = black_box(Unit::new());
-            black_box(unit.add_lib(StdLib));
+        for _ in 0..100 {
+            let mut unit = Unit::new();
+            unit.add_lib(StdLib);
             unit.push_script("
                 main() {
                     # use some stdlib stuff
@@ -24,6 +24,6 @@ pub fn compile_std_lib(b: &mut Bencher) {
                     vecfloat.push(234.0)
                 }
             ").unwrap();
-        //}
+        }
     });
 }

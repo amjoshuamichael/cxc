@@ -164,9 +164,9 @@ impl<T: Clone> TypeRelationGeneric<T> {
     }
 
     // TODO: return pointer here
-    pub fn inner_type(&self) -> Option<T> {
+    pub fn inner_type(&self) -> Option<&T> {
         match self {
-            Self::Static(inner) | Self::MethodOf(inner) => Some(inner.clone()),
+            Self::Static(inner) | Self::MethodOf(inner) => Some(&inner),
             Self::Unrelated => None,
         }
     }

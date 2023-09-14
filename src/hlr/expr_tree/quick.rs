@@ -187,23 +187,6 @@ impl NodeDataGen for CallGen {
     }
 }
 
-// TODO: is this nescessary
-impl NodeDataGen for FuncQuery {
-    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
-        let func_type = hlr.comp_data.get_func_type(self).unwrap();
-
-        hlr.tree.insert(
-            parent,
-            HNodeData::Call {
-                query: self.clone(),
-                ret_type: func_type.ret,
-                a: Vec::new(),
-                sret: None,
-            },
-        )
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct StructLitGen {
     pub var_type: Type,

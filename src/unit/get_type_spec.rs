@@ -2,7 +2,7 @@ use crate::{
     errors::{TErr, TResult},
     parse::TypeSpec,
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
-    VarName, typ::Field,
+    VarName, typ::{Field, can_transform::TransformationList},
 };
 use std::fmt::Debug;
 
@@ -42,14 +42,14 @@ impl GenericTable for FuncQuery {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
         self.generics.get(index as usize).cloned()
     }
-    fn get_self(&self) -> Option<Type> { self.relation.inner_type() }
+    fn get_self(&self) -> Option<Type> { self.relation.inner_type().cloned() }
 }
 
 impl GenericTable for (&Vec<Type>, &TypeRelation) {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
         self.0.get(index as usize).cloned()
     }
-    fn get_self(&self) -> Option<Type> { self.1.inner_type() }
+    fn get_self(&self) -> Option<Type> { self.1.inner_type().cloned() }
 }
 
 impl<T: GenericTable> GenericTable for (T, Option<Type>) {
@@ -59,8 +59,8 @@ impl<T: GenericTable> GenericTable for (T, Option<Type>) {
 
 #[derive(Debug)]
 pub struct GetSpecReport {
-    typ: Type,
-    pub deref_count: i8,
+    pub typ: Type,
+    pub transformation: Option<TransformationList>,
 }
 
 impl CompData {
@@ -73,8 +73,6 @@ impl CompData {
         spec: &TypeSpec,
         generics: &impl GenericTable,
     ) -> TResult<GetSpecReport> {
-        let mut deref_count: i8 = 0;
-
         let typ = match spec {
             TypeSpec::Named(name) => self.get_by_name(name)?,
             TypeSpec::TypeLevelFunc(name, args) => {
@@ -97,29 +95,16 @@ impl CompData {
             TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_auto_deref(&*self)?,
             TypeSpec::StructMember(struct_type, field_name) => {
                 let struct_type = self.get_spec(struct_type, generics)?;
-                let deref_chain = struct_type.deref_chain();
-
-                let mut member = None;
-
-                for (t, typ) in { deref_chain }.drain(..).enumerate() {
-                    if let TypeEnum::Struct(struct_type) = typ.as_type_enum() 
-                        && let Ok(field_type) = struct_type.get_field_type(field_name) {
-
-                        member = Some(field_type);
-                        deref_count = t as i8;
-                        break;
-                    }
-                }
-
-                if let Some(member) = member {
-                    member
+                if let Some((trans, typ)) = struct_type.route_to(field_name.clone()) {
+                    return Ok(GetSpecReport {
+                        typ,
+                        transformation: Some(trans),
+                    });
                 } else {
-                    for typ in struct_type.deref_chain().into_iter() {
-                        let TypeEnum::Struct(struct_type) = typ.as_type_enum() 
-                            else { continue };
-                        return Err(TErr::FieldNotFound(struct_type.clone(), field_name.clone()));
-                    }
-                    return Err(TErr::NotAStruct(struct_type.clone()))
+                    return Err(TErr::FieldNotFound(
+                        struct_type.clone_type_enum(), 
+                        field_name.clone(),
+                    ));
                 }
             },
             TypeSpec::SumMember(_sum_type, _type_name) => {
@@ -217,6 +202,6 @@ impl CompData {
             },
         };
 
-        Ok(GetSpecReport { typ, deref_count })
+        Ok(GetSpecReport { typ, transformation: None })
     }
 }

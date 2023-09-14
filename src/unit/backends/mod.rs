@@ -19,8 +19,7 @@ pub trait IsBackend: Sized {
     fn end_compilation_round(&mut self);
 
     fn has_been_compiled(&self, id: FuncId) -> bool;
-    // TODO: make this infallible??
-    fn get_function(&self, id: FuncId) -> Option<&Self::LowerableFuncRef>;
+    fn get_function(&self, id: FuncId) -> &Self::LowerableFuncRef;
     fn compiled_iter<'a>(&'a self) -> 
         Box<dyn Iterator<Item = (FuncId, &Self::LowerableFuncRef)> + 'a>;
 

@@ -128,7 +128,6 @@ impl Type {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
             _ => match self.size() {
                 0..=8 => {
-                    // TODO: make i take usize or make size return u32
                     let int_type = IntType { 
                         size: (self.size() * 8) as u32,
                         signed: true

@@ -177,8 +177,8 @@ impl IsBackend for CraneliftBackend {
         }
     }
 
-    fn get_function(&self, id: FuncId) -> Option<&Self::LowerableFuncRef> {
-        self.func_pointers.get(id)
+    fn get_function(&self, id: FuncId) -> &Self::LowerableFuncRef {
+        &self.func_pointers[id]
     }
 
     fn compiled_iter<'a>(&'a self) -> 

@@ -1,6 +1,6 @@
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex};
-use crate::{Type, FuncQuery, VarName};
+use crate::{Type, VarName};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
 use super::{ExprNode, HNodeData::*};
@@ -127,14 +127,6 @@ impl ExprTree {
         let new_data = closure(new_space, self);
         self.replace(new_space, new_data);
         new_space
-    }
-
-    // TODO: remove
-    pub fn func_query_of_call(&self, call: &HNodeData) -> FuncQuery {
-        let HNodeData::Call { ref query, .. } = &call
-            else { panic!() };
-
-        query.clone()
     }
 
     pub fn count(&self) -> usize { self.nodes.len() }

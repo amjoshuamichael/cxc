@@ -94,7 +94,6 @@ fn struct_pointer() {
 }
 
 #[test]
-#[ignore]
 fn struct_rc_pointer() {
     let mut unit = Unit::new();
 

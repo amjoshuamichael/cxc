@@ -79,9 +79,12 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
 
             let new_default = hlr.insert_quick(
                 arraylit_id,
-                FuncQuery {
-                    name: VarName::from("default"),
-                    relation: TypeRelation::Static(array_type.base.clone()),
+                CallGen {
+                    query: FuncQuery {
+                        name: VarName::from("default"),
+                        relation: TypeRelation::Static(array_type.base.clone()),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }
             );

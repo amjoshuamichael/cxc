@@ -421,7 +421,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 graph.add_to_inferables_list(id);
 
                 if let Some(rel_type) = query.relation.inner_type() && rel_type.is_known() {
-                    graph.mark_known(Inferable::Relation(id), rel_type, KnownBy::Specified);
+                    graph.mark_known(Inferable::Relation(id), rel_type.clone(), KnownBy::Specified);
                 } else if query.relation.is_method() {
                     graph.join(a[0], Inferable::Relation(id));
                 } else if query.relation.inner_type().is_some() {
@@ -985,7 +985,7 @@ fn fill_in_call(
 
             constraint.connections.insert(
                 InferableConnection {
-                    spec: code.relation.inner_type().unwrap(),
+                    spec: code.relation.inner_type().unwrap().clone(),
                     gen_params: call_generic_constraints.clone(),
                     method_of: None,
                 }

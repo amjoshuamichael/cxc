@@ -2,7 +2,6 @@ mod add_void_return;
 mod active_initialization;
 mod do_transformations;
 mod remove_redundant_derefs;
-mod op_overloading;
 mod struct_literals;
 mod array_literals;
 mod large_returns;
@@ -30,7 +29,6 @@ use prelude::*;
 
 use self::active_initialization::active_initialization;
 use self::do_transformations::do_transformations;
-use self::op_overloading::op_overloading;
 use self::struct_literals::struct_literals;
 use self::array_literals::array_literals;
 use self::hlr_data_output::HLR;
@@ -49,7 +47,11 @@ pub fn hlr(
     #[cfg(feature = "xc-debug")]
     {
         println!();
-        println!("====HLR of {}====", info.name);
+        if let Some(typ) = info.relation.inner_type() {
+            println!("====HLR of {:?}.{}====", typ, info.name);
+        } else {
+            println!("====HLR of {}====", info.name);
+        }
     }
 
     assert!(matches!(code.code, Expr::Block(_)), "hlr input must be a block");
@@ -65,8 +67,9 @@ pub fn hlr(
     // see the individual perf impact of each pass when using a flamegraph
 
     infer_types(&mut output);
+        println!("{}", &output.tree.to_string());
     do_transformations(&mut output)?;
-    op_overloading(&mut output);
+        println!("{}", &output.tree.to_string());
     active_initialization(&mut output);
     struct_literals(&mut output);
     array_literals(&mut output);

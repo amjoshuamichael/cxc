@@ -191,8 +191,7 @@ pub enum MExpr {
     Free { ptr: MOperand, },
     Ref { on: MAddr },
     Alloc { len: MOperand, },
-    // TODO: replace operand with memloc here?
-    Deref { to: Type, on: MOperand },
+    Deref { to: Type, on: MMemLoc },
     Void,
 }
 

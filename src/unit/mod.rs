@@ -125,8 +125,6 @@ impl Unit {
     }
 
     pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<FuncQuery>> {
-        // TODO: make sure the global can only be accessed from a compilation script
-
         let lexed = lex(script);
 
         let parsed = parse::parse(lexed).map_err(|errs| {
@@ -200,7 +198,6 @@ impl Unit {
             set = set
                 .into_iter()
                 .map(|query| {
-                    // TODO: here, get code id, but also get code generics with id
                     let (code, _) = self.comp_data.get_code(query.code_query()).unwrap();
 
                     let func_arg_types = code
@@ -396,7 +393,7 @@ impl Unit {
 
         let comp_script_id = self.comp_data.query_for_id(&comp_script_query).unwrap();
 
-        let comp_script_fn = self.backend.get_function(comp_script_id).unwrap();
+        let comp_script_fn = self.backend.get_function(comp_script_id);
 
         comp_script_fn.downcast::<(), ()>()();
     }
@@ -410,13 +407,11 @@ impl Unit {
         let id = self.comp_data.query_for_id(&with)?;
 
         let correct_function_ptr = self.backend.get_function(id);
-        assert!(correct_function_ptr.is_some());
 
         #[cfg(feature = "ffi-assertions")]
         {
             assert!(
                 correct_function_ptr
-                    .unwrap()
                     .typ()
                     .args
                     .iter()
@@ -427,7 +422,7 @@ impl Unit {
             );
         }
 
-        return correct_function_ptr;
+        return Some(correct_function_ptr);
     }
 
     pub fn add_lib(&mut self, lib: impl Library) -> &mut Self {

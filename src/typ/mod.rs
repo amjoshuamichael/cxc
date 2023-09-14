@@ -386,14 +386,14 @@ impl StructType {
             }
         }
 
-        Err(TErr::FieldNotFound(self.clone(), field_name.clone()))
+        Err(TErr::FieldNotFound(TypeEnum::Struct(self.clone()), field_name.clone()))
     }
 
     pub fn get_field_index(&self, field_name: &VarName) -> TResult<usize> {
         self.fields
             .iter()
             .position(|field| field.name == *field_name)
-            .ok_or(TErr::FieldNotFound(self.clone(), field_name.clone()))
+            .ok_or(TErr::FieldNotFound(TypeEnum::Struct(self.clone()), field_name.clone()))
     }
 
     pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].name, VarName::TupleIndex(0)) }
@@ -413,7 +413,6 @@ impl StructType {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
-    // when we need to support 2-billion-bit integers, we'll be ready
     pub size: u32,
     pub signed: bool,
 }
