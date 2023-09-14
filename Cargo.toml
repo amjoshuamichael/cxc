@@ -42,7 +42,7 @@ glam = { version = "0.22", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["backend-llvm", "ffi-assertions"]
+default = ["backend-cranelift", "ffi-assertions"]
 xc-debug = []
 mir-debug = []
 backend-debug = []
