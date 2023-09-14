@@ -279,7 +279,7 @@ impl CompData {
         if let Ok(deriver_info) = DeriverInfo::try_from(info.clone()) && 
             info.relation.inner_type()?.is_known() {
             let deriver = self.derivers.get(&deriver_info)?;
-            deriver(self, info.relation.inner_type()?)
+            deriver(self, info.relation.inner_type().cloned()?)
         } else {
             None
         }

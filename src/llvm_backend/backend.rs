@@ -18,7 +18,7 @@ use super::{compile_routine, add_nescessary_attributes_to_func, add_sret_attribu
 
 pub struct LLVMBackend {
     pub globals: BTreeMap<VarName, (Type, PointerValue<'static>)>,
-    module: Module<'static>,
+    pub module: Module<'static>,
     pub context: &'static Context,
     execution_engine: ExecutionEngine<'static>,
     pub compiled: SecondaryMap<FuncId, LLVMFunctionData>,
@@ -114,7 +114,7 @@ impl IsBackend for LLVMBackend {
         let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
         fcs.builder.position_at_end(basic_block);
 
-        compile_routine(&mut fcs, &self.module);
+        compile_routine(&mut fcs);
     }
 
     fn end_compilation_round(&mut self) {
@@ -137,8 +137,8 @@ impl IsBackend for LLVMBackend {
         }
     }
 
-    fn get_function(&self, id: FuncId) -> Option<&Self::LowerableFuncRef> {
-        self.compiled.get(id).map(|LLVMFunctionData { func, .. }| func)
+    fn get_function(&self, id: FuncId) -> &Self::LowerableFuncRef {
+        &self.compiled[id].func
     }
 
     fn compiled_iter<'a>(&'a self) -> 

@@ -13,7 +13,6 @@ pub fn add_drops(hlr: &mut FuncRep) {
     for (var_name, var_type) in vars {
         if var_type.is_shallow() || 
             matches!(var_type.as_type_enum(), TypeEnum::Ref(_)) ||
-            // TODO: reify compiler intrinsic variable names
             var_name.to_string().chars().next() == Some('_') {
             continue;
         }

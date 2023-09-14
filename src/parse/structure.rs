@@ -88,8 +88,6 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 }
 
 fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    // TODO: shouldn't have to clone here, and also shouldn't have to clone in a couple
-    // other places in this same file
     let beginning_of_alias = lexer.peek_tok()?.clone();
 
     let type_alias = match beginning_of_alias {

@@ -245,7 +245,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
                 },
                 Opcode::Deref => MExpr::Deref { 
                     to: node.ret_type(),
-                    on: build_as_operand(tree.get(hs), tree, mir) 
+                    on: build_as_memloc(tree.get(hs), tree, mir) 
                 },
                 _ => MExpr::UnarOp { 
                     ret_type, 
@@ -302,9 +302,8 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let len = build_as_operand(tree.get(a[0]), tree, mir);
             MExpr::Alloc { len }
         },
-        HNodeData::Call { ref a, ref ret_type, ref sret, .. } => {
-            let func_query = tree.func_query_of_call(&node);
-            let func_id = mir.dependencies[&func_query];
+        HNodeData::Call { ref query, ref a, ref ret_type, ref sret, .. } => {
+            let func_id = mir.dependencies[&query];
 
             let typ = FuncType {
                 ret: ret_type.clone(),

@@ -163,7 +163,6 @@ struct FuncInner {
 }
 
 #[derive(Clone, Debug, XcReflectMac)]
-#[xc_opaque] // TODO: we shouldn't have to do this
 pub enum FuncCodePtr {
     Compiled {
         pointer: Option<NonNull<usize>>,

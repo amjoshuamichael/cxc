@@ -149,7 +149,7 @@ impl Unit {
 
         let value_func_id = self.comp_data.query_for_id(&value_function_query).unwrap();
 
-        let func_addr = self.backend.get_function(value_func_id).unwrap();
+        let func_addr = self.backend.get_function(value_func_id);
         let func_info = &self.comp_data.processed[value_func_id];
 
         let ret_type = &func_info.typ.ret;

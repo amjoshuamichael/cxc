@@ -56,7 +56,7 @@ fn variables_in_expr(mexpr: &MExpr) -> Vec<VarInMIR> {
         },
         MExpr::Free { ptr } => variables_in_operand(ptr),
         MExpr::Ref { on } => variables_in_addr(on),
-        MExpr::Deref { on, .. } => variables_in_operand(on),
+        MExpr::Deref { on, .. } => variables_in_memloc(on),
         MExpr::Void => Vec::new(),
         MExpr::Alloc { len } => variables_in_operand(len),
     }

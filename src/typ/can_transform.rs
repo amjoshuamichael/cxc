@@ -173,6 +173,74 @@ impl Type {
         })
     }
 
+    pub fn route_to(&self, field: VarName) -> Option<(TransformationList, Type)> {
+        match self.as_type_enum() {
+            TypeEnum::Ref(RefType { base }) => {
+                let mut base = base.clone();
+                let mut reference_count = 1;
+
+                while let Some(dereffed) = base.get_deref() {
+                    base = dereffed.clone();
+                    reference_count += 1;
+                }
+
+                return base.route_to(field).map(|(list, typ)|
+                    (
+                        TransformationList::Cons(
+                            TransformationStep::Ref(-reference_count), 
+                            Box::new(list),
+                        ),
+                        typ
+                    )
+                )
+            },
+            TypeEnum::Struct(StructType { fields, .. }) => {
+                for Field { name, typ, .. } in fields {
+                    if name == &field {
+                        return Some((TransformationList::Nil, typ.clone()));
+                    }
+                }
+
+                for Field { inherited, typ, name } in fields {
+                    if !inherited { continue }
+
+                    if let Some((list, typ)) = typ.route_to(field.clone()) {
+                        return Some((
+                            TransformationList::Cons(
+                                TransformationStep::Field(name.clone()),
+                                Box::new(list),
+                            ),
+                            typ.clone()
+                        ));
+                    }
+                }
+
+                None
+            },
+            TypeEnum::Array(ArrayType { base, .. }) => {
+                let field_typ = match &*field {
+                    "ptr" => base.get_ref(),
+                    "len" => Type::u(64),
+                    _ => return None,
+                };
+
+                Some((
+                    TransformationList::Cons(
+                        TransformationStep::Field(field),
+                        Box::new(
+                            TransformationList::Cons(
+                                TransformationStep::ArrayToSlice, 
+                                Box::new(TransformationList::Nil)
+                            )
+                        ),
+                    ),
+                    field_typ
+                ))
+            }
+            _ => None,
+        }
+    }
+
     fn is_equivalent(
         &self, 
         spec: TypeSpec, 
@@ -320,7 +388,7 @@ mod tests {
     use crate::{parse::TypeSpec, Type, Unit, errors::CResult, typ::can_transform::{Transformation, TransformationStep}, VarName};
 
     #[test]
-    fn works_as_method_on() -> CResult<()> {
+    fn method_transformations() -> CResult<()> {
         let mut unit = Unit::new();
 
         unit.push_script("Vec<T> = { ptr: &T, capacity: i64, len: i64 }")
@@ -429,5 +497,21 @@ mod tests {
         assert_eq!(comp("{+x: i32, y: i64, z: u32}", "{+x: i32, +y: i64}"), None);
         
         Ok(())
+    }
+
+    #[test]
+    fn field_transformations() {
+        let mut unit = Unit::new();
+
+        unit.push_script("RcBox<T> = { strong: i64, weak: i64, +value: T }").unwrap();
+        unit.push_script("Rc<T> = { +inner: &RcBox<T> }").unwrap();
+
+        let comp = |spec: &str, field: &str| 
+            unit.comp_data.get_spec(&TypeSpec::from(spec), &())
+            .unwrap()
+            .route_to(VarName::from(field))
+            .map(|(steps, typ)| (typ, steps.to_vec()));
+
+        dbg!(comp("Rc<{ x: i32, y: i32}>", "x"));
     }
 }

@@ -1,4 +1,4 @@
-use crate::lex::{indent_parens, TypeName, VarName};
+use crate::lex::{TypeName, VarName};
 use crate::typ::can_transform::TransformationList;
 use crate::{parse::*, FuncQuery};
 use crate::Type;
@@ -19,8 +19,7 @@ pub struct ExprTree {
 impl ToString for ExprTree {
     fn to_string(&self) -> String {
         let data = self.get(self.root);
-        let not_indented = data.to_string(self);
-        indent_parens(not_indented)
+        data.to_string(self)
     }
 }
 
@@ -232,27 +231,38 @@ impl HNodeData {
     }
 
     pub fn to_string(&self, tree: &ExprTree) -> String {
+        const RED: &str = "\x1b[91m";
+        const GREEN: &str = "\x1b[92m";
+        const YELLOW: &str = "\x1b[93m";
+        const BLUE: &str = "\x1b[94m";
+        const MAGENTA: &str = "\x1b[95m";
+        const WHITE: &str = "\x1b[37m";
         match self {
-            Number { value, lit_type } => format!("{value}{lit_type:?}"),
-            Float { value, lit_type } => format!("{value}{lit_type:?}"),
-            Bool { value, .. } => value.to_string(),
-            Ident { name, .. } => name.to_string(),
+            Number { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
+            Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
+            Bool { value, .. } => format!("{MAGENTA}{value}"),
+            Ident { name, .. } => format!("{BLUE}{name}"),
             StructLit {
                 var_type,
                 fields,
                 initialize,
             } => {
-                let mut lit = match var_type.name() {
+                let mut lit = WHITE.to_string();
+
+                lit += &*match var_type.name() {
                     TypeName::Anonymous => format!("{var_type:?}"),
                     other => other.to_string(),
-                } + " ";
+                };
 
-                lit += "{ \n";
+                lit += " { \n";
 
                 for field in fields.iter() {
+                    lit += BLUE;
                     lit += &*field.0.to_string();
+                    lit += WHITE;
                     lit += " = ";
                     lit += &*tree.get(field.1).to_string(tree);
+                    lit += WHITE;
                     lit += "\n";
                 }
 
@@ -262,6 +272,7 @@ impl HNodeData {
                     InitOpts::NoFill => {},
                 }
 
+                lit = lit.replace("\n", "\n    ");
                 lit += "} \n";
 
                 lit
@@ -306,9 +317,11 @@ impl HNodeData {
                     TypeRelation::Unrelated => String::default(),
                 };
 
+                call += GREEN;
                 call += &*query.name;
 
                 if !query.generics.is_empty() {
+                    call += WHITE;
                     call += "<";
                     for (g, generic) in query.generics.iter().enumerate() {
                         if g > 0 {
@@ -316,6 +329,7 @@ impl HNodeData {
                         }
                         call += &*format!("{:?}", generic);
                     }
+                    call += WHITE;
                     call += ">";
                 }
 
@@ -332,6 +346,7 @@ impl HNodeData {
                         call += ", ";
                     }
                     call += &*tree.get(*arg).to_string(tree);
+                    call += WHITE;
                 }
 
                 call += ")";
@@ -353,11 +368,15 @@ impl HNodeData {
                 call
             },
             Member { object, field, .. } => {
-                let mut member = String::from("(");
+                let mut member = WHITE.to_string();
+                member += "(";
                 member += &*tree.get(*object).to_string(tree);
+                member += WHITE;
                 member += ")";
                 member += ".";
+                member += BLUE;
                 member += &*field.to_string();
+                member += WHITE;
                 member
             },
             Index { object, index, .. } => {
@@ -368,10 +387,10 @@ impl HNodeData {
                 object
             },
             UnarOp { op, hs, .. } => {
-                op.to_string() + &*tree.get(*hs).to_string(tree)
+                YELLOW.to_string() + &*op.to_string() + &*tree.get(*hs).to_string(tree)
             },
             Transform { hs, .. } => {
-                "+".to_string() + &*tree.get(*hs).to_string(tree)
+                YELLOW.to_string() + "+" + &*tree.get(*hs).to_string(tree)
             },
             BinOp { lhs, op, rhs, .. } => {
                 let mut binop = tree.get(*lhs).to_string(tree);
@@ -404,19 +423,18 @@ impl HNodeData {
                 wh
             },
             Block { stmts, .. } => {
-                let mut bl = "{".into();
-                for (s, stmt) in stmts.iter().enumerate() {
+                let mut bl: String = "{".into();
+                for stmt in stmts.iter() {
+                    bl += "\n";
                     bl += &*tree.get(*stmt).to_string(tree);
-
-                    if s != stmts.len() - 1 {
-                        bl += "\n"
-                    }
                 }
-                bl += "}";
+                bl = bl.replace("\n", "\n    ");
+                bl += "\n}";
+                bl += WHITE;
                 bl
             },
             Return { to_return, .. } => {
-                let mut ret = "; ".into();
+                let mut ret = RED.to_string() + "; " + WHITE;
                 if let Some(to_return) = to_return {
                     ret += &*tree.get(*to_return).to_string(tree);
                 }

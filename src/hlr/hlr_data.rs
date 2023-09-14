@@ -18,7 +18,7 @@ pub struct FuncRep<'a> {
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
     pub ret_type: Type,
-    pub variables: Variables,
+    pub variables: Variables, // TODO: use ids for variable names
     pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
 }
 
@@ -51,7 +51,7 @@ impl<'a> FuncRep<'a> {
     pub fn from_code(
         code: &FuncCode,
         comp_data: &'a CompData,
-        info: FuncQuery, // TODO
+        info: FuncQuery,
     ) -> CResult<Self> {
         let mut new = FuncRep {
             name: code.name.clone(),

@@ -29,8 +29,8 @@ indexmap = "1"
 passable = "1"
 lazy_static = "1"
 
-bytemuck = { version = "1.12", optional = true, default-features = false }
-region = { version = "3.0", optional = true }
+bytemuck = { version = "1", optional = true, default-features = false }
+region = { version = "3", optional = true }
 
 cxc_derive = "0.1"
 
@@ -42,7 +42,7 @@ glam = { version = "0.22", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["backend-cranelift", "ffi-assertions"]
+default = ["backend-llvm", "ffi-assertions"]
 xc-debug = []
 mir-debug = []
 backend-debug = []
@@ -53,7 +53,7 @@ show-bytes = []
 
 [profile.bench]
 opt-level = 3
-#debug = true
+debug = true
 
 [profile.release]
 opt-level = 3

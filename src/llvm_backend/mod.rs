@@ -43,7 +43,7 @@ impl LLVMBackend {
         mir: MIR,
         function: FunctionValue<'static>,
     ) -> FunctionCompilationState {
-        FunctionCompilationState {
+        let mut fcs = FunctionCompilationState {
             mir,
             memlocs: BTreeMap::new(),
             addresses: BTreeMap::new(),
@@ -54,7 +54,11 @@ impl LLVMBackend {
             context: self.context,
             globals: &self.globals,
             compiled: &self.compiled,
-        }
+        };
+
+        get_used_functions(&mut fcs, &self.module);
+
+        fcs
     }
 }
 
@@ -144,16 +148,12 @@ fn get_used_functions(
     }
 }
 
-pub fn compile_routine(fcs: &mut FunctionCompilationState, module: &Module<'static>) {
+pub fn compile_routine(fcs: &mut FunctionCompilationState) {
     #[cfg(feature = "backend-debug")]
     println!("Compiling: {}", fcs.function.get_name().to_str().unwrap().to_string());
 
     build_stack_allocas(fcs);
     create_blocks(fcs);
-
-    // TODO: if we can move this to the make_new_fcs function then we can remove the comp 
-    // data field from FunctionCompilationState
-    get_used_functions(fcs, module);
 
     for index in 0..fcs.mir.lines.len() {
         compile_mline(fcs, index);
@@ -239,7 +239,7 @@ pub fn compile_expr(
             Some(get_addr(fcs, on).as_basic_value_enum())
         }
         MExpr::Deref { to, on } => {
-            let obj = compile_operand(fcs, on).into_pointer_value();
+            let obj = load_memloc(fcs, on).into_pointer_value();
             let loaded = 
                 fcs.builder.build_load(to.to_basic_type(fcs.context), obj, reg_name);
             Some(loaded.as_basic_value_enum())

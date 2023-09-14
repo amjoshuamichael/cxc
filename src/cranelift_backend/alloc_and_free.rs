@@ -35,7 +35,7 @@ impl AllocAndFree {
 unsafe fn alloc_x_bytes(x: i64) -> *const u8 {
     use std::alloc::*;
     // TODO: use unchecked
-    alloc(Layout::from_size_align(x as usize, 4).unwrap())
+    alloc(Layout::from_size_align_unchecked(x as usize, 4))
 }
 
 unsafe fn free(ptr: *mut u8) {
