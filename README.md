@@ -5,23 +5,23 @@
 
 ```
 [dependencies]
-cxc = "0.1"
+cxc = "0.2"
 ```
 
-The default features of the crate use [cranelift](https://cranelift.dev/) as a compiler backend. Alternatively, you can activate the "llvm" feature, which uses [LLVM](https://llvm.org/), but it does require that you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. Both backends have full feature parity. The Cranelift backend compiles faster, and is more portable, but the emitted code is slower. The LLVM backend is less portable because it requires that users have LLVM installed, but the emitted code is faster.
+The default features of the crate use [cranelift](https://cranelift.dev/) as a compiler backend. Alternatively, you can activate the "backend-llvm" feature, which uses [LLVM](https://llvm.org/), but it does require that you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. Both backends have full feature parity. The Cranelift backend compiles faster, and is more portable, but the emitted code is slower. The LLVM backend is less portable because it requires that users have LLVM installed, but the emitted code is faster.
 
 ```
 cxc = {
-    version = "0.1",
+    version = "0.2",
     default-features = false, 
-    features = ["use-llvm", "ffi-assertions"]
+    features = ["backend-llvm", "ffi-assertions"]
 }
 ```
 
 `prime.cxc`
 ```ruby
 # function that takes a 32 bit integer and returns a boolean
-is_prime(num: i32); bool { 
+is_prime(num: i32); bool {
     divider = 2 # declare divider (type is inferred as i32)
 
     @ divider < num { # while divider is less than num
