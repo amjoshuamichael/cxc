@@ -1,6 +1,6 @@
 use crate::errors::CResultMany;
-use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex};
-use crate::{Type, VarName};
+use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex, VarID};
+use crate::{Type};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
 use super::{ExprNode, HNodeData::*};
@@ -21,7 +21,11 @@ impl ExprTree {
 
         fn ids_of(tree: &ExprTree, id: ExprID) -> Vec<ExprID> {
             let rest = match tree.get(id) {
-                Number { .. } | Float { .. } | Bool { .. } | Ident { .. } => Vec::new(),
+                Number { .. } 
+                | Float { .. } 
+                | Bool { .. } 
+                | GlobalLoad { .. }
+                | Ident { .. } => Vec::new(),
                 StructLit { fields, .. } => fields
                     .iter()
                     .flat_map(|(_, id)| ids_of(tree, *id))
@@ -215,29 +219,12 @@ impl<'a> FuncRep<'a> {
         new
     }
 
-    pub fn add_variable(&mut self, name: &str, typ: &Type) -> VarName {
-        let new_name = self.uniqueify_varname(name);
-
-        self.variables.insert(new_name.clone(), VariableInfo {
+    pub fn add_variable(&mut self, typ: &Type) -> VarID {
+        self.variables.insert(VariableInfo {
             typ: typ.clone(),
             arg_index: ArgIndex::None,
             ..Default::default()
-        });
-
-        new_name.clone()
-    }
-
-    fn uniqueify_varname(&mut self, name: &str) -> VarName {
-        let name = VarName::from(name);
-        let mut uniqueified = name.clone();
-        let mut unique_id = 0;
-
-        while self.variables.contains_key(&uniqueified) {
-            uniqueified = VarName::from(&*format!("{name}{unique_id}"));
-            unique_id += 1;
-        }
-
-        uniqueified
+        })
     }
 }
 

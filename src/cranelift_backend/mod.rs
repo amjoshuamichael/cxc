@@ -11,7 +11,7 @@ use self::{to_cl_type::func_type_to_signature, external_function::ExternalFuncDa
 
 mod to_cl_type;
 mod compile_function;
-mod variables_in_mline;
+mod variables_in;
 mod global;
 mod external_function;
 mod alloc_and_free;
@@ -25,21 +25,13 @@ pub struct CraneliftBackend {
 
     to_recompile: HashSet<FuncId>,
     func_signatures: BTreeMap<FuncType, Signature>,
-    globals: BTreeMap<VarName, Global>,
+    globals: BTreeMap<VarName, *const usize>,
     module: JITModule,
     isa: Box<Arc<dyn TargetIsa>>,
     frontend_config: TargetFrontendConfig,
     external_functions: SecondaryMap<FuncId, ExternalFuncData>,
     alloc_and_free: AllocAndFree,
     func_counter: u32,
-}
-
-pub enum Global {
-    Value {
-        typ: Type,
-        ptr: *const usize,
-    },
-    Func(FuncId),
 }
 
 pub struct ClFunctionData {
@@ -75,7 +67,6 @@ impl IsBackend for CraneliftBackend {
 
     fn begin_compilation_round(&mut self) {
         #[cfg(feature = "backend-debug")]
-        println!("---beginning compilation round---");
         println!("---beginning compilation round---");
 
         self.module = make_proper_module(&*self.isa);
@@ -116,7 +107,6 @@ impl IsBackend for CraneliftBackend {
             func_id, 
             ClFunctionData { ctx, cl_func_id, name }
         );
-        self.globals.insert(func_info.name.clone(), Global::Func(func_id));
 
         if !self.func_pointers.contains_key(func_id) {
             self.func_pointers.insert(func_id, Func::new_compiled(func_info.typ.clone()));
@@ -186,8 +176,8 @@ impl IsBackend for CraneliftBackend {
         Box::new(self.func_pointers.iter())
     }
 
-    fn add_global(&mut self, name: VarName, typ: Type, ptr: *mut usize) {
-        self.globals.insert(name, Global::Value { typ, ptr });
+    fn add_global(&mut self, name: VarName, _: Type, ptr: *mut usize) {
+        self.globals.insert(name, ptr);
     }
 
     fn add_external_func(

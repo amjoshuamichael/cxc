@@ -6,9 +6,10 @@ use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::{parse::*, TypeEnum};
-use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId};
+use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId, Global};
 use crate::Type;
 use indexmap::IndexMap;
+use slotmap::{SlotMap};
 
 #[derive(Debug)]
 pub struct FuncRep<'a> {
@@ -18,11 +19,18 @@ pub struct FuncRep<'a> {
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
     pub ret_type: Type,
-    pub variables: Variables, // TODO: use ids for variable names
+    pub variables: SlotMap<VarID, VariableInfo>,
     pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
 }
 
-pub type Variables = IndexMap<VarName, VariableInfo>;
+impl<'a> ToString for FuncRep<'a> {
+    fn to_string(&self) -> String {
+        let data = self.tree.get(self.tree.root);
+        data.to_string(self)
+    }
+}
+
+slotmap::new_key_type! { pub struct VarID; }
 
 #[derive(Default, Debug, Clone)]
 pub struct VariableInfo {
@@ -30,9 +38,10 @@ pub struct VariableInfo {
     pub arg_index: ArgIndex,
 
     // specially marks variables that definitely should not be dropped. if this is marked
-    // as false, traditional drwillop rules still apply. this is not a way to check if a
+    // as false, traditional drop rules still apply. this is not a way to check if a
     // variable will be dropped.
     pub do_not_drop: bool,
+    pub name: VarName,
 }
 
 #[derive(Copy, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -70,54 +79,54 @@ impl<'a> FuncRep<'a> {
             generics: info.generics,
             tree: ExprTree::default(),
             comp_data,
-            variables: IndexMap::new(),
+            variables: SlotMap::with_key(),
             specified_dependencies: HashSet::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
             let typ = new.get_type_spec(&arg.type_spec)?;
 
-            new.variables.insert(
-                arg.name.clone(),
-                VariableInfo {
-                    typ,
-                    arg_index: ArgIndex::Some(a),
-                    ..Default::default()
-                },
-            );
+            new.variables.insert(VariableInfo {
+                typ,
+                arg_index: ArgIndex::Some(a),
+                name: arg.name.clone(),
+                do_not_drop: false,
+            });
         }
 
-        for expr in code.code.into_iter() {
-            let (var_name, typ) = match expr {
-                Expr::SetVar(VarDecl { name, type_spec }, _) => 
-                    (name, new.get_type_spec(type_spec)?),
-                _ => continue,
-            };
-
-            if !new.variables.contains_key(var_name) {
-                new.variables.insert(var_name.clone(), VariableInfo {
-                    typ,
-                    arg_index: ArgIndex::None,
-                    ..Default::default()
-                });
+        new.tree.root = new.tree.insert(
+            ExprID::default(),
+            HNodeData::Block {
+                ret_type: Type::unknown(),
+                stmts: Vec::new(),
+                // only thing in new.variables is the args
+                declared: new.variables.keys().collect(), 
             }
-        }
+        );
 
-        let new_root = new.add_expr(&code.code, new.tree.root);
-        new.tree.root = new_root;
+        let mut statment_ids = Vec::new();
+
+        {
+            let Expr::Block(ref stmts) = code.code else { unreachable!() };
+
+            for stmt in stmts {
+                statment_ids.push(new.add_expr(&stmt, new.tree.root));
+            }
+
+            let HNodeData::Block { stmts, .. } = new.tree.get_mut(new.tree.root)
+                else { unreachable!() };
+
+            *stmts = statment_ids;
+        }
 
         Ok(new)
     }
 
     // includes sret argument
-    pub fn args<'b>(&'b mut self) -> Vec<(&VarName, &VariableInfo)> {
-        self.variables
-            .sort_by(|_, df, _, df2| df.arg_index.cmp(&df2.arg_index));
-
+    pub fn args<'b>(&'b mut self) -> Vec<(VarID, &VariableInfo)> {
         let mut names_and_flow = self
             .variables
             .iter()
-            .map(|(name, v_info)| (name, v_info))
             .filter(|(_, v_info)| v_info.is_arg_or_sret())
             .collect::<Vec<_>>();
 
@@ -134,15 +143,15 @@ impl<'a> FuncRep<'a> {
     }
 
     // includes sret argument
-    pub fn arg_names(&mut self) -> Vec<VarName> {
-        self.args().into_iter().map(|(name, _)| name).cloned().collect::<Vec<_>>()
+    pub fn arg_ids(&mut self) -> Vec<VarID> {
+        self.args().into_iter().map(|(id, _)| id).collect::<Vec<_>>()
     }
 
     // includes sret argument
     pub fn arg_count(&mut self) -> u32 { self.args().len() as u32 }
 
-    pub fn get_type_spec(&self, alias: &TypeSpec) -> TResult<Type> {
-        self.comp_data.get_spec(alias, &(&self.generics, &self.relation))
+    pub fn get_type_spec(&self, spec: &TypeSpec) -> TResult<Type> {
+        self.comp_data.get_spec(spec, &(&self.generics, &self.relation))
     }
 
     pub fn output(mut self) -> (HLR, ProcessedFuncInfo) {
@@ -165,14 +174,16 @@ impl<'a> FuncRep<'a> {
         let mut dependencies = HashSet::<FuncQuery>::new();
 
         for (_call_id, call_data) in self.tree.iter() {
-            let HNodeData::Call { query, .. } = call_data else { continue };
+            let (
+                HNodeData::Call { query, .. } 
+                | HNodeData::GlobalLoad { global: Global::Func(query), .. }
+            ) = call_data else { continue };
             dependencies.insert(query.clone());
         }
 
         (
             HLR {
                 func_type: func_type.clone(),
-                arg_names: self.arg_names(),
                 tree: self.tree,
                 data_flow: self.variables,
                 dependencies,
@@ -266,31 +277,59 @@ impl<'a> FuncRep<'a> {
                 call_space
             },
             Expr::Ident(name) => {
-                let var_type = match self.variables.get(name) {
-                    Some(variables) => variables.typ.clone(),
-                    None => self
-                        .comp_data
-                        .globals
-                        .get(&name.clone())
-                        .unwrap_or_else(|| {
-                            panic!("could not find identifier {} in {:?}", name, self.variables) // TODO: throw error
-                        })
-                        .clone(),
-                };
+                let var_id: VarID;
+                let mut block: ExprID = parent;
 
-                self.tree.insert(parent, HNodeData::Ident { var_type, name: name.clone() })
+                'find_var: loop {
+                    (_, block) = self.tree.statement_and_block(block);
+
+                    let HNodeData::Block { declared, .. } = self.tree.get_ref(block)
+                        else { unreachable!() };
+
+                    for declared_var in declared {
+                        if &self.variables[*declared_var].name == name {
+                            var_id = *declared_var;
+                            break 'find_var;
+                        }
+                    }
+
+                    // the parent of the root value is the ExprID::default()
+                    if block == self.tree.root {
+                        let global = self
+                            .comp_data
+                            .globals
+                            .get(name)
+                            .unwrap_or_else(|| panic!("could not find identifier {} in {:?}", name, self.variables))
+                            .clone();
+                        let var_type = self.comp_data.get_type_of_global(&global).unwrap();
+                        return self.tree.insert(parent, HNodeData::GlobalLoad { var_type, global });
+                    }
+                }
+
+                let var_type = self.variables[var_id].typ.clone();
+
+                self.tree.insert(parent, HNodeData::Ident { var_type, var_id })
             },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
-                let ret_type = self.variables[&decl.name].typ.clone();
+                let var_type = self.get_type_spec(&decl.type_spec).unwrap(); // TODO: error
+
+                let id = self.variables.insert(VariableInfo {
+                    name: decl.name.clone(),
+                    typ: var_type.clone(),
+                    arg_index: ArgIndex::None,
+                    do_not_drop: false,
+                });
+
+                let (_, block) = self.tree.statement_and_block(space);
+                let HNodeData::Block { declared, .. } = self.tree.get_mut(block)
+                    else { unreachable!() };
+                declared.insert(id);
 
                 let ident = self.tree.insert(
                     space,
-                    HNodeData::Ident {
-                        var_type: ret_type.clone(),
-                        name: decl.name.clone(),
-                    },
+                    HNodeData::Ident { var_type, var_id: id },
                 );
 
                 let statement = HNodeData::Set {
@@ -378,18 +417,22 @@ impl<'a> FuncRep<'a> {
             Expr::Block(stmts) => {
                 let space = self.tree.make_one_space(parent);
 
+                self.tree.replace(space, HNodeData::Block {
+                    ret_type: Type::unknown(),
+                    stmts: Vec::new(),
+                    declared: HashSet::new(),
+                });
+
                 let mut statment_ids = Vec::new();
 
                 for stmt in stmts {
                     statment_ids.push(self.add_expr(stmt, space));
                 }
 
-                let new_binop = HNodeData::Block {
-                    ret_type: Type::unknown(),
-                    stmts: statment_ids,
-                };
+                let HNodeData::Block { stmts, .. } = self.tree.get_mut(space)
+                    else { unreachable!() };
+                *stmts = statment_ids;
 
-                self.tree.replace(space, new_binop);
                 space
             },
             Expr::Call {

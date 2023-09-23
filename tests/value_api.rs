@@ -6,7 +6,7 @@ use cxc::{Unit, Value, library::StdLib};
 use test_utils::{Numbers4, Numbers5, Point2D, Point3D, TestUtilsLib};
 
 #[test]
-fn value_4() {
+fn value_4_dep() {
     let mut unit = Unit::new();
     unit.push_script("double(x: i32); i32 { ; x * 2 }");
 
@@ -114,7 +114,7 @@ fn vec_value_func() {
     unit.push_script(
         "
         many_nums(); Value { 
-            some_nums = Vec<u32>:new()
+            some_nums := Vec<u32>:new()
             some_nums.push(4325)
             some_nums.push(6954)
             some_nums.push(50986)

@@ -5,7 +5,7 @@ print<T>(value: T) {
 
 assert_eq<T>(lhs: T, rhs: T) {
     ? lhs != rhs {
-        failure = "a"#lhs.to_string()
+        failure := "a"#lhs.to_string()
         #failure.push_string(&" is not equal to ")
         #failure.push_string(&rhs.to_string())
         #failure.push_string(&"!")

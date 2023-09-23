@@ -1,5 +1,5 @@
 use crate::{
-    hlr::hlr_data::FuncRep,
+    hlr::hlr_data::{FuncRep, VarID},
     lex::VarName,
     parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
     Type, FuncQuery, typ::spec_from_type::type_to_type_spec,
@@ -60,13 +60,13 @@ impl NodeDataGen for usize {
     }
 }
 
-impl NodeDataGen for VarName {
+impl NodeDataGen for VarID {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         hlr.tree.insert(
             parent,
             HNodeData::Ident {
-                name: self.clone(),
-                var_type: hlr.variables.get(self).unwrap().typ.clone(),
+                var_id: *self,
+                var_type: hlr.variables.get(*self).unwrap().typ.clone(),
             },
         )
     }

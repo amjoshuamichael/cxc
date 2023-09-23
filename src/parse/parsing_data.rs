@@ -114,6 +114,10 @@ impl Expr {
     pub fn string(from: &str) -> Box<Expr> {
         Box::new(Expr::String(Arc::from(from)))
     }
+
+    pub fn empty_block() -> Expr {
+        Expr::Block(Vec::new())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -185,7 +189,7 @@ impl<T> Default for TypeRelationGeneric<T> {
     fn default() -> Self { Self::Unrelated }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct FuncCode {
     pub name: VarName,
     pub ret_type: TypeSpec,

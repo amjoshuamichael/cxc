@@ -251,26 +251,27 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     fn inner(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         let lhs = parse_expr(lexer)?;
 
-        if matches!(lhs, Expr::Ident(_)) {
+        if matches!(lhs, Expr::Ident(_)) && lexer.peek_tok()? == &Tok::Colon {
             let Expr::Ident(var_name) = lhs else { todo!("new err type") };
 
-            let var = match lexer.next_tok()? {
-                Tok::Assignment => VarDecl {
+            lexer.assert_next_tok_is(Tok::Colon)?;
+
+            let var = if lexer.peek_tok()? == &Tok::Assignment {
+                lexer.next_tok()?;
+                VarDecl {
                     name: var_name,
                     type_spec: TypeSpec::Unknown,
-                },
-                Tok::Colon => {
-                    let type_spec =
-                        lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
-                    lexer.assert_next_tok_is(Tok::Assignment)?;
-                    VarDecl {
-                        name: var_name,
-                        type_spec,
-                    }
-                },
-                got => {
-                    return ParseError::unexpected(got, vec![TokName::Assignment, TokName::Colon]);
-                },
+                }
+            } else {
+                let type_spec =
+                    lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
+
+                lexer.assert_next_tok_is(Tok::Assignment)?;
+
+                VarDecl {
+                    name: var_name,
+                    type_spec,
+                }
             };
 
             let rhs = lexer.recover(parse_expr)?;

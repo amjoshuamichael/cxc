@@ -232,7 +232,7 @@ fn conversion_dependents() {
 
     unit.push_script(r#"
         main(); i32 {
-            x = TwoNums { 0, 0 }
+            x := TwoNums { 0, 0 }
             ; x.fifty()
         }
     "#).unwrap();

@@ -1,4 +1,4 @@
-use crate::{Type};
+use crate::Type;
 
 use super::{
     expr_tree::{MemberGen, HNodeData, SetVarGen},
@@ -17,8 +17,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                 return;
             }
             
-            let new_struct = 
-                hlr.add_variable("struct", &var_type);
+            let new_struct = hlr.add_variable(&var_type);
 
             let mut current_statement = structlit;
 
@@ -41,7 +40,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
 
             *struct_data = HNodeData::Ident {
                 var_type: var_type.clone(),
-                name: new_struct,
+                var_id: new_struct,
             };
         },
     )

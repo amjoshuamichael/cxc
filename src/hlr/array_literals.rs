@@ -14,8 +14,7 @@ pub fn array_literals(hlr: &mut FuncRep) {
             let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() 
                 else { unreachable!() };
 
-            let new_array = 
-                hlr.add_variable("array", &var_type);
+            let new_array = hlr.add_variable(&var_type);
 
             let mut current_statement = arr_id;
 
@@ -40,7 +39,7 @@ pub fn array_literals(hlr: &mut FuncRep) {
 
             *arr_data = HNodeData::Ident {
                 var_type: var_type.clone(),
-                name: new_array,
+                var_id: new_array,
             };
         },
     )

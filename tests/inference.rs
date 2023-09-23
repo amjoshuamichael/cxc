@@ -9,7 +9,7 @@ fn infer_i() {
     xc_test!(
         "
         ; i32 {
-            x = 300
+            x := 300
             ; x
         }
         ";
@@ -22,7 +22,7 @@ fn infer_f() {
     xc_test!(
         "
         ; f32 {
-            x = 320.7
+            x := 320.7
             ; x
         }
         ";
@@ -35,7 +35,7 @@ fn infer_b() {
     xc_test!(
         "
         ; bool {
-            x = true
+            x := true
             ; x
         }
         ";
@@ -48,7 +48,7 @@ fn infer_struct() {
     xc_test!(
         "
         ; i32 {
-            twonums = { x = 43, y = 94 }
+            twonums := { x = 43, y = 94 }
             ; twonums.y
         }
         ";
@@ -61,7 +61,7 @@ fn infer_tuple() {
     xc_test!(
         "
         ; i32 {
-            twonums = { 43, 94 }
+            twonums := { 43, 94 }
             ; twonums.1
         }
         ";
@@ -74,8 +74,8 @@ fn factorial_while() {
     xc_test!(
         "
         ; i32 {
-            current = 5
-            output = 1
+            current := 5
+            output := 1
 
             @ current > 0 {
                 output = output * current
@@ -107,7 +107,7 @@ fn infer_vec_push() {
         use StdLib;
         r#"
         main() {
-            x = Vec<i32>:new<i32>()
+            x := Vec<i32>:new<i32>()
             x.push(432)
             x.get(0)
         }
@@ -135,7 +135,7 @@ fn infer_default_struct() {
         Defaultable = { x: i32, y: i32 }
 
         main() {
-            x = Defaultable { ++ } 
+            x := Defaultable { ++ } 
             assert_eq(x.x, 0)
             assert_eq(x.y, 0)
         }
@@ -181,13 +181,13 @@ fn infer_int_size_u8() {
         takes_a_u8(a: u8) { }
 
         main(); bool {
-            x = 90
+            x := 90
 
             takes_a_u8(x)
 
             # this 250 should become a u8, and so should y. y should overflow, 
             # causing it to be less than x
-            y = 250 + x
+            y := 250 + x
 
             ; x > y
         }
@@ -207,11 +207,11 @@ fn infer_float_size_f64_1() {
         }
 
         main(); bool {
-            x = 90.0
+            x := 90.0
 
             takes_an_f64(x)
 
-            y = 250.0 + x
+            y := 250.0 + x
 
             ; size_of_val(&y) == 8
         }
@@ -227,11 +227,11 @@ fn infer_float_size_f64_2() {
         takes_an_f64(a: f64) { }
 
         main(); f64 {
-            x = 90.0
+            x := 90.0
 
             takes_an_f64(x)
 
-            y = 250.0 + x
+            y := 250.0 + x
 
             ? y > 250.0 + 80.0 {
                 ; y
@@ -252,11 +252,11 @@ fn infer_struct_fields_with_arg() {
         takes_3_nums(me: {x: i32, y: i32, z: i32}) {}
 
         main(); i32 {
-            three = { x = 43, y = 65, ++ }
+            three := { x = 43, y = 65, ++ }
 
             takes_3_nums(three)
 
-            x = three.x + three.y + three.z
+            x := three.x + three.y + three.z
 
             ; x
         }
@@ -271,9 +271,9 @@ fn infer_struct_fields_with_member() {
         use StdLib;
         r#"
         main(); i32 {
-            three = { x = 43, y = 65, ++ }
+            three := { x = 43, y = 65, ++ }
 
-            x = three.x + three.y + three.z
+            x := three.x + three.y + three.z
 
             ; x
         }
@@ -289,7 +289,7 @@ fn infer_set_struct_fields_basic() {
         size_of_val<T>(val: &T); i32 { ; cast(size_of<T>()) }
 
         main(); i32 {
-            three = { -- }
+            three := { -- }
             three.x = 90
             three.y = 48
             three.z = 39
@@ -308,7 +308,7 @@ fn infer_set_struct_fields_and_infer_number_size() {
         size_of_val<T>(val: &T); u64 { ; size_of<T>() }
 
         main(); u64 {
-            three = { -- }
+            three := { -- }
             three.x = 90
             three.y = 48
             three.z = 39
@@ -327,7 +327,7 @@ fn infer_number_u32_in_struct() {
         size_of_val<T>(val: &T); u64 { ; size_of<T>() }
 
         main(); u64 {
-            twonums = { 30, 40 }
+            twonums := { 30, 40 }
 
             ; size_of_val(&twonums)
         }
@@ -344,7 +344,7 @@ fn infer_number_u8_in_struct() {
         takes_a_u8(val: u8) {}
 
         main(); u64 {
-            twonums = { 30, 40 }
+            twonums := { 30, 40 }
             takes_a_u8(twonums.0)
             takes_a_u8(twonums.1)
 
@@ -363,7 +363,7 @@ fn infer_array_len() {
         takes_a_big_array(val: &[200]u8) {}
 
         main(); u64 {
-            supposed_to_be_big = [432, 656, ++]
+            supposed_to_be_big := [432, 656, ++]
             takes_a_big_array(&supposed_to_be_big)
 
             ; (&supposed_to_be_big).len()

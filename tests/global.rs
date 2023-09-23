@@ -88,8 +88,8 @@ fn comp_script() {
 
         ---
 
-        x = 30
-        y = double(x)
+        x := 30
+        y := double(x)
         large_value.c = y
 
         "#,

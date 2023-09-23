@@ -506,12 +506,10 @@ mod tests {
         unit.push_script("RcBox<T> = { strong: i64, weak: i64, +value: T }").unwrap();
         unit.push_script("Rc<T> = { +inner: &RcBox<T> }").unwrap();
 
-        let comp = |spec: &str, field: &str| 
+        let _comp = |spec: &str, field: &str| 
             unit.comp_data.get_spec(&TypeSpec::from(spec), &())
             .unwrap()
             .route_to(VarName::from(field))
             .map(|(steps, typ)| (typ, steps.to_vec()));
-
-        dbg!(comp("Rc<{ x: i32, y: i32}>", "x"));
     }
 }

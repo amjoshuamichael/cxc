@@ -158,6 +158,12 @@ fn store_first_class() {
             triple_operation: Operation = get_operation(3)
             sixty: i32 = triple_operation.run(20)
 
+            x := 10
+
+            hello := 10
+
+            x = 10
+
             ; ten + sixty
         }
         ";

@@ -10,7 +10,7 @@ fn basic_drop() {
     unit.push_script(
         r#"
         clone_rc(the_rc: &Rc<i32>) {
-           cloned = the_rc.clone()
+           cloned := the_rc.clone()
         }
         "#,
     )

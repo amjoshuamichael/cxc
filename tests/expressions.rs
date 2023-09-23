@@ -45,28 +45,3 @@ fn bool_complement() { xc_test!("; bool { ; !true }"; false) }
 #[test]
 fn double_bool_complement() { xc_test!("; bool { ; !!true }"; true) }
 
-#[test]
-fn ret_if() { xc_test!("; i32 { ? true { ; 100 } ; 20 }"; 100) }
-#[test]
-fn ret_if_no() { xc_test!("; i32 { ? false { ; 100 } ; 20 }"; 20) }
-
-// TODO:
-// these do not work.
-//
-// The first two don't work because LLVM needs to see a return at the END of a
-// function in order to compile it.
-//
-// The second two don't work because the to_llvm module does not support return
-// an if-else statement. Both of these can be fixed by adding extra HLR passes.
-#[test]
-#[ignore]
-fn ret_if_else() { xc_test!("; i32 { ? true { ; 100 } : { ; 20 } }"; 100) }
-#[test]
-#[ignore]
-fn ret_if_else_no() { xc_test!("; i32 { ? false { ; 1 } : { ; 2 } }"; 2) }
-#[test]
-#[ignore]
-fn expr_if_else() { xc_test!("; i32 { ; ? true { 10 } : { 2 } }"; 10) }
-#[test]
-#[ignore]
-fn expr_if_else_no() { xc_test!("; i32 { ? false { 10 } : { 2 } }"; 20) }

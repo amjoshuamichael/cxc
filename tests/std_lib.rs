@@ -59,11 +59,11 @@ fn vec_push_and_check() {
             num_vec: Vec<i64> = Vec<i64>:new()
             two_num_vec: Vec<TwoNums> = Vec<TwoNums>:new()
 
-            current_index = i64 0
+            current_index := i64 0
             @ current_index < number_of_checks {
                 num_vec.push(current_index)
 
-                current_index = current_index + i64 1
+                current_index = current_index + 1
             }
 
             current_index = i64 0
@@ -73,14 +73,14 @@ fn vec_push_and_check() {
                     current_index
                 )
 
-                current_index = current_index + i64 1
+                current_index = current_index + 1
             }
 
             current_index = i64 0
             @ current_index < number_of_checks {
                 two_num_vec.push(two_nums_from_one(current_index))
 
-                current_index = current_index + i64 1
+                current_index = current_index + 1
             }
 
             current_index = i64 0
@@ -90,7 +90,7 @@ fn vec_push_and_check() {
 
                 assert_eq<i64>(in_vec.num_two, corresponding.num_two)
 
-                current_index = current_index + i64 1
+                current_index = current_index + 1
             }
         }"
     )
@@ -132,7 +132,7 @@ fn bit_array_16() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<i16>:new()
+            arr8 := BitArray<i16>:new()
 
             arr8.toggle(u16 0)
             arr8.toggle(u16 4)
@@ -155,7 +155,7 @@ fn bit_array_32() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<i32>:new()
+            arr8 := BitArray<i32>:new()
 
             arr8.toggle(u32 0)
             arr8.toggle(u32 4)
@@ -178,7 +178,7 @@ fn bit_array_8() {
     xc_test!(
         "
         main() {
-            arr8 = BitArray<i8>:new()
+            arr8 := BitArray<i8>:new()
 
             arr8.toggle(u8 0)
             arr8.toggle(u8 4)
@@ -227,9 +227,7 @@ fn arc_test() {
     )
 }
 
-// TODO: naming a variable with the name of a method causes bugs??
 #[test]
-#[ignore]
 fn arc_clone() {
     xc_test!(
         use StdLib;

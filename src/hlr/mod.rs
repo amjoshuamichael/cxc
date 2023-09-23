@@ -59,7 +59,7 @@ pub fn hlr(
     let mut output = FuncRep::from_code(code, comp_data, info)?;
 
     #[cfg(feature = "xc-debug")]
-    println!("{}", &output.tree.to_string());
+    println!("{}", &output.to_string());
 
     // the following hlr passes are nescessary, not just optimization
     //
@@ -67,9 +67,7 @@ pub fn hlr(
     // see the individual perf impact of each pass when using a flamegraph
 
     infer_types(&mut output);
-        println!("{}", &output.tree.to_string());
     do_transformations(&mut output)?;
-        println!("{}", &output.tree.to_string());
     active_initialization(&mut output);
     struct_literals(&mut output);
     array_literals(&mut output);
@@ -82,7 +80,7 @@ pub fn hlr(
 
     #[cfg(feature = "xc-debug")]
     {
-        println!("{}", &output.tree.to_string());
+        println!("{}", &output.to_string());
         println!("{:?}", &output.variables);
     }
   

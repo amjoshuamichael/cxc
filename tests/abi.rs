@@ -9,7 +9,7 @@ fn pass_8_byte_sep() {
 
         main(); i32 {
             x: {i32, i32} = { 43, 65 }
-            sum_x = sum(x)
+            sum_x := sum(x)
             ; sum_x
         }
         ";
@@ -31,7 +31,7 @@ fn pass_12_byte_2sep() {
         main(); i64 {
             # a little over the 32 bit integer limit, to make sure this is *really* an i64
             x: {i64, i32} = { i64 2_147_483_694, 65, }
-            sum_x = sum(x)
+            sum_x := sum(x)
             ; sum_x
         }
         ";
@@ -47,7 +47,7 @@ fn pass_12_byte_3sep() {
 
         main(); i32 {
             x: {i32, i32, i32} = { 43, 65, 4 }
-            sum_x = sum(x)
+            sum_x := sum(x)
             ; sum_x
         }
         ";
@@ -64,7 +64,7 @@ fn pass_16_byte_2sep() {
         main(); i64 {
             # a little over the 32 bit integer limit, to make sure this is *really* an i64
             x: {i64, i64} = { i64 2_147_483_694, i64 65, }
-            sum_x = sum(x)
+            sum_x := sum(x)
             ; sum_x
         }
         ";

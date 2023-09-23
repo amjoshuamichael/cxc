@@ -5,7 +5,9 @@ use self::functions::TypeLevelFunc;
 pub use self::value_api::Value;
 use crate::FuncType;
 
+use crate::TypeEnum;
 use crate::errors::CErr;
+use crate::errors::CResult;
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data_output::HLR;
 use crate::hlr::prelude::*;
@@ -52,7 +54,7 @@ pub struct Unit {
     pub(crate) backend: Backend,
 }
 
-#[derive(Clone, Default, XcReflectMac)]
+#[derive(Default, XcReflectMac)]
 #[xc_opaque]
 pub struct CompData {
     typedefs: BTreeMap<TypeName, TypeSpec>,
@@ -63,7 +65,16 @@ pub struct CompData {
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
     intrinsics: BTreeSet<FuncCodeId>,
     processed: SlotMap<FuncId, ProcessedFuncInfo>,
-    pub globals: BTreeMap<VarName, Type>,
+    pub globals: BTreeMap<VarName, Global>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Global {
+    Value {
+        name: VarName,
+        typ: Type,
+    },
+    Func(FuncQuery),
 }
 
 #[derive(Debug, Clone)]
@@ -198,22 +209,10 @@ impl Unit {
             set = set
                 .into_iter()
                 .map(|query| {
-                    let (code, _) = self.comp_data.get_code(query.code_query()).unwrap();
-
-                    let func_arg_types = code
-                        .args
-                        .iter()
-                        .map(|VarDecl { type_spec, .. }| {
-                             self.comp_data.get_spec(type_spec, &query)
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let func_ret_type = self.comp_data.get_spec(&code.ret_type, &query)?;
-                    let func_type = func_ret_type.func_with_args(func_arg_types);
-
-                    if query.generics.is_empty() {
+                   if query.generics.is_empty() && query.relation.inner_type().is_none() {
                         self.comp_data.globals.insert(
                             query.name.clone(),
-                            func_type.clone()
+                            Global::Func(query.clone()),
                         );
                     }
 
@@ -457,7 +456,10 @@ impl Unit {
     pub fn add_global<T: XcReflect + 'static>(&mut self, name: VarName, val: *mut T) {
         let typ = self.get_reflect_type::<T>().unwrap();
 
-        self.comp_data.globals.insert(name.clone(), typ.get_ref());
+        self.comp_data.globals.insert(
+            name.clone(), 
+            Global::Value { name: name.clone(), typ: typ.clone() },
+       );
 
         self.backend.add_global(name, typ.get_ref(), val as _);
     }
@@ -466,5 +468,16 @@ impl Unit {
         let (id, func) = self.backend.compiled_iter().find(|(_, func)| func.get_pointer() == ptr)?;
 
         Some((id.clone(), func.clone()))
+    }
+}
+
+impl CompData {
+    pub fn get_type_of_global(&self, global: &Global) -> CResult<Type> {
+        match global {
+            Global::Value { typ, .. } => Ok(typ.clone().get_ref()),
+            Global::Func(query) => self
+                .get_func_type(query)
+                .map(|func_type| Type::new(TypeEnum::Func(func_type))),
+        }
     }
 }

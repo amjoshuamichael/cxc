@@ -1,15 +1,15 @@
 value<T>(data: T); Value {
-    typeobj = typeobj<T>()
+    typeobj := typeobj<T>()
 
     bytes_arr: EraseDataU8(T) = cast(data)
 
-    bytes_vec = Vec<u8>:new()
+    bytes_vec: = Vec<u8>:new()
 
-    b = i64 0
+    b: i64 = 0
     @ b < EraseDataU8(T):len() {
         bytes_vec.push(bytes_arr[b]) 
 
-        b = b + i64 1
+        b = b + 1
     }
 
     ; Value {

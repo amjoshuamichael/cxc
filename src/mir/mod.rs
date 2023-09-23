@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{VarName, parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}, hlr_data::{VariableInfo, ArgIndex}}, FuncType, TypeEnum, ArrayType, unit::FuncId, FuncQuery, Type};
+use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery};
 
 pub use self::mir_data::*;
 
@@ -26,6 +26,10 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
 
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
 
+    for (l, line) in mir.lines.iter().enumerate() {
+        // print the index with three digits of space
+        println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
+    }
     remove_post_return_statements(&mut mir);
 
     #[cfg(feature = "mir-debug")]
@@ -62,7 +66,6 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
             },
             HNodeData::Return { to_return: Some(expr), .. } => {
                 let operand = build_as_operand(tree.get(expr), &tree, mir);
-
                 mir.lines.push(MLine::Return(Some(operand)));
             },
             HNodeData::Return { to_return: None, .. } => {
@@ -111,6 +114,29 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
 
                 mir.lines.push(MLine::Marker(after));
             }
+            HNodeData::IfThenElse { i, t, e, .. } => {
+                let i = build_as_operand(tree.get(i), tree, mir);
+
+                let then = new_block_id(mir);
+                let else_ = new_block_id(mir);
+                let after = new_block_id(mir);
+
+                mir.lines.push(MLine::Branch { 
+                    if_: i, 
+                    yes: then,
+                    no: else_,
+                });
+
+                mir.lines.push(MLine::Marker(then));
+                build_block(tree.get(t), tree, mir);
+                mir.lines.push(MLine::Goto(after));
+
+                mir.lines.push(MLine::Marker(else_));
+                build_block(tree.get(e), tree, mir);
+                mir.lines.push(MLine::Goto(after));
+
+                mir.lines.push(MLine::Marker(after));
+            }
             _ => {
                 let expr = build_as_expr(tree.get(stmt), tree, mir);
                 mir.lines.push(MLine::Expr(expr));
@@ -120,8 +146,10 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
 }
 
 fn build_as_memloc(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MMemLoc {
-    if let HNodeData::Ident { name, .. } = node {
+    if let HNodeData::Ident { var_id: name, .. } = node {
         return MMemLoc::Var(name);
+    } else if let HNodeData::GlobalLoad { global: Global::Value { name, .. }, .. } = node {
+        return MMemLoc::Global(name);
     }
 
     MMemLoc::Reg(build_as_reg(node, tree, add_to))
@@ -129,35 +157,19 @@ fn build_as_memloc(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MMemLo
 
 fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
     match node {
-        HNodeData::Ident { name, .. } => {
-            if !mir.variables.contains_key(&name) || mir.variables[&name].is_arg_or_sret() {
-                let new_var_name = VarName::from(&*(name.to_string() + "$addr"));
+        HNodeData::Ident { var_id: id, .. } => {
+            let var = &mir.variables[id];
+            if var.is_arg_or_sret() {
+                let addr_var = mir.new_variable(var.typ.clone());
 
-                if !mir.variables.contains_key(&new_var_name) {
-                    mir.lines.insert(0, MLine::Store {
-                        l: MAddr::Var(new_var_name.clone()),
-                        val: MOperand::MemLoc(MMemLoc::Var(name.clone())),
-                    });
+                mir.lines.insert(0, MLine::Store {
+                    l: MAddr::Var(addr_var),
+                    val: MOperand::Memloc(MMemLoc::Var(id)),
+                });
 
-                    if mir.variables.contains_key(&name) {
-                        mir.variables.insert(new_var_name.clone(), VariableInfo {
-                            typ: mir.variables[&name].typ.clone(),
-                            arg_index: ArgIndex::None,
-                            ..Default::default()
-                        });
-                    } else {
-                        // pointer to a global
-                        mir.variables.insert(new_var_name.clone(), VariableInfo {
-                            typ: Type::u(8).get_ref(),
-                            arg_index: ArgIndex::None,
-                            ..Default::default()
-                        });
-                    }
-                }
-
-                MAddr::Var(new_var_name)
+                MAddr::Var(addr_var)
             } else {
-                MAddr::Var(name)
+                MAddr::Var(id)
             }
         },
         HNodeData::UnarOp { op, hs, .. } if op == Opcode::Deref => {
@@ -175,7 +187,7 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
     }
 }
 
-fn build_as_operand(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MOperand {
+fn build_as_operand(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MOperand {
     match node {
         HNodeData::Number { lit_type, value } => {
             MOperand::Lit(MLit::Int { size: lit_type.size() as u32 * 8, val: value })
@@ -184,6 +196,10 @@ fn build_as_operand(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MOper
             MOperand::Lit(MLit::Float { size: lit_type.size() as u32 * 8, val: value })
         },
         HNodeData::Bool { value } => MOperand::Lit(MLit::Bool(value)),
+        HNodeData::GlobalLoad { global: Global::Func(func_query), .. } => {
+            let func_id = mir.dependencies[&func_query];
+            MOperand::Lit(MLit::Function(func_id))
+        }
         HNodeData::Call { ref query, .. } if &*query.name.to_string() == "size_of" => {
             MOperand::Lit(MLit::Int { size: 64, val: query.generics[0].size() as u64 })
         },
@@ -194,7 +210,7 @@ fn build_as_operand(node: HNodeData, tree: &ExprTree, add_to: &mut MIR) -> MOper
             })
         },
         _ => {
-            MOperand::MemLoc(build_as_memloc(node, tree, add_to))
+            MOperand::Memloc(build_as_memloc(node, tree, mir))
         },
     }
 }
@@ -258,7 +274,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let to_type = query.generics[1].clone();
 
             let val = build_as_addr(tree.get(a[0]), tree, mir);
-            let new_cast_out = mir.new_variable("cast_out", to_type.clone());
+            let new_cast_out = mir.new_variable(to_type.clone());
 
             mir.lines.push(MLine::MemCpy {
                 from: val, 
@@ -333,8 +349,11 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
 
             MExpr::Addr(addr)
         },
-        HNodeData::Ident { name, .. } => {
-            MExpr::MemLoc(MMemLoc::Var(name))
+        HNodeData::Ident { var_id, .. } => {
+            MExpr::MemLoc(MMemLoc::Var(var_id))
+        },
+        HNodeData::GlobalLoad { global: Global::Value { name, .. }, .. } => {
+            MExpr::MemLoc(MMemLoc::Global(name))
         },
         _ => todo!("{:?}", node),
     }
@@ -352,7 +371,7 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
             let field_index = struct_type.get_field_index(&field).unwrap() as u32;
             
             MAddrExpr::Member { object_type, object, field_index }
-        }
+        },
         HNodeData::Index { object, index, .. } => {
             let array_type = tree.get(object).ret_type();
             let TypeEnum::Array(ArrayType { base, .. }) = array_type.as_type_enum() 
@@ -364,28 +383,24 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
             let index = build_as_operand(tree.get(index), tree, mir);
 
             MAddrExpr::Index { array_type, element_type, object, index }
-        }
-        
+        },
         HNodeData::ArrayLit { .. } 
         | HNodeData::Number { .. } 
         | HNodeData::Float { .. } 
         | HNodeData::Bool { .. } 
         | HNodeData::Call { .. } 
+        | HNodeData::GlobalLoad { .. } 
         | HNodeData::UnarOp { .. } 
         | HNodeData::BinOp { .. } => {
             let node_ret_type = node.ret_type();
             let expr = build_as_operand(node, tree, mir);
 
-            if let MOperand::MemLoc(MMemLoc::Var(name)) = expr {
-                MAddrExpr::Addr(MAddr::Var(name))
-            } else {
-                let new_var = mir.new_variable("temp_storage", node_ret_type);
-                let addr = MAddr::Var(new_var);
+            let new_var = mir.new_variable(node_ret_type);
+            let addr = MAddr::Var(new_var);
 
-                mir.lines.push(MLine::Store { l: addr.clone(), val: expr });
+            mir.lines.push(MLine::Store { l: addr.clone(), val: expr });
 
-                MAddrExpr::Addr(addr)
-            }
+            MAddrExpr::Addr(addr)
         },
         _ => panic!("{node:?}"),
     }

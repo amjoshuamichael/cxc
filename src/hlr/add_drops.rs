@@ -1,4 +1,4 @@
-use crate::{parse::Opcode, FuncQuery, TypeRelation, TypeEnum};
+use crate::{parse::Opcode, FuncQuery, TypeRelation};
 
 use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen}};
 
@@ -10,15 +10,13 @@ pub fn add_drops(hlr: &mut FuncRep) {
         .map(|(name, info)| (name.clone(), info.typ.clone()))
         .collect::<Vec<_>>();
 
-    for (var_name, var_type) in vars {
-        if var_type.is_shallow() || 
-            matches!(var_type.as_type_enum(), TypeEnum::Ref(_)) ||
-            var_name.to_string().chars().next() == Some('_') {
+    for (var_id, var_type) in vars {
+        if var_type.is_shallow() || var_type.is_primitive() {
             continue;
         }
 
         let should_not_drop = hlr.tree.iter().any(|(id, data)| {
-            if !matches!(data, HNodeData::Ident { name, .. } if name == &var_name) {
+            if !matches!(data, HNodeData::Ident { var_id: other_id, .. } if other_id == &var_id) {
                 return false;
             }
 
@@ -32,7 +30,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
                 HNodeData::Set { lhs, .. } => {
                     if matches!(
                             hlr.tree.get_ref(lhs), 
-                            HNodeData::Ident { name, .. } if name == &var_name
+                            HNodeData::Ident { var_id: other_id, .. } if other_id == &var_id
                         ) {
                         return false
                     }
@@ -52,7 +50,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
         let (first_use, _) = hlr.tree
             .iter()
             .find(|(_, node)| {
-                matches!(node, HNodeData::Ident { name, .. } if name == &var_name)
+                matches!(node, HNodeData::Ident { var_id: other_id, .. } if other_id == &var_id)
             }).unwrap();
         let (stmt, block) = hlr.tree.statement_and_block(first_use);
         let HNodeData::Block { stmts, .. } = hlr.tree.get(block) else { unreachable!() };
@@ -70,7 +68,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
             },
             args: vec![Box::new(UnarOpGen {
                 op: Opcode::Ref,
-                hs: var_name,
+                hs: var_id,
                 ret_type: var_type.get_ref()
             })],
             ..Default::default()

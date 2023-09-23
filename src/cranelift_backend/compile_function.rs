@@ -4,12 +4,12 @@ use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prel
 use cranelift_module::Module;
 use slotmap::SecondaryMap;
 
-use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo}, cranelift_backend::variables_in_mline::{self, VarInMIR}, RefType, IntType, unit::FuncId};
+use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
 
-use super::{to_cl_type::{ToCLType, func_type_to_signature}, variables_in_mline::variables_in, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, ClFunctionData, Global, alloc_and_free::AllocAndFree};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, ClFunctionData, alloc_and_free::AllocAndFree};
 
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum VarLocation {
     Stack,
     Reg,
@@ -45,48 +45,24 @@ pub fn make_fcs<'a>(
     builder.seal_block(entry_block);
 
     let mut used_globals = BTreeMap::<VarName, CLValue>::new();
-    let mut var_locations = BTreeMap::<VarName, (VarLocation, VariableInfo)>::new();
+    let mut var_locations = SecondaryMap::<VarID, (VarLocation, VariableInfo)>::new();
 
-    for line in &mir.lines {
-        for var in &variables_in_mline::variables_in(line) {
-            if let Some(info) = mir.variables.get(&var.name) {
-                let name = var.name.clone();
-                let info = info.clone();
+    let vars_in_mir = variables_in::variables_in(&mir);
 
-                if var.is_referenced {
-                    var_locations.insert(name, (VarLocation::Stack, info));
-                } else if !var_locations.contains_key(&var.name) {
-                    var_locations.insert(name, (VarLocation::Reg, info));
-                }
-            }
-
-            if used_globals.contains_key(&var.name) {
-                continue;
-            }
-
-            let val = if !mir.variables.contains_key(&var.name) {
-                match backend.globals[&var.name] {
-                    Global::Value { ptr, .. } => {
-                        builder.ins().iconst(cl_types::I64, ptr as i64)
-                    },
-                    Global::Func(func_id) => {
-                        let ClFunctionData { cl_func_id, .. } = 
-                            &backend.cl_function_data[func_id];
-
-                        let func_ref = 
-                            backend.module.declare_func_in_func(*cl_func_id, builder.func);
-                        builder.ins().func_addr(cl_types::I64, func_ref)
-                    }
-                }
-            } else {
-                continue;
-            };
-
-            used_globals.insert(var.name.clone(), val);
-        }
+    for var in vars_in_mir.stack_vars {
+        var_locations.insert(var, (VarLocation::Stack, mir.variables[var].clone()));
     }
 
-     for line in &mir.lines {
+    for var in vars_in_mir.register_vars {
+        var_locations.insert(var, (VarLocation::Reg, mir.variables[var].clone()));
+    }
+
+    for global in vars_in_mir.globals {
+        let ptr = &backend.globals[&global];
+        used_globals.insert(global, builder.ins().iconst(cl_types::I64, *ptr as i64));
+    }
+
+    for line in &mir.lines {
         let call_type = match line {
             MLine::Set { r: MExpr::Call { typ, .. }, .. } => typ,
             MLine::Expr(MExpr::Call { typ, .. }) => typ,
@@ -107,7 +83,7 @@ pub fn make_fcs<'a>(
         },
         other_blocks: Vec::new(),
         addresses: BTreeMap::new(),
-        variables: BTreeMap::new(),
+        variables: SecondaryMap::new(),
         registers: BTreeMap::new(),
         reg_types: mir.reg_types,
         used_functions,
@@ -155,8 +131,8 @@ pub struct FunctionCompilationState<'a> {
     // cranelift, we *actually* just return multiple values from the function. that's why 
     // we use a vec of CLValues here.
     registers: BTreeMap<MReg, Vec<CLValue>>,
-    variables: BTreeMap<VarName, Writeable>,
-    var_locations: BTreeMap<VarName, (VarLocation, VariableInfo)>,
+    variables: SecondaryMap<VarID, Writeable>,
+    var_locations: SecondaryMap<VarID, (VarLocation, VariableInfo)>,
     entry_block: BlockData,
     other_blocks: Vec<BlockData>,
     reg_types: BTreeMap<MReg, Type>,
@@ -286,15 +262,11 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
     let mut arg_offset = 0;
 
     let mut var_locations: Vec<_> = fcs.var_locations.iter().collect();
-    var_locations.sort_by(
-        |
-            (_, (_, VariableInfo { arg_index: a, .. })), 
-            (_, (_, VariableInfo { arg_index: b, .. })),
-        | a.cmp(b));
+    var_locations.sort_by(|a, b| a.1.1.arg_index.cmp(&b.1.1.arg_index));
 
-    for (id, (name, (location, VariableInfo { typ, arg_index, .. }))) 
+    for (index, (name, (location, VariableInfo { typ, arg_index, .. }))) 
         in var_locations.into_iter().enumerate() {
-        let var = Variable::from_u32(id as u32);
+        let var = Variable::from_u32(index as u32);
         let var_types = typ.to_cl_type();
 
         if *location == VarLocation::Reg {
@@ -328,16 +300,14 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
 
             fcs.variables.insert(name.clone(), writeable);
         } else {
-            if let ArgIndex::Some(_arg_index) = arg_index {
-                todo!()
-            } else {
-                let slot = fcs.builder.create_sized_stack_slot(StackSlotData {
-                    kind: StackSlotKind::ExplicitSlot,
-                    size: typ.size() as u32,
-                });
+            assert!(*arg_index == ArgIndex::None);
 
-                fcs.variables.insert(name.clone(), Writeable::Slot(slot, typ.to_cl_type()));
-            }
+            let slot = fcs.builder.create_sized_stack_slot(StackSlotData {
+                kind: StackSlotKind::ExplicitSlot,
+                size: typ.size() as u32,
+            });
+
+            fcs.variables.insert(name.clone(), Writeable::Slot(slot, typ.to_cl_type()));
         }
     }
 }
@@ -353,7 +323,7 @@ fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
 
     #[derive(Default, Debug)]
     struct BData {
-        variables: Set<VarName>,
+        variables: Set<VarID>,
         goes_to: Set<usize>,
     }
 
@@ -381,11 +351,10 @@ fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
             processing_bdata.goes_to.insert(*no as usize);
         } else {
             processing_bdata.variables.extend(
-                variables_in(line)
+                variables_in::variables_in_line(line)
                     .into_iter()
-                    .map(|VarInMIR { name, .. }| name)
-                    .filter(|name| {
-                        if let Some(loc) = fcs.var_locations.get(name) {
+                    .filter(|id| {
+                        if let Some(loc) = fcs.var_locations.get(*id) {
                             loc.1.arg_index == ArgIndex::None
                         } else {
                             false
@@ -419,7 +388,7 @@ fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
         block: fcs.builder.create_block(),
         variables_used: entry_variables
             .into_iter()
-            .filter_map(|name| fcs.variables.get(&name).cloned())
+            .filter_map(|name| fcs.variables.get(name).cloned())
             .collect(),
     };
 
@@ -437,7 +406,7 @@ fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
                 block: fcs.builder.create_block(),
                 variables_used: variables
                     .into_iter()
-                    .filter_map(|name| fcs.variables.get(&name).cloned())
+                    .filter_map(|name| fcs.variables.get(name).cloned())
                     .collect(),
             }
         })
@@ -458,7 +427,7 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
             let vals = compile_operand(fcs, val);
 
             match l {
-                MAddr::Var(name) => fcs.variables[name].write(&mut fcs.builder, vals),
+                MAddr::Var(name) => fcs.variables[*name].write(&mut fcs.builder, vals),
                 MAddr::Reg(reg) => {
                     let addr = get_addr(fcs, &MAddr::Reg(*reg), 0);
 
@@ -564,11 +533,11 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
     } 
 
     let mut get_val_at = match operand {
-        MOperand::MemLoc(memloc) => {
+        MOperand::Memloc(memloc) => {
             match memloc {
-                MMemLoc::Reg(_) => todo!(),
+                MMemLoc::Reg(_) | MMemLoc::Global(_) => todo!(),
                 MMemLoc::Var(var_name) => {
-                    let writeable = fcs.variables[&var_name].clone();
+                    let writeable = fcs.variables[*var_name].clone();
 
                     let fcs = &mut fcs;
                     move |typ: CLType, offset: u32| {
@@ -818,7 +787,7 @@ fn compile_binop(
 
 fn compile_operand(fcs: &mut FunctionCompilationState, operand: &MOperand) -> Vec<CLValue> {
     match operand {
-        MOperand::MemLoc(memloc) => load_memloc(fcs, memloc),
+        MOperand::Memloc(memloc) => load_memloc(fcs, memloc),
         MOperand::Lit(lit) => vec![compile_lit(fcs, lit)],
     }
 }
@@ -840,27 +809,29 @@ fn compile_lit(fcs: &mut FunctionCompilationState, lit: &MLit) -> CLValue {
             let bool_type = Type::bool().to_cl_type()[0];
             fcs.builder.ins().iconst(bool_type, *val as i64)
         },
+        MLit::Function(func_id) => {
+            let func_ref = fcs.used_functions[*func_id];
+            fcs.builder.ins().func_addr(cl_types::I64, func_ref)
+        },
     }
 }
 
 fn load_memloc(fcs: &mut FunctionCompilationState, memloc: &MMemLoc) -> Vec<CLValue> {
     match memloc {
-        MMemLoc::Var(name) => {
-            match fcs.variables.get(&name) {
-                Some(var) => var.load(&mut fcs.builder),
-                None => {
-                    vec![fcs.used_globals[&name]]
-                }
-            }
+        MMemLoc::Var(id) => {
+            dbg!(&id);
+            fcs.variables[*id].load(&mut fcs.builder)
         }
-        MMemLoc::Reg(reg) => fcs.registers[&reg].clone(),
+        MMemLoc::Reg(reg) => fcs.registers[dbg!(&reg)].clone(),
+        MMemLoc::Global(global) => vec![fcs.used_globals[global]],
     }
 }
 
 fn get_addr(fcs: &mut FunctionCompilationState, addr: &MAddr, offset: u32) -> CLValue {
     match addr {
-        MAddr::Var(name) => fcs.variables[&name].addr(&mut fcs.builder, offset),
+        MAddr::Var(name) => fcs.variables[*name].addr(&mut fcs.builder, offset),
         MAddr::Reg(reg) => {
+            dbg!(&reg);
             let addr = fcs.addresses[&reg];
 
             if offset != 0 {

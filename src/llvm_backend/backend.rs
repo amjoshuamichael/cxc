@@ -6,7 +6,6 @@ use inkwell::values::{BasicMetadataValueEnum, BasicValue};
 use inkwell::{values::{PointerValue, FunctionValue}, context::Context, module::Module, execution_engine::ExecutionEngine, AddressSpace};
 use slotmap::SecondaryMap;
 
-use crate::TypeEnum;
 use crate::typ::ReturnStyle;
 use crate::unit::{FuncId, ProcessedFuncInfo};
 use crate::{VarName, Type, unit::backends::IsBackend, mir::MIR, FuncType};
@@ -96,14 +95,6 @@ impl IsBackend for LLVMBackend {
                 }
             );
         }
-
-        self.globals.insert(
-            func_info.name.clone(),
-            (
-                Type::new(TypeEnum::Func(func_info.typ.clone())),
-                empty_function.as_global_value().as_pointer_value(),
-            ),
-        );
     }
 
     fn compile_function(&mut self, func_id: FuncId, mir: MIR) {

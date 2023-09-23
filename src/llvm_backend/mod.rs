@@ -113,7 +113,7 @@ pub fn add_sret_attribute_to_call_site(
 fn build_stack_allocas(
     fcs: &mut FunctionCompilationState,
 ) {
-    for (name, info) in fcs.mir.variables.iter() {
+    for (var_id, info) in fcs.mir.variables.iter() {
         if info.arg_index != ArgIndex::None {
             continue;
         }
@@ -122,10 +122,10 @@ fn build_stack_allocas(
 
         let var_ptr: PointerValue<'static> = fcs.builder.build_alloca(
             var_type.to_basic_type(fcs.context), 
-            &*name.to_string()
+            &*fcs.mir.variables[var_id].name
         );
 
-        fcs.addresses.insert(MAddr::Var(name.clone()), var_ptr);
+        fcs.addresses.insert(MAddr::Var(var_id.clone()), var_ptr);
     }
 }
 
@@ -383,7 +383,7 @@ pub fn compile_addr_expr(
 
 pub fn compile_operand(fcs: &FunctionCompilationState, operand: &MOperand) -> BasicValueEnum<'static> {
     match operand {
-        MOperand::MemLoc(memloc) => load_memloc(fcs, memloc),
+        MOperand::Memloc(memloc) => load_memloc(fcs, memloc),
         MOperand::Lit(lit) => compile_lit(fcs, lit),
     }
 }
@@ -410,19 +410,18 @@ pub fn compile_lit(fcs: &FunctionCompilationState, lit: &MLit) -> BasicValueEnum
         MLit::Bool(val) => {
             fcs.context.bool_type().const_int(*val as u64, false).as_basic_value_enum()
         },
+        MLit::Function(func_id) => {
+            fcs.used_functions[*func_id].as_global_value().as_pointer_value().as_basic_value_enum()
+        }
     }
 }
 
 pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicValueEnum<'static> {
     match memloc {
         MMemLoc::Reg(_) => fcs.memlocs[memloc],
-        MMemLoc::Var(name) => {
-            match fcs.mir.variables.get(name) {
-                None =>  {
-                    let global = &fcs.globals[&name];
-                    BasicValueEnum::PointerValue(global.1)
-                }
-                Some(VariableInfo { arg_index: ArgIndex::Some(arg_index), .. }) => {
+        MMemLoc::Var(var_id) => {
+            match &fcs.mir.variables[*var_id] {
+                VariableInfo { arg_index: ArgIndex::Some(arg_index), .. } => {
                     let param_index = 
                         if fcs.mir.func_type.ret.return_style() == ReturnStyle::Sret {
                             *arg_index + 1
@@ -432,17 +431,21 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
 
                     fcs.function.get_nth_param(param_index as u32).unwrap().into()
                 }
-                Some(VariableInfo { arg_index: ArgIndex::SRet, .. }) => {
+                VariableInfo { arg_index: ArgIndex::SRet, .. } => {
                     fcs.function.get_nth_param(0).unwrap().into()
                 }
-                Some(VariableInfo { typ: var_type, .. }) => {
+                VariableInfo { typ: var_type, .. } => {
                     fcs.builder.build_load(
                         var_type.to_basic_type(fcs.context), 
-                        fcs.addresses[&MAddr::Var(name.clone())], 
-                        &*name.to_string()
+                        fcs.addresses[&MAddr::Var(var_id.clone())], 
+                        &*fcs.mir.variables[*var_id].name
                     )
                 }
             }
+        }
+        MMemLoc::Global(name) => {
+            let global = &fcs.globals[&name];
+            BasicValueEnum::PointerValue(global.1)
         }
     }
 }

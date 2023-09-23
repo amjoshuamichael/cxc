@@ -1,11 +1,13 @@
 use std::{collections::{BTreeMap, HashMap}, fmt::{Formatter, Display}, fmt};
 
-use crate::{hlr::hlr_data::{Variables, VariableInfo, ArgIndex}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
+use slotmap::SlotMap;
+
+use crate::{hlr::hlr_data::{VariableInfo, ArgIndex, VarID}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
 
 #[derive(Debug)]
 pub struct MIR {
     pub lines: Vec<MLine>,
-    pub variables: Variables,
+    pub variables: SlotMap<VarID, VariableInfo>,
     pub dependencies: HashMap<FuncQuery, FuncId>,
     pub func_type: FuncType,
     pub block_count: u32,
@@ -31,22 +33,13 @@ impl MIR {
         MAddrReg(current_reg)
     }
 
-    pub fn new_variable(&mut self, base_name: &str, typ: Type) -> VarName {
-        let mut base_name = String::from(base_name);
-        let mut var_name = VarName::from(&*base_name);
-
-        while self.variables.contains_key(&var_name) {
-            base_name += "_";
-            var_name = VarName::from(&*base_name);
-        }
-
-        self.variables.insert(var_name, VariableInfo { 
+    pub fn new_variable(&mut self, typ: Type) -> VarID {
+        self.variables.insert(VariableInfo { 
             typ, 
             arg_index: ArgIndex::None, 
-            ..Default::default()
-        });
-
-        VarName::from(&*base_name)
+            name: VarName::None,
+            do_not_drop: false,
+        })
     }
 }
 
@@ -126,7 +119,8 @@ impl fmt::Debug for MAddrReg {
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub enum MMemLoc {
     Reg(MReg),
-    Var(VarName),
+    Var(VarID),
+    Global(VarName),
 }
 
 impl fmt::Debug for MMemLoc {
@@ -135,7 +129,8 @@ impl fmt::Debug for MMemLoc {
 
         match self {
             Reg(reg) => write!(f, "{:?}", reg),
-            Var(var) => write!(f, "{}", var),
+            Var(var) => write!(f, "{:?}", var),
+            Global(var) => write!(f, "{}", var),
         }
     }
 }
@@ -143,7 +138,7 @@ impl fmt::Debug for MMemLoc {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum MAddr {
     Reg(MAddrReg),
-    Var(VarName),
+    Var(VarID),
 }
 
 impl fmt::Debug for MAddr {
@@ -152,7 +147,7 @@ impl fmt::Debug for MAddr {
 
         match self {
             Reg(reg) => write!(f, "{:?}", reg),
-            Var(var) => write!(f, "@{}", var),
+            Var(var) => write!(f, "@{:?}", var),
         }
     }
 }
@@ -160,6 +155,7 @@ impl fmt::Debug for MAddr {
 pub enum MLit {
     Int { size: u32, val: u64 },
     Float { size: u32, val: f64 },
+    Function(FuncId),
     Bool(bool),
 }
 
@@ -168,16 +164,17 @@ impl fmt::Debug for MLit {
         use MLit::*;
 
         match self {
-            Int { size, val } => write!(f, "{}i{}", val, size),
-            Float { size, val } => write!(f, "{}f{}", val, size),
-            Bool(val) => write!(f, "{}", val),
+            Int { size, val } => write!(f, "{val}i{size}"),
+            Float { size, val } => write!(f, "{val}f{size}"),
+            Function(id) => write!(f, "{id:?}"),
+            Bool(val) => write!(f, "{val}"),
         }
     }
 }
 
 #[derive(Debug)]
 pub enum MOperand {
-    MemLoc(MMemLoc),
+    Memloc(MMemLoc),
     Lit(MLit),
 }
 

@@ -21,8 +21,8 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
                 rhs_type.primitive_fields_iter().count() <= 1 && 
                 lhs_type.primitive_fields_iter().count() <= 1 { return; }
 
-            if let HNodeData::Ident { name, .. } = hlr.tree.get_ref(*rhs) {
-                hlr.variables[name].do_not_drop = true;
+            if let HNodeData::Ident { var_id: name, .. } = hlr.tree.get_ref(*rhs) {
+                hlr.variables[*name].do_not_drop = true;
             }
 
             let new_data = hlr.insert_quick(

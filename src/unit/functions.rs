@@ -134,7 +134,8 @@ impl CompData {
             ret_type: "U".into(),
             generic_count: 2,
             is_external: true,
-            ..Default::default()
+            code: Expr::empty_block(),
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -143,7 +144,8 @@ impl CompData {
             ret_type: "Type".into(),
             generic_count: 1,
             is_external: true,
-            ..Default::default()
+            code: Expr::empty_block(),
+            relation: TypeSpecRelation::Unrelated,
         });
 
         out.typedefs.insert("Type".into(), TypeSpec::Int(64));

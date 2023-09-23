@@ -32,7 +32,7 @@ fn handle_own_return(hlr: &mut FuncRep) {
 }
 
 fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
-    let casted_ret = hlr.add_variable("casted_ret", &load_as);
+    let casted_ret = hlr.add_variable(&load_as);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -50,7 +50,7 @@ fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
 
 fn return_by_move_into_double(hlr: &mut FuncRep) {
     let f64 = Type::f(64);
-    let casted_ret = hlr.add_variable("casted_ret", &f64);
+    let casted_ret = hlr.add_variable(&f64);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -70,7 +70,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
             });
 
             *data = HNodeData::Ident {
-                name: casted_ret.clone(),
+                var_id: casted_ret.clone(),
                 var_type: f64.clone(),
             };
         }
@@ -80,7 +80,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
 fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
     let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
-    let output_var_name = hlr.add_variable("casted_ret", &i64i64);
+    let output_var_name = hlr.add_variable(&i64i64);
 
     hlr.modify_many_infallible(
         |return_id, mut data, hlr| {
@@ -122,16 +122,11 @@ fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
-    let output_var = VarName::from("Sret");
-
-    hlr.variables.insert(
-        output_var.clone(),
-        VariableInfo {
-            typ: hlr.ret_type.get_ref(),
-            arg_index: ArgIndex::SRet,
-            ..Default::default()
-        }
-    );
+    let output_var = hlr.variables.insert(VariableInfo {
+        typ: hlr.ret_type.get_ref(),
+        arg_index: ArgIndex::SRet,
+        ..Default::default()
+    });
 
     hlr.modify_many_infallible(
         |return_id, data, hlr| {
@@ -143,7 +138,7 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                 return_id,
                 MemCpyGen {
                     from: get_ref(hlr.tree.get(*to_return_inner)),
-                    to: output_var.clone(),
+                    to: output_var,
                     size: HNodeData::Number {
                         lit_type: Type::i(64),
                         value: hlr.ret_type.size() as u64,
@@ -194,12 +189,10 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
-    let casted_var_name = 
-        hlr.add_variable("casted_call_out", &casted_var_type);
+    let casted_var_name = hlr.add_variable(&casted_var_type);
 
     let raw_ret_var_type = casted_var_type.raw_return_type();
-    let raw_ret_var_name = 
-        hlr.add_variable("raw_call_out", &raw_ret_var_type);
+    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type);
 
     hlr.insert_statement_before(
         og_call,
@@ -211,11 +204,11 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     .after_that(MemCpyGen {
         from: get_ref(HNodeData::Ident {
             var_type: raw_ret_var_type.clone(),
-            name: raw_ret_var_name,
+            var_id: raw_ret_var_name,
         }),
         to: get_ref(HNodeData::Ident {
             var_type: casted_var_type.clone(),
-            name: casted_var_name.clone(),
+            var_id: casted_var_name.clone(),
         }),
         size: HNodeData::Number {
             lit_type: Type::i(64),
@@ -227,7 +220,7 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
         og_call,
         HNodeData::Ident {
             var_type: casted_var_type,
-            name: casted_var_name,
+            var_id: casted_var_name,
         },
     );
 }
@@ -245,7 +238,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         *ret_type = Type::void();
         hlr.replace_quick(parent, new_data);
     } else {
-        let call_var = hlr.add_variable("_call_out", ret_type);
+        let call_var = hlr.add_variable(ret_type);
 
         let new_arg = hlr.insert_quick(og_call_id, get_ref(call_var.clone()));
 

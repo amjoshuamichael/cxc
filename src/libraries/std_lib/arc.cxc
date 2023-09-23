@@ -1,16 +1,16 @@
 Arc<T> = {
-    ptr: &ArcInner<T>,
+    +ptr: &ArcInner<T>,
 }
 
 ArcInner<T> = {
     strong: AtomicUsize,
 
-    # the value usize::MAX acts as a sentinel for temporarily "locking" the
-    # ability to upgrade weak pointers or downgrade strong ones; this is used
-    # to avoid races in `make_mut` and `get_mut`.
+    # the value usize::MAX acts as a sentinel for temporarily "locking" the ability to 
+    # upgrade weak pointers or downgrade strong ones; this is used to avoid races in 
+    # `make_mut` and `get_mut`.
     weak: AtomicUsize,
 
-    data: T,
+    +data: T,
 }
 
 <T> Arc<T>:: { 
@@ -35,7 +35,7 @@ ArcInner<T> = {
 
 <T> &Arc<T>:. {
     clone(); Arc<T> {
-        self.ptr.strong.fetch_add(i64 1, Ordering.Relaxed {})
+        self.ptr.strong.fetch_add(i64 1, 0)
 
         ; Arc<T> { ptr = self.ptr }
     }
