@@ -63,7 +63,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 let mut statements = Vec::new();
 
                 while lexer.peek_tok() != Err(ParseError::UnexpectedEndOfFile) {
-                    statements.push(dbg!(parse_stmt(&mut func_parser)?));
+                    statements.push(parse_stmt(&mut func_parser)?);
                 }
 
                 let code = FuncCode {
@@ -298,6 +298,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     match lexer.peek_tok()?.clone() {
         Tok::VarName(_)
+        | Tok::Label(_)
         | Tok::TypeName(_)
         | Tok::Int(_)
         | Tok::DottedNum(_)

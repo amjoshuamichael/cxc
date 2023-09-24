@@ -124,6 +124,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         Tok::Bool(val) => Expr::Bool(val).into(),
         Tok::Strin(val) => Expr::String(val.clone()).into(),
         Tok::VarName(val) => Expr::Ident(val.clone()).into(),
+        Tok::Label(label) => Expr::Label(label).into(),
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
         Tok::LBrack => parse_array_literal(lexer)?.into(),
         Tok::LParen => {
@@ -141,10 +142,9 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         _ if let Ok(type_spec) = parse_type_spec(&mut lexer.detach()) => {
             parse_type_spec(lexer)?;
 
-            if lexer.peek_tok()? == &Tok::Colon {
+            if let Tok::Label(label) = lexer.peek_tok()?.clone() {
                 lexer.next_tok()?;
-                let func_name = lexer.next_tok()?.var_name()?;
-                Atom::Expr(Expr::StaticMethodPath(type_spec, func_name))
+                Atom::Expr(Expr::StaticMethodPath(type_spec, label))
             } else {
                 let value = lexer
                     .recover(parse_atom_after_op)?
@@ -183,6 +183,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             | Atom::Expr(Expr::Bool(_))
             | Atom::Expr(Expr::String(_))
             | Atom::Expr(Expr::Ident(_))
+            | Atom::Expr(Expr::Label(_))
             | Atom::Op(_)
     ) {
         lexer.next_tok()?;

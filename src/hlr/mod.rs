@@ -67,7 +67,6 @@ pub fn hlr(
     // see the individual perf impact of each pass when using a flamegraph
 
     infer_types(&mut output);
-    dbg!(&output.tree);
     do_transformations(&mut output)?;
     active_initialization(&mut output);
     struct_literals(&mut output);

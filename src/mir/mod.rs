@@ -9,6 +9,14 @@ mod remove_post_return_statements;
 
 use remove_post_return_statements::remove_post_return_statements;
 
+impl MIR {
+    fn new_block_id(&mut self) -> u32 {
+        let current_block = self.block_count;
+        self.block_count += 1;
+        current_block
+    }
+}
+
 pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
     #[cfg(feature = "mir-debug")]
     println!("--mir type: {:?}--", &hlr.func_type);
@@ -22,7 +30,14 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
         reg_count: 0,
         addr_reg_count: 0,
         reg_types: BTreeMap::new(),
+        block_labels: HashMap::new(),
     };
+
+    for goto_label in hlr.tree.nodes.values() {
+        let HNodeData::GotoLabel(name) = &goto_label.data else { continue };
+        let new_block_id = mir.new_block_id();
+        mir.block_labels.insert(name.clone(), new_block_id);
+    }
 
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
 
@@ -45,11 +60,6 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
 fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
     let HNodeData::Block { stmts, .. }  = node else { unreachable!() };
 
-    fn new_block_id(mir: &mut MIR) -> u32 {
-        let current_block = mir.block_count;
-        mir.block_count += 1;
-        current_block
-    }
 
     for stmt in stmts {
         match tree.get(stmt) {
@@ -67,10 +77,19 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
             HNodeData::Return { to_return: None, .. } => {
                 mir.lines.push(MLine::Return(None));
             },
+            HNodeData::GotoLabel(name) => {
+                let block_id = mir.block_labels[&name];
+
+                mir.lines.push(MLine::Goto(block_id));
+                mir.lines.push(MLine::Marker(mir.block_labels[&name]));
+            },
+            HNodeData::Goto(name) => {
+                mir.lines.push(MLine::Goto(mir.block_labels[&name]));
+            }
             HNodeData::While { w, d } => {
-                let beginwhile = new_block_id(mir);
-                let whilecode = new_block_id(mir);
-                let pastwhile = new_block_id(mir);
+                let beginwhile = mir.new_block_id();
+                let whilecode = mir.new_block_id();
+                let pastwhile = mir.new_block_id();
 
                 mir.lines.push(MLine::Goto(beginwhile));
                 mir.lines.push(MLine::Marker(beginwhile));
@@ -94,8 +113,8 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
             HNodeData::IfThen { i, t, .. } => {
                 let i = build_as_operand(tree.get(i), tree, mir);
 
-                let then = new_block_id(mir);
-                let after = new_block_id(mir);
+                let then = mir.new_block_id();
+                let after = mir.new_block_id();
 
                 mir.lines.push(MLine::Branch { 
                     if_: i, 
@@ -113,9 +132,9 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
             HNodeData::IfThenElse { i, t, e, .. } => {
                 let i = build_as_operand(tree.get(i), tree, mir);
 
-                let then = new_block_id(mir);
-                let else_ = new_block_id(mir);
-                let after = new_block_id(mir);
+                let then = mir.new_block_id();
+                let else_ = mir.new_block_id();
+                let after = mir.new_block_id();
 
                 mir.lines.push(MLine::Branch { 
                     if_: i, 

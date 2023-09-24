@@ -215,7 +215,7 @@ pub enum Tok {
 
     #[token(":.")]
     ColonDot,
-    #[token("::")]
+    #[token("::", priority = 3)]
     DoubleColon,
 
     #[token("(")]
@@ -244,6 +244,13 @@ pub enum Tok {
 
     #[token("=")]
     Assignment,
+
+    #[regex(
+        ":([a-z_][a-zA-Z0-9_]+|[a-z_])",
+        |t| VarName::Other(Arc::from(&t.slice()[1..]))
+    )]
+
+    Label(VarName),
 
     #[regex(
         "[a-z_][a-zA-Z0-9_]+|\
@@ -432,6 +439,7 @@ impl ToString for Tok {
             RArrow => "->",
             Assignment => "=",
             VarName(name) => return name.to_string(),
+            Label(name) => return format!(":{name}"),
             TypeName(name) => return name.to_string(),
             Int(value) => return value.to_string(),
             DottedNum((left, right)) => return format!("{left}.{right}"),

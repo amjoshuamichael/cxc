@@ -505,6 +505,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 Type::bool(), 
                 KnownBy::Condition,
             ),
+            HNodeData::GotoLabel(_) | HNodeData::Goto(_) => {},
         }
 
         if node_data_ret_type.is_known() {
@@ -667,6 +668,8 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Bool { .. } 
             | HNodeData::Ident { .. } 
             | HNodeData::GlobalLoad { .. } 
+            | HNodeData::GotoLabel { .. } 
+            | HNodeData::Goto { .. } 
             | HNodeData::Set { .. } 
             | HNodeData::Call { .. }
             | HNodeData::AccessAlias { .. }
@@ -965,7 +968,10 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
     );
 
     for alias in infer_map.unreplaced_alises.drain(..) {
-        assert!(try_replace_alias(hlr, alias));
+        assert!(
+            try_replace_alias(hlr, alias), 
+            "could not find var {:?}", hlr.tree.get(alias)
+        );
     }
 }
 

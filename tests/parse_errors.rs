@@ -34,6 +34,7 @@ fn double_error() {
     let mut iter = errors.drain(..);
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
+    assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), None);
 }
 

@@ -61,18 +61,14 @@ impl ExprNode {
             Number { value, .. } => format!("{value}"),
             Float { value, .. } => format!("{value:?}"),
             Bool { value, .. } => format!("{value:?}"),
-            StructLit {
-                var_type, fields, ..
-            } => {
-                format!("{var_type:?} {{ {fields:?} }}")
-            },
-            ArrayLit { parts, .. } => {
-                format!("{parts:?}")
-            },
+            StructLit { var_type, fields, .. } => format!("{var_type:?} {{ {fields:?} }}"),
+            ArrayLit { parts, .. } => format!("{parts:?}"),
             Call { query, a, .. } => format!("{:?}({:?})", query.name, a),
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { var_id: id, .. } => format!("{}", variables[*id].name),
             AccessAlias(name) => format!("{name}"),
+            GotoLabel(name) => format!(":{name}"),
+            Goto(name) => format!("{name}"),
             GlobalLoad { global, .. } => format!("global({global:?})"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => format!("{object:?}.{field}"),
@@ -121,6 +117,8 @@ pub enum HNodeData {
         var_id: VarID,
     },
     AccessAlias(VarName),
+    GotoLabel(VarName),
+    Goto(VarName),
     GlobalLoad {
         var_type: Type,
         global: Global,
@@ -200,7 +198,7 @@ impl HNodeData {
         match self {
             Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
             Bool { .. } => Type::bool(),
-            While { .. } | Set { .. } => Type::void(),
+            While { .. } | Set { .. } | GotoLabel { .. } | Goto { .. } => Type::void(),
             AccessAlias { .. } => Type::unknown(),
             Ident { var_type, .. }
             | GlobalLoad { var_type, .. }
@@ -224,7 +222,12 @@ impl HNodeData {
         match self {
             Number { ref mut lit_type, .. }
             | Float { ref mut lit_type, .. } => Some(lit_type),
-            Bool { .. } | While { .. } | Set { .. } | AccessAlias { .. } => None,
+            Bool { .. } 
+            | While { .. } 
+            | Set { .. } 
+            | AccessAlias { .. } 
+            | GotoLabel { .. } 
+            | Goto { .. } => None,
             Ident { ref mut var_type, .. }
             | GlobalLoad { ref mut var_type, .. }
             | StructLit { ref mut var_type, .. }
@@ -257,8 +260,10 @@ impl HNodeData {
             Number { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
             Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
             Bool { value, .. } => format!("{MAGENTA}{value}"),
-            Ident { var_id: id, .. } => format!("{BLUE}{}", hlr.variables[*id].name),
-            AccessAlias(name) => format!("{BLUE}{name}"),
+            Ident { var_id: id, .. } => format!("{BLUE}{}{WHITE}", hlr.variables[*id].name),
+            AccessAlias(name) => format!("{BLUE}{name}{WHITE}"),
+            GotoLabel(name) => format!("{YELLOW}:{name}{WHITE}"),
+            Goto(name) => format!("{YELLOW}:{name}{WHITE}"),
             GlobalLoad { global, .. } => format!("{BLUE}({global:?})"),
             StructLit {
                 var_type,

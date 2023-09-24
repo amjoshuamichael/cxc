@@ -120,7 +120,13 @@ impl<N: Default + Clone> ParseContext<N> {
         }
 
         #[cfg(feature = "xc-debug")]
-        print!("{}", next.to_string());
+        {
+            use std::io::Write;
+            print!("{}", next.to_string());
+            // sometimes the parser gets into loops, so to debug this we need to make
+            // sure the most recently lexed token is always visible
+            std::io::stdout().flush().unwrap();
+        }
 
         Ok(&next)
     }
@@ -177,6 +183,7 @@ impl<N: Default + Clone> ParseContext<N> {
                 #[cfg(feature = "xc-debug")]
                 println!("...recovering...");
 
+                let starting_pos = self.tok_pos.val();
                 let mut has_increased_once = false;
 
                 // move backwards, in case the "skip until" token was the one that caused the
@@ -200,12 +207,18 @@ impl<N: Default + Clone> ParseContext<N> {
                     self.tok_pos.inc();
                 }
 
-                // helps break out of infinite loops.
-                if !has_increased_once {
-                    self.tok_pos.inc();
+                while self.tokens[self.tok_pos.val()].is_whitespace() {
+                    self.tok_pos.dec();
                 }
 
-                let tok_end = self.tok_pos.val();
+                // helps break out of infinite loops.
+                if starting_pos >= self.tok_pos.val() {
+                    // we just want to move forward, we don't care if we hit the end of
+                    // the file
+                    let _ = self.next_tok();
+                }
+
+                let tok_end = self.tok_pos.val().min(self.spans.len() - 1);
                 let char_end = self.spans[tok_end].1 - 1;
 
                 // sometimes, the parser can get stuck with whitespace tokens, causing

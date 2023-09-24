@@ -29,13 +29,20 @@ pub fn remove_post_return_statements(mir: &mut MIR) {
         let mut n = 0;
         while let Some(line) = mir.lines.get(n) {
             match line {
-                MLine::Return(_) => remove = true,
+                MLine::Return(_) | MLine::Goto(_) => {
+                    if remove {
+                        mir.lines.remove(n);
+                        n -= 1;
+                    }
+
+                    remove = true
+                }
                 MLine::Marker(m) => {
                     if blocks_that_have_gotos.contains(m) {
                         remove = false
                     }
                 }
-                _ => {
+                _ => { 
                     if remove {
                         mir.lines.remove(n);
                         n -= 1;

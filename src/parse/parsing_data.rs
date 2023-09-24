@@ -23,6 +23,7 @@ pub enum Expr {
     Bool(bool),
     String(Arc<str>),
     Ident(VarName),
+    Label(VarName),
     TypedValue(TypeSpec, Box<Expr>),
     Struct(Vec<(VarName, Expr)>, InitOpts),
     StaticMethodPath(TypeSpec, VarName),

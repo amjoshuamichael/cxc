@@ -26,7 +26,9 @@ impl ExprTree {
                 | Bool { .. } 
                 | GlobalLoad { .. }
                 | Ident { .. } 
-                | AccessAlias(_) => Vec::new(),
+                | AccessAlias(_) 
+                | Goto(_) 
+                | GotoLabel(_) => Vec::new(),
                 StructLit { fields, .. } => fields
                     .iter()
                     .flat_map(|(_, id)| ids_of(tree, *id))

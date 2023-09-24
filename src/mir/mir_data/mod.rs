@@ -11,6 +11,7 @@ pub struct MIR {
     pub dependencies: HashMap<FuncQuery, FuncId>,
     pub func_type: FuncType,
     pub block_count: u32,
+    pub block_labels: HashMap<VarName, u32>,
     pub reg_count: u32,
     pub addr_reg_count: u32,
     pub reg_types: BTreeMap<MReg, Type>,

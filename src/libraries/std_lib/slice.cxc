@@ -9,10 +9,35 @@
         ; ptr
     }
 
+    into_iter(); SliceIter<T> {
+        ; SliceIter<T> {
+            ptr = self.len,
+            end = self.ptr.ptr_add(self.len),
+        }
+    }
+
     slice(range: Range<u64>); Me {
         ; Me {
             ptr = self.ptr.ptr_add(range.start),
             len = range.end - range.start,
         }
+    }
+}
+
+SliceIter<T> = {
+    inner: {
+        ptr: &T,
+        end: &T,
+    },
+    it: &T,
+}
+
+<T> SliceIter<T>:. {
+    none_remaining(); bool {
+        ; self.ptr == self.end
+    }
+
+    next() {
+        self.it = self.it.ptr_add(1)
     }
 }

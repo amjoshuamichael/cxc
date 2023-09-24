@@ -314,6 +314,9 @@ impl<'a> FuncRep<'a> {
                     self.tree.insert(parent, HNodeData::AccessAlias(name.clone()))
                 }
             },
+            Expr::Label(name) => {
+                self.tree.insert(parent, HNodeData::GotoLabel(name.clone()))
+            },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
 
@@ -553,6 +556,10 @@ impl<'a> FuncRep<'a> {
                 space
             },
             Expr::Return(to_return) => {
+                if let Expr::Label(label) = &**to_return {
+                    return self.tree.insert(parent, HNodeData::Goto(label.clone()));
+                }
+
                 let space = self.tree.make_one_space(parent);
 
                 let new_return = HNodeData::Return {
