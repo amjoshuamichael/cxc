@@ -8,7 +8,7 @@ use crate::Type;
 use crate::unit::Global;
 use super::hlr_data::{VarID, FuncRep};
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fmt::{Debug, Formatter};
 
 mod expr_tree_helper;
@@ -44,10 +44,14 @@ new_key_type! {
     pub struct ExprID;
 }
 
+impl ExprID { 
+    pub fn oprhaned() -> Self { Self::default() } 
+}
+
 #[derive(Clone)]
 pub struct ExprNode {
     parent: ExprID,
-    data: HNodeData,
+    pub data: HNodeData,
 }
 
 impl ExprNode {
@@ -68,6 +72,7 @@ impl ExprNode {
             Call { query, a, .. } => format!("{:?}({:?})", query.name, a),
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { var_id: id, .. } => format!("{}", variables[*id].name),
+            AccessAlias(name) => format!("{name}"),
             GlobalLoad { global, .. } => format!("global({global:?})"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
             Member { object, field, .. } => format!("{object:?}.{field}"),
@@ -115,6 +120,7 @@ pub enum HNodeData {
         var_type: Type,
         var_id: VarID,
     },
+    AccessAlias(VarName),
     GlobalLoad {
         var_type: Type,
         global: Global,
@@ -180,6 +186,8 @@ pub enum HNodeData {
         ret_type: Type,
         stmts: Vec<ExprID>,
         declared: HashSet<VarID>,
+        aliases: HashMap<VarName, ExprID>,
+        withs: HashSet<ExprID>,
     },
     Return {
         ret_type: Type,
@@ -193,6 +201,7 @@ impl HNodeData {
             Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
             Bool { .. } => Type::bool(),
             While { .. } | Set { .. } => Type::void(),
+            AccessAlias { .. } => Type::unknown(),
             Ident { var_type, .. }
             | GlobalLoad { var_type, .. }
             | StructLit { var_type, .. }
@@ -215,8 +224,7 @@ impl HNodeData {
         match self {
             Number { ref mut lit_type, .. }
             | Float { ref mut lit_type, .. } => Some(lit_type),
-            Bool { .. } => None,
-            While { .. } | Set { .. } => None,
+            Bool { .. } | While { .. } | Set { .. } | AccessAlias { .. } => None,
             Ident { ref mut var_type, .. }
             | GlobalLoad { ref mut var_type, .. }
             | StructLit { ref mut var_type, .. }
@@ -250,6 +258,7 @@ impl HNodeData {
             Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
             Bool { value, .. } => format!("{MAGENTA}{value}"),
             Ident { var_id: id, .. } => format!("{BLUE}{}", hlr.variables[*id].name),
+            AccessAlias(name) => format!("{BLUE}{name}"),
             GlobalLoad { global, .. } => format!("{BLUE}({global:?})"),
             StructLit {
                 var_type,
@@ -458,6 +467,14 @@ impl HNodeData {
                 }
                 ret
             },
+        }
+    }
+
+    pub fn void() -> Self {
+        HNodeData::StructLit {
+            var_type: Type::empty(),
+            fields: Vec::new(),
+            initialize: InitOpts::NoFill,
         }
     }
 }

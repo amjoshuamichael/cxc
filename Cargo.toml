@@ -32,7 +32,7 @@ lazy_static = "1"
 bytemuck = { version = "1", optional = true, default-features = false }
 region = { version = "3", optional = true }
 
-cxc_derive = "0.1"
+cxc_derive = "0.2"
 
 # these libraries are re-exported into cxc
 

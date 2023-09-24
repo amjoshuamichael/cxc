@@ -126,7 +126,6 @@ fn first_class_void() {
             (fn.0)(3)
             (fn.0)(9)
         }
-
         "#,
     )
     .unwrap();

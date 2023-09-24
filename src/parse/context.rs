@@ -125,13 +125,22 @@ impl<N: Default + Clone> ParseContext<N> {
         Ok(&next)
     }
 
-    pub fn assert_next_tok_is(&mut self, tok: Tok) -> Result<(), ParseError> {
+    pub fn move_on(&mut self, tok: Tok) -> bool {
+        if self.peek_tok() == Ok(&tok) {
+            self.next_tok().unwrap();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn assert_next_tok_is(&mut self, tok: Tok, name: TokName) -> Result<(), ParseError> {
         let next = self.next_tok()?;
 
         if next != &tok {
             return Err(ParseError::UnexpectedTok {
                 got: next.clone(),
-                expected: vec![TokName::from(tok)],
+                expected: vec![TokName::from(name)],
             });
         }
 

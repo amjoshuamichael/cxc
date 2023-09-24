@@ -338,7 +338,7 @@ impl CompData {
         );
     }
 
-    pub fn add_type_alias(&mut self, name: TypeName, a: TypeSpec) {
+    pub fn add_type_spec(&mut self, name: TypeName, a: TypeSpec) {
         self.typedefs.insert(name, a);
     }
 

@@ -50,7 +50,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
     }
 
     loop {
-        match lexer.peek_tok()? {
+        match lexer.peek_tok()?.clone() {
             Tok::VarName(_) => {
                 script.funcs.push(lexer.recover(|lexer| parse_func(
                     lexer,
@@ -58,14 +58,12 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                     GenericLabels::new(),
                 ))?);
             },
-            Tok::TripleMinus => {
-                lexer.assert_next_tok_is(Tok::TripleMinus)?;
-
+            _ if lexer.move_on(Tok::TripleMinus) => {
                 let mut func_parser = lexer.split(VarName::from("comp_script"), HashMap::new());
                 let mut statements = Vec::new();
 
                 while lexer.peek_tok() != Err(ParseError::UnexpectedEndOfFile) {
-                    statements.push(parse_stmt(&mut func_parser)?);
+                    statements.push(dbg!(parse_stmt(&mut func_parser)?));
                 }
 
                 let code = FuncCode {
@@ -92,7 +90,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                         let type_name = lexer.next_tok()?.type_name()?;
                         let generic_labels = parse_generics(lexer)?;
 
-                        lexer.assert_next_tok_is(Tok::Assignment)?;
+                        lexer.assert_next_tok_is(Tok::Assignment, TokName::Assignment)?;
 
                         let context = lexer.split(type_name, generic_labels);
 
@@ -146,7 +144,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
 
 pub fn parse_generics(lexer: &mut GlobalParseContext) -> ParseResult<GenericLabels> {
     if lexer.peek_tok()? == &Tok::LAngle {
-        let list = parse_list(Tok::angles(), Some(Tok::Comma), parse_generic_label, lexer)?
+        let list = parse_list(Tok::angles(), COMMAS, parse_generic_label, lexer)?
             .iter()
             .enumerate()
             .map(|(i, s)| (s.clone(), i as u8))
@@ -187,8 +185,7 @@ pub fn parse_func_code(
     mut lexer: FuncParseContext,
     relation: TypeSpecRelation,
 ) -> ParseResult<FuncCode> {
-    let mut args =
-        parse_list((Tok::LParen, Tok::RParen), Some(Tok::Comma), parse_var_decl, &mut lexer)?;
+    let mut args = parse_list(Tok::parens(), COMMAS, parse_var_decl, &mut lexer)?;
 
     let ret_type = match lexer.peek_tok()? {
         Tok::Semicolon => {
@@ -248,16 +245,28 @@ fn parse_block(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 }
 
 fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
-    fn inner(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
+    lexer.recover(|lexer| {
+        if lexer.move_on(Tok::With) {
+            let with_expr = parse_expr(lexer)?;
+
+            if lexer.move_on(Tok::As) {
+                let alias_name = lexer.next_tok()?.var_name()?;
+                return Ok(Expr::WithAs(Box::new(with_expr), alias_name));
+            } else {
+                return Ok(Expr::With(Box::new(with_expr)));
+            }
+        }
+
         let lhs = parse_expr(lexer)?;
 
         if matches!(lhs, Expr::Ident(_)) && lexer.peek_tok()? == &Tok::Colon {
             let Expr::Ident(var_name) = lhs else { todo!("new err type") };
 
-            lexer.assert_next_tok_is(Tok::Colon)?;
+            lexer.assert_next_tok_is(Tok::Colon, TokName::Colon)?;
 
             let var = if lexer.peek_tok()? == &Tok::Assignment {
                 lexer.next_tok()?;
+
                 VarDecl {
                     name: var_name,
                     type_spec: TypeSpec::Unknown,
@@ -266,7 +275,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 let type_spec =
                     lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
 
-                lexer.assert_next_tok_is(Tok::Assignment)?;
+                lexer.assert_next_tok_is(Tok::Assignment, TokName::VarAssignment)?;
 
                 VarDecl {
                     name: var_name,
@@ -276,22 +285,18 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 
             let rhs = lexer.recover(parse_expr)?;
             Ok(Expr::SetVar(var, Box::new(rhs)))
-        } else if lexer.peek_tok() == Ok(&Tok::Assignment) {
-            lexer.assert_next_tok_is(Tok::Assignment)?;
-
+        } else if lexer.move_on(Tok::Assignment) {
             let rhs = lexer.recover(parse_expr)?;
 
             Ok(Expr::Set(Box::new(lhs), Box::new(rhs)))
         } else {
             Ok(lhs)
         }
-    }
-
-    lexer.recover(inner)
+    })
 }
 
 pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
-    match lexer.peek_tok()? {
+    match lexer.peek_tok()?.clone() {
         Tok::VarName(_)
         | Tok::TypeName(_)
         | Tok::Int(_)
@@ -303,14 +308,13 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         | Tok::LParen
         | Tok::LCurly => parse_math_expr(lexer),
         tok if tok.is_unary_op() => parse_math_expr(lexer),
-        Tok::At => parse_for(lexer),
-        Tok::Question => parse_if(lexer),
-        Tok::Semicolon => {
-            lexer.next_tok()?;
+        _ if lexer.move_on(Tok::At) => parse_for(lexer),
+        _ if lexer.move_on(Tok::Question) => parse_if(lexer),
+        _ if lexer.move_on(Tok::Semicolon) => {
             Ok(Expr::Return(Box::new(parse_expr(lexer)?)))
         },
         got => {
-            return ParseError::unexpected(got, vec![
+            return ParseError::unexpected(&got, vec![
                 TokName::VarName,
                 TokName::TypeName,
                 TokName::Int,
@@ -327,8 +331,6 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 }
 
 fn parse_for(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
-    ctx.assert_next_tok_is(Tok::At)?;
-
     let w = parse_expr(ctx)?;
     let d = parse_block(ctx)?;
 
@@ -336,8 +338,6 @@ fn parse_for(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
 }
 
 fn parse_if(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
-    ctx.assert_next_tok_is(Tok::Question)?;
-
     let i = parse_expr(ctx)?;
     let t = parse_block(ctx)?;
 

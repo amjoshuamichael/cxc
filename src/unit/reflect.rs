@@ -9,17 +9,17 @@ use crate::{
 };
 
 pub trait XcReflect: 'static {
-    fn alias_code() -> String;
+    fn spec_code() -> String;
 
     fn type_decl() -> TypeDecl {
-        let alias_code = Self::alias_code();
-        let is_named = alias_code.contains('=');
+        let spec_code = Self::spec_code();
+        let is_named = spec_code.contains('=');
 
-        let mut lexer = lex(&Self::alias_code());
+        let mut lexer = lex(&Self::spec_code());
 
         if is_named {
             parse::file(&mut lexer)
-                .expect(&*format!("error in type decl {alias_code}"))
+                .expect(&*format!("error in type decl {spec_code}"))
                 .types.iter()
                 .next()
                 .expect("error in type decl")
@@ -51,7 +51,7 @@ macro_rules! impl_reflect {
     ($($t:ty),*) => {
         $(
             impl XcReflect for $t {
-                fn alias_code() -> String {
+                fn spec_code() -> String {
                     stringify!($t).into()
                 }
             }
@@ -64,10 +64,10 @@ impl_reflect!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f3
 macro_rules! impl_reflect_set {
     ( $( $elem:ident )+ ) => {
         impl<$($elem: XcReflect,)+> XcReflect for ($($elem,)+) {
-            fn alias_code() -> String {
+            fn spec_code() -> String {
                 let mut code = String::from("{");
                 $(
-                    code += &*$elem::alias_code();
+                    code += &*$elem::spec_code();
                     code += ", ";
                 )+
                 code += "}";
@@ -76,14 +76,14 @@ macro_rules! impl_reflect_set {
         }
 
         impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for fn($($elem),+) -> R {
-            fn alias_code() -> String {
+            fn spec_code() -> String {
                 let mut code = String::from("(");
                 $(
-                    code += &*$elem::alias_code();
+                    code += &*$elem::spec_code();
                     code += ", ";
                 )+
                 code += "); ";
-                code += &*R::alias_code();
+                code += &*R::spec_code();
                 code
             }
         }
@@ -104,14 +104,14 @@ impl_reflect_set! { A B C D E F G H I J }
 macro_rules! impl_reflect_generic {
     ( $arg:ident ) => {
         impl<T: XcReflect> XcReflect for $arg<T> {
-            fn alias_code() -> String {
+            fn spec_code() -> String {
                 // TODO: make this "reflected" keyword more important in code
                 let mut code = String::from("Reflected = ");
                 code += stringify!($arg);
                 code += "<";
 
                 if T::type_decl().name == TypeName::Anonymous {
-                    code += &*T::alias_code();
+                    code += &*T::spec_code();
                 } else {
                     code += &*T::type_decl().name.to_string();
                 }
@@ -152,12 +152,12 @@ impl Unit {
 
     pub fn add_many_reflect_types(&mut self, type_decls: &[TypeDecl]) {
         for decl in type_decls {
-            self.comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
+            self.comp_data.add_type_spec(decl.name.clone(), decl.typ.clone());
         }
     }
 
     pub fn add_type_with_decl<T: XcReflect>(&mut self, decl: TypeDecl) -> Option<Type> {
-        self.comp_data.add_type_alias(decl.name.clone(), decl.typ.clone());
+        self.comp_data.add_type_spec(decl.name.clone(), decl.typ.clone());
 
         let typ = type_from_decl(&self.comp_data, decl)?;
 

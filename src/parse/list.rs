@@ -1,15 +1,17 @@
 use super::*;
 use crate::lex::Tok;
 
+pub const COMMAS: Option<TokWithName> = Some((Tok::Comma, TokName::Comma));
+
 pub fn parse_list<T: Default + Clone, O: Errable>(
-    opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
-    separator: Option<Tok>,
+    opener_and_closer: (TokWithName, TokWithName), // tuple used to make calls cleaner
+    separator: Option<TokWithName>,
     parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,
     lexer: &mut ParseContext<T>,
 ) -> Result<Vec<O>, ParseError> {
-    let (opener, closer) = opener_and_closer;
+    let ((opener, opener_name), (closer, _)) = opener_and_closer;
 
-    lexer.assert_next_tok_is(opener)?;
+    lexer.assert_next_tok_is(opener, opener_name)?;
 
     if lexer.peek_tok()? == &closer {
         lexer.next_tok()?;
@@ -18,7 +20,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
 
     let mut list = vec![parser(lexer)?];
 
-    if let Some(separator) = separator {
+    if let Some((separator, separator_name)) = separator {
         // parse with separator
 
         loop {
@@ -33,7 +35,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
                 },
                 s if s == &closer => break,
                 got => {
-                    return ParseError::unexpected(got, vec![TokName::from(separator)]);
+                    return ParseError::unexpected(got, vec![TokName::from(separator_name)]);
                 },
             }
         }
@@ -54,12 +56,12 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
 }
 
 pub fn parse_one_or_list<T: Default + Clone, O: Errable>(
-    opener_and_closer: (Tok, Tok), // tuple used to make calls cleaner
-    separator: Option<Tok>,
+    opener_and_closer: (TokWithName, TokWithName), // tuple used to make calls cleaner
+    separator: Option<TokWithName>,
     parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,
     lexer: &mut ParseContext<T>,
 ) -> Result<Vec<O>, ParseError> {
-    if lexer.peek_tok()? == &opener_and_closer.0 {
+    if lexer.peek_tok()? == &opener_and_closer.0.0 {
         parse_list(opener_and_closer, separator, parser, lexer)
     } else {
         Ok(vec![parser(lexer)?])

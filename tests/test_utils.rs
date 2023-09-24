@@ -71,7 +71,7 @@ pub struct TwoOf<T: 'static> {
 }
 
 impl<T> XcReflect for TwoOf<T> {
-    fn alias_code() -> String { "TwoOf<T> = { one: T, two: T }".into() }
+    fn spec_code() -> String { "TwoOf<T> = { one: T, two: T }".into() }
 }
 
 #[derive(Clone, Copy, Debug, XcReflect, PartialEq, Eq)]
@@ -116,7 +116,7 @@ pub enum BoolMore {
 }
 
 impl XcReflect for BoolMore {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "BoolMore = { Bool: bool / V2: {} / V3: {} / V4: {} / V5: {} }".into()
     }
 }
@@ -131,7 +131,7 @@ pub enum BoolMM {
 }
 
 impl XcReflect for BoolMM {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "BoolMM = { BoolM: BoolMore / V6: {} / V7: {} / V8: {} / V9: {} }".into()
     }
 }
@@ -146,7 +146,7 @@ pub enum BoolMMM {
 }
 
 impl XcReflect for BoolMMM {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "BoolMMM = { BoolMM: BoolMM / V10: {} / V11: {} / V12: {} / V13: {} }".into()
     }
 }

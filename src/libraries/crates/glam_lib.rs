@@ -42,7 +42,7 @@ impl Library for GlamLib {
 }
 
 impl XcReflect for Vec4 {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "Vec4 = {
             inner: {f32, f32, f32, f32}
         }"
@@ -51,7 +51,7 @@ impl XcReflect for Vec4 {
 }
 
 impl XcReflect for Vec3 {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "Vec3 = {
             x: f32,
             y: f32,
@@ -62,7 +62,7 @@ impl XcReflect for Vec3 {
 }
 
 impl XcReflect for Vec2 {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "Vec2 = C({
             x: f32,
             y: f32
@@ -72,7 +72,7 @@ impl XcReflect for Vec2 {
 }
 
 impl XcReflect for Mat3 {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "Mat3 = {
             x_axis: Vec3,
             y_axis: Vec3,
@@ -83,7 +83,7 @@ impl XcReflect for Mat3 {
 }
 
 impl XcReflect for Mat4 {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "Mat4 = {
             x_axis: Vec4,
             y_axis: Vec4,

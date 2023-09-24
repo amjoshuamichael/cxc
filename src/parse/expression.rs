@@ -40,8 +40,8 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             }
         } else if matches!(next, Tok::LAngle) && after_generics(lexer, Tok::LParen)? {
             let generics = parse_list(
-                (Tok::LAngle, Tok::RAngle),
-                Some(Tok::Comma),
+                Tok::angles(),
+                COMMAS,
                 parse_type_spec,
                 lexer,
             )?;
@@ -52,7 +52,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         } else if matches!((&last_atom, &next), (Atom::Expr(Expr::Ident(_)), Tok::LBrack)) {
             lexer.next_tok()?;
             let index = parse_expr(lexer)?;
-            lexer.assert_next_tok_is(Tok::RBrack)?;
+            lexer.assert_next_tok_is(Tok::RBrack, TokName::RBrack)?;
 
             let object = atoms.pop().unwrap().unwrap_expr()?;
 
@@ -127,9 +127,9 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
         Tok::LBrack => parse_array_literal(lexer)?.into(),
         Tok::LParen => {
-            lexer.assert_next_tok_is(Tok::LParen)?;
+            lexer.assert_next_tok_is(Tok::LParen, TokName::LParen)?;
             let enclosed = Expr::Enclosed(Box::new(parse_math_expr(lexer)?)).into();
-            lexer.assert_next_tok_is(Tok::RParen)?;
+            lexer.assert_next_tok_is(Tok::RParen, TokName::RParen)?;
             enclosed
         },
         Tok::LCurly if lexer.peek_by(1)? == &Tok::RCurly => {
@@ -168,7 +168,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             parse_struct_literal(lexer)?.into()
         },
         Tok::LCurly => {
-            let exprs = parse_list(Tok::curlys(), Some(Tok::Comma), parse_math_expr, lexer)?;
+            let exprs = parse_list(Tok::curlys(), COMMAS, parse_math_expr, lexer)?;
 
             Expr::Tuple(exprs, InitOpts::NoFill).into()
         },
@@ -196,7 +196,7 @@ fn parse_call(
     generics: Vec<TypeSpec>,
     lexer: &mut FuncParseContext,
 ) -> ParseResult<Atom> {
-    let mut args = parse_list(Tok::parens(), Some(Tok::Comma), parse_expr, lexer)?;
+    let mut args = parse_list(Tok::parens(), COMMAS, parse_expr, lexer)?;
 
     let func = atoms
         .pop()
@@ -271,12 +271,12 @@ fn detect_binary_ops(atoms: &mut Vec<Atom>) -> ParseResult<()> {
 fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError> {
     let mut fields = Vec::new();
 
-    lexer.assert_next_tok_is(Tok::LCurly)?;
+    lexer.assert_next_tok_is(Tok::LCurly, TokName::LCurly)?;
 
     while let Ok(field_name) = lexer.peek_tok()?.var_name() {
         lexer.next_tok()?;
 
-        lexer.assert_next_tok_is(Tok::Assignment)?;
+        lexer.assert_next_tok_is(Tok::Assignment, TokName::FieldAssignment)?;
 
         let rhs = lexer.recover_with(parse_expr, vec![&Tok::Comma])?;
 
@@ -291,11 +291,11 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
 
     let initialize = match lexer.next_tok()? {
         Tok::DoublePlus => {
-            lexer.assert_next_tok_is(Tok::RCurly)?;
+            lexer.assert_next_tok_is(Tok::RCurly, TokName::RCurly)?;
             InitOpts::Default
         },
         Tok::DoubleMinus => {
-            lexer.assert_next_tok_is(Tok::RCurly)?;
+            lexer.assert_next_tok_is(Tok::RCurly, TokName::RCurly)?;
             InitOpts::Uninit
         },
         Tok::RCurly => InitOpts::NoFill,
@@ -311,19 +311,19 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
 }
 
 fn parse_array_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError> {
-    lexer.assert_next_tok_is(Tok::LBrack)?;
+    lexer.assert_next_tok_is(Tok::LBrack, TokName::LBrack)?;
     let mut expressions = Vec::new();
 
     loop {
         match lexer.peek_tok()? {
             Tok::DoublePlus => {
                 lexer.next_tok()?;
-                lexer.assert_next_tok_is(Tok::RBrack)?;
+                lexer.assert_next_tok_is(Tok::RBrack, TokName::RBrack)?;
                 return Ok(Expr::Array(expressions, InitOpts::Default));
             },
             Tok::DoubleMinus => {
                 lexer.next_tok()?;
-                lexer.assert_next_tok_is(Tok::RBrack)?;
+                lexer.assert_next_tok_is(Tok::RBrack, TokName::RBrack)?;
                 return Ok(Expr::Array(expressions, InitOpts::Uninit));
             },
             Tok::RBrack => {
@@ -356,7 +356,7 @@ fn after_generics(lexer: &mut FuncParseContext, tok: Tok) -> ParseResult<bool> {
 
     let mut detached = lexer.detach();
 
-    let list = parse_list(Tok::angles(), Some(Tok::Comma), parse_type_spec, &mut detached);
+    let list = parse_list(Tok::angles(), COMMAS, parse_type_spec, &mut detached);
 
     Ok(detached.errors.deref().unwrap().is_empty()
         && list.is_ok()

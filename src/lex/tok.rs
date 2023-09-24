@@ -3,6 +3,7 @@ use crate::parse::Opcode;
 use crate::parse::ParseError;
 use crate::parse::ParseResult;
 use crate::parse::TokName;
+use crate::parse::TokWithName;
 use logos::{Lexer, Logos};
 use std::{
     fmt::{Debug, Display},
@@ -164,7 +165,7 @@ pub enum Tok {
     #[regex(r"\*+", |set| set.slice().len() as u8)]
     AsterickSet(u8),
     #[token("/")]
-    Divider,
+    Slash,
     #[token("%")]
     Modulus,
     #[token("|")]
@@ -206,6 +207,11 @@ pub enum Tok {
     Colon,
     #[token("@")]
     At,
+
+    #[token("with")]
+    With,
+    #[token("as")]
+    As,
 
     #[token(":.")]
     ColonDot,
@@ -315,7 +321,7 @@ impl Tok {
             Tok::Plus => Ok(Opcode::Plus),
             Tok::Minus => Ok(Opcode::Minus),
             Tok::AsterickSet(1) => Ok(Opcode::Multiplier),
-            Tok::Divider => Ok(Opcode::Divider),
+            Tok::Slash => Ok(Opcode::Divider),
             Tok::Modulus => Ok(Opcode::Modulus),
             Tok::AmpersandSet(1) => Ok(Opcode::BitAND),
             Tok::BitOR => Ok(Opcode::BitOR),
@@ -366,10 +372,18 @@ impl Tok {
         matches!(self, Space | Comment | Return | Tab)
     }
 
-    pub fn parens() -> (Self, Self) { (Tok::LParen, Tok::RParen) }
-    pub fn bracks() -> (Self, Self) { (Tok::LBrack, Tok::RBrack) }
-    pub fn curlys() -> (Self, Self) { (Tok::LCurly, Tok::RCurly) }
-    pub fn angles() -> (Self, Self) { (Tok::LAngle, Tok::RAngle) }
+    pub fn parens() -> (TokWithName, TokWithName) { 
+        ((Tok::LParen, TokName::LParen), (Tok::RParen, TokName::RParen)) 
+    }
+    pub fn bracks() -> (TokWithName, TokWithName) { 
+        ((Tok::LBrack, TokName::LBrack), (Tok::RBrack, TokName::RBrack)) 
+    }
+    pub fn curlys() -> (TokWithName, TokWithName) { 
+        ((Tok::LCurly, TokName::LCurly), (Tok::RCurly, TokName::RCurly)) 
+    }
+    pub fn angles() -> (TokWithName, TokWithName) { 
+        ((Tok::LAngle, TokName::LAngle), (Tok::RAngle, TokName::RAngle)) 
+    }
 }
 
 impl ToString for Tok {
@@ -383,7 +397,7 @@ impl ToString for Tok {
             Plus => "+",
             Minus => "-",
             AsterickSet(count) => return "*".repeat(*count as _),
-            Divider => "/",
+            Slash => "/",
             Modulus => "%",
             BitOR => "|",
             BitXOR => "^",
@@ -402,6 +416,8 @@ impl ToString for Tok {
             Question => "?",
             Colon => ":",
             At => "@",
+            With => "with",
+            As => "as",
             ColonDot => ":.",
             DoubleColon => "::",
             LParen => "(",

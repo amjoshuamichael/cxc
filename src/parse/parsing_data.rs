@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash, iter::{once, empty}, sync::Arc};
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use crate::{
     unit::{CompData, FuncQuery},
@@ -46,6 +46,8 @@ pub enum Expr {
     Block(Vec<Expr>),
     Return(Box<Expr>),
     Enclosed(Box<Expr>),
+    With(Box<Expr>),
+    WithAs(Box<Expr>, VarName),
 
     Error,
 }
@@ -54,49 +56,6 @@ impl Default for Expr {
     fn default() -> Self { Self::Block(Vec::new()) }
 }
 
-impl<'a> IntoIterator for &'a Expr {
-    type Item = &'a Expr;
-
-    type IntoIter = Box<dyn Iterator<Item = &'a Expr> + 'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        use Expr::*;
-
-        let me = once(self);
-
-        let rest: Box<dyn Iterator<Item = &Expr>> = match self {
-            Number(_)
-            | Float(_)
-            | Bool(_)
-            | String(_)
-            | Ident(_)
-            | StaticMethodPath(..)
-            | Error { .. } => Box::new(empty()),
-            Struct(fields, _) 
-                => Box::new(fields.iter().map(|(_, expr)| expr).flatten()),
-            Tuple(exprs, _) => Box::new(exprs.iter().flatten()),
-            Array(exprs, _) => Box::new(exprs.iter().flatten()),
-            Index(a, i) => Box::new([&**a, &**i].into_iter().flatten()),
-            SetVar(_, rhs) => Box::new(once(&**rhs).flatten()),
-            Set(lhs, rhs) => Box::new([&**lhs, &**rhs].into_iter().flatten()),
-            Call {
-                func: name, args, ..
-            } => Box::new(once(&**name).chain(args.iter())),
-            UnarOp(_, hs) => Box::new(once(&**hs).flatten()),
-            BinOp(_, lhs, rhs) => Box::new([&**lhs, &**rhs].into_iter().flatten()),
-            Member(o, _) => Box::new(o.into_iter()),
-            IfThen(i, t) => Box::new([&**i, &**t].into_iter().flatten()),
-            IfThenElse(i, t, e) => Box::new([&**i, &**t, &**e].into_iter().flatten()),
-            While(f, w) => Box::new([&**f, &**w].into_iter().flatten()),
-            Block(stmts) => Box::new(stmts.iter().flatten()),
-            Return(r) => Box::new(once(&**r).flatten()),
-            Enclosed(expr) => Box::new(once(&**expr).flatten()),
-            TypedValue(_, expr) => Box::new(once(&**expr).flatten()),
-        };
-
-        Box::new(me.chain(rest))
-    }
-}
 impl Expr {
     pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, Box::new(self.clone())) }
 
@@ -153,7 +112,7 @@ pub type TypeSpecRelation = TypeRelationGeneric<TypeSpec>;
 pub type TypeRelation = TypeRelationGeneric<Type>;
 
 impl XcReflect for TypeRelationGeneric<Type> {
-    fn alias_code() -> String {
+    fn spec_code() -> String {
         "TypeRelation = { Static: { Type } / MethodOf: { Type } / Unrelated: {} }".into()
     }
 }

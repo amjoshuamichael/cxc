@@ -174,7 +174,7 @@ fn infer_cast() {
 }
 
 #[test]
-fn infer_int_size_u8() {
+fn infer_size_u8_int() {
     xc_test!(
         r#"
         # notifies the compiler that whatever variable is passed into this function is a u8

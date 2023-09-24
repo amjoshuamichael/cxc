@@ -6,7 +6,7 @@ pub struct StringLib;
 
 // TODO: can't have empty strings yet
 impl crate::XcReflect for String {
-    fn alias_code() -> String { "String = { Vec<u8>, }".to_string() }
+    fn spec_code() -> String { "String = { Vec<u8>, }".to_string() }
 }
 
 impl Library for StringLib {

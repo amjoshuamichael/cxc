@@ -151,7 +151,7 @@ impl Unit {
 
         let funcs_to_process = {
             for decl in parsed.types.iter().cloned() {
-                self.comp_data.add_type_alias(decl.name, decl.typ);
+                self.comp_data.add_type_spec(decl.name, decl.typ);
             }
 
             let mut declarations = Vec::<FuncCodeId>::new();

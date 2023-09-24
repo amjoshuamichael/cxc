@@ -25,7 +25,8 @@ impl ExprTree {
                 | Float { .. } 
                 | Bool { .. } 
                 | GlobalLoad { .. }
-                | Ident { .. } => Vec::new(),
+                | Ident { .. } 
+                | AccessAlias(_) => Vec::new(),
                 StructLit { fields, .. } => fields
                     .iter()
                     .flat_map(|(_, id)| ids_of(tree, *id))
@@ -120,6 +121,19 @@ impl ExprTree {
         } else {
             self.statement_and_block(parent)
         }
+    }
+
+    pub fn expr_is_in_block(&self, expr: ExprID, block: ExprID) -> bool {
+        let mut check_block: ExprID = self.statement_and_block(expr).1;
+
+        if block == check_block { return true }
+
+        while check_block != self.root {
+            check_block = self.statement_and_block(check_block).1;
+            if block == check_block { return true }
+        }
+
+        return false;
     }
 
     pub fn with_space(

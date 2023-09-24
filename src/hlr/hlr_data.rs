@@ -1,4 +1,4 @@
-use std::collections::{HashSet};
+use std::collections::{HashSet, HashMap};
 
 use super::expr_tree::*;
 use super::hlr_data_output::HLR;
@@ -9,7 +9,7 @@ use crate::{parse::*, TypeEnum};
 use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId, Global};
 use crate::Type;
 use indexmap::IndexMap;
-use slotmap::{SlotMap};
+use slotmap::SlotMap;
 
 #[derive(Debug)]
 pub struct FuncRep<'a> {
@@ -101,6 +101,8 @@ impl<'a> FuncRep<'a> {
                 stmts: Vec::new(),
                 // only thing in new.variables is the args
                 declared: new.variables.keys().collect(), 
+                aliases: HashMap::new(),
+                withs: HashSet::new(),
             }
         );
 
@@ -277,7 +279,7 @@ impl<'a> FuncRep<'a> {
                 call_space
             },
             Expr::Ident(name) => {
-                let var_id: VarID;
+                let mut var_id = None;
                 let mut block: ExprID = parent;
 
                 'find_var: loop {
@@ -288,27 +290,29 @@ impl<'a> FuncRep<'a> {
 
                     for declared_var in declared {
                         if &self.variables[*declared_var].name == name {
-                            var_id = *declared_var;
+                            var_id = Some(*declared_var);
                             break 'find_var;
                         }
                     }
 
-                    // the parent of the root value is the ExprID::default()
                     if block == self.tree.root {
-                        let global = self
-                            .comp_data
-                            .globals
-                            .get(name)
-                            .unwrap_or_else(|| panic!("could not find identifier {} in {:?}", name, self.variables))
-                            .clone();
-                        let var_type = self.comp_data.get_type_of_global(&global).unwrap();
-                        return self.tree.insert(parent, HNodeData::GlobalLoad { var_type, global });
+                        break 'find_var;
                     }
                 }
 
-                let var_type = self.variables[var_id].typ.clone();
+                if let Some(var_id) = var_id {
+                    let var_type = self.variables[var_id].typ.clone();
 
-                self.tree.insert(parent, HNodeData::Ident { var_type, var_id })
+                    self.tree.insert(parent, HNodeData::Ident { var_type, var_id })
+                } else if let Some(global) = self.comp_data.globals.get(name) {
+                    let var_type = self.comp_data.get_type_of_global(&global).unwrap();
+                    self.tree.insert(parent, HNodeData::GlobalLoad { 
+                        var_type, 
+                        global: global.clone(),
+                    })
+                } else {
+                    self.tree.insert(parent, HNodeData::AccessAlias(name.clone()))
+                }
             },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
@@ -421,6 +425,8 @@ impl<'a> FuncRep<'a> {
                     ret_type: Type::unknown(),
                     stmts: Vec::new(),
                     declared: HashSet::new(),
+                    aliases: HashMap::new(),
+                    withs: HashSet::new(),
                 });
 
                 let mut statment_ids = Vec::new();
@@ -596,6 +602,28 @@ impl<'a> FuncRep<'a> {
                 *node.ret_type_mut().unwrap() = typ;
 
                 expr_id
+            },
+            Expr::With(expr) => {
+                let realized_expr = self.add_expr(&**expr, parent);
+
+                let (_, block) = self.tree.statement_and_block(realized_expr);
+                let HNodeData::Block { withs, .. } = self.tree.get_mut(block)
+                    else { unreachable!() };
+                withs.insert(realized_expr);
+
+                realized_expr
+            },
+            Expr::WithAs(expr, name) => {
+                let blank = self.tree.insert(parent, HNodeData::void());
+
+                let realized_expr = self.add_expr(&**expr, self.tree.root);
+
+                let (_, block) = self.tree.statement_and_block(blank);
+                let HNodeData::Block { aliases, .. } = self.tree.get_mut(block)
+                    else { unreachable!() };
+                aliases.insert(name.clone(), realized_expr);
+
+                blank
             },
             Expr::StaticMethodPath(..) | Expr::Error { .. } => {
                 unreachable!()

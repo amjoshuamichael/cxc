@@ -7,8 +7,8 @@ pub struct Cache<T> {
 }
 
 impl<T: XcReflect> XcReflect for Cache<T> {
-    fn alias_code() -> String {
-        let t = T::alias_code();
+    fn spec_code() -> String {
+        let t = T::spec_code();
         format!("
         {{
             calculated: RwLock<Option<{t}>>,

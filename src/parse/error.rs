@@ -126,7 +126,7 @@ pub enum TokName {
     Plus,
     Minus,
     Multiply,
-    Divider,
+    Slash,
     Modulus,
 
     BitOR,
@@ -173,6 +173,8 @@ pub enum TokName {
     RightAngle,
 
     Assignment,
+    VarAssignment,
+    FieldAssignment,
 
     VarName,
     TypeName,
@@ -190,58 +192,4 @@ pub enum TokName {
     BinaryOperator,
 }
 
-impl From<Tok> for TokName {
-    fn from(tok: Tok) -> Self {
-        use Tok::*;
-        match tok {
-            Comma => TokName::Comma,
-            Semicolon => TokName::Semicolon,
-            Bang => TokName::Bang,
-            Plus => TokName::Plus,
-            Minus => TokName::Minus,
-            AsterickSet(_) => todo!(),
-            Divider => TokName::Divider,
-            Modulus => TokName::Modulus,
-            BitOR => TokName::BitOR,
-            BitXOR => TokName::BitXOR,
-            BitShiftR => TokName::BitShiftR,
-            BitShiftL => TokName::BitShiftL,
-            Dot => TokName::Dot,
-            DoublePlus => TokName::DoublePlus,
-            DoubleMinus => TokName::DoubleMinus,
-            TripleMinus => TokName::TripleMinus,
-            AmpersandSet(_) => todo!(),
-            Or => TokName::Or,
-            LessOrEqual => TokName::LessOrEqual,
-            GreaterOrEqual => TokName::GreaterOrEqual,
-            Equal => todo!(),
-            Inequal => todo!(),
-            Question => TokName::Question,
-            Colon => TokName::Colon,
-            At => TokName::At,
-            ColonDot => TokName::ColonDot,
-            DoubleColon => TokName::DoubleColon,
-            LParen => TokName::LParen,
-            RParen => TokName::RParen,
-            LCurly => TokName::LCurly,
-            RCurly => TokName::RCurly,
-            LBrack => TokName::LBrack,
-            RBrack => TokName::RBrack,
-            LAngle => TokName::LAngle,
-            RAngle => TokName::RightAngle,
-            LArrow => TokName::LArrow,
-            RArrow => TokName::RArrow,
-            Assignment => TokName::Assignment,
-            VarName(_) => TokName::VarName,
-            TypeName(_) => TokName::TypeName,
-            Int(_) => TokName::Int,
-            // Could also be a tuple member, but this is a safe bet.
-            DottedNum(_) => TokName::Float,
-            Float(_) => TokName::Float,
-            Bool(_) => TokName::Bool,
-            Strin(_) => TokName::Strin,
-            Error => TokName::Error,
-            Space | Comment | Return | Tab => TokName::Whitespace,
-        }
-    }
-}
+pub type TokWithName = (Tok, TokName);

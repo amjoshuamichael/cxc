@@ -88,9 +88,9 @@ fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 }
 
 fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    let beginning_of_alias = lexer.peek_tok()?.clone();
+    let beginning_of_spec = lexer.peek_tok()?.clone();
 
-    let type_alias = match beginning_of_alias {
+    let type_spec = match beginning_of_spec {
         Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2), lexer.peek_by(3)) {
             (Ok(Tok::VarName(_)), Ok(Tok::Colon), _) |
             (Ok(Tok::Plus), Ok(Tok::VarName(_)), Ok(Tok::Colon))
@@ -113,7 +113,8 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                 match (lexer.next_tok()?.clone(), lexer.peek_tok()) {
                     (Tok::RCurly, _) => elems.into_iter().next().unwrap(),
                     (Tok::Comma, Ok(Tok::RCurly)) => {
-                        lexer.assert_next_tok_is(Tok::RCurly)?;
+                        lexer.next_tok()?;
+
                         TypeSpec::Tuple(elems)
                     },
                     (Tok::Comma, Ok(_)) => {
@@ -187,14 +188,14 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 
                     if lexer.peek_tok() == Ok(&Tok::LParen) {
                         let type_level_func_args =
-                            parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
+                            parse_list(Tok::parens(), COMMAS, parse_type, lexer)?;
 
                         TypeSpec::TypeLevelFunc(name.clone(), type_level_func_args)
                     } else if let Some(generic_index) = lexer.get_generic_label(&name) {
                         TypeSpec::GenParam(generic_index)
                     } else if lexer.peek_tok() == Ok(&Tok::LAngle) {
                         let generics =
-                            parse_list(Tok::angles(), Some(Tok::Comma), parse_type, lexer)?;
+                            parse_list(Tok::angles(), COMMAS, parse_type, lexer)?;
 
                         TypeSpec::Generic(name, generics)
                     } else {
@@ -205,7 +206,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             }
         },
         Tok::LParen => {
-            let arg_types = parse_list(Tok::parens(), Some(Tok::Comma), parse_type, lexer)?;
+            let arg_types = parse_list(Tok::parens(), COMMAS, parse_type, lexer)?;
 
             let ret_type = match lexer.peek_tok() {
                 Ok(Tok::Semicolon) => {
@@ -219,7 +220,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         },
         _ => {
             return ParseError::unexpected(
-                &beginning_of_alias, 
+                &beginning_of_spec, 
                 vec![TokName::TypeName, TokName::LCurly, TokName::Ref]
             );
         },
@@ -231,29 +232,29 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 
             match lexer.next_tok()? {
                 Tok::VarName(name) => 
-                    TypeSpec::StructMember(Box::new(type_alias), name.clone()),
+                    TypeSpec::StructMember(Box::new(type_spec), name.clone()),
                 Tok::TypeName(name) => 
-                    TypeSpec::SumMember(Box::new(type_alias), name.clone()),
+                    TypeSpec::SumMember(Box::new(type_spec), name.clone()),
                 got => {
                     return ParseError::unexpected(got, vec![TokName::VarName, TokName::TypeName]);
                 },
             }
         },
-        _ => type_alias,
+        _ => type_spec,
     };
 
     Ok(final_output)
 }
 
 pub fn parse_type_decl(mut lexer: TypeParseContext) -> Result<TypeDecl, ParseError> {
-    let alias = parse_type(&mut lexer)?;
+    let spec = parse_type(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
     let name = lexer.name.clone();
 
     let type_decl = TypeDecl {
         name,
-        typ: alias,
+        typ: spec,
         contains_generics,
     };
 
@@ -273,14 +274,14 @@ pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 
         let field_name = lexer.next_tok()?.var_name()?;
 
-        lexer.assert_next_tok_is(Tok::Colon)?;
+        lexer.assert_next_tok_is(Tok::Colon, TokName::Colon)?;
 
         let typ = lexer.recover(parse_type)?;
 
         Ok((inherited, field_name, typ))
     }
 
-    let fields = parse_list(Tok::curlys(), Some(Tok::Comma), parse_field, lexer)?;
+    let fields = parse_list(Tok::curlys(), COMMAS, parse_field, lexer)?;
 
     Ok(TypeSpec::Struct(fields))
 }
@@ -293,14 +294,15 @@ pub fn parse_sum(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             return Err(ParseError::BadVariantName(variant_name));
         }
 
-        lexer.assert_next_tok_is(Tok::Colon)?;
+        lexer.assert_next_tok_is(Tok::Colon, TokName::Colon)?;
 
         let typ = parse_type(lexer)?;
 
         Ok((variant_name, typ))
     }
 
-    let fields = parse_list(Tok::curlys(), Some(Tok::Divider), parse_variant, lexer)?;
+    let fields = 
+        parse_list(Tok::curlys(), Some((Tok::Slash, TokName::Slash)), parse_variant, lexer)?;
 
     Ok(TypeSpec::Sum(fields))
 }

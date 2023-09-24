@@ -4,7 +4,7 @@ use crate::{
     Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation
 };
 use indexmap::IndexMap;
-use std::{hash::Hash, collections::HashMap};
+use std::{hash::Hash, collections::{HashMap, HashSet}};
 
 mod unique_vec;
 
@@ -16,6 +16,10 @@ enum Inferable {
     Var(VarID),
     Relation(ExprID),
     CallGeneric(ExprID, usize),
+    Alias {
+        name: VarName,
+        block: ExprID,
+    },
     ReturnType,
 }
 
@@ -85,19 +89,13 @@ struct InferMap {
     inferables: Vec<Inferable>,
     inferable_index_to_constraint_index: Vec<ConstraintId>,
     calls: UniqueVec<ExprID>,
+    unreplaced_alises: UniqueVec<ExprID>,
     has_been_modified_since_last_round: bool,
 }
 
 type ConstraintId = usize;
 
 impl InferMap {
-    pub fn all_types_known(&self) -> bool {
-        self.constraints
-            .iter()
-            .all(|constraint| constraint.is.is_known())
-            && self.calls.is_empty()
-    }
-
     pub fn constraint_of(&mut self, inferable: impl Into<Inferable>) -> &mut Constraints {
         let constraint_index = self.constraint_index_of(inferable);
         &mut self.constraints[constraint_index]
@@ -259,11 +257,16 @@ pub fn infer_types(hlr: &mut FuncRep) {
             Err(_) => break,
             _ => {},
         }
+
         infer_calls(&mut infer_map, hlr).unwrap();
 
         introduce_reverse_constraints(&mut infer_map);
 
-        if infer_map.all_types_known() {
+        if infer_map.constraints.iter().all(|constraint| constraint.is.is_known())
+            && infer_map.calls.is_empty() {
+            infer_aliases(&mut infer_map, hlr);
+            assert!(infer_map.unreplaced_alises.is_empty());
+
             set_types_in_hlr(infer_map, hlr);
             return;
         }
@@ -292,6 +295,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
             println!("{i} {inferable:?}");
         }
         println!("calls: {:?}", &infer_map.calls);
+        println!("aliases: {:?}", &infer_map.unreplaced_alises);
         set_types_in_hlr(infer_map, hlr);
         println!("{:?}", &hlr.tree);
         println!("{}", &hlr.to_string());
@@ -345,7 +349,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             if let Some(index) = self.0.iter().position(|i| i.inferable == inferable) {
                 index
             } else {
-                self.add_to_inferables_list(inferable)
+                self.add_to_inferables_list(inferable).unwrap()
             }
         }
 
@@ -355,9 +359,12 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             self.0[set_index].known = Some((to, known_by));
         }
 
-        fn add_to_inferables_list(&mut self, add: impl Into<Inferable>) -> usize {
+        fn add_to_inferables_list(&mut self, add: impl Into<Inferable>) -> Option<usize> {
             let add = add.into();
-            assert!(!self.0.iter().any(|node| node.inferable == add));
+
+            if self.0.iter().any(|node| node.inferable == add) {
+                return None;
+            }
 
             let new_index = self.0.len();
 
@@ -368,7 +375,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 known: None,
             });
             
-            new_index
+            Some(new_index)
         }
 
         fn verify_all_roots(&mut self) {
@@ -390,16 +397,30 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
         graph.mark_known(Inferable::ReturnType, hlr.ret_type.clone(), KnownBy::Specified);
     }
 
-    let ids_in_order = hlr.tree.ids_in_order();
+    let node_ids: Vec<ExprID> = hlr.tree.nodes.keys().collect();
     // mark inferables as "the same", for example, both sides of a binary operation *must*
     // be the same. we also mark "known types" here, like how the result of a comparison
     // must be a boolean.
-    for expr_id in ids_in_order.iter().copied().rev() {
+    for expr_id in node_ids.iter().copied() {
         let node_data = hlr.tree.get_ref(expr_id);
 
+        let node_data_ret_type = node_data.ret_type();
+        
         match node_data {
             HNodeData::Ident { ref var_id, .. } => {
                 graph.join(expr_id, *var_id)
+            }
+            HNodeData::AccessAlias(name) => {
+                let alias_inferable = Inferable::Alias { 
+                    name: name.clone(), 
+                    block: hlr.tree.statement_and_block(expr_id).1,
+                };
+
+                graph.join(expr_id, alias_inferable.clone());
+
+                if !try_replace_alias(hlr, expr_id) {
+                    infer_map.unreplaced_alises.insert(expr_id);
+                }
             }
             HNodeData::GlobalLoad { global, .. } => {
                 graph.mark_known(
@@ -486,7 +507,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             ),
         }
 
-        let node_data_ret_type = node_data.ret_type();
         if node_data_ret_type.is_known() {
             graph.mark_known(expr_id, node_data_ret_type, KnownBy::Specified);
         }
@@ -512,8 +532,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
         if let Some((known_type, known_by)) = node.known {
             if constraints.is.is_known() && known_type != constraints.is {
-                dbg!(&constraints);
-                dbg!(&known_by);
                 panic!() // TODO: error
             }
 
@@ -530,7 +548,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
     infer_map.inferable_index_to_constraint_index = inferable_index_to_constraint_index;
     infer_map.constraints = constraints_set;
 
-    for id in ids_in_order.into_iter().rev() {
+    for id in node_ids.iter().copied().rev() {
         match hlr.tree.get_ref(id) {
             HNodeData::Number { .. } => {
                 infer_map.constraint_of(id).usages.is_int.push(id);
@@ -616,8 +634,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 }
             },
             HNodeData::Member { object, field, .. } => {
-                let object_constraint_index =
-                    infer_map.constraint_index_of(*object);
+                let object_constraint_index = infer_map.constraint_index_of(*object);
 
                 let member_constraint_index = infer_map.constraint_index_of(id);
                 infer_map.constraints[member_constraint_index].connections.insert(
@@ -652,6 +669,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             | HNodeData::GlobalLoad { .. } 
             | HNodeData::Set { .. } 
             | HNodeData::Call { .. }
+            | HNodeData::AccessAlias { .. }
             | HNodeData::BinOp { .. } 
             | HNodeData::Transform { .. } 
             | HNodeData::IfThen { .. }
@@ -842,9 +860,36 @@ fn set_types_in_hlr(infer_map: InferMap, hlr: &mut FuncRep) {
                         else { unreachable!() };
                     query.generics[*index] = set;
                 },
+                Inferable::Alias { .. } => { },
             }
         }
     }
+}
+
+fn try_replace_alias(hlr: &mut FuncRep, alias_id: ExprID) -> bool {
+    let node_data = hlr.tree.get(alias_id);
+    let HNodeData::AccessAlias(name) = node_data else { unreachable!() };
+    
+    let alias_expr;
+    let mut block: ExprID = hlr.tree.parent(alias_id);
+
+    'find_alias: loop {
+        (_, block) = hlr.tree.statement_and_block(block);
+        let HNodeData::Block { aliases, .. } = hlr.tree.get_ref(block)
+            else { unreachable!() };
+
+        if let Some(found_alias_expr) = aliases.get(&name) {
+            alias_expr = found_alias_expr;
+            break 'find_alias;
+        }
+
+        if block == hlr.tree.root {
+            return false;
+        }
+    }
+
+    hlr.tree.replace(alias_id, hlr.tree.get(*alias_expr));
+    true
 }
 
 fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
@@ -869,6 +914,59 @@ fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
     }
 
     Ok(())
+}
+
+fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
+    let names_to_infer: HashSet<VarName> = hlr
+        .tree
+        .iter()
+        .filter_map(|(_, node)| {
+            let HNodeData::AccessAlias(name) = node else { return None };
+            Some(name.clone())
+        })
+        .collect();
+
+    hlr.modify_many_infallible(
+        |_, block, hlr| {
+            let HNodeData::Block { withs, aliases, .. } = block else { return };
+
+            for with in &*withs {
+                let with_type = infer_map.constraint_of(*with).is.clone();
+                
+                for name in &names_to_infer {
+                    let Some(route) = with_type.route_to(name.clone()) else { continue };
+
+                    let member_node = hlr.tree.make_one_space(ExprID::oprhaned());
+                       
+                    let transform_node = hlr.tree.insert(
+                        member_node,
+                        HNodeData::Transform {
+                            hs: *with,
+                            ret_type: Type::unknown(),
+                            steps: route.0,
+                        }
+                    );
+
+                    hlr.tree.replace(
+                        member_node, 
+                        HNodeData::Member {
+                            ret_type: route.1,
+                            object: transform_node,
+                            field: name.clone(),
+                        }
+                    );
+
+                    
+                    assert!(!aliases.contains_key(name));
+                    aliases.insert(name.clone(), member_node);
+                }
+            }
+        }
+    );
+
+    for alias in infer_map.unreplaced_alises.drain(..) {
+        assert!(try_replace_alias(hlr, alias));
+    }
 }
 
 fn fill_in_call(
