@@ -217,3 +217,68 @@ fn extern_and_local() {
     unit.push_script("sum(); i32 { ; fourty_three() + twenty_nine() }").unwrap();
     unit.get_fn("fourty_three").unwrap().downcast::<(), i32>()();
 }
+
+#[test]
+fn combine_string_array() {
+    xc_test!(
+        use StdLib;
+        r#"
+            main(); String {
+                message := ["H", "E", "L", "L", "O"]
+                new_message := ""
+                
+                m := 0
+                @ m < message.len() {
+                    new_message.push_string(&message[m])
+                    m = m + 1
+                }
+
+                ; new_message
+            }
+        "#;
+        String::from("HELLO")
+    );
+}
+
+#[test]
+fn prime_sieve() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); Vec<u64> {
+            size: u64 = 40
+            sieve := Vec<bool>:init_with(size, false)
+
+            i := 2
+            @ i < size {
+                j := i + 1
+
+                @ j < size {
+                    ? j % i == 0 {
+                        *sieve.get_ref(j) = true
+                    }
+
+                    j = j + 1
+                }
+
+                i = i + 1
+            }
+
+            final := Vec<u64>:new()
+
+            l := 0
+            @ l < size {
+                is_prime := sieve.get(l)
+                ? !is_prime {
+                    final.push(l)
+                }
+
+                l = l + 1
+            }
+
+            ; final
+        }
+        "#;
+        vec![0i64, 1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+    );
+}

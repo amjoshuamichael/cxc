@@ -60,4 +60,6 @@ fn string_from_bytes(buf: *mut u8, length: usize) -> String {
     x
 }
 
-fn push_string(this: &mut String, other: &String) { *this += &**other; }
+fn push_string(this: &mut String, other: &String) { 
+    *this += &**other; 
+}

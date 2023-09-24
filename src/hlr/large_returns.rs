@@ -32,7 +32,7 @@ fn handle_own_return(hlr: &mut FuncRep) {
 }
 
 fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
-    let casted_ret = hlr.add_variable(&load_as);
+    let casted_ret = hlr.add_variable(&load_as, hlr.tree.root);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -50,7 +50,7 @@ fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
 
 fn return_by_move_into_double(hlr: &mut FuncRep) {
     let f64 = Type::f(64);
-    let casted_ret = hlr.add_variable(&f64);
+    let casted_ret = hlr.add_variable(&f64, hlr.tree.root);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -80,7 +80,7 @@ fn return_by_move_into_double(hlr: &mut FuncRep) {
 fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
     let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
 
-    let output_var_name = hlr.add_variable(&i64i64);
+    let output_var_name = hlr.add_variable(&i64i64, hlr.tree.root);
 
     hlr.modify_many_infallible(
         |return_id, mut data, hlr| {
@@ -153,7 +153,6 @@ fn return_by_pointer(hlr: &mut FuncRep) {
 
 #[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
-
     let calls = hlr
         .tree
         .ids_in_order()
@@ -189,10 +188,10 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
-    let casted_var_name = hlr.add_variable(&casted_var_type);
+    let casted_var_name = hlr.add_variable(&casted_var_type, og_call);
 
     let raw_ret_var_type = casted_var_type.raw_return_type();
-    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type);
+    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type, og_call);
 
     hlr.insert_statement_before(
         og_call,
@@ -238,7 +237,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         *ret_type = Type::void();
         hlr.replace_quick(parent, new_data);
     } else {
-        let call_var = hlr.add_variable(ret_type);
+        let call_var = hlr.add_variable(ret_type, og_call_id);
 
         let new_arg = hlr.insert_quick(og_call_id, get_ref(call_var.clone()));
 

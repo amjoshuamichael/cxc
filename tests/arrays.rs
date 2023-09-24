@@ -10,17 +10,16 @@ fn array_basic() {
         main(); i32 {
             original: [7]i32 = [1, 4, 8, 15, 16, 23, 42]
 
-            first_sum: i32 = original[i64 3] + original[i64 0] + original[i64 6]
+            first_sum: i32 = original[3] + original[0] + original[6]
 
-            index: i64 = i64 0
-            @ index < i64 7 {
+            index: u64 = 0
+            @ index < 7 {
                 original[index] = cast<i64, i32>(index) * 2
 
-                index = index + i64 1
+                index = index + 1
             }
 
-            second_sum: i32 = 
-                original[i64 0] + original[i64 1] + original[i64 3] + original[i64 6]
+            second_sum: i32 = original[0] + original[1] + original[3] + original[6]
 
             ; first_sum + second_sum
         }

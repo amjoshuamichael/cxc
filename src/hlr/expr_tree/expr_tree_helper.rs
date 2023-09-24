@@ -109,11 +109,11 @@ impl ExprTree {
     pub fn set_parent(&mut self, of: ExprID, to: ExprID) { self.nodes[of].parent = to }
 
     pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
-        let parent = self.parent(of);
-
-        if parent == self.root {
-            return (of, parent);
+        if of == self.root {
+            return (of, of);
         }
+
+        let parent = self.parent(of);
 
         if matches!(self.get(parent), Block { .. }) {
             (of, parent)
@@ -219,12 +219,19 @@ impl<'a> FuncRep<'a> {
         new
     }
 
-    pub fn add_variable(&mut self, typ: &Type) -> VarID {
-        self.variables.insert(VariableInfo {
+    pub fn add_variable(&mut self, typ: &Type, use_block_of: ExprID) -> VarID {
+        let var = self.variables.insert(VariableInfo {
             typ: typ.clone(),
             arg_index: ArgIndex::None,
             ..Default::default()
-        })
+        });
+
+        let (_, block) = self.tree.statement_and_block(use_block_of);
+        let HNodeData::Block { ref mut declared, .. } = self.tree.get_mut(block)
+            else { unreachable!() };
+        declared.insert(var);
+
+        var
     }
 }
 

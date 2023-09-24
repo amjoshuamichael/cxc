@@ -47,16 +47,15 @@ pub fn add_drops(hlr: &mut FuncRep) {
             continue;
         }
 
-        let (first_use, _) = hlr.tree
+        let (block, _) = hlr.tree
             .iter()
             .find(|(_, node)| {
-                matches!(node, HNodeData::Ident { var_id: other_id, .. } if other_id == &var_id)
+                let HNodeData::Block { declared, .. } = node else { return false };
+                declared.contains(&var_id)
             }).unwrap();
-        let (stmt, block) = hlr.tree.statement_and_block(first_use);
         let HNodeData::Block { stmts, .. } = hlr.tree.get(block) else { unreachable!() };
         let last_return = stmts
             .iter()
-            .skip_while(|&&s| s != stmt)
             .find(|&&s| matches!(hlr.tree.get(s), HNodeData::Return { .. }));
 
         let drop_call = CallGen {

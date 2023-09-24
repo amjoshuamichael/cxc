@@ -30,8 +30,6 @@ Vec<T> = {
 
         self.len = self.len + u64 1
     }
-
-    
 }
 
 <T> Vec<T>:. {
@@ -45,13 +43,37 @@ Vec<T> = {
 
 <T> Vec<T>:: {
     new(); Vec<T> {
-        new_vec: Vec<T> = Vec<T> {
+        ; Vec<T> {
             len = u64 0,
             capacity = u64 0,
             ptr = cast<u64, &T>(u64 0),
         }
+    }
 
-        ; new_vec
+    init_with(len: u64, obj: T); Vec<T> {
+        ptr: &T = alloc<T>(len)
+
+        o := 0
+
+        @ o < len {
+            *ptr.ptr_add(o) = obj
+            
+            o = o + 1
+        }
+
+        ; Vec<T> {
+            len = len,
+            capacity = len,
+            ptr = ptr,
+        }
+    }
+
+    with_capacity(cap: u64); Vec<T> {
+        ; Vec<T> {
+            len = 0,
+            capacity = cap,
+            ptr = alloc<T>(cap),
+        }
     }
 
     default(); Vec<T> {

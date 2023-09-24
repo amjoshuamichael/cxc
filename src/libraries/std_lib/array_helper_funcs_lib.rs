@@ -72,23 +72,24 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
 }
 
 fn derive_array_len_m(_: &CompData, typ: Type) -> Option<FuncCode> {
-    let derefed_typ = typ.clone().complete_deref();
+    let typ = typ.get_deref().unwrap_or(typ);
     let TypeEnum::Array(ArrayType { count, .. }) =
-        derefed_typ.as_type_enum() else { return None };
+        typ.as_type_enum() else { return None };
 
+    let type_spec = type_to_type_spec(typ.get_ref().clone());
     Some(FuncCode {
         name: VarName::from("len"),
         ret_type: TypeSpec::Int(64),
+        relation: TypeSpecRelation::MethodOf(type_spec.clone()),
         args: vec![VarDecl {
             name: "self".into(),
-            type_spec: type_to_type_spec(typ.clone()),
+            type_spec,
         }],
         generic_count: 0,
         code: Expr::TypedValue(
             TypeSpec::Int(64), 
             Box::new(Expr::Number(*count as u64))
         ).wrap_in_block(),
-        relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
     })
 }

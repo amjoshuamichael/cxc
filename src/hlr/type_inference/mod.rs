@@ -67,6 +67,7 @@ enum KnownBy {
     Condition,
     VarType,
     GlobalType,
+    Index,
 }
 
 #[derive(PartialEq, Eq, Debug, Default)]
@@ -464,12 +465,15 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Set { lhs, rhs, .. } => {
                 graph.join(*lhs, *rhs);
             },
+            HNodeData::Index { index, .. } => {
+                graph.mark_known(*index, Type::u(64), KnownBy::Index);
+                graph.add_to_inferables_list(expr_id);
+            },
             HNodeData::Transform { .. } |
             HNodeData::Member { .. } |
             HNodeData::IndirectCall { .. } |
             HNodeData::Number { .. } |
             HNodeData::Float { .. } |
-            HNodeData::Index { .. } |
             HNodeData::Bool { .. } => {
                 graph.add_to_inferables_list(expr_id);
             }
@@ -508,9 +512,8 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
         if let Some((known_type, known_by)) = node.known {
             if constraints.is.is_known() && known_type != constraints.is {
+                dbg!(&constraints);
                 dbg!(&known_by);
-                dbg!(&known_type);
-                dbg!(&constraints.is);
                 panic!() // TODO: error
             }
 

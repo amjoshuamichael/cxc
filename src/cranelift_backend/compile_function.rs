@@ -106,20 +106,20 @@ pub fn compile(
     make_stack_allocas(&mut fcs);
     make_blocks(&mut fcs, &lines);
 
-    #[cfg(feature = "xc-debug")]
+    #[cfg(feature = "mir-debug")]
     let mut l = 0;
 
     for line in lines {
         compile_mline(&mut fcs, line);
 
-        #[cfg(feature = "xc-debug")]
+        #[cfg(feature = "mir-debug")]
         {
             print!("{:03}, ", l);
             l += 1;
         }
     }
 
-    #[cfg(feature = "xc-debug")]
+    #[cfg(feature = "mir-debug")]
     println!();
 }
 
@@ -703,7 +703,10 @@ fn compile_unarop(
     match ret_type.as_type_enum() {
         TypeEnum::Bool => {
             match op {
-                Not => fcs.builder.ins().bnot(hs),
+                Not => {
+                    let true_ = fcs.builder.ins().iconst(cl_types::I8, 1);
+                    fcs.builder.ins().bxor(hs, true_)
+                }
                 _ => unreachable!(),
             }
         }
@@ -735,7 +738,7 @@ fn compile_binop(
                 Minus => ins.isub(l, r),
                 Multiplier => ins.imul(l, r),
                 Divider => ins.udiv(l, r),
-                Modulus => ins.iadd(l, r),
+                Modulus => ins.urem(l, r),
                 Equal => ins.icmp(IntCC::Equal, l, r),
                 Inequal => ins.icmp(IntCC::NotEqual, l, r),
                 GrtrThan if signed => ins.icmp(IntCC::SignedGreaterThan, l, r),
@@ -751,6 +754,8 @@ fn compile_binop(
                 BitAND => ins.band(l, r),
                 BitOR => ins.bor(l, r),
                 BitXOR => ins.bxor(l, r),
+                And => ins.band(l, r),
+                Or => ins.band(l, r),
                 _ => todo!(),
             }
         }
@@ -818,11 +823,8 @@ fn compile_lit(fcs: &mut FunctionCompilationState, lit: &MLit) -> CLValue {
 
 fn load_memloc(fcs: &mut FunctionCompilationState, memloc: &MMemLoc) -> Vec<CLValue> {
     match memloc {
-        MMemLoc::Var(id) => {
-            dbg!(&id);
-            fcs.variables[*id].load(&mut fcs.builder)
-        }
-        MMemLoc::Reg(reg) => fcs.registers[dbg!(&reg)].clone(),
+        MMemLoc::Var(id) => fcs.variables[*id].load(&mut fcs.builder),
+        MMemLoc::Reg(reg) => fcs.registers[&reg].clone(),
         MMemLoc::Global(global) => vec![fcs.used_globals[global]],
     }
 }
@@ -831,7 +833,6 @@ fn get_addr(fcs: &mut FunctionCompilationState, addr: &MAddr, offset: u32) -> CL
     match addr {
         MAddr::Var(name) => fcs.variables[*name].addr(&mut fcs.builder, offset),
         MAddr::Reg(reg) => {
-            dbg!(&reg);
             let addr = fcs.addresses[&reg];
 
             if offset != 0 {

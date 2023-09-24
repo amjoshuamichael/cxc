@@ -322,7 +322,7 @@ impl Tok {
             Tok::BitXOR => Ok(Opcode::BitXOR),
             Tok::BitShiftR => Ok(Opcode::BitShiftR),
             Tok::BitShiftL => Ok(Opcode::BitShiftL),
-            Tok::AmpersandSet(2) => Ok(Opcode::BitAND),
+            Tok::AmpersandSet(2) => Ok(Opcode::And),
             Tok::Or => Ok(Opcode::Or),
             Tok::LAngle => Ok(Opcode::LessThan),
             Tok::RAngle => Ok(Opcode::GrtrThan),

@@ -26,10 +26,6 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
 
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
 
-    for (l, line) in mir.lines.iter().enumerate() {
-        // print the index with three digits of space
-        println!("{:03}: {}", l, format!("{:?}", line).replace("\n", " "));
-    }
     remove_post_return_statements(&mut mir);
 
     #[cfg(feature = "mir-debug")]

@@ -17,7 +17,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                 return;
             }
             
-            let new_struct = hlr.add_variable(&var_type);
+            let new_struct = hlr.add_variable(&var_type, structlit);
 
             let mut current_statement = structlit;
 
