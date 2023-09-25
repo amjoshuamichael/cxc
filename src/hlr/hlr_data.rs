@@ -421,6 +421,90 @@ impl<'a> FuncRep<'a> {
                 self.tree.replace(space, new_binop);
                 space
             },
+            Expr::For(f, as_, d) => {
+                let new_block = self.tree.insert(parent, HNodeData::new_block());
+                let iterating_over = self.add_expr(f, new_block);
+
+                let iterator_var = self.add_variable(&Type::unknown(), new_block);
+                let set_iterator = self.insert_quick(
+                    new_block,
+                    SetGen {
+                        lhs: iterator_var,
+                        rhs: CallGen {
+                            query: FuncQuery { 
+                                name: "into_iter".into(),
+                                relation: TypeRelation::MethodOf(Type::unknown()),
+                                generics: Vec::new(),
+                            },
+                            args: vec![Box::new(iterating_over)],
+                            sret: None,
+                            infer_types: false,
+                        }
+                    }
+                );
+                let while_ = self.tree.make_one_space(new_block);
+                let cond = self.insert_quick(
+                    while_,
+                    CallGen {
+                        query: FuncQuery { 
+                            name: "still_iterating".into(),
+                            relation: TypeRelation::MethodOf(Type::unknown()),
+                            generics: Vec::new(),
+                        },
+                        args: vec![Box::new(iterator_var)],
+                        sret: None,
+                        infer_types: false,
+                    },
+                );
+                let loop_ = self.tree.insert(parent, HNodeData::new_block());
+                let inner_do = self.add_expr(d, loop_);
+                let next = self.insert_quick(
+                    loop_,
+                    CallGen {
+                        query: FuncQuery { 
+                            name: "next".into(),
+                            relation: TypeRelation::MethodOf(Type::unknown()),
+                            generics: Vec::new(),
+                        },
+                        args: vec![Box::new(iterator_var)],
+                        sret: None,
+                        infer_types: false,
+                    },
+                );
+
+                let iterator_ident = HNodeData::Ident {
+                    var_type: Type::unknown(),
+                    var_id: iterator_var,
+                };
+                let it_alias = as_.is_some().then(|| {
+                    let member = self.tree.make_one_space(ExprID::oprhaned());
+                    let iterator_id = self.tree.insert(member, iterator_ident.clone());
+                    self.tree.replace(member, HNodeData::Member {
+                        ret_type: Type::unknown(),
+                        object: iterator_id,
+                        field: "it".into(),
+                    });
+                    member
+                });
+
+                let HNodeData::Set { lhs: initial_iterator_id, .. }
+                    = self.tree.get(set_iterator) else { unreachable!() };
+                let HNodeData::Block { stmts, aliases, withs, .. } 
+                    = self.tree.get_mut(loop_) else { unreachable!() };
+                *stmts = vec![inner_do, next];
+                if let Some(it_alias) = it_alias {
+                    aliases.insert(as_.clone().unwrap(), it_alias);
+                }
+                withs.insert(initial_iterator_id);
+                
+                self.tree.replace(while_, HNodeData::While { w: cond, d: loop_ });
+
+                let HNodeData::Block { stmts, .. } = self.tree.get_mut(new_block) 
+                    else { unreachable!() };
+                *stmts = vec![set_iterator, while_];
+                
+                new_block
+            }
             Expr::Block(stmts) => {
                 let space = self.tree.make_one_space(parent);
 

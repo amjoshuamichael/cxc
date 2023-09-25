@@ -68,7 +68,7 @@ impl Type {
                     reference_count += 1;
                 }
 
-                return base.can_transform_to(spec).map(|equivalence|
+                return base.can_transform_to(spec.clone()).map(|equivalence| {
                     Transformation {
                         steps: TransformationList::Cons(
                             TransformationStep::Ref(-reference_count), 
@@ -76,7 +76,7 @@ impl Type {
                         ),
                         generics: equivalence.generics,
                     }
-                )
+                })
             },
             TypeEnum::Struct(struct_type) => {
                 if let TypeSpec::Struct(field_specs) = spec.clone()

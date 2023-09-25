@@ -152,6 +152,7 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
 
                 mir.lines.push(MLine::Marker(after));
             }
+            HNodeData::Block { .. } => build_block(tree.get(stmt), tree, mir),
             _ => {
                 let expr = build_as_expr(tree.get(stmt), tree, mir);
                 mir.lines.push(MLine::Expr(expr));

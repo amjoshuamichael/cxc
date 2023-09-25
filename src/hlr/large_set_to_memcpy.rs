@@ -1,6 +1,6 @@
 use crate::Type;
 
-use super::{hlr_data::FuncRep, expr_tree::{HNodeData, get_ref, MemCpyGen}};
+use super::{hlr_data::FuncRep, expr_tree::{HNodeData, MemCpyGen, RefGen}};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
@@ -28,8 +28,8 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
             let new_data = hlr.insert_quick(
                 hlr.tree.parent(set_id),
                 MemCpyGen {
-                    from: get_ref(*rhs),
-                    to: get_ref(*lhs),
+                    from: RefGen(*rhs),
+                    to: RefGen(*lhs),
                     size: HNodeData::Number {
                         lit_type: Type::i(64),
                         value: min_set_size as u64,

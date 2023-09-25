@@ -49,6 +49,7 @@ pub enum Expr {
     Enclosed(Box<Expr>),
     With(Box<Expr>),
     WithAs(Box<Expr>, VarName),
+    For(Box<Expr>, Option<VarName>, Box<Expr>),
 
     Error,
 }

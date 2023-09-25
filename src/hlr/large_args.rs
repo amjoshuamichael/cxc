@@ -31,7 +31,7 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
     let new_arg_load_var = hlr.add_variable(&arg_load_arg_type, hlr.tree.root);
     let set_arg_load_var = hlr.insert_quick(
         hlr.tree.root,
-        SetVarGen {
+        SetGen {
             lhs: new_arg_load_var.clone(),
             rhs: HNodeData::Ident {
                 var_id: og_arg.clone(),
@@ -69,12 +69,12 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_id: VarID) {
                 return;
             }
 
-            hlr.replace_quick(var_id, DerefGen { 
-                object: HNodeData::Ident {
+            hlr.replace_quick(var_id, DerefGen(
+                HNodeData::Ident {
                     var_id: arg_id.clone(),
                     var_type: arg_type_reffed.clone(),
                 },
-        });
+            ));
             *var_data = hlr.tree.get(var_id);
         }
     );
@@ -95,12 +95,12 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 let arg_style = old_arg_type.arg_style();
 
                 if arg_style == ArgStyle::Pointer {
-                    args[0] = hlr.insert_quick(call_id, get_ref(arg));
+                    args[0] = hlr.insert_quick(call_id, RefGen(arg));
                 } else if let ArgStyle::Ints(..) = arg_style {
                     let _new_arg_name = format!("{}_arg_{}", query.name, a);
                     let new_arg = hlr.add_variable(&old_arg_type.raw_arg_type(), hlr.tree.root);
 
-                    hlr.insert_statement_before(call_id, SetVarGen {
+                    hlr.insert_statement_before(call_id, SetGen {
                         lhs: new_arg.clone(),
                         rhs: arg,
                     });

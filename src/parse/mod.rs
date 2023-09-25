@@ -56,7 +56,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                     lexer,
                     TypeSpecRelation::Unrelated,
                     GenericLabels::new(),
-                ))?);
+                )));
             },
             _ if lexer.move_on(Tok::TripleMinus) => {
                 let mut func_parser = lexer.split(VarName::from("comp_script"), HashMap::new());
@@ -99,7 +99,7 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                         script.types.push(type_decl);
 
                         Ok(())
-                    })?;
+                    });
                 } else {
                     let method_of = {
                         let mut method_of_parser = lexer
@@ -245,7 +245,7 @@ fn parse_block(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 }
 
 fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
-    lexer.recover(|lexer| {
+    Ok(lexer.recover(|lexer| {
         if lexer.move_on(Tok::With) {
             let with_expr = parse_expr(lexer)?;
 
@@ -272,8 +272,7 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                     type_spec: TypeSpec::Unknown,
                 }
             } else {
-                let type_spec =
-                    lexer.recover_with(parse_type_spec, vec![&Tok::Assignment])?;
+                let type_spec = lexer.recover_with(vec![&Tok::Assignment], parse_type_spec);
 
                 lexer.assert_next_tok_is(Tok::Assignment, TokName::VarAssignment)?;
 
@@ -283,16 +282,16 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
                 }
             };
 
-            let rhs = lexer.recover(parse_expr)?;
+            let rhs = lexer.recover(parse_expr);
             Ok(Expr::SetVar(var, Box::new(rhs)))
         } else if lexer.move_on(Tok::Assignment) {
-            let rhs = lexer.recover(parse_expr)?;
+            let rhs = lexer.recover(parse_expr);
 
             Ok(Expr::Set(Box::new(lhs), Box::new(rhs)))
         } else {
             Ok(lhs)
         }
-    })
+    }))
 }
 
 pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
@@ -309,8 +308,9 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         | Tok::LParen
         | Tok::LCurly => parse_math_expr(lexer),
         tok if tok.is_unary_op() => parse_math_expr(lexer),
-        _ if lexer.move_on(Tok::At) => parse_for(lexer),
+        _ if lexer.move_on(Tok::At) => parse_while(lexer),
         _ if lexer.move_on(Tok::Question) => parse_if(lexer),
+        _ if lexer.move_on(Tok::For) => parse_for(lexer),
         _ if lexer.move_on(Tok::Semicolon) => {
             Ok(Expr::Return(Box::new(parse_expr(lexer)?)))
         },
@@ -332,6 +332,20 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
 }
 
 fn parse_for(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
+    let for_ = parse_expr(ctx)?;
+    let as_ = ctx.recover_with(vec![&Tok::RCurly], |lexer| {
+        if lexer.move_on(Tok::As) {
+            Ok(Some(lexer.next_tok()?.var_name()?))
+        } else {
+            Ok(None)
+        }
+    });
+    let do_ = parse_block(ctx)?;
+
+    Ok(Expr::For(Box::new(for_), as_, Box::new(do_)))
+}
+
+fn parse_while(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
     let w = parse_expr(ctx)?;
     let d = parse_block(ctx)?;
 

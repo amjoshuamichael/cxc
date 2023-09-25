@@ -147,7 +147,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
                 Atom::Expr(Expr::StaticMethodPath(type_spec, label))
             } else {
                 let value = lexer
-                    .recover(parse_atom_after_op)?
+                    .recover(parse_atom_after_op)
                     .ok_or(ParseError::ImproperExpression)?;
                 let Atom::Expr(expr) = value 
                     else { return Err(ParseError::ImproperExpression) };
@@ -279,7 +279,7 @@ fn parse_struct_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError
 
         lexer.assert_next_tok_is(Tok::Assignment, TokName::FieldAssignment)?;
 
-        let rhs = lexer.recover_with(parse_expr, vec![&Tok::Comma])?;
+        let rhs = lexer.recover_with(vec![&Tok::Comma], parse_expr);
 
         fields.push((field_name, rhs));
 
@@ -333,7 +333,7 @@ fn parse_array_literal(lexer: &mut FuncParseContext) -> Result<Expr, ParseError>
             },
             _ => {
                 let expr =
-                    lexer.recover_with(parse_math_expr, vec![&Tok::Comma, &Tok::RBrack])?;
+                    lexer.recover_with(vec![&Tok::Comma, &Tok::RBrack], parse_math_expr);
                 expressions.push(expr);
             },
         };

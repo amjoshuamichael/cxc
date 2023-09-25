@@ -1,7 +1,7 @@
 use crate::Type;
 
 use super::{
-    expr_tree::{MemberGen, HNodeData, SetVarGen},
+    expr_tree::{MemberGen, HNodeData, SetGen},
     hlr_data::FuncRep,
 };
 
@@ -25,7 +25,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                 current_statement = hlr
                     .insert_statement_before(
                         current_statement,
-                        SetVarGen {
+                        SetGen {
                             lhs: MemberGen {
                                 object: new_struct.clone(),
                                 field: field_name.clone(),

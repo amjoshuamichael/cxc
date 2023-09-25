@@ -482,4 +482,14 @@ impl HNodeData {
             initialize: InitOpts::NoFill,
         }
     }
+
+    pub fn new_block() -> Self {
+        HNodeData::Block {
+            ret_type: Type::void(),
+            stmts: Vec::new(),
+            declared: HashSet::new(),
+            aliases: HashMap::new(),
+            withs: HashSet::new(),
+        }
+    }
 }

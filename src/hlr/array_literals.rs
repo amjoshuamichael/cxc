@@ -1,7 +1,7 @@
 use crate::{Type, TypeEnum, ArrayType};
 
 use super::{
-    expr_tree::{HNodeData, SetVarGen, IndexGen},
+    expr_tree::{HNodeData, SetGen, IndexGen},
     hlr_data::FuncRep,
 };
 
@@ -22,7 +22,7 @@ pub fn array_literals(hlr: &mut FuncRep) {
                 current_statement = hlr
                     .insert_statement_before(
                         current_statement,
-                        SetVarGen {
+                        SetGen {
                             lhs: IndexGen {
                                 object: new_array.clone(),
                                 index: HNodeData::Number {

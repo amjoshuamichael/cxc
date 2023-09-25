@@ -775,15 +775,10 @@ fn compile_binop(
                 _ => todo!(),
             }
         },
-        TypeEnum::Ref(RefType { base }) => {
+        TypeEnum::Ref(RefType { .. }) => {
             match op {
-                Plus => {
-                    let size = base.size();
-                    let size = ins.iconst(cl_types::I64, size as i64);
-                    let proper_add = fcs.builder.ins().imul(r, size);
-                    fcs.builder.ins().iadd(l, proper_add)
-                }
-                _ => todo!(),
+                Inequal => ins.icmp(IntCC::NotEqual, l, r ),
+                _ => todo!("{op:?}"),
             }
         }
         _ => todo!("{left_type:?}"),

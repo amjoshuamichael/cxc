@@ -207,6 +207,8 @@ pub enum Tok {
     Colon,
     #[token("@")]
     At,
+    #[token("for")]
+    For,
 
     #[token("with")]
     With,
@@ -425,6 +427,7 @@ impl ToString for Tok {
             At => "@",
             With => "with",
             As => "as",
+            For => "for",
             ColonDot => ":.",
             DoubleColon => "::",
             LParen => "(",

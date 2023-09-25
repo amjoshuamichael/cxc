@@ -3,7 +3,7 @@ use crate::{
     errors::CResultMany, typ::can_transform::TransformationStep, VarName, Type, Field, TypeEnum, ArrayType,
 };
 
-use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, get_ref}, hlr_data::FuncRep};
+use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen}, hlr_data::FuncRep};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
@@ -44,14 +44,14 @@ pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
                             for _ in 0..count {
                                 *hs = hlr.insert_quick(
                                     transform_parent,
-                                    RefGen { object: *hs },
+                                    RefGen(*hs),
                                 );
                             }
                         } else {
                             for _ in 0..(-count) {
                                 *hs = hlr.insert_quick(
                                     transform_parent,
-                                    DerefGen { object: *hs },
+                                    DerefGen(*hs),
                                 );
                             }
                         }
@@ -112,7 +112,7 @@ pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
                                     Field { inherited: true, name: "len".into(), typ: Type::u(64) },
                                 ]),
                                 fields: vec![
-                                    ("ptr".into(), get_ref(hlr.tree.get(*hs))),
+                                    ("ptr".into(), Box::new(RefGen(hlr.tree.get(*hs)))),
                                     (
                                         "len".into(), 
                                         Box::new(HNodeData::Number { 

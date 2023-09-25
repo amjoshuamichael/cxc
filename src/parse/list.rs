@@ -31,7 +31,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
                         break;
                     }
 
-                    list.push(lexer.recover_with(&parser, vec![&separator, &closer])?)
+                    list.push(lexer.recover_with(vec![&separator, &closer], &parser))
                 },
                 s if s == &closer => break,
                 got => {
@@ -47,7 +47,7 @@ pub fn parse_list<T: Default + Clone, O: Errable>(
                     lexer.next_tok()?;
                     break;
                 },
-                _ => list.push(lexer.recover(&parser)?),
+                _ => list.push(lexer.recover(&parser)),
             }
         }
     }

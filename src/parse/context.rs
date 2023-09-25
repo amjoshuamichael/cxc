@@ -156,15 +156,15 @@ impl<N: Default + Clone> ParseContext<N> {
     pub fn recover<O: Errable>(
         &mut self,
         parser: impl FnMut(&mut Self) -> ParseResult<O>,
-    ) -> ParseResult<O> {
-        self.recover_with(parser, vec![&Tok::Return])
+    ) -> O {
+        self.recover_with(vec![&Tok::Return], parser)
     }
 
     pub fn recover_with<O: Errable>(
         &mut self,
-        mut parser: impl FnMut(&mut Self) -> ParseResult<O>,
         skip_until: Vec<&Tok>,
-    ) -> ParseResult<O> {
+        mut parser: impl FnMut(&mut Self) -> ParseResult<O>,
+    ) -> O {
         let next_non_whitespace_index = self
             .tokens
             .iter()
@@ -178,7 +178,7 @@ impl<N: Default + Clone> ParseContext<N> {
         let beginning_scope = self.scope.val();
 
         match parser(self) {
-            Ok(expr) => Ok(expr),
+            Ok(expr) => expr,
             Err(error) => {
                 #[cfg(feature = "xc-debug")]
                 println!("...recovering...");
@@ -191,10 +191,8 @@ impl<N: Default + Clone> ParseContext<N> {
                 self.tok_pos.dec();
 
                 loop {
-                    let next_token = &self
-                        .tokens
-                        .get(self.tok_pos.val())
-                        .ok_or(ParseError::UnexpectedEndOfFile)?;
+                    let Some(next_token) = &self.tokens.get(self.tok_pos.val()) 
+                        else { break };
 
                     if skip_until.contains(&next_token) && self.scope.val() == beginning_scope {
                         break;
@@ -218,6 +216,8 @@ impl<N: Default + Clone> ParseContext<N> {
                     let _ = self.next_tok();
                 }
 
+                // TODO: throw an UnexpectedEndOfFile if we are at the end of the fil
+
                 let tok_end = self.tok_pos.val().min(self.spans.len() - 1);
                 let char_end = self.spans[tok_end].1 - 1;
 
@@ -239,7 +239,7 @@ impl<N: Default + Clone> ParseContext<N> {
 
                 self.errors.deref_mut().unwrap().push(spanned);
 
-                Ok(O::err())
+                O::err()
             },
         }
     }

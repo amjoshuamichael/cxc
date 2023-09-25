@@ -73,12 +73,12 @@ impl NodeDataGen for VarID {
 }
 
 #[derive(Debug, Default)]
-pub struct SetVarGen<T: NodeDataGen, U: NodeDataGen> {
+pub struct SetGen<T: NodeDataGen, U: NodeDataGen> {
     pub lhs: T,
     pub rhs: U,
 }
 
-impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for SetVarGen<T, U> {
+impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for SetGen<T, U> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
@@ -152,11 +152,23 @@ impl<T: NodeDataGen> NodeDataGen for UnarOpGen<T> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CallGen {
     pub query: FuncQuery,
     pub args: Vec<Box<dyn NodeDataGen>>,
     pub sret: Option<Box<dyn NodeDataGen>>,
+    pub infer_types: bool,
+}
+
+impl Default for CallGen {
+    fn default() -> Self {
+        CallGen {
+            query: FuncQuery::default(),
+            args: Vec::default(),
+            sret: None,
+            infer_types: true,
+        }
+    }
 }
 
 impl NodeDataGen for CallGen {
@@ -171,13 +183,17 @@ impl NodeDataGen for CallGen {
 
         let sret = self.sret.as_ref().map(|sret| sret.add_to_expr_tree(hlr, space));
 
-        let func_type = hlr.comp_data.get_func_type(&self.query).unwrap();
+        let ret_type = if self.infer_types {
+            hlr.comp_data.get_func_type(&self.query).unwrap().ret
+        } else {
+            Type::unknown()
+        };
 
         hlr.tree.replace(
             space,
             HNodeData::Call {
                 query: self.query.clone(),
-                ret_type: func_type.ret,
+                ret_type,
                 a: args,
                 sret,
             },
@@ -320,15 +336,13 @@ impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for IndexGen<T, U> {
 }
 
 #[derive(Debug, Default)]
-pub struct RefGen<T: NodeDataGen> {
-    pub object: T,
-}
+pub struct RefGen<T: NodeDataGen>(pub T);
 
 impl<T: NodeDataGen> NodeDataGen for RefGen<T> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
-        let object = self.object.add_to_expr_tree(hlr, space);
+        let object = self.0.add_to_expr_tree(hlr, space);
         let obj_typ = hlr.tree.get(object).ret_type();
         let obj_typ_ref = obj_typ.get_ref();
         
@@ -345,22 +359,14 @@ impl<T: NodeDataGen> NodeDataGen for RefGen<T> {
     }
 }
 
-pub fn get_ref<T: NodeDataGen + 'static>(node_data_gen: T) -> Box<RefGen<T>> {
-    Box::new(RefGen {
-        object: node_data_gen,
-    })
-}
-
 #[derive(Debug, Default)]
-pub struct DerefGen<T: NodeDataGen> {
-    pub object: T,
-}
+pub struct DerefGen<T: NodeDataGen>(pub T);
 
 impl<T: NodeDataGen> NodeDataGen for DerefGen<T> {
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let space = hlr.tree.make_one_space(parent);
 
-        let object = self.object.add_to_expr_tree(hlr, space);
+        let object = self.0.add_to_expr_tree(hlr, space);
         let obj_typ = hlr.tree.get(object).ret_type();
         let obj_typ_deref = obj_typ.get_deref().unwrap();
 

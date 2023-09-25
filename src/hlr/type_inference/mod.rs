@@ -240,7 +240,8 @@ enum InferenceSteps {
     Start = 0,
     FillStructLiterals = 1,
     FillIntsAndFloats = 2,
-    Failure = 3,
+    FillFullStructType = 3,
+    Failure = 4,
 }
 
 #[cfg_attr(debug_assertions, inline(never))]
@@ -254,7 +255,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
     loop {
         match type_solving_round(&mut infer_map, &hlr.comp_data) {
-            Err(_) => break,
+            Err(_) => panic!(),
             _ => {},
         }
 
@@ -981,6 +982,10 @@ fn fill_in_call(
     func_query: FuncQuery,
     call_id: &ExprID,
 ) -> TResult<bool> {
+    if let Some(inner_type) = func_query.relation.inner_type() && inner_type.is_unknown() {
+        return Ok(false);
+    }
+
     // TODO: this is a hack
     let derive_code_storage;
 
@@ -1107,9 +1112,10 @@ fn fill_in_call(
             constraint.acts_on.insert(transform_inferable_index);
             infer_map.inferable_index_to_constraint_index.push(constraint_index);
 
+            let relation_type = code.relation.inner_type().unwrap();
             constraint.connections.insert(
                 InferableConnection {
-                    spec: code.relation.inner_type().unwrap().clone(),
+                    spec: relation_type.clone(),
                     gen_params: call_generic_constraints.clone(),
                     method_of: None,
                 }
@@ -1157,7 +1163,8 @@ fn advance_inference_step(
     *step = match step {
         InferenceSteps::Start => InferenceSteps::FillStructLiterals,
         InferenceSteps::FillStructLiterals => InferenceSteps::FillIntsAndFloats,
-        InferenceSteps::FillIntsAndFloats => InferenceSteps::Failure,
+        InferenceSteps::FillIntsAndFloats => InferenceSteps::FillFullStructType,
+        InferenceSteps::FillFullStructType => InferenceSteps::Failure,
         InferenceSteps::Failure => InferenceSteps::Failure, // should be caught by infer_types
     };
 
@@ -1176,14 +1183,7 @@ fn advance_inference_step(
 
             fulfilled_usages.push(constraint_index);
 
-            let only_set_members = constraints.is.is_known();
-
-            let has_fields = std::mem::replace(
-                &mut constraints.usages.has_fields, 
-                IndexMap::default()
-            );
-
-            for (name, ids) in &has_fields {
+            for (name, ids) in &constraints.usages.has_fields.clone() {
                 let field_constraint = infer_map.join_constraints(
                     ids.iter().map(|id| infer_map.constraint_index_of(*id)).collect()
                 );
@@ -1195,25 +1195,6 @@ fn advance_inference_step(
                             name.clone()
                         ),
                         gen_params: vec![constraint_index],
-                        method_of: None,
-                    }
-                );
-            }
-            
-            if !only_set_members {
-                let mut struct_fields = Vec::<(bool, VarName, TypeSpec)>::new();
-                let mut gen_params = Vec::<ConstraintId>::new();
-
-                for (f, (name, ids)) in has_fields.into_iter().enumerate() {
-                    let field_constraint_index = infer_map.constraint_index_of(ids[0]);
-                    struct_fields.push((false, name.clone(), TypeSpec::GenParam(f as u8)));
-                    gen_params.push(field_constraint_index);
-                }
-
-                infer_map.constraints[constraint_index].connections.insert(
-                    InferableConnection {
-                        spec: TypeSpec::Struct(struct_fields),
-                        gen_params,
                         method_of: None,
                     }
                 );
@@ -1232,6 +1213,41 @@ fn advance_inference_step(
             } else { 
                 continue;
             };
+
+            fulfilled_usages.push(constraint_index);
+        }
+    }
+
+    if *step >= InferenceSteps::FillFullStructType {
+        for constraint_index in 0..infer_map.constraints.len() {
+            let constraints = &mut infer_map.constraints[constraint_index];
+
+            if constraints.usages.has_fields.is_empty() && 
+                constraints.usages.is_struct.is_empty() {
+                continue;
+            }
+
+            let has_fields = std::mem::replace(
+                &mut constraints.usages.has_fields, 
+                IndexMap::default()
+            );
+
+            let mut struct_fields = Vec::<(bool, VarName, TypeSpec)>::new();
+            let mut gen_params = Vec::<ConstraintId>::new();
+
+            for (f, (name, ids)) in has_fields.into_iter().enumerate() {
+                let field_constraint_index = infer_map.constraint_index_of(ids[0]);
+                struct_fields.push((false, name.clone(), TypeSpec::GenParam(f as u8)));
+                gen_params.push(field_constraint_index);
+            }
+
+            infer_map.constraints[constraint_index].connections.insert(
+                InferableConnection {
+                    spec: TypeSpec::Struct(struct_fields),
+                    gen_params,
+                    method_of: None,
+                }
+            );
 
             fulfilled_usages.push(constraint_index);
         }

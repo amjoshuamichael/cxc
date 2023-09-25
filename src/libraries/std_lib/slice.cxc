@@ -11,8 +11,11 @@
 
     into_iter(); SliceIter<T> {
         ; SliceIter<T> {
-            ptr = self.len,
-            end = self.ptr.ptr_add(self.len),
+            it = *self.ptr,
+            inner = {
+                ptr = self.ptr,
+                end = self.ptr.ptr_add(self.len),
+            },
         }
     }
 
@@ -29,15 +32,16 @@ SliceIter<T> = {
         ptr: &T,
         end: &T,
     },
-    it: &T,
+    it: T,
 }
 
-<T> SliceIter<T>:. {
-    none_remaining(); bool {
-        ; self.ptr == self.end
+<T> &SliceIter<T>:. {
+    still_iterating(); bool {
+        ; self.inner.ptr != self.inner.end
     }
 
     next() {
-        self.it = self.it.ptr_add(1)
+        self.inner.ptr = self.inner.ptr.ptr_add(1)
+        self.it = *self.inner.ptr
     }
 }

@@ -1,7 +1,7 @@
 use crate::{lex::VarName, parse::InitOpts, TypeEnum, TypeRelation, FuncQuery, typ::Field};
 
 use super::{
-    expr_tree::{CallGen, MemberGen, HNodeData, SetVarGen},
+    expr_tree::{CallGen, MemberGen, HNodeData, SetGen},
     hlr_data::FuncRep,
 };
 
@@ -29,7 +29,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
 
             hlr.insert_statement_before(
                 structlit_id,
-                SetVarGen {
+                SetGen {
                     lhs: new_default.clone(),
                     rhs: CallGen {
                         query: FuncQuery {

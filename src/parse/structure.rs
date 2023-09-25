@@ -276,7 +276,7 @@ pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 
         lexer.assert_next_tok_is(Tok::Colon, TokName::Colon)?;
 
-        let typ = lexer.recover(parse_type)?;
+        let typ = lexer.recover(parse_type);
 
         Ok((inherited, field_name, typ))
     }
