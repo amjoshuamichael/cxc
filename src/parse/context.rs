@@ -205,12 +205,9 @@ impl<N: Default + Clone> ParseContext<N> {
                     self.tok_pos.inc();
                 }
 
-                while self.tokens[self.tok_pos.val()].is_whitespace() {
-                    self.tok_pos.dec();
-                }
-
                 // helps break out of infinite loops.
-                if starting_pos >= self.tok_pos.val() {
+                if starting_pos >= self.tok_pos.val() 
+                    || self.tokens.len() <= self.tok_pos.val() {
                     // we just want to move forward, we don't care if we hit the end of
                     // the file
                     let _ = self.next_tok();

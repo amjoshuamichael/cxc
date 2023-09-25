@@ -43,7 +43,7 @@ fn basic_it_for() {
 }
 
 #[test]
-fn basic_vec_for() {
+fn vec_for() {
     xc_test!(
         use StdLib;
         r#"
@@ -64,5 +64,37 @@ fn basic_vec_for() {
         }
         "#;
         135
+    );
+}
+
+#[test]
+fn break_inner_with_as() {
+    xc_test!(
+        use StdLib;
+        r#"
+        ; i32 {
+            numbers: [5]i32 = [1, 2, 3, 40, 4]
+            bools: [4]bool = [true, true, false, true]
+
+            sum: i32 = 0
+
+            for numbers as number {
+                ? number == 40 {
+                    ;:break
+                }
+
+                for bools as a_bool {
+                    ? a_bool {
+                        sum = sum + number
+                    } : {
+                        ;:continue
+                    }
+                }
+            }
+
+            ; sum
+        }
+        "#;
+        18
     );
 }

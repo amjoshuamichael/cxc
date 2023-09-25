@@ -81,10 +81,26 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
                 let block_id = mir.block_labels[&name];
 
                 mir.lines.push(MLine::Goto(block_id));
-                mir.lines.push(MLine::Marker(mir.block_labels[&name]));
+                mir.lines.push(MLine::Marker(block_id));
             },
             HNodeData::Goto(name) => {
-                mir.lines.push(MLine::Goto(mir.block_labels[&name]));
+                let mut block = tree.block_of(stmt);
+                loop {
+                    let HNodeData::Block { goto_labels, .. } = tree.get_ref(block)
+                        else { unreachable!() };
+
+                    dbg!(&goto_labels);
+                    if let Some(goto_label_id) = goto_labels.get(&name) {
+                        let block_id = mir.block_labels[goto_label_id];
+                        mir.lines.push(MLine::Goto(block_id));
+                        break;
+                    }
+
+                    let parent_block = tree.statement_and_block(block).1;
+
+                    if parent_block == block { panic!() }
+                    block = parent_block;
+                }
             }
             HNodeData::While { w, d } => {
                 let beginwhile = mir.new_block_id();

@@ -20,6 +20,7 @@ pub struct FuncRep<'a> {
     pub generics: Vec<Type>,
     pub ret_type: Type,
     pub variables: SlotMap<VarID, VariableInfo>,
+    pub goto_labels: SlotMap<GotoLabelID, ExprID>,
     pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
 }
 
@@ -30,7 +31,10 @@ impl<'a> ToString for FuncRep<'a> {
     }
 }
 
-slotmap::new_key_type! { pub struct VarID; }
+slotmap::new_key_type! { 
+    pub struct VarID; 
+    pub struct GotoLabelID; 
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct VariableInfo {
@@ -80,6 +84,7 @@ impl<'a> FuncRep<'a> {
             tree: ExprTree::default(),
             comp_data,
             variables: SlotMap::with_key(),
+            goto_labels: SlotMap::with_key(),
             specified_dependencies: HashSet::new(),
         };
 
@@ -103,6 +108,7 @@ impl<'a> FuncRep<'a> {
                 declared: new.variables.keys().collect(), 
                 aliases: HashMap::new(),
                 withs: HashSet::new(),
+                goto_labels: HashMap::new(),
             }
         );
 
@@ -315,7 +321,10 @@ impl<'a> FuncRep<'a> {
                 }
             },
             Expr::Label(name) => {
-                self.tree.insert(parent, HNodeData::GotoLabel(name.clone()))
+                let space = self.tree.make_one_space(parent);
+                let label = self.add_goto_label(name.clone(), space);
+                self.tree.replace(space, HNodeData::GotoLabel(label));
+                space
             },
             Expr::SetVar(decl, e) => {
                 let space = self.tree.make_one_space(parent);
@@ -411,15 +420,42 @@ impl<'a> FuncRep<'a> {
                 space
             },
             Expr::While(w, d) => {
-                let space = self.tree.make_one_space(parent);
+                let surrounding_block = self.tree.insert(parent, HNodeData::new_block());
+                let while_space = self.tree.make_one_space(surrounding_block);
 
+                let d = self.add_expr(&**d, while_space);
                 let new_binop = HNodeData::While {
-                    w: self.add_expr(&**w, space),
-                    d: self.add_expr(&**d, space),
+                    w: self.add_expr(&**w, while_space),
+                    d,
                 };
 
-                self.tree.replace(space, new_binop);
-                space
+                self.tree.replace(while_space, new_binop);
+
+                let break_label = self.add_goto_label("break".into(), surrounding_block);
+                let break_ = self.tree.insert(
+                    surrounding_block, 
+                    HNodeData::GotoLabel(break_label),
+                );
+
+                let HNodeData::Block { stmts, .. } = self.tree.get_mut(surrounding_block)
+                    else { unreachable!() };
+
+                *stmts = vec![while_space, break_]; 
+
+                if matches!(self.tree.get_ref(d), HNodeData::Block { .. }) {
+                    let continue_label = self.add_goto_label("continue".into(), d);
+                    let continue_ = self.tree.insert(
+                        parent, 
+                        HNodeData::GotoLabel(continue_label),
+                    );
+
+                    let HNodeData::Block { stmts, .. } = self.tree.get_mut(d)
+                        else { unreachable!() };
+
+                    stmts.push(continue_);
+                }
+
+                surrounding_block
             },
             Expr::For(f, as_, d) => {
                 let new_block = self.tree.insert(parent, HNodeData::new_block());
@@ -456,7 +492,7 @@ impl<'a> FuncRep<'a> {
                         infer_types: false,
                     },
                 );
-                let loop_ = self.tree.insert(parent, HNodeData::new_block());
+                let loop_ = self.tree.insert(while_, HNodeData::new_block());
                 let inner_do = self.add_expr(d, loop_);
                 let next = self.insert_quick(
                     loop_,
@@ -487,11 +523,14 @@ impl<'a> FuncRep<'a> {
                     member
                 });
 
+                let continue_ = self.add_expr(&Expr::Label("continue".into()), loop_);
+                let break_ = self.add_expr(&Expr::Label("break".into()), new_block);
+
                 let HNodeData::Set { lhs: initial_iterator_id, .. }
                     = self.tree.get(set_iterator) else { unreachable!() };
                 let HNodeData::Block { stmts, aliases, withs, .. } 
                     = self.tree.get_mut(loop_) else { unreachable!() };
-                *stmts = vec![inner_do, next];
+                *stmts = vec![inner_do, continue_, next];
                 if let Some(it_alias) = it_alias {
                     aliases.insert(as_.clone().unwrap(), it_alias);
                 }
@@ -501,20 +540,15 @@ impl<'a> FuncRep<'a> {
 
                 let HNodeData::Block { stmts, .. } = self.tree.get_mut(new_block) 
                     else { unreachable!() };
-                *stmts = vec![set_iterator, while_];
+                *stmts = vec![set_iterator, while_, break_];
+
                 
                 new_block
             }
             Expr::Block(stmts) => {
                 let space = self.tree.make_one_space(parent);
 
-                self.tree.replace(space, HNodeData::Block {
-                    ret_type: Type::unknown(),
-                    stmts: Vec::new(),
-                    declared: HashSet::new(),
-                    aliases: HashMap::new(),
-                    withs: HashSet::new(),
-                });
+                self.tree.replace(space, HNodeData::new_block());
 
                 let mut statment_ids = Vec::new();
 

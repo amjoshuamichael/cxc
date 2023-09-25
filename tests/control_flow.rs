@@ -113,3 +113,46 @@ fn scope() {
         30
     )
 }
+
+#[test]
+fn while_continue() {
+    xc_test!(
+        "; i32 {
+            x := 0
+            sum := 0
+
+            @ x < 30 {
+                x = x + 1
+
+                ? x % 2 == 0 {
+                    ;:continue
+                }
+
+                sum = sum + x
+            }
+
+            ; x
+        }";
+        30
+    );
+}
+
+#[test]
+fn while_break() {
+    xc_test!(
+        "; i32 {
+            x := 0
+
+            @ x < 50 {
+                ? x >= 30 {
+                    ;:break
+                }
+                
+                x = x + 1
+            }
+
+            ; x
+        }";
+        30
+    );
+}

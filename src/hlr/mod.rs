@@ -56,7 +56,7 @@ pub fn hlr(
 
     assert!(matches!(code.code, Expr::Block(_)), "hlr input must be a block");
 
-    let mut output = FuncRep::from_code(code, comp_data, info)?;
+    let mut output = FuncRep::from_code(code, comp_data, info.clone())?;
 
     #[cfg(feature = "xc-debug")]
     println!("{}", &output.to_string());
@@ -82,6 +82,10 @@ pub fn hlr(
     {
         println!("{}", &output.to_string());
         println!("{:?}", &output.variables);
+    }
+
+    if &info.name == &"main".into() {
+        dbg!(&output.tree);
     }
   
     Ok(output.output())

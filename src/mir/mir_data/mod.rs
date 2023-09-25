@@ -2,7 +2,7 @@ use std::{collections::{BTreeMap, HashMap}, fmt::{Formatter, Display}, fmt};
 
 use slotmap::SlotMap;
 
-use crate::{hlr::hlr_data::{VariableInfo, ArgIndex, VarID}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
+use crate::{hlr::hlr_data::{VariableInfo, ArgIndex, VarID, GotoLabelID}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
 
 #[derive(Debug)]
 pub struct MIR {
@@ -11,7 +11,7 @@ pub struct MIR {
     pub dependencies: HashMap<FuncQuery, FuncId>,
     pub func_type: FuncType,
     pub block_count: u32,
-    pub block_labels: HashMap<VarName, u32>,
+    pub block_labels: HashMap<GotoLabelID, u32>,
     pub reg_count: u32,
     pub addr_reg_count: u32,
     pub reg_types: BTreeMap<MReg, Type>,

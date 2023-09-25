@@ -1,6 +1,6 @@
 use crate::errors::CResultMany;
-use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex, VarID};
-use crate::{Type};
+use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex, VarID, GotoLabelID};
+use crate::{Type, VarName};
 
 use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
 use super::{ExprNode, HNodeData::*};
@@ -118,11 +118,19 @@ impl ExprTree {
 
         let parent = self.parent(of);
 
-        if matches!(self.get(parent), Block { .. }) {
+        if matches!(self.get_ref(parent), Block { .. }) {
             (of, parent)
         } else {
             self.statement_and_block(parent)
         }
+    }
+
+    pub fn block_of(&self, of: ExprID) -> ExprID {
+        if matches!(self.get_ref(of), HNodeData::Block { .. }) {
+            return of;
+        }
+
+        self.statement_and_block(of).1
     }
 
     pub fn expr_is_in_block(&self, expr: ExprID, block: ExprID) -> bool {
@@ -248,6 +256,23 @@ impl<'a> FuncRep<'a> {
         declared.insert(var);
 
         var
+    }
+
+    pub fn add_goto_label(&mut self, name: VarName, use_block_of: ExprID) -> GotoLabelID {
+        let label = self.goto_labels.insert(use_block_of);
+
+        let block = if matches!(self.tree.get_ref(use_block_of), HNodeData::Block { .. }) {
+            use_block_of
+        } else {
+            self.tree.statement_and_block(use_block_of).1
+        };
+
+        let HNodeData::Block { ref mut goto_labels, .. } = self.tree.get_mut(block)
+            else { unreachable!() };
+        goto_labels.insert(name, label);
+        dbg!(&goto_labels);
+
+        label
     }
 }
 

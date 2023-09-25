@@ -38,3 +38,33 @@ fn goto_at_start() {
         1
     );
 }
+
+#[test]
+fn scoped_goto() {
+    xc_test!(
+        r#"
+        ; i32 {
+            x := 1
+
+            :repeat
+
+            x = x + 2
+
+            ? true { 
+                :repeat
+
+                x = x - 1
+
+                ? x < 0 {
+                    ; x
+                }
+
+                ;:repeat
+            }
+
+            ; x
+        }
+        "#;
+        -1
+    );
+}

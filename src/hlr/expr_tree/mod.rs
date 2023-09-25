@@ -6,7 +6,7 @@ use crate::typ::can_transform::TransformationList;
 use crate::{parse::*, FuncQuery};
 use crate::Type;
 use crate::unit::Global;
-use super::hlr_data::{VarID, FuncRep};
+use super::hlr_data::{VarID, FuncRep, GotoLabelID};
 
 use std::collections::{HashSet, HashMap};
 use std::fmt::{Debug, Formatter};
@@ -67,7 +67,7 @@ impl ExprNode {
             IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
             Ident { var_id: id, .. } => format!("{}", variables[*id].name),
             AccessAlias(name) => format!("{name}"),
-            GotoLabel(name) => format!(":{name}"),
+            GotoLabel(name) => format!(":{name:?}"),
             Goto(name) => format!("{name}"),
             GlobalLoad { global, .. } => format!("global({global:?})"),
             Set { lhs, rhs, .. } => format!("{lhs:?} = {rhs:?}"),
@@ -117,7 +117,7 @@ pub enum HNodeData {
         var_id: VarID,
     },
     AccessAlias(VarName),
-    GotoLabel(VarName),
+    GotoLabel(GotoLabelID),
     Goto(VarName),
     GlobalLoad {
         var_type: Type,
@@ -186,6 +186,7 @@ pub enum HNodeData {
         declared: HashSet<VarID>,
         aliases: HashMap<VarName, ExprID>,
         withs: HashSet<ExprID>,
+        goto_labels: HashMap<VarName, GotoLabelID>,
     },
     Return {
         ret_type: Type,
@@ -257,14 +258,14 @@ impl HNodeData {
         const MAGENTA: &str = "\x1b[95m";
         const WHITE: &str = "\x1b[37m";
         match self {
-            Number { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
-            Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}"),
-            Bool { value, .. } => format!("{MAGENTA}{value}"),
+            Number { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
+            Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
+            Bool { value, .. } => format!("{MAGENTA}{value}{WHITE}"),
             Ident { var_id: id, .. } => format!("{BLUE}{}{WHITE}", hlr.variables[*id].name),
             AccessAlias(name) => format!("{BLUE}{name}{WHITE}"),
-            GotoLabel(name) => format!("{YELLOW}:{name}{WHITE}"),
-            Goto(name) => format!("{YELLOW}:{name}{WHITE}"),
-            GlobalLoad { global, .. } => format!("{BLUE}({global:?})"),
+            GotoLabel(name) => format!("{YELLOW}:{name:?}{WHITE}"),
+            Goto(name) => format!("{RED};{YELLOW}:{name}{WHITE}"),
+            GlobalLoad { global, .. } => format!("{BLUE}({global:?}){WHITE}"),
             StructLit {
                 var_type,
                 fields,
@@ -490,6 +491,7 @@ impl HNodeData {
             declared: HashSet::new(),
             aliases: HashMap::new(),
             withs: HashSet::new(),
+            goto_labels: HashMap::new(),
         }
     }
 }
