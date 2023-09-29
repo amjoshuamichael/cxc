@@ -114,7 +114,7 @@ fn build_stack_allocas(
     fcs: &mut FunctionCompilationState,
 ) {
     for (var_id, info) in fcs.mir.variables.iter() {
-        if info.arg_index != ArgIndex::None {
+        if info.is_arg_or_sret() {
             continue;
         }
 

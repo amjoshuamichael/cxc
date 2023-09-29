@@ -34,10 +34,14 @@ pub struct CraneliftBackend {
     func_counter: u32,
 }
 
+unsafe impl Send for CraneliftBackend {}
+unsafe impl Sync for CraneliftBackend {}
+
 pub struct ClFunctionData {
     ctx: codegen::Context,
     cl_func_id: ClFuncId,
     name: String,
+    func_type: FuncType,
 }
 
 impl IsBackend for CraneliftBackend {
@@ -105,7 +109,7 @@ impl IsBackend for CraneliftBackend {
 
         self.cl_function_data.insert(
             func_id, 
-            ClFunctionData { ctx, cl_func_id, name }
+            ClFunctionData { ctx, cl_func_id, name, func_type: func_info.typ.clone() }
         );
 
         if !self.func_pointers.contains_key(func_id) {
@@ -152,7 +156,7 @@ impl IsBackend for CraneliftBackend {
             if let Some(cl_data) = self.cl_function_data.get(func_id) {
                 let cl_id = cl_data.cl_func_id;
                 let address = self.module.get_finalized_function(cl_id) as *const usize;
-                self.func_pointers[func_id].set_pointer(address);
+                self.func_pointers[func_id].change(address, cl_data.func_type.clone());
             }
         }
     }

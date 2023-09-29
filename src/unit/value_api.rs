@@ -169,7 +169,7 @@ impl Unit {
                     let out: [u8; 16] = transmute(new_func());
                     Value::new_from_arr(ret_type.clone(), out)
                 },
-                ReturnStyle::MoveIntoDouble => {
+                ReturnStyle::ThroughDouble => {
                     let new_func = func_addr.downcast::<(), f64>();
                     let out: [u8; 8] = transmute(new_func());
                     Value::new_from_arr(ret_type.clone(), out)

@@ -128,8 +128,9 @@ impl Func {
         inner.code.clone()
     }
 
-    pub(crate) fn set_pointer(&self, pointer: *const usize) {
+    pub(crate) fn change(&self, pointer: *const usize, typ: FuncType) {
         let mut inner = self.inner.write().unwrap();
+        inner.typ = typ;
         inner.code = FuncCodePtr::Compiled {
             pointer: NonNull::new(pointer as *mut _),
         };
@@ -171,6 +172,9 @@ pub enum FuncCodePtr {
         pointer: *const usize,
     },
 }
+
+unsafe impl Send for FuncCodePtr {}
+unsafe impl Sync for FuncCodePtr {}
 
 impl FuncCodePtr {
     pub fn pointer(&self) -> Option<*const usize> {

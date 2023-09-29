@@ -83,10 +83,6 @@ pub fn hlr(
         println!("{}", &output.to_string());
         println!("{:?}", &output.variables);
     }
-
-    if &info.name == &"main".into() {
-        dbg!(&output.tree);
-    }
   
     Ok(output.output())
 }

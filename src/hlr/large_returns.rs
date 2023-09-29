@@ -6,7 +6,6 @@ use crate::hlr::expr_tree::*;
 use crate::lex::VarName;
 use crate::typ::ReturnStyle;
 use crate::Type;
-use crate::FuncQuery;
 
 pub fn large_returns(hlr: &mut FuncRep) {
     handle_other_calls(hlr);
@@ -18,20 +17,37 @@ fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style() {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
-        | ReturnStyle::ThroughF32F32
+        | ReturnStyle::ThroughDouble if hlr.ret_type != hlr.ret_type.raw_return_type() => {
+            return_by_small_cast(hlr, hlr.ret_type.raw_return_type());
+        },
+        ReturnStyle::ThroughF32F32
         | ReturnStyle::ThroughI32I32
         | ReturnStyle::ThroughI64I32
         | ReturnStyle::ThroughI64I64 if hlr.ret_type != hlr.ret_type.raw_return_type() => {
-            return_by_cast(hlr, hlr.ret_type.raw_return_type());
-        },
-        ReturnStyle::MoveIntoDouble => return_by_move_into_double(hlr),
+            return_by_big_cast(hlr, hlr.ret_type.raw_return_type());
+        }
         ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
         ReturnStyle::Sret => return_by_pointer(hlr),
         _ => {},
     }
 }
 
-fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
+fn return_by_small_cast(hlr: &mut FuncRep, load_as: Type) {
+    hlr.modify_many_infallible(
+        move |_, data, hlr| {
+            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
+
+            hlr.replace_quick(*to_return, DerefGen(
+                CastGen {
+                    cast: RefGen(hlr.tree.get(*to_return)),
+                    to: load_as.get_ref(),
+                }
+            ));
+        }
+    );
+}
+
+fn return_by_big_cast(hlr: &mut FuncRep, load_as: Type) {
     let casted_ret = hlr.add_variable(&load_as, hlr.tree.root);
 
     hlr.modify_many_infallible(
@@ -44,35 +60,6 @@ fn return_by_cast(hlr: &mut FuncRep, load_as: Type) {
             });
 
             hlr.replace_quick(*to_return, casted_ret.clone());
-        }
-    );
-}
-
-fn return_by_move_into_double(hlr: &mut FuncRep) {
-    let f64 = Type::f(64);
-    let casted_ret = hlr.add_variable(&f64, hlr.tree.root);
-
-    hlr.modify_many_infallible(
-        move |return_id, data, hlr| {
-            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
-
-            hlr.insert_statement_before(return_id, SetGen {
-                lhs: casted_ret.clone(),
-                rhs: CallGen {
-                    query: FuncQuery {
-                        name: VarName::from("cast"),
-                        generics: vec![hlr.ret_type.clone(), f64.clone()],
-                        ..Default::default()
-                    },
-                    args: vec![Box::new(*to_return)],
-                    ..Default::default()
-                },
-            });
-
-            *data = HNodeData::Ident {
-                var_id: casted_ret.clone(),
-                var_type: f64.clone(),
-            };
         }
     );
 }
@@ -169,9 +156,9 @@ fn handle_other_calls(hlr: &mut FuncRep) {
             match data.ret_type().return_style() {
                 ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::MoveIntoI64I64 => todo!(),
-                ReturnStyle::MoveIntoDouble => {},
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
+                | ReturnStyle::ThroughDouble
                 | ReturnStyle::ThroughI32I32
                 | ReturnStyle::ThroughF32F32
                 | ReturnStyle::ThroughI64I32

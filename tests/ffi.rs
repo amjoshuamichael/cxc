@@ -122,11 +122,20 @@ fn struct_rc_pointer() {
 }
 
 #[test]
-fn small_struct() {
+fn small_struct_i() {
     xc_test!(
         "; Point2D { ; Point2D { x = 32, y = 43 } }";
         Point2D { x: 32, y: 43 }
     )
+}
+
+#[test]
+fn small_struct_f() {
+    xc_test!(
+        use StdLib;
+        r#"; { f32, f32 } { ; { 200.0, 100.0 } }"#;
+        (200.0f32, 100.0f32)
+    );
 }
 
 #[test]
@@ -502,4 +511,5 @@ fn strings() {
         String::from("that's cray")
     )
 }
+
 

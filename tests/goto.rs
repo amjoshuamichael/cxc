@@ -1,5 +1,6 @@
 mod test_utils;
 use test_utils::xc_test;
+use cxc::library::StdLib;
 
 #[test]
 fn basic_goto() {
@@ -42,6 +43,7 @@ fn goto_at_start() {
 #[test]
 fn scoped_goto() {
     xc_test!(
+        use StdLib;
         r#"
         ; i32 {
             x := 1
@@ -50,7 +52,7 @@ fn scoped_goto() {
 
             x = x + 2
 
-            ? true { 
+            ? true {
                 :repeat
 
                 x = x - 1

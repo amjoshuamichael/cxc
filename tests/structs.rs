@@ -7,7 +7,7 @@ use test_utils::{xc_test, Numbers5, Strings4};
 fn basic_struct() {
     xc_test!(
         "
-        ; i32 {
+        main(); i32 {
             x: Point2D = { -- }
             x.x = 30
             x.y = 90

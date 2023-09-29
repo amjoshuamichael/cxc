@@ -12,7 +12,7 @@ fn basic_for() {
             sum := 0
 
             for numbers as number {
-                sum = sum + number
+                sum = sum + *number
             }
 
             ; sum
@@ -32,7 +32,7 @@ fn basic_it_for() {
             sum: i32 = 0
 
             for numbers {
-                sum = sum + it
+                sum = sum + *it
             }
 
             ; sum
@@ -57,7 +57,7 @@ fn vec_for() {
             sum := 0
 
             for numbers {
-                sum = sum + it
+                sum = sum + *it
             }
 
             ; sum
@@ -79,13 +79,13 @@ fn break_inner_with_as() {
             sum: i32 = 0
 
             for numbers as number {
-                ? number == 40 {
+                ? *number == 40 {
                     ;:break
                 }
 
                 for bools as a_bool {
-                    ? a_bool {
-                        sum = sum + number
+                    ? *a_bool {
+                        sum = sum + *number
                     } : {
                         ;:continue
                     }

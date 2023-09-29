@@ -2,7 +2,7 @@ use crate::{
     hlr::hlr_data::{FuncRep, VarID},
     lex::VarName,
     parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
-    Type, FuncQuery, typ::spec_from_type::type_to_type_spec,
+    Type, FuncQuery, typ::spec_from_type::type_to_type_spec, TypeRelation,
 };
 
 use super::{ExprID, HNodeData};
@@ -196,6 +196,36 @@ impl NodeDataGen for CallGen {
                 ret_type,
                 a: args,
                 sret,
+            },
+        );
+
+        space
+    }
+}
+
+#[derive(Debug)]
+pub struct CastGen<T: NodeDataGen> {
+    pub cast: T,
+    pub to: Type,
+}
+
+impl<T: NodeDataGen> NodeDataGen for CastGen<T> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        let space = hlr.tree.make_one_space(parent);
+        let cast = self.cast.add_to_expr_tree(hlr, space);
+        let from_type = hlr.tree.get_ref(cast).ret_type();
+
+        hlr.tree.replace(
+            space,
+            HNodeData::Call {
+                query: FuncQuery {
+                    name: "cast".into(),
+                    relation: TypeRelation::Unrelated,
+                    generics: vec![from_type, self.to.clone()],
+                },
+                ret_type: self.to.clone(),
+                a: vec![cast],
+                sret: None,
             },
         );
 

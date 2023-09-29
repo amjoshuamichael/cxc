@@ -28,6 +28,7 @@ pub struct LLVMBackend {
 pub struct LLVMFunctionData {
     func: Func,
     name: String,
+    typ: FuncType,
     pub value: FunctionValue<'static>,
 }
 
@@ -81,10 +82,11 @@ impl IsBackend for LLVMBackend {
 
         add_nescessary_attributes_to_func(&mut empty_function, &self.context, &func_info.typ);
 
-        if let Some(LLVMFunctionData { name: ref mut old_name, ref mut value, .. }) = 
+        if let Some(LLVMFunctionData { name: ref mut old_name, ref mut value, typ: ref mut old_type, .. }) = 
             self.compiled.get_mut (func_id) {
             *value = empty_function;
             *old_name = name;
+            *old_type = func_info.typ.clone();
         } else {
             self.compiled.insert(
                 func_id,
@@ -92,6 +94,7 @@ impl IsBackend for LLVMBackend {
                     func: Func::new_compiled(func_info.typ.clone()),
                     name,
                     value: empty_function,
+                    typ: func_info.typ.clone(),
                 }
             );
         }
@@ -109,9 +112,10 @@ impl IsBackend for LLVMBackend {
     }
 
     fn end_compilation_round(&mut self) {
-        for LLVMFunctionData { func, name, value: _ } in self.compiled.values() {
-            func.set_pointer(
-                self.execution_engine.get_function_address(&name).unwrap() as _
+        for LLVMFunctionData { func, name, typ, .. } in self.compiled.values() {
+            func.change(
+                self.execution_engine.get_function_address(&name).unwrap() as _,
+                typ.clone(),
             );
         }
 
@@ -240,16 +244,17 @@ impl IsBackend for LLVMBackend {
             builder.build_return(Some(&out));
         }
 
-        if let Some(LLVMFunctionData { name: ref mut old_name, ref mut value, .. }) = 
-            self.compiled.get_mut(func_id) {
+        if let Some(LLVMFunctionData { name: ref mut old_name, ref mut value, typ: ref mut old_typ, .. }) = self.compiled.get_mut(func_id) {
             *value = function;
             *old_name = name;
+            *old_typ = func_type;
         } else {
             self.compiled.insert(
                 func_id,
                 LLVMFunctionData {
                     value: function,
                     name,
+                    typ: func_type.clone(),
                     func: Func::new_external(
                         func_type.clone(),
                         function_ptr,

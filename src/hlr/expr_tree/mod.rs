@@ -261,7 +261,13 @@ impl HNodeData {
             Number { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
             Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
             Bool { value, .. } => format!("{MAGENTA}{value}{WHITE}"),
-            Ident { var_id: id, .. } => format!("{BLUE}{}{WHITE}", hlr.variables[*id].name),
+            Ident { var_id: id, .. } => {
+                if let VarName::Other(name) = &hlr.variables[*id].name {
+                    format!("{BLUE}{name}{WHITE}")
+                } else {
+                    format!("{BLUE}{id:?}{WHITE}")
+                }
+            }
             AccessAlias(name) => format!("{BLUE}{name}{WHITE}"),
             GotoLabel(name) => format!("{YELLOW}:{name:?}{WHITE}"),
             Goto(name) => format!("{RED};{YELLOW}:{name}{WHITE}"),

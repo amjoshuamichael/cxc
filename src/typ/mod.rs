@@ -258,6 +258,12 @@ impl Type {
             TypeEnum::Array(_)
         )
     }
+
+    pub fn is_ref(&self) -> bool {
+        matches!(self.as_type_enum(), TypeEnum::Ref(_))
+    }
+
+    pub fn full_name(&self) -> String { format!("{self:?}") }
 }
 
 #[derive(Default, Hash, PartialEq, Eq, PartialOrd, Clone, Ord, XcReflect)]

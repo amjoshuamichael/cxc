@@ -532,17 +532,28 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
         return;
     } 
 
-    let mut get_val_at = match operand {
+    let mut get_val_at: Box<dyn FnMut(CLType, u32) -> CLValue> = match operand {
         MOperand::Memloc(memloc) => {
             match memloc {
-                MMemLoc::Reg(_) | MMemLoc::Global(_) => todo!(),
+                MMemLoc::Reg(reg) => {
+                    let values = fcs.registers[reg].clone();
+
+                    Box::new(move |_: CLType, offset: u32| {
+                        if offset == 0 {
+                            values[0]
+                        } else {
+                            values[1]
+                        }
+                    })
+                },
+                MMemLoc::Global(_) => todo!(),
                 MMemLoc::Var(var_name) => {
                     let writeable = fcs.variables[*var_name].clone();
 
                     let fcs = &mut fcs;
-                    move |typ: CLType, offset: u32| {
+                    Box::new(move |typ: CLType, offset: u32| {
                         writeable.load_offset(&mut fcs.builder, typ, offset)
-                    }
+                    })
                 },
             }
         },
@@ -556,7 +567,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
         ReturnStyle::ThroughI64 => {
             vec![get_val_at(cl_types::I64, 0)]
         },
-        ReturnStyle::MoveIntoDouble => {
+        ReturnStyle::ThroughDouble => {
             vec![get_val_at(cl_types::F64, 0)]
         },
         ReturnStyle::ThroughI32I32 => {
@@ -573,6 +584,8 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
         },
         _ => unreachable!("{return_style:?}"),
     };
+
+    std::mem::drop(get_val_at);
 
     fcs.builder.ins().return_(&*ret);
 }
@@ -625,17 +638,17 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
             let all_args: Vec<CLValue> = sret.into_iter().chain(a).collect();
 
             let call_inst = match f {
-                MCallable::Func(info) => {
-                    if let Some(func_ref) = fcs.used_functions.get(*info) {
+                MCallable::Func(id) => {
+                    if let Some(func_ref) = fcs.used_functions.get(*id) {
                         fcs.builder.ins().call(*func_ref, &*all_args)
-                    } else if let Some(ext_func_data) = fcs.external_functions.get(*info) {
+                    } else if let Some(ext_func_data) = fcs.external_functions.get(*id) {
                         return Some(build_external_func_call(
                             &mut fcs.builder, 
                             all_args, 
                             ext_func_data
                         ));
                     } else {
-                        panic!("{info:?}");
+                        panic!("{id:?}");
                     }
                 },
                 MCallable::FirstClass(memloc) => {

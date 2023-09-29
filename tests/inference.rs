@@ -90,7 +90,6 @@ fn factorial_while() {
 }
 
 #[test]
-#[ignore]
 fn hello_world() {
     xc_test!(
         r#"
@@ -107,7 +106,7 @@ fn infer_vec_push() {
         use StdLib;
         r#"
         main() {
-            x := Vec<i32>:new<i32>()
+            x := Vec<i32>:new()
             x.push(432)
             x.get(0)
         }

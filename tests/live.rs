@@ -245,3 +245,20 @@ fn conversion_dependents() {
     "#).unwrap();
     assert_eq!(main(), 50);
 }
+
+#[test]
+#[serial]
+fn change_type() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();
+    let fifty_four = unit.get_fn("fifty_four").unwrap().clone();
+
+    assert_eq!(fifty_four.typ().args, Vec::new());
+    assert_eq!(fifty_four.typ().ret, Type::i(32));
+    assert_eq!(fifty_four.downcast::<(), i32>()(), 54);
+
+    unit.push_script(r#"fifty_four(); f32 { ; 54.0 }"#).unwrap();
+    assert_eq!(fifty_four.typ().args, Vec::new());
+    assert_eq!(fifty_four.typ().ret, Type::f32());
+    assert_eq!(fifty_four.downcast::<(), f32>()(), 54.0);
+}

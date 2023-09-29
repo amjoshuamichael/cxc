@@ -89,7 +89,6 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
                     let HNodeData::Block { goto_labels, .. } = tree.get_ref(block)
                         else { unreachable!() };
 
-                    dbg!(&goto_labels);
                     if let Some(goto_label_id) = goto_labels.get(&name) {
                         let block_id = mir.block_labels[goto_label_id];
                         mir.lines.push(MLine::Goto(block_id));
@@ -303,18 +302,23 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             }
         },
         HNodeData::Call { ref query, ref a, .. } if &*query.name == "cast" => {
+            let from_type = query.generics[0].clone();
             let to_type = query.generics[1].clone();
 
-            let val = build_as_addr(tree.get(a[0]), tree, mir);
-            let new_cast_out = mir.new_variable(to_type.clone());
+            if from_type.is_ref() && to_type.is_ref() {
+                build_as_expr(tree.get(a[0]), tree, mir)
+            } else {
+                let val = build_as_addr(tree.get(a[0]), tree, mir);
+                let new_cast_out = mir.new_variable(to_type.clone());
 
-            mir.lines.push(MLine::MemCpy {
-                from: val, 
-                to: MAddr::Var(new_cast_out.clone()), 
-                len: MOperand::Lit(MLit::Int { size: 64, val: to_type.size() as u64 }),
-            });
+                mir.lines.push(MLine::MemCpy {
+                    from: val, 
+                    to: MAddr::Var(new_cast_out.clone()), 
+                    len: MOperand::Lit(MLit::Int { size: 64, val: to_type.size() as u64 }),
+                });
 
-            MExpr::MemLoc(MMemLoc::Var(new_cast_out))
+                MExpr::MemLoc(MMemLoc::Var(new_cast_out))
+            }
         },
         HNodeData::Call { ref query, ref a, .. } if &*query.name == "memcpy" => {
             let from = build_as_addr_reg_with_normal_expr(tree.get(a[0]), tree, mir);
@@ -401,8 +405,12 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
             let TypeEnum::Struct(struct_type) = 
                 object_type.as_type_enum() else { unreachable!() };
             let field_index = struct_type.get_field_index(&field).unwrap() as u32;
-            
-            MAddrExpr::Member { object_type, object, field_index }
+
+            if field_index == 0 {
+                MAddrExpr::Addr(object)
+            } else {
+                MAddrExpr::Member { object_type, object, field_index }
+            }
         },
         HNodeData::Index { object, index, .. } => {
             let array_type = tree.get(object).ret_type();

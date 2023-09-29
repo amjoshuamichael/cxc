@@ -11,9 +11,8 @@
 
     into_iter(); SliceIter<T> {
         ; SliceIter<T> {
-            it = *self.ptr,
+            it = self.ptr,
             inner = {
-                ptr = self.ptr,
                 end = self.ptr.ptr_add(self.len),
             },
         }
@@ -29,13 +28,30 @@
 
 SliceIter<T> = {
     inner: {
+        end: &T,
+    },
+    it: &T,
+}
+
+<T> &SliceIter<T>:. {
+    still_iterating(); bool {
+        ; self.it != self.inner.end
+    }
+
+    next() {
+        self.it = self.it.ptr_add(1)
+    }
+}
+
+SliceIterCopy<T> = {
+    inner: {
         ptr: &T,
         end: &T,
     },
     it: T,
 }
 
-<T> &SliceIter<T>:. {
+<T> &SliceIterCopy<T>:. {
     still_iterating(); bool {
         ; self.inner.ptr != self.inner.end
     }

@@ -7,7 +7,7 @@ pub enum ReturnStyle {
     Direct,
     ThroughI32,
     ThroughI64,
-    MoveIntoDouble,
+    ThroughDouble,
     ThroughI32I32,
     ThroughF32F32,
     ThroughI64I32,
@@ -28,7 +28,7 @@ pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
     match return_style {
         ReturnStyle::ThroughI32 => Type::i(32),
         ReturnStyle::ThroughI64 => Type::i(64),
-        ReturnStyle::MoveIntoDouble => Type::f(64),
+        ReturnStyle::ThroughDouble => Type::f(64),
         ReturnStyle::ThroughI32I32 => Type::new_tuple(vec![Type::i(32); 2]),
         ReturnStyle::ThroughF32F32 => Type::new_tuple(vec![Type::f(32); 2]),
         ReturnStyle::ThroughI64I32 => 
@@ -78,22 +78,6 @@ impl Type {
     pub fn return_style(&self) -> ReturnStyle {
         use TypeEnum::*;
 
-        fn return_style_from_size(size: usize) -> ReturnStyle {
-            if size > 16 {
-                ReturnStyle::Sret
-            } else if size == 16 {
-                ReturnStyle::ThroughI64I64
-            } else if size == 12 {
-                ReturnStyle::ThroughI64I32
-            } else if size <= 8 {
-                ReturnStyle::ThroughI64
-            } else if size <= 4 {
-                ReturnStyle::ThroughI32
-            } else {
-                todo!("cannot find return style for type of size {size}")
-            }
-        }
-
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) => {
@@ -110,7 +94,24 @@ impl Type {
                     if first_field.size() == 4 && second_field.size() == 8 {
                         ReturnStyle::MoveIntoI64I64
                     } else {
-                        return_style_from_size(size)
+                        if size > 16 {
+                            ReturnStyle::Sret
+                        } else if size == 16 {
+                            ReturnStyle::ThroughI64I64
+                        } else if size == 12 {
+                            ReturnStyle::ThroughI64I32
+                        } else if size <= 8 {
+                            // arm processors return a pair of floating point numbers
+                            // differently
+                            if first_field.is_float() && second_field.is_float() 
+                                && cfg!(any(target_arch = "arm", target_arch = "aarch64")) {
+                                ReturnStyle::ThroughF32F32
+                            } else {
+                                ReturnStyle::ThroughI64
+                            }
+                        } else {
+                            ReturnStyle::ThroughI32
+                        }
                     }
                 } else {
                     ReturnStyle::Direct

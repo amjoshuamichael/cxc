@@ -270,7 +270,6 @@ impl<'a> FuncRep<'a> {
         let HNodeData::Block { ref mut goto_labels, .. } = self.tree.get_mut(block)
             else { unreachable!() };
         goto_labels.insert(name, label);
-        dbg!(&goto_labels);
 
         label
     }

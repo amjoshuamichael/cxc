@@ -3,7 +3,7 @@ use inkwell::{values::*, FloatPredicate};
 use crate::llvm_backend::compile_operand;
 use crate::llvm_backend::to_llvm_type::ToLLVMType;
 use crate::mir::MOperand;
-use crate::{TypeEnum, Type};
+use crate::{TypeEnum, Type, IntType};
 use crate::{parse::Opcode, llvm_backend::FunctionCompilationState};
 
 pub fn compile_bin_op(
@@ -25,6 +25,11 @@ pub fn compile_bin_op(
             let l = l.into_int_value();
             let r = r.into_int_value();
 
+            let signed = matches!(
+                math_type.as_type_enum(), 
+                TypeEnum::Int(IntType { signed: true, .. }),
+            );
+
             match op {
                 Plus => fcs.builder.build_int_add(l, r, reg),
                 Minus => fcs.builder.build_int_sub(l, r, reg),
@@ -33,9 +38,13 @@ pub fn compile_bin_op(
                 Modulus => fcs.builder.build_int_unsigned_rem(l, r, reg),
                 Inequal => fcs.builder.build_int_compare(NE, l, r, reg),
                 Equal => fcs.builder.build_int_compare(EQ, l, r, reg),
+                LessThan if signed => fcs.builder.build_int_compare(SLT, l, r, reg),
                 LessThan => fcs.builder.build_int_compare(ULT, l, r, reg),
+                GrtrThan if signed => fcs.builder.build_int_compare(SGT, l, r, reg),
                 GrtrThan => fcs.builder.build_int_compare(UGT, l, r, reg),
+                LessOrEqual if signed => fcs.builder.build_int_compare(SLE, l, r, reg),
                 LessOrEqual => fcs.builder.build_int_compare(ULE, l, r, reg),
+                GreaterOrEqual if signed => fcs.builder.build_int_compare(SGE, l, r, reg),
                 GreaterOrEqual => fcs.builder.build_int_compare(UGE, l, r, reg),
                 BitShiftL => fcs.builder.build_left_shift(l, r, reg),
                 BitShiftR => fcs.builder.build_right_shift(l, r, false, reg),
@@ -44,7 +53,7 @@ pub fn compile_bin_op(
                 BitXOR => fcs.builder.build_xor(l, r, "xor"),
                 _ => todo!(),
             }.as_basic_value_enum()
-        }
+        },
         TypeEnum::Float(_) => {
             use FloatPredicate::*;
 
@@ -70,20 +79,24 @@ pub fn compile_bin_op(
                 }.as_basic_value_enum()
             }
         },
-        TypeEnum::Ref(pointing_to) => {
+        TypeEnum::Ref(_) => {
             let l = l.into_pointer_value();
-            let r = r.into_int_value();
+            let r = r.into_pointer_value();
 
-            let result = match op {
-                Plus => unsafe {
-                    fcs.builder.build_in_bounds_gep(
-                        pointing_to.base.to_basic_type(fcs.context),
-                        l,
-                        &[r],
-                        "ptrmath",
-                    )
-                },
-                _ => todo!(),
+            let result = if matches!(op, Inequal | Equal) {
+                let i64 = fcs.context.i64_type();
+                let l_int = fcs.builder.build_ptr_to_int(l, i64, "ptr_as_int");
+                let r_int = fcs.builder.build_ptr_to_int(r, i64, "ptr_as_int");
+                compile_bin_op(
+                    fcs,
+                    &Type::i(64),
+                    op,
+                    l_int.as_basic_value_enum(),
+                    r_int.as_basic_value_enum(),
+                    reg,
+                )
+            } else {
+                todo!()
             };
 
             result.into()
