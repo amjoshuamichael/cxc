@@ -415,6 +415,17 @@ impl StructType {
 
         Some(types[0].clone())
     }
+
+    pub fn field_offset(&self, offset: usize) -> usize {
+        if self.fields.len() == 0 {
+            return 0
+        }
+        
+        let size_sum: usize = self.fields[0..offset].iter().map(|Field { typ, .. }| typ.size()).sum();
+        let alignment = self.largest_field().unwrap().size();
+
+        size_sum.next_multiple_of(alignment)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]

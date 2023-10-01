@@ -42,12 +42,13 @@ glam = { version = "0.22", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["backend-cranelift", "ffi-assertions"]
+default = ["backend-interpreter", "ffi-assertions"]
 xc-debug = []
 mir-debug = []
 backend-debug = []
 backend-llvm = ["llvm-sys", "inkwell"]
 backend-cranelift = ["cranelift", "cranelift-jit", "cranelift-module", "cranelift-native"]
+backend-interpreter = ["region"]
 ffi-assertions = ["region"]
 show-bytes = []
 

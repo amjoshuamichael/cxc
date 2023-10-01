@@ -326,7 +326,6 @@ impl Tok {
 
     pub fn get_bin_opcode(&self) -> Result<Opcode, ParseError> {
         match self {
-            Tok::AsterickSet(2) => Ok(Opcode::Exponential),
             Tok::Plus => Ok(Opcode::Plus),
             Tok::Minus => Ok(Opcode::Minus),
             Tok::AsterickSet(1) => Ok(Opcode::Multiplier),

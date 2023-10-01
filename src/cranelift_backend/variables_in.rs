@@ -79,7 +79,6 @@ fn variables_in_expr(mexpr: &MExpr, vars: &mut VarsInMIR) {
         MExpr::Ref { on } => variables_in_addr(on, vars),
         MExpr::Deref { on, .. } => variables_in_memloc(on, vars),
         MExpr::Alloc { len } => variables_in_operand(len, vars),
-        MExpr::Void => {},
     }
 }
 

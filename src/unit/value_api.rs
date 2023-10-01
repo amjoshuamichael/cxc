@@ -1,3 +1,5 @@
+use cxc_derive::xc_opaque;
+
 use crate::{
     errors::CResultMany,
     lex::{indent_parens, lex, VarName},
@@ -14,9 +16,10 @@ use super::{FuncQuery, backends::IsBackend};
 use crate as cxc;
 
 #[derive(Default, Debug, XcReflect)]
+#[xc_opaque]
 pub struct Value {
-    typ: Type,
-    data: Vec<u8>,
+    pub(crate) typ: Type,
+    pub(crate) data: Box<[u8]>,
 }
 
 // This MAX_BYTES static is used as an output for functions that return a value
@@ -35,22 +38,35 @@ lazy_static::lazy_static! {
 impl Value {
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
         let size = typ.size();
-        let data = data[0..size].to_vec();
+        let data = data[0..size].to_vec().into_boxed_slice();
 
         Self { typ, data }
     }
 
-    pub fn new_from_vec(typ: Type, data: Vec<u8>) -> Self { Self { typ, data } }
+    pub fn new_from_boxed_slice(typ: Type, data: Box<[u8]>) -> Self { 
+        Self { typ, data } 
+    }
+
+    pub fn new_from_slice(typ: Type, data: &[u8]) -> Self { 
+        Self { typ, data: data.into() } 
+    }
+
+    pub fn void() -> Self {
+        Self {
+            typ: Type::void(),
+            data: vec![0; 0].into_boxed_slice(),
+        }
+    }
 
     /// # Safety
     ///
     /// Ensure the pointer is pointing to a type equivalent to typ.
     pub unsafe fn new_from_ptr(typ: Type, ptr: *const u8) -> Self {
-        let slice = std::slice::from_raw_parts(ptr, typ.size());
+        let slice = std::slice::from_raw_parts(ptr, typ.size()).to_vec().into_boxed_slice();
 
         Self {
             typ,
-            data: slice.to_vec(),
+            data: slice,
         }
     }
 
@@ -92,7 +108,7 @@ impl Value {
     /// # Safety
     ///
     /// Ensure the generic type 'T' is the same as the type of the value.
-    pub unsafe fn get_data(self) -> Box<[u8]> { self.data.into_boxed_slice() }
+    pub unsafe fn get_data(self) -> Box<[u8]> { self.data }
 
 
     /// # Safety
@@ -102,7 +118,7 @@ impl Value {
         let data_ptr = self.data.as_mut_ptr();
 
         // Prevent data from being dropped
-        let _: (u64, u64, u64) = std::mem::transmute(self.data);
+        let _: (u64, u64) = std::mem::transmute(self.data);
 
         Box::from_raw(data_ptr as *mut T)
     }
@@ -153,60 +169,52 @@ impl Unit {
         let func_info = &self.comp_data.processed[value_func_id];
 
         let ret_type = &func_info.typ.ret;
-        let value = unsafe {
-            match ret_type.return_style() {
-                ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
-                    let new_func = func_addr.downcast::<(), i64>();
-                    let out: [u8; 8] = new_func().to_ne_bytes();
-                    Value::new_from_arr(ret_type.clone(), out)
-                },
-                ReturnStyle::ThroughI32I32
-                | ReturnStyle::ThroughF32F32
-                | ReturnStyle::ThroughI64I32
-                | ReturnStyle::ThroughI64I64
-                | ReturnStyle::MoveIntoI64I64 => {
-                    let new_func = func_addr.downcast::<(), (i64, i64)>();
-                    let out: [u8; 16] = transmute(new_func());
-                    Value::new_from_arr(ret_type.clone(), out)
-                },
-                ReturnStyle::ThroughDouble => {
-                    let new_func = func_addr.downcast::<(), f64>();
-                    let out: [u8; 8] = transmute(new_func());
-                    Value::new_from_arr(ret_type.clone(), out)
-                },
-                ReturnStyle::Sret => {
-                    let new_func = func_addr.downcast::<(), MaxBytes>();
+        #[cfg(feature = "backend-interpreter")]
+        {
+            Ok(func_addr.call_void())
+        }
 
-                    let data_vec = {
-                        let mut bytes_lock = MAX_BYTES.lock().unwrap();
-                        *bytes_lock = new_func();
-                        bytes_lock[..ret_type.size()].to_vec()
-                    };
+        #[cfg(not(feature = "backend-interpreter"))]
+        {
+            let value = unsafe {
+                match ret_type.return_style() {
+                    ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
+                        let new_func = func_addr.downcast::<(), i64>();
+                        let out: [u8; 8] = new_func().to_ne_bytes();
+                        Value::new_from_arr(ret_type.clone(), out)
+                    },
+                    ReturnStyle::ThroughI32I32
+                    | ReturnStyle::ThroughF32F32
+                    | ReturnStyle::ThroughI64I32
+                    | ReturnStyle::ThroughI64I64
+                    | ReturnStyle::MoveIntoI64I64 => {
+                        let new_func = func_addr.downcast::<(), (i64, i64)>();
+                        let out: [u8; 16] = transmute(new_func());
+                        Value::new_from_arr(ret_type.clone(), out)
+                    },
+                    ReturnStyle::ThroughDouble => {
+                        let new_func = func_addr.downcast::<(), f64>();
+                        let out: [u8; 8] = transmute(new_func());
+                        Value::new_from_arr(ret_type.clone(), out)
+                    },
+                    ReturnStyle::Sret => {
+                        let new_func = func_addr.downcast::<(), MaxBytes>();
 
-                    Value::new_from_vec(ret_type.clone(), data_vec)
-                },
-                ReturnStyle::Void => {
-                    panic!("value returns none!")
-                },
-            }
-        };
+                        let data_vec = {
+                            let mut bytes_lock = MAX_BYTES.lock().unwrap();
+                            *bytes_lock = new_func();
+                            bytes_lock[..ret_type.size()].to_vec()
+                        };
 
-        // TODO: free function machine code
+                        Value::new_from_slice(ret_type.clone(), &*data_vec)
+                    },
+                    ReturnStyle::Void => {
+                        panic!("value returns none!")
+                    },
+                }
+            };
 
-        Ok(value)
+            Ok(value)
+        }
     }
-}
-
-impl<'a> IntoIterator for &'a Value {
-    type Item = &'a u8;
-    type IntoIter = std::slice::Iter<'a, u8>;
-
-    fn into_iter(self) -> Self::IntoIter { self.data.iter() }
-}
-
-impl IntoIterator for Value {
-    type Item = u8;
-    type IntoIter = std::vec::IntoIter<u8>;
-
-    fn into_iter(self) -> Self::IntoIter { self.data.into_iter() }
 }

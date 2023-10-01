@@ -98,7 +98,7 @@ impl fmt::Debug for MLine {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MReg(u32);
+pub struct MReg(pub(crate) u32);
 
 impl Display for MReg {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "_{}", self.0) }
@@ -108,7 +108,7 @@ impl fmt::Debug for MReg {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MAddrReg(u32);
+pub struct MAddrReg(pub(crate) u32);
 
 impl Display for MAddrReg {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "-{}", self.0) }
@@ -153,6 +153,7 @@ impl fmt::Debug for MAddr {
     }
 }
 
+// TODO: combine MLit and MOperand?
 pub enum MLit {
     Int { size: u32, val: u64 },
     Float { size: u32, val: f64 },
@@ -190,7 +191,6 @@ pub enum MExpr {
     Ref { on: MAddr },
     Alloc { len: MOperand, },
     Deref { to: Type, on: MMemLoc },
-    Void,
 }
 
 #[derive(Debug)]

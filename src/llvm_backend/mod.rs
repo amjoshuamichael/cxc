@@ -8,7 +8,7 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-use inkwell::{values::*};
+use inkwell::values::*;
 
 use slotmap::SecondaryMap;
 use std::collections::BTreeMap;

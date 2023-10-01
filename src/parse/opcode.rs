@@ -5,7 +5,6 @@ pub enum Opcode {
     Minus,
     Multiplier,
     Divider,
-    Exponential,
     Modulus,
     BitAND,
     BitOR,
@@ -59,7 +58,6 @@ impl Opcode {
             Plus | Minus => Some(3),
             Multiplier | Divider => Some(2),
             Modulus => Some(1),
-            Exponential => Some(0),
             _ => None,
         }
     }
@@ -73,7 +71,6 @@ impl Opcode {
 impl ToString for Opcode {
     fn to_string(&self) -> String {
         match self {
-            Exponential => "**",
             Plus => "+",
             Minus => "-",
             Multiplier => "*",

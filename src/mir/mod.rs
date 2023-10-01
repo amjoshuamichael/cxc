@@ -169,8 +169,9 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
             }
             HNodeData::Block { .. } => build_block(tree.get(stmt), tree, mir),
             _ => {
-                let expr = build_as_expr(tree.get(stmt), tree, mir);
-                mir.lines.push(MLine::Expr(expr));
+                if let Some(expr) = build_as_expr(tree.get(stmt), tree, mir) {
+                    mir.lines.push(MLine::Expr(expr));
+                }
             },
         }
     }
@@ -250,7 +251,7 @@ fn build_as_reg(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MReg {
     let l = mir.new_reg(node.ret_type());
     let r = build_as_expr(node, tree, mir);
 
-    mir.lines.push(MLine::Set { l, r, });
+    mir.lines.push(MLine::Set { l, r: r.unwrap(), });
 
     l
 }
@@ -268,15 +269,15 @@ fn build_as_addr_reg_with_normal_expr(node: HNodeData, tree: &ExprTree, mir: &mu
     let l = mir.new_addr_reg();
     let r = build_as_expr(node, tree, mir);
 
-    mir.lines.push(MLine::SetAddr { l, r: MAddrExpr::Expr(r), });
+    mir.lines.push(MLine::SetAddr { l, r: MAddrExpr::Expr(r.unwrap()), });
 
     l
 }
 
-pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
+pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option<MExpr> {
     let ret_type = node.ret_type();
 
-    match node {
+    let expr: MExpr = match node {
         HNodeData::BinOp { lhs, op, rhs, .. } => {
             let left_type = tree.get(lhs).ret_type();
 
@@ -306,7 +307,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             let to_type = query.generics[1].clone();
 
             if from_type.is_ref() && to_type.is_ref() {
-                build_as_expr(tree.get(a[0]), tree, mir)
+                build_as_expr(tree.get(a[0]), tree, mir).unwrap()
             } else {
                 let val = build_as_addr(tree.get(a[0]), tree, mir);
                 let new_cast_out = mir.new_variable(to_type.clone());
@@ -331,7 +332,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
                 len,
             });
 
-            MExpr::Void
+            return None;
         },
         HNodeData::Call { ref query, ref a, .. } if &*query.name == "memmove" => {
             let from = build_as_operand(tree.get(a[0]), tree, mir);
@@ -344,7 +345,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
                 len,
             });
 
-            MExpr::Void
+            return None;
         },
         HNodeData::Call { ref query, ref a, .. } if &*query.name == "free" => {
             let ptr = build_as_operand(tree.get(a[0]), tree, mir);
@@ -392,7 +393,9 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MExpr {
             MExpr::MemLoc(MMemLoc::Global(name))
         },
         _ => todo!("{:?}", node),
-    }
+    };
+
+    return Some(expr);
 }
 
 pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrExpr {

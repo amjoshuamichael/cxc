@@ -100,15 +100,17 @@ impl IsBackend for LLVMBackend {
         }
     }
 
-    fn compile_function(&mut self, func_id: FuncId, mir: MIR) {
-        let function = self.compiled[func_id].value;
+    fn compile_functions(&mut self, mirs: SecondaryMap<FuncId, MIR>) {
+        for (func_id, mir) in mirs {
+            let function = self.compiled[func_id].value;
 
-        let mut fcs = self.new_func_comp_state(mir, function);
+            let mut fcs = self.new_func_comp_state(mir, function);
 
-        let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
-        fcs.builder.position_at_end(basic_block);
+            let basic_block = fcs.context.append_basic_block(fcs.function, "entry");
+            fcs.builder.position_at_end(basic_block);
 
-        compile_routine(&mut fcs);
+            compile_routine(&mut fcs);
+        }
     }
 
     fn end_compilation_round(&mut self) {

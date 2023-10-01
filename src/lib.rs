@@ -53,18 +53,24 @@ mod llvm_backend;
 #[cfg(feature = "backend-cranelift")]
 mod cranelift_backend;
 
+#[cfg(feature = "backend-interpreter")]
+mod interpreter;
+
 pub mod backend {
     #[cfg(feature = "backend-llvm")]
     pub use super::llvm_backend::LLVMBackend as Backend;
 
     #[cfg(feature = "backend-cranelift")]
     pub use super::cranelift_backend::CraneliftBackend as Backend;
+
+    #[cfg(feature = "backend-interpreter")]
+    pub use super::interpreter::InterpreterBackend as Backend;
 }
 
 mod typ;
 mod unit;
 
-#[cfg(not(any(feature = "backend-llvm", feature = "backend-cranelift")))]
+#[cfg(not(any(feature = "backend-llvm", feature = "backend-cranelift", feature = "backend-interpreter")))]
 compile_error!("No backend chosen: in your Cargo.toml, enable either backend-cranelift (recommended) or backend-llvm (requires LLVM to be installed)");
 
 #[cfg(not(target_pointer_width = "64"))]

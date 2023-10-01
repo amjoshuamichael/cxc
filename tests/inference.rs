@@ -105,10 +105,10 @@ fn infer_vec_push() {
     xc_test!(
         use StdLib;
         r#"
-        main() {
+        main(); i32 {
             x := Vec<i32>:new()
             x.push(432)
-            x.get(0)
+            ; x.get(0)
         }
         "#;
         432
