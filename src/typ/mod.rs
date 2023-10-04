@@ -31,7 +31,7 @@ use crate as cxc;
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result { write!(f, "{:?}", self.0) }
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result { write!(f, "{:?}", self.0) }
 }
 
 impl Default for Type {
@@ -248,6 +248,7 @@ impl Type {
     }
 
     pub fn is_shallow(&self) -> bool {
+        !self.is_ref() &&
         !self.fields_iter().any(|field| matches!(field.as_type_enum(), TypeEnum::Ref(_)))
     }
 
@@ -411,7 +412,6 @@ impl StructType {
 
         let mut types = self.fields.iter().map(|Field { typ, .. }| typ).collect::<Vec<_>>();
         types.sort_by(|a, b| b.size().cmp(&a.size()));
-        types.reverse();
 
         Some(types[0].clone())
     }

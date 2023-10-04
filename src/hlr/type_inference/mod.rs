@@ -947,7 +947,7 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                         HNodeData::Transform {
                             hs: *with,
                             ret_type: Type::unknown(),
-                            steps: route.0,
+                            steps: Some(route.0),
                         }
                     );
 
@@ -1031,7 +1031,7 @@ fn fill_in_call(
 
             let transform = hlr.tree.insert(*call_id, HNodeData::Transform {
                 hs: a[0],
-                steps: trans.map(|trans| trans.steps).unwrap_or_default(),
+                steps: Some(trans.map(|trans| trans.steps).unwrap_or_default()),
                 ret_type: Type::unknown(),
             });
 
@@ -1093,7 +1093,7 @@ fn fill_in_call(
 
             let transform = hlr.tree.insert(*call_id, HNodeData::Transform {
                 hs: a[0],
-                steps: trans.as_ref().map(|trans| trans.steps.clone()).unwrap_or_default(),
+                steps: Some(trans.as_ref().map(|trans| trans.steps.clone()).unwrap_or_default()),
                 ret_type: Type::unknown(),
             });
 

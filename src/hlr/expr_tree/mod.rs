@@ -6,7 +6,7 @@ use crate::typ::can_transform::TransformationList;
 use crate::{parse::*, FuncQuery};
 use crate::Type;
 use crate::unit::Global;
-use super::hlr_data::{VarID, FuncRep, GotoLabelID};
+use super::hlr_data::{VarID, FuncRep, GotoLabelID, VariableInfo};
 
 use std::collections::{HashSet, HashMap};
 use std::fmt::{Debug, Formatter};
@@ -157,7 +157,7 @@ pub enum HNodeData {
     Transform {
         hs: ExprID,
         ret_type: Type,
-        steps: TransformationList,
+        steps: Option<TransformationList>,
     },
     BinOp {
         ret_type: Type,
@@ -249,7 +249,8 @@ impl HNodeData {
 
     pub fn to_string(
         &self, 
-        hlr: &FuncRep, 
+        tree: &ExprTree, 
+        variables: &SlotMap<VarID, VariableInfo>,
     ) -> String {
         const RED: &str = "\x1b[91m";
         const GREEN: &str = "\x1b[92m";
@@ -262,7 +263,7 @@ impl HNodeData {
             Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
             Bool { value, .. } => format!("{MAGENTA}{value}{WHITE}"),
             Ident { var_id: id, .. } => {
-                if let VarName::Other(name) = &hlr.variables[*id].name {
+                if let VarName::Other(name) = &variables[*id].name {
                     format!("{BLUE}{name}{WHITE}")
                 } else {
                     format!("{BLUE}{id:?}{WHITE}")
@@ -291,7 +292,7 @@ impl HNodeData {
                     lit += &*field.0.to_string();
                     lit += WHITE;
                     lit += " = ";
-                    lit += &*hlr.tree.get(field.1).to_string(hlr);
+                    lit += &*tree.get(field.1).to_string(tree, variables);
                     lit += WHITE;
                     lit += "\n";
                 }
@@ -316,7 +317,7 @@ impl HNodeData {
                     if p > 0 {
                         lit += ", ";
                     }
-                    lit += &*hlr.tree.get(*part).to_string(hlr);
+                    lit += &*tree.get(*part).to_string(tree, variables);
                 }
 
                 match initialize {
@@ -330,9 +331,9 @@ impl HNodeData {
                 lit
             },
             Set { lhs, rhs, .. } => {
-                let mut lit = hlr.tree.get(*lhs).to_string(hlr);
+                let mut lit = tree.get(*lhs).to_string(tree, variables);
                 lit += " = ";
-                lit += &*hlr.tree.get(*rhs).to_string(hlr);
+                lit += &*tree.get(*rhs).to_string(tree, variables);
                 lit
             },
             Call {
@@ -367,7 +368,7 @@ impl HNodeData {
 
                 if let Some(sret) = sret {
                     call += "-> ";
-                    call += &*hlr.tree.get(*sret).to_string(hlr);
+                    call += &*tree.get(*sret).to_string(tree, variables);
                     call += " | ";
                 }
 
@@ -375,7 +376,7 @@ impl HNodeData {
                     if a > 0 {
                         call += ", ";
                     }
-                    call += &*hlr.tree.get(*arg).to_string(hlr);
+                    call += &*tree.get(*arg).to_string(tree, variables);
                     call += WHITE;
                 }
 
@@ -384,7 +385,7 @@ impl HNodeData {
             },
             IndirectCall { f, a: args, .. } => {
                 let mut call = "(".into();
-                call += &*hlr.tree.get(*f).to_string(hlr);
+                call += &*tree.get(*f).to_string(tree, variables);
                 call += ")";
 
                 call += "(";
@@ -392,7 +393,7 @@ impl HNodeData {
                     if a > 0 {
                         call += ", ";
                     }
-                    call += &*hlr.tree.get(*arg).to_string(hlr);
+                    call += &*tree.get(*arg).to_string(tree, variables);
                 }
                 call += ")";
                 call
@@ -400,7 +401,7 @@ impl HNodeData {
             Member { object, field, .. } => {
                 let mut member = WHITE.to_string();
                 member += "(";
-                member += &*hlr.tree.get(*object).to_string(hlr);
+                member += &*tree.get(*object).to_string(tree, variables);
                 member += WHITE;
                 member += ")";
                 member += ".";
@@ -410,61 +411,61 @@ impl HNodeData {
                 member
             },
             Index { object, index, .. } => {
-                let mut object = hlr.tree.get(*object).to_string(hlr);
+                let mut object = tree.get(*object).to_string(tree, variables);
                 object += "[";
-                object += &*hlr.tree.get(*index).to_string(hlr);
+                object += &*tree.get(*index).to_string(tree, variables);
                 object += "]";
                 object
             },
             UnarOp { op, hs, .. } => {
-                YELLOW.to_string() + &*op.to_string() + &*hlr.tree.get(*hs).to_string(hlr)
+                YELLOW.to_string() + &*op.to_string() + &*tree.get(*hs).to_string(tree, variables)
             },
             Transform { hs, .. } => {
-                YELLOW.to_string() + "+" + &*hlr.tree.get(*hs).to_string(hlr)
+                YELLOW.to_string() + "+" + &*tree.get(*hs).to_string(tree, variables)
             },
             BinOp { lhs, op, rhs, .. } => {
-                let mut binop = hlr.tree.get(*lhs).to_string(hlr);
+                let mut binop = tree.get(*lhs).to_string(tree, variables);
                 binop += " ";
                 binop += &*op.to_string();
                 binop += " ";
-                binop + &*hlr.tree.get(*rhs).to_string(hlr)
+                binop + &*tree.get(*rhs).to_string(tree, variables)
             },
             IfThen { i, t, .. } => {
                 let mut it = RED.to_string() + "? ".into();
                 it += WHITE;
-                it += &*hlr.tree.get(*i).to_string(hlr);
+                it += &*tree.get(*i).to_string(tree, variables);
                 it += " ";
                 it += WHITE;
-                it += &*hlr.tree.get(*t).to_string(hlr);
+                it += &*tree.get(*t).to_string(tree, variables);
                 it += WHITE;
                 it
             },
             IfThenElse { i, t, e, .. } => {
                 let mut ite = RED.to_string() + "? ".into();
                 ite += WHITE;
-                ite += &*hlr.tree.get(*i).to_string(hlr);
+                ite += &*tree.get(*i).to_string(tree, variables);
                 ite += " ";
                 ite += WHITE;
-                ite += &*hlr.tree.get(*t).to_string(hlr);
+                ite += &*tree.get(*t).to_string(tree, variables);
                 ite += RED;
                 ite += " : ";
                 ite += WHITE;
-                ite += &*hlr.tree.get(*e).to_string(hlr);
+                ite += &*tree.get(*e).to_string(tree, variables);
                 ite += WHITE;
                 ite
             },
             While { w, d, .. } => {
                 let mut wh = "@ ".into();
-                wh += &*hlr.tree.get(*w).to_string(hlr);
+                wh += &*tree.get(*w).to_string(tree, variables);
                 wh += " ";
-                wh += &*hlr.tree.get(*d).to_string(hlr);
+                wh += &*tree.get(*d).to_string(tree, variables);
                 wh
             },
             Block { stmts, .. } => {
                 let mut bl: String = "{".into();
                 for stmt in stmts.iter() {
                     bl += "\n";
-                    bl += &*hlr.tree.get(*stmt).to_string(hlr);
+                    bl += &*tree.get(*stmt).to_string(tree, variables);
                     bl += WHITE;
                 }
                 bl = bl.replace("\n", "\n    ");
@@ -475,7 +476,7 @@ impl HNodeData {
             Return { to_return, .. } => {
                 let mut ret = RED.to_string() + "; " + WHITE;
                 if let Some(to_return) = to_return {
-                    ret += &*hlr.tree.get(*to_return).to_string(hlr);
+                    ret += &*tree.get(*to_return).to_string(tree, variables);
                 }
                 ret
             },

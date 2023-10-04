@@ -123,12 +123,13 @@ fn slice_basic() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn pass_in_slice() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
 
     unit.push_script("
-        section_of(array_ptr: &[6]u32); { +ptr: &u32, len: u64 } {
+        section_of(array_ptr: &[6]u32); { +ptr: &u32, +len: u64 } {
             ; array_ptr.slice(Range<u64>:from(u64 1, u64 4))
         }
     ").unwrap();

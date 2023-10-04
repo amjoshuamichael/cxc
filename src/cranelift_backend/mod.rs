@@ -121,31 +121,33 @@ impl IsBackend for CraneliftBackend {
         self.to_recompile.insert(id);
     }
 
-    fn compile_function(&mut self, func_id: FuncId, mir: MIR) {
-        let mut cl_data = self.cl_function_data.remove(func_id).unwrap();
+    fn compile_functions(&mut self, mirs: SecondaryMap<FuncId, MIR>) {
+        for (func_id, mir) in mirs {
+            let mut cl_data = self.cl_function_data.remove(func_id).unwrap();
 
-        #[cfg(feature = "backend-debug")]
-        println!("compiling {}", &cl_data.name);
+            #[cfg(feature = "backend-debug")]
+            println!("compiling {}", &cl_data.name);
 
-        let mut func_builder_context = FunctionBuilderContext::new();
+            let mut func_builder_context = FunctionBuilderContext::new();
 
-        let (fcs, lines) = compile_function::make_fcs(
-            self, 
-            &mut func_builder_context,
-            &mut cl_data.ctx, 
-            mir,
-        );
+            let (fcs, lines) = compile_function::make_fcs(
+                self, 
+                &mut func_builder_context,
+                &mut cl_data.ctx, 
+                mir,
+            );
 
-        compile_function::compile(fcs, lines);
+            compile_function::compile(fcs, lines);
 
-        #[cfg(feature = "backend-debug")]
-        println!("func {:?}:\n{}", &cl_data.name, &cl_data.ctx.func);
+            #[cfg(feature = "backend-debug")]
+            println!("func {:?}:\n{}", &cl_data.name, &cl_data.ctx.func);
 
-        self.module.define_function(cl_data.cl_func_id, &mut cl_data.ctx).unwrap();
+            self.module.define_function(cl_data.cl_func_id, &mut cl_data.ctx).unwrap();
 
-        cl_data.ctx.compile(&**self.isa).unwrap();
+            cl_data.ctx.compile(&**self.isa).unwrap();
 
-        self.cl_function_data.insert(func_id, cl_data);
+            self.cl_function_data.insert(func_id, cl_data);
+        }
     }
 
     fn end_compilation_round(&mut self) {

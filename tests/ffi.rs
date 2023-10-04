@@ -5,7 +5,7 @@ use std::rc::Rc;
 use cxc::library::StdLib;
 use cxc::{ExternalFuncAdd, TypeRelation};
 use cxc::{Type, Unit};
-use test_utils::{xc_test, Numbers5, Point2D, Point3D};
+use test_utils::{xc_test, Numbers5, Point2D, Point3D, consume};
 
 #[test]
 fn return_arg() {
@@ -13,7 +13,7 @@ fn return_arg() {
     unit.push_script("main(a: i32); i32 { ; a }");
 
     let num = unit.get_fn("main").unwrap().downcast::<(i32,), i32>()(32);
-    assert_eq!(num, 32);
+    assert_eq!(consume::<i32>(num), 32);
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn multiple_args() {
     );
 
     let num = unit.get_fn("add").unwrap().downcast::<(i32, i32), i32>()(4, 5);
-    assert_eq!(num, 9);
+    assert_eq!(consume::<i32>(num), 9);
 }
 
 #[test]
@@ -56,7 +56,7 @@ fn basic_pointer() {
 }
 
 #[test]
-fn one_el_array_out() { xc_test!("; [1]i32 { ; [1] }"; [1]) }
+fn one_el_array_out() { xc_test!("; [1]i32 { ; [34986] }"; [34986]) }
 #[test]
 fn two_el_array_out() { xc_test!( "; [2]i32 { ; [1, 4] }"; [1, 4]) }
 #[test]
@@ -86,10 +86,12 @@ fn struct_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = unit
-        .get_fn("sqr_magnitude_of")
-        .unwrap()
-        .downcast::<(&Point2D,), i32>()(&point);
+    let sqr_mag: i32 = consume(
+        unit
+            .get_fn("sqr_magnitude_of")
+            .unwrap()
+            .downcast::<(&Point2D,), i32>()(&point)
+    );
     assert_eq!(sqr_mag, 13);
 }
 
@@ -114,10 +116,12 @@ fn struct_rc_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = unit
-        .get_fn("sqr_magnitude_of")
-        .unwrap()
-        .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point));
+    let sqr_mag: i32 = consume(
+        unit
+            .get_fn("sqr_magnitude_of")
+            .unwrap()
+            .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point))
+    );
     assert_eq!(sqr_mag, 13);
 }
 
@@ -173,7 +177,12 @@ fn i32_and_ref() {
         .get_fn("main")
         .unwrap()
         .downcast::<(&i32,), (i32, &i32)>();
-    let output: (i32, &i32) = func(&mut thirty_two);
+    let output: (i32, &i32);
+
+    #[cfg(not(feature = "backend-interpreter"))]
+    { output = func(&mut thirty_two); }
+    #[cfg(feature = "backend-interpreter")]
+    unsafe { output = *func(&mut thirty_two).consume() }
     assert_eq!(output, (10, &thirty_two));
 }
 
@@ -205,7 +214,7 @@ fn method_on_struct_with_arg() {
     .unwrap();
 
     let output = unit.get_fn("main").unwrap().downcast::<(), i32>()();
-    assert_eq!(output, 1680);
+    assert_eq!(consume::<i32>(output), 1680);
 }
 
 #[test]
@@ -261,7 +270,7 @@ fn return_from_external_4byte() {
 
     unit.push_script("main(); i32 { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), i32>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<i32>(main()), ext());
 }
 
 #[test]
@@ -283,7 +292,7 @@ fn return_from_external_8byte() {
 
     unit.push_script("main(); i64 { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), i64>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<i64>(main()), ext());
 }
 
 #[test]
@@ -305,7 +314,7 @@ fn return_from_external_8byte_sep() {
 
     unit.push_script("main(); {i32, i32} { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32)>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<(i32, i32)>(main()), ext());
 }
 
 #[test]
@@ -327,7 +336,7 @@ fn return_from_external_12byte_2sep() {
 
     unit.push_script("main(); {i64, i32} { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i32)>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<(i64, i32)>(main()), ext());
 }
 
 #[test]
@@ -349,7 +358,7 @@ fn return_from_external_12byte_3sep() {
 
     unit.push_script("main(); {i32, i32, i32} { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32, i32)>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<(i32, i32, i32)>(main()), ext());
 }
 
 #[test]
@@ -371,7 +380,7 @@ fn return_from_external_16byte_4sep() {
 
     unit.push_script("main(); {i32, i32, i32, i32} { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32, i32, i32)>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<(i32, i32, i32, i32)>(main()), ext());
 }
 
 #[test]
@@ -393,7 +402,7 @@ fn return_from_external_16byte_2sep() {
 
     unit.push_script("main(); {i64, i64} { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i64)>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<(i64, i64)>(main()), ext());
 }
 
 #[test]
@@ -420,7 +429,7 @@ fn return_from_external_32byte() {
 
     unit.push_script("main(); {i64, i64, i64, i64} { ; ext() }");
     let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i64, i64, i64)>();
-    assert_eq!(main(), ext());
+    assert_eq!(consume::<(i64, i64, i64, i64)>(main()), ext());
 }
 
 #[test]
@@ -429,7 +438,7 @@ fn pass_to_4byte() {
 
     unit.push_script("add_59(x: i32); i32 { ; x + 59 }").unwrap();
     let add_59 = unit.get_fn("add_59").unwrap().downcast::<(i32,), i32>();
-    assert_eq!(add_59(41), 100);
+    assert_eq!(consume::<i32>(add_59(41)), 100);
 }
 
 #[test]
@@ -439,7 +448,7 @@ fn pass_to_16byte() {
     unit.push_script("sum_two_add_3(x: { i64, i64 }); i64 { ; x.0 + x.1 + i64 3 }").unwrap();
     let sum_two_add_3 = 
         unit.get_fn("sum_two_add_3").unwrap().downcast::<((i64, i64),), i64>();
-    assert_eq!(sum_two_add_3((3i64, 90i64)), 96i64);
+    assert_eq!(consume::<i64>(sum_two_add_3((3i64, 90i64))), 96i64);
 }
 
 #[test]
@@ -455,7 +464,7 @@ fn pass_to_two_16byte() {
         .unwrap();
     let sum_four_add_3 = 
         unit.get_fn("sum_four_add_3").unwrap().downcast::<((i64, i64), (i64, i64)), i64>();
-    assert_eq!(sum_four_add_3((3i64, 90i64), (8i64, 23i64)), 127i64);
+    assert_eq!(consume::<i64>(sum_four_add_3((3i64, 90i64), (8i64, 23i64))), 127i64);
 }
 
 #[test]
@@ -465,7 +474,7 @@ fn pass_to_20byte() {
     unit.push_script("take_5(nums: {i32, i32, i32, i32, i32}); i32 { ; nums.3 + 2 }").unwrap();
     let take_5 = 
         unit.get_fn("take_5").unwrap().downcast::<((i32, i32, i32, i32, i32),), i32>();
-    assert_eq!(take_5((439, 435, 102, 4, 100)), 6);
+    assert_eq!(consume::<i32>(take_5((439, 435, 102, 4, 100))), 6);
 }
 
 #[test]
@@ -475,7 +484,8 @@ fn pass_20byte_return_20byte() {
     unit.push_script("take_5(nums: {i32, i32, i32, i32, i32}); { i32, i32, i32, i32, i32 } { ; nums }").unwrap();
     let take_5 = 
         unit.get_fn("take_5").unwrap().downcast::<((i32, i32, i32, i32, i32),), (i32, i32, i32, i32, i32)>();
-    assert_eq!(take_5((439, 435, 102, 4, 100)), (439, 435, 102, 4, 100));
+    let output = consume::<(i32, i32, i32, i32, i32)>(take_5((439, 435, 102, 4, 100)));
+    assert_eq!(output, (439, 435, 102, 4, 100));
 }
 
 #[test]
@@ -485,7 +495,7 @@ fn pass_to_40byte() {
     unit.push_script("take_5(nums: {i64, i64, i64, i64, i64}); i64 { ; nums.3 + i64 2 }").unwrap();
     let take_5 = 
         unit.get_fn("take_5").unwrap().downcast::<((i64, i64, i64, i64, i64),), i64>();
-    assert_eq!(take_5((439, 435, 102, 4, 100)), 6);
+    assert_eq!(consume::<i64>(take_5((439, 435, 102, 4, 100))), 6);
 }
 
 #[test]
@@ -495,7 +505,8 @@ fn pass_40byte_return_40byte() {
     unit.push_script("take_5(nums: {i64, i64, i64, i64, i64}); {i64, i64, i64, i64, i64} { ; nums }").unwrap();
     let take_5 = 
         unit.get_fn("take_5").unwrap().downcast::<((i64, i64, i64, i64, i64),), (i64, i64, i64, i64, i64)>();
-    assert_eq!(take_5((439, 435, 102, 4, 100)), (439, 435, 102, 4, 100));
+    let output = consume::<(i64, i64, i64, i64, i64)>(take_5((439, 435, 102, 4, 100)));
+    assert_eq!(output, (439, 435, 102, 4, 100));
 }
 
 #[test]

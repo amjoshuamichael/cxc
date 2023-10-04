@@ -105,10 +105,10 @@ fn infer_vec_push() {
     xc_test!(
         use StdLib;
         r#"
-        main() {
+        main(); i32 {
             x := Vec<i32>:new()
             x.push(432)
-            x.get(0)
+            ; x.get(0)
         }
         "#;
         432
@@ -120,8 +120,9 @@ fn infer_alloc() {
     xc_test!(
         r#"
         main() {
-            ptr: &i32 = alloc(i64 1)
+            ptr: &i32 = alloc(u64 1)
             *ptr = 4
+            free(ptr)
         }
         "#
     )

@@ -15,7 +15,12 @@ fn default_util() {
     unit.push_script("main(); String { ; String:default() }");
 
     let default_string = unit.get_fn("main").unwrap().downcast::<(), String>()();
-    assert_eq!(default_string, String::default());
+
+    #[cfg(not(feature = "backend-interpreter"))]
+    { assert_eq!(default_string, String::default()); }
+
+    #[cfg(feature = "backend-interpreter")]
+    unsafe { assert_eq!(*default_string.consume::<String>(), String::default()); }
 }
 
 #[test]
@@ -40,13 +45,20 @@ fn clone_util() {
     unit.push_script(
         "
         main(); String { 
-            ; a_cool_string()
+            cool_string := a_cool_string()
+            cool_string_clone := cool_string.clone()
+            ; cool_string_clone
         }
         ",
     );
 
-    let cool_string_copy = unit.get_fn("main").unwrap().downcast::<(), String>();
-    assert_eq!(cool_string_copy(), a_cool_string());
+    let cool_string_copy = unit.get_fn("main").unwrap().downcast::<(), String>()();
+
+    #[cfg(not(feature = "backend-interpreter"))]
+    { assert_eq!(cool_string_copy, String::default()); }
+
+    #[cfg(feature = "backend-interpreter")]
+    unsafe { assert_eq!(*cool_string_copy.consume::<String>(), String::from("coolman")); }
 }
 
 fn a_cool_string() -> String { String::from("coolman") }

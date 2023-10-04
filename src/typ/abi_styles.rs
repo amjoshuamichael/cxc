@@ -100,7 +100,7 @@ impl Type {
                             ReturnStyle::ThroughI64I64
                         } else if size == 12 {
                             ReturnStyle::ThroughI64I32
-                        } else if size <= 8 {
+                        } else if size <= 8 && size > 4 {
                             // arm processors return a pair of floating point numbers
                             // differently
                             if first_field.is_float() && second_field.is_float() 

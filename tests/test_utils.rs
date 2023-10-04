@@ -3,6 +3,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 use cxc::XcReflect;
+use cxc::Value;
 
 macro_rules! xc_test {
     ($code:expr) => {
@@ -24,22 +25,35 @@ macro_rules! xc_test {
         }
 
         #[allow(unused_assignments)]
+        #[allow(unused_mut)]
         // this is just so output uses the expected output's type
         let mut output = $expected_output;
 
         #[cfg(feature = "backend-debug")]
         println!("--getting function--");
 
-        let function = unit.get_fn("main").unwrap().downcast::<(), _>();
 
         #[cfg(feature = "backend-debug")]
         println!("--running function--");
 
-        output = function();
+        #[cfg(not(feature = "backend-interpreter"))]
+        {
+            let function = unit.get_fn("main").unwrap().downcast::<(), _>();
+
+            output = function();
+            #[cfg(feature = "show-bytes")]
+            cxc::bytesof::print_binary_two(&$expected_output, &output);
+            assert_eq!($expected_output, output);
+        }
+
+        #[cfg(feature = "backend-interpreter")]
+        {
+            let value = unit.get_fn("main").unwrap().call_void();
+            output = unsafe { *value.consume() };
+        }
 
         #[cfg(feature = "show-bytes")]
         cxc::bytesof::print_binary_two(&$expected_output, &output);
-
         assert_eq!($expected_output, output);
     }};
 }
@@ -194,6 +208,12 @@ impl<'a> Library for TestUtilsLib<'a> {
         }
     }
 }
+
+#[cfg(not(feature = "backend-interpreter"))]
+pub fn consume<T>(val: T) -> T { val }
+
+#[cfg(feature = "backend-interpreter")]
+pub fn consume<T: std::fmt::Debug + Copy>(val: Value) -> T { val.safe_consume::<T>() }
 
 use cxc::{library::Library, Unit};
 pub(crate) use xc_test;

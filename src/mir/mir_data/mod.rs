@@ -1,8 +1,8 @@
 use std::{collections::{BTreeMap, HashMap}, fmt::{Formatter, Display}, fmt};
 
-use slotmap::SlotMap;
+use slotmap::{SlotMap, SecondaryMap};
 
-use crate::{hlr::hlr_data::{VariableInfo, ArgIndex, VarID, GotoLabelID}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
+use crate::{hlr::{hlr_data::{VariableInfo, ArgIndex, VarID, GotoLabelID}, expr_tree::{ExprTree, ExprID}}, FuncType, Type, VarName, parse::Opcode, unit::FuncId, FuncQuery};
 
 #[derive(Debug)]
 pub struct MIR {
@@ -15,6 +15,8 @@ pub struct MIR {
     pub reg_count: u32,
     pub addr_reg_count: u32,
     pub reg_types: BTreeMap<MReg, Type>,
+    pub from_tree: ExprTree,
+    pub dbg_map: HashMap<usize, ExprID>,
 }
 
 impl MIR {
@@ -79,7 +81,7 @@ pub enum MLine {
 }
 
 impl fmt::Debug for MLine {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use MLine::*;
 
         match self {
@@ -98,23 +100,23 @@ impl fmt::Debug for MLine {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MReg(u32);
+pub struct MReg(pub(crate) u32);
 
 impl Display for MReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "_{}", self.0) }
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result { write!(f, "_{}", self.0) }
 }
 impl fmt::Debug for MReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "%{self}") }
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result { write!(f, "%{self}") }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MAddrReg(u32);
+pub struct MAddrReg(pub(crate) u32);
 
 impl Display for MAddrReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "-{}", self.0) }
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result { write!(f, "-{}", self.0) }
 }
 impl fmt::Debug for MAddrReg {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result { write!(f, "%{self}") }
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result { write!(f, "%{self}") }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -125,7 +127,7 @@ pub enum MMemLoc {
 }
 
 impl fmt::Debug for MMemLoc {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use MMemLoc::*;
 
         match self {
@@ -143,7 +145,7 @@ pub enum MAddr {
 }
 
 impl fmt::Debug for MAddr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use MAddr::*;
 
         match self {
@@ -153,6 +155,7 @@ impl fmt::Debug for MAddr {
     }
 }
 
+// TODO: combine MLit and MOperand?
 pub enum MLit {
     Int { size: u32, val: u64 },
     Float { size: u32, val: f64 },
@@ -161,7 +164,7 @@ pub enum MLit {
 }
 
 impl fmt::Debug for MLit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         use MLit::*;
 
         match self {
@@ -190,7 +193,6 @@ pub enum MExpr {
     Ref { on: MAddr },
     Alloc { len: MOperand, },
     Deref { to: Type, on: MMemLoc },
-    Void,
 }
 
 #[derive(Debug)]

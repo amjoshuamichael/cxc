@@ -3,7 +3,7 @@ mod test_utils;
 use std::rc::Rc;
 
 use cxc::{Unit, library::StdLib};
-use test_utils::xc_test;
+use test_utils::{xc_test, consume};
 
 #[test]
 fn auto_deref_method_1() {
@@ -60,7 +60,7 @@ fn auto_deref_method_2() {
         .downcast::<(Rc<MyPoint>,), f32>();
 
     let rc = Rc::new(MyPoint { x: 4.0, y: 3.0 });
-    assert_eq!(func(rc), 25.0);
+    assert_eq!(consume::<f32>(func(rc)), 25.0);
 }
 
 #[test]
@@ -92,8 +92,7 @@ fn big_rc_sum() {
         }
 
         main(); i32 {
-            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
-
+            rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 80, 100 })
             ; rcx.sum()
         }
         ";

@@ -1,6 +1,6 @@
 use crate::{
     parse::InitOpts,
-    errors::CResultMany, typ::can_transform::TransformationStep, VarName, Type, Field, TypeEnum, ArrayType,
+    errors::CResultMany, typ::{can_transform::TransformationStep, spec_from_type::type_to_type_spec}, VarName, Type, Field, TypeEnum, ArrayType,
 };
 
 use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen}, hlr_data::FuncRep};
@@ -19,7 +19,7 @@ pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
                     HNodeData::Transform {
                         hs: *object,
                         ret_type: Type::unknown(),
-                        steps,
+                        steps: Some(steps),
                     }
                 );
             }
@@ -31,10 +31,17 @@ pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
             let HNodeData::Transform { 
                 ref mut hs, 
                 steps,
-                ..
+                ret_type,
             } = transform_data else { return };
 
-            let steps = steps.clone().to_vec();
+            let steps = if let Some(existing_stpes) = steps {
+                existing_stpes.clone().to_vec()
+            } else {
+                let transforms_to = type_to_type_spec(ret_type.clone());
+                let from = hlr.tree.get(*hs).ret_type();
+                from.can_transform_to(transforms_to).unwrap().steps.to_vec()
+            };
+
             let transform_parent = hlr.tree.parent(transform_id);
 
             for step in steps {

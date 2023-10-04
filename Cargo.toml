@@ -31,6 +31,7 @@ lazy_static = "1"
 
 bytemuck = { version = "1", optional = true, default-features = false }
 region = { version = "3", optional = true }
+libc = { version = "0.2", optional = true }
 
 cxc_derive = "0.2"
 
@@ -42,12 +43,13 @@ glam = { version = "0.22", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["backend-cranelift", "ffi-assertions"]
+default = ["backend-interpreter", "ffi-assertions"]
 xc-debug = []
 mir-debug = []
 backend-debug = []
 backend-llvm = ["llvm-sys", "inkwell"]
 backend-cranelift = ["cranelift", "cranelift-jit", "cranelift-module", "cranelift-native"]
+backend-interpreter = ["region", "libc"]
 ffi-assertions = ["region"]
 show-bytes = []
 

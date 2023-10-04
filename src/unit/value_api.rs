@@ -1,9 +1,11 @@
+use cxc_derive::xc_opaque;
+
 use crate::{
     errors::CResultMany,
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation},
     typ::ReturnStyle,
-    Unit, XcReflect,
+    Unit, XcReflect, IntType, TypeEnum, StructType,
 };
 use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
 
@@ -13,10 +15,19 @@ use super::{FuncQuery, backends::IsBackend};
 
 use crate as cxc;
 
-#[derive(Default, Debug, XcReflect)]
+#[derive(Default, Debug)]
 pub struct Value {
-    typ: Type,
-    data: Vec<u8>,
+    pub(crate) typ: Type,
+    pub(crate) data: Box<[u8]>,
+}
+
+impl XcReflect for Value {
+    fn spec_code() -> String {
+        "Value = {
+            typ: Type,
+            data: { +ptr: &u8, +len: u64 },
+        }".into()
+    }
 }
 
 // This MAX_BYTES static is used as an output for functions that return a value
@@ -35,22 +46,35 @@ lazy_static::lazy_static! {
 impl Value {
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
         let size = typ.size();
-        let data = data[0..size].to_vec();
+        let data = data[0..size].to_vec().into_boxed_slice();
 
         Self { typ, data }
     }
 
-    pub fn new_from_vec(typ: Type, data: Vec<u8>) -> Self { Self { typ, data } }
+    pub fn new_from_boxed_slice(typ: Type, data: Box<[u8]>) -> Self { 
+        Self { typ, data } 
+    }
+
+    pub fn new_from_slice(typ: Type, data: &[u8]) -> Self { 
+        Self { typ, data: data.into() } 
+    }
+
+    pub fn void() -> Self {
+        Self {
+            typ: Type::void(),
+            data: vec![0; 0].into_boxed_slice(),
+        }
+    }
 
     /// # Safety
     ///
     /// Ensure the pointer is pointing to a type equivalent to typ.
     pub unsafe fn new_from_ptr(typ: Type, ptr: *const u8) -> Self {
-        let slice = std::slice::from_raw_parts(ptr, typ.size());
+        let slice = std::slice::from_raw_parts(ptr, typ.size()).to_vec().into_boxed_slice();
 
         Self {
             typ,
-            data: slice.to_vec(),
+            data: slice,
         }
     }
 
@@ -66,22 +90,74 @@ impl Value {
         }
     }
 
-    pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
-        let info = FuncQuery {
-            name: "to_string".into(),
-            relation: TypeRelation::MethodOf(self.typ.clone()),
-            ..Default::default()
+    /// Only converts primitives to strings.
+    pub fn to_string_no_unit(&self) -> Option<String> {
+        macro_rules! int_to_string {
+            ($int_ty:ty, $data:expr) => {{
+                let arr = <[u8; std::mem::size_of::<$int_ty>()]>::try_from(&*self.data).unwrap();
+                <$int_ty>::from_ne_bytes(arr).to_string()
+            }}
+        }
+
+        use TypeEnum::*;
+
+        let string = match self.typ.as_type_enum() {
+            Int(IntType { signed: false, size: 64 }) => int_to_string!(u64, &*self.data),
+            Int(IntType { signed: false, size: 32 }) => int_to_string!(u32, &*self.data),
+            Int(IntType { signed: false, size: 16 }) => int_to_string!(u16, &*self.data),
+            Int(IntType { signed: true, size: 64 }) => int_to_string!(i64, &*self.data),
+            Int(IntType { signed: true, size: 32 }) => int_to_string!(i32, &*self.data),
+            Int(IntType { signed: true, size: 16 }) => int_to_string!(i16, &*self.data),
+            Ref(_) => int_to_string!(u64, &*self.data),
+            Struct(struct_type) => {
+                let mut output = String::from("{ ");
+
+                for (f, field) in struct_type.fields.iter().enumerate() {
+                    output += &*field.name; 
+                    output += ": ";
+                    let field_offset = struct_type.field_offset_in_bytes(f);
+                    let member_value = Value {
+                        typ: field.typ.clone(),
+                        data: self.data[field_offset..(field_offset + field.typ.size())].into(),
+                    };
+
+                    output += &*member_value.to_string_no_unit()?;
+
+                    if f != struct_type.fields.len() - 1 {
+                        output += ", ";
+                    }
+                }
+
+                output += " }";
+
+                output
+            }
+            _ => return None,
         };
 
-        unit.compile_func_set(std::iter::once(info.clone()).collect()).unwrap();
+        Some(string)
+    }
 
-        let mut output = String::new();
+    pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
+        if !self.typ.is_ref() && let Some(serialized_primitive) = self.to_string_no_unit() {
+            return Some(serialized_primitive)
+        } else {
+            let query = FuncQuery {
+                name: "to_string".into(),
+                relation: TypeRelation::MethodOf(self.typ.clone()),
+                ..Default::default()
+            };
 
-        let func = unit.get_fn(info)?;
-        let func = func.downcast::<(&mut String, *const usize), ()>();
-        func(&mut output, self.const_ptr());
+            unit.compile_func_set(std::iter::once(query.clone()).collect()).unwrap();
 
-        Some(indent_parens(output))
+            let mut output = String::new();
+
+            let func = unit.get_fn(query)?;
+            let func = func.downcast::<(&mut String, *const usize), ()>();
+            func(&mut output, self.const_ptr());
+
+            Some(indent_parens(output))
+        }
     }
 
     /// # Safety
@@ -92,7 +168,7 @@ impl Value {
     /// # Safety
     ///
     /// Ensure the generic type 'T' is the same as the type of the value.
-    pub unsafe fn get_data(self) -> Box<[u8]> { self.data.into_boxed_slice() }
+    pub unsafe fn get_data(self) -> Box<[u8]> { self.data }
 
 
     /// # Safety
@@ -102,9 +178,15 @@ impl Value {
         let data_ptr = self.data.as_mut_ptr();
 
         // Prevent data from being dropped
-        let _: (u64, u64, u64) = std::mem::transmute(self.data);
+        let _: (u64, u64) = std::mem::transmute(self.data);
 
         Box::from_raw(data_ptr as *mut T)
+    }
+
+    pub fn safe_consume<T: Copy>(self) -> T {
+        // TODO: make this return an error instead of doing assertions
+        assert!(self.typ.size() == self.data.len());
+        unsafe { *(self.data.as_ptr() as *const T) }
     }
 
     pub fn const_ptr(&self) -> *const usize { &*self.data as *const [u8] as *const usize }
@@ -153,60 +235,52 @@ impl Unit {
         let func_info = &self.comp_data.processed[value_func_id];
 
         let ret_type = &func_info.typ.ret;
-        let value = unsafe {
-            match ret_type.return_style() {
-                ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
-                    let new_func = func_addr.downcast::<(), i64>();
-                    let out: [u8; 8] = new_func().to_ne_bytes();
-                    Value::new_from_arr(ret_type.clone(), out)
-                },
-                ReturnStyle::ThroughI32I32
-                | ReturnStyle::ThroughF32F32
-                | ReturnStyle::ThroughI64I32
-                | ReturnStyle::ThroughI64I64
-                | ReturnStyle::MoveIntoI64I64 => {
-                    let new_func = func_addr.downcast::<(), (i64, i64)>();
-                    let out: [u8; 16] = transmute(new_func());
-                    Value::new_from_arr(ret_type.clone(), out)
-                },
-                ReturnStyle::ThroughDouble => {
-                    let new_func = func_addr.downcast::<(), f64>();
-                    let out: [u8; 8] = transmute(new_func());
-                    Value::new_from_arr(ret_type.clone(), out)
-                },
-                ReturnStyle::Sret => {
-                    let new_func = func_addr.downcast::<(), MaxBytes>();
+        #[cfg(feature = "backend-interpreter")]
+        {
+            Ok(func_addr.call_void())
+        }
 
-                    let data_vec = {
-                        let mut bytes_lock = MAX_BYTES.lock().unwrap();
-                        *bytes_lock = new_func();
-                        bytes_lock[..ret_type.size()].to_vec()
-                    };
+        #[cfg(not(feature = "backend-interpreter"))]
+        {
+            let value = unsafe {
+                match ret_type.return_style() {
+                    ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
+                        let new_func = func_addr.downcast::<(), i64>();
+                        let out: [u8; 8] = new_func().to_ne_bytes();
+                        Value::new_from_arr(ret_type.clone(), out)
+                    },
+                    ReturnStyle::ThroughI32I32
+                    | ReturnStyle::ThroughF32F32
+                    | ReturnStyle::ThroughI64I32
+                    | ReturnStyle::ThroughI64I64
+                    | ReturnStyle::MoveIntoI64I64 => {
+                        let new_func = func_addr.downcast::<(), (i64, i64)>();
+                        let out: [u8; 16] = transmute(new_func());
+                        Value::new_from_arr(ret_type.clone(), out)
+                    },
+                    ReturnStyle::ThroughDouble => {
+                        let new_func = func_addr.downcast::<(), f64>();
+                        let out: [u8; 8] = transmute(new_func());
+                        Value::new_from_arr(ret_type.clone(), out)
+                    },
+                    ReturnStyle::Sret => {
+                        let new_func = func_addr.downcast::<(), MaxBytes>();
 
-                    Value::new_from_vec(ret_type.clone(), data_vec)
-                },
-                ReturnStyle::Void => {
-                    panic!("value returns none!")
-                },
-            }
-        };
+                        let data_vec = {
+                            let mut bytes_lock = MAX_BYTES.lock().unwrap();
+                            *bytes_lock = new_func();
+                            bytes_lock[..ret_type.size()].to_vec()
+                        };
 
-        // TODO: free function machine code
+                        Value::new_from_slice(ret_type.clone(), &*data_vec)
+                    },
+                    ReturnStyle::Void => {
+                        panic!("value returns none!")
+                    },
+                }
+            };
 
-        Ok(value)
+            Ok(value)
+        }
     }
-}
-
-impl<'a> IntoIterator for &'a Value {
-    type Item = &'a u8;
-    type IntoIter = std::slice::Iter<'a, u8>;
-
-    fn into_iter(self) -> Self::IntoIter { self.data.iter() }
-}
-
-impl IntoIterator for Value {
-    type Item = u8;
-    type IntoIter = std::vec::IntoIter<u8>;
-
-    fn into_iter(self) -> Self::IntoIter { self.data.into_iter() }
 }

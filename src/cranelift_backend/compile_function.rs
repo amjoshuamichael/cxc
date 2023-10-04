@@ -699,7 +699,6 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
             let typ = to.to_cl_type()[0];
             Some(vec![fcs.builder.ins().load(typ, MemFlags::new(), ptr, 0)])
         },
-        MExpr::Void => None,
     }
 }
 

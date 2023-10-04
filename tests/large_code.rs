@@ -145,7 +145,7 @@ fn basic_default() {
         "
             OutputType = {
                 one: i32,
-                two: f32
+                two: f32,
             }
 
             main(); OutputType {

@@ -5,7 +5,6 @@ pub enum Opcode {
     Minus,
     Multiplier,
     Divider,
-    Exponential,
     Modulus,
     BitAND,
     BitOR,
@@ -33,18 +32,19 @@ pub enum Opcode {
 use Opcode::*;
 
 impl Opcode {
-    pub const MAX_UNARY_PRECEDENT_LEVEL: u8 = 1;
+    pub const MAX_UNARY_PRECEDENT_LEVEL: u8 = 3;
     pub fn un_prec_level(&self) -> Option<u8> {
         use Opcode::*;
 
         match self {
-            Ref | Deref => Some(1),
-            Not => Some(0),
+            Ref | Deref => Some(3),
+            Not => Some(2),
+            Transform => Some(1),
             _ => None,
         }
     }
 
-    pub const MAX_BINARY_PRECEDENT_LEVEL: u8 = 10;
+    pub const MAX_BINARY_PRECEDENT_LEVEL: u8 = 11;
     pub fn bin_prec_level(&self) -> Option<u8> {
         // lower is more significant
         match self {
@@ -59,7 +59,6 @@ impl Opcode {
             Plus | Minus => Some(3),
             Multiplier | Divider => Some(2),
             Modulus => Some(1),
-            Exponential => Some(0),
             _ => None,
         }
     }
@@ -73,7 +72,6 @@ impl Opcode {
 impl ToString for Opcode {
     fn to_string(&self) -> String {
         match self {
-            Exponential => "**",
             Plus => "+",
             Minus => "-",
             Multiplier => "*",

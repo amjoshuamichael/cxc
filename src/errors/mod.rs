@@ -17,7 +17,7 @@ pub enum CErr {
 }
 
 impl Display for CErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::Parse(parse_error) => write!(f, "{parse_error}"),
             Self::Type(type_error) => write!(f, "{type_error:?}"),

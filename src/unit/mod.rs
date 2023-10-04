@@ -113,7 +113,7 @@ new_key_type! {
 }
 
 impl Debug for CompData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "CompData {{ ... }}")
     }
 }
@@ -372,10 +372,7 @@ impl Unit {
             mirs.insert(func_id, mir);
         }
 
-        for (func_id, mir) in mirs {
-            self.backend.compile_function(func_id, mir);
-        }
-
+        self.backend.compile_functions(mirs);
         self.backend.end_compilation_round();
 
         #[cfg(feature = "backend-debug")]
@@ -400,7 +397,7 @@ impl Unit {
     /// Gets a function from the unit. Returns none if that function doesn't already exist.
     /// Note that if you have a generic function, and the specific variation of that
     /// function that you query for hasn't been compiled, `get_fn` will return None.
-    pub fn get_fn(&self, with: impl Into<FuncQuery>) -> Option<&Func> {
+    pub fn get_fn(&self, with: impl Into<FuncQuery>) -> Option<&<Backend as IsBackend>::LowerableFuncRef> {
         let with = with.into();
 
         let id = self.comp_data.query_for_id(&with)?;
@@ -464,7 +461,8 @@ impl Unit {
         self.backend.add_global(name, typ.get_ref(), val as _);
     }
 
-    pub fn get_fn_by_ptr(&self, ptr: *const usize) -> Option<(FuncId, Func)> {
+    pub fn get_fn_by_ptr(&self, ptr: *const usize) 
+        -> Option<(FuncId, <Backend as backends::IsBackend>::LowerableFuncRef)> {
         let (id, func) = self.backend.compiled_iter().find(|(_, func)| func.get_pointer() == ptr)?;
 
         Some((id.clone(), func.clone()))

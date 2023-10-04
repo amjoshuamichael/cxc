@@ -33,7 +33,6 @@ fn double_error() {
         .unwrap_err();
     let mut iter = errors.drain(..);
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
-    assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), None);
 }
 
@@ -53,6 +52,7 @@ fn in_struct_expression() {
         )
         .unwrap_err();
     let mut iter = errors.drain(..);
+    assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), Some(CErr::Parse(_)));
     assert_matches!(iter.next(), None);

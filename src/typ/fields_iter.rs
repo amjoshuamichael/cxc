@@ -2,16 +2,17 @@ use std::ops::DerefMut;
 
 use super::*;
 
+#[derive(Debug)]
 pub struct PrimitiveFieldsIter {
     inner: FieldsIter,
-    skip_parent_on_next: bool,
+    skip_ref_on_next: bool,
 }
 
 impl PrimitiveFieldsIter {
     pub fn new(from: Type) -> Self {
         Self {
             inner: FieldsIter::new(from),
-            skip_parent_on_next: false,
+            skip_ref_on_next: false,
         }
     }
 }
@@ -29,8 +30,10 @@ impl Iterator for PrimitiveFieldsIter {
     type Item = Type;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.skip_parent_on_next {
-            self.skip_parent_of_last();
+        if self.skip_ref_on_next {
+            self.inner.next();
+            self.inner.skip_parent_of_last();
+            self.skip_ref_on_next = false;
         }
 
         loop {
@@ -38,7 +41,7 @@ impl Iterator for PrimitiveFieldsIter {
             match next_type.as_type_enum() {
                 TypeEnum::Array(_) | TypeEnum::Struct(_) => {},
                 TypeEnum::Ref(_) => {
-                    self.skip_parent_on_next = true;
+                    self.skip_ref_on_next = true;
                     return Some(next_type);
                 },
                 _ => return Some(next_type),
@@ -225,6 +228,20 @@ mod tests {
         assert_eq!(iter.next(), Some(Type::bool()));
         assert_eq!(iter.next(), Some(Type::i(32).get_ref()));
         assert_eq!(iter.next(), Some(Type::f32()));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn fields_iter_vec() {
+        let mut iter = PrimitiveFieldsIter::new(Type::new_struct(vec![
+            Field { inherited: true, name: "ptr".into(), typ: Type::u(8).get_ref() },
+            Field { inherited: false, name: "cap".into(), typ: Type::u(64) },
+            Field { inherited: true, name: "len".into(), typ: Type::u(32) },
+        ]));
+
+        assert_eq!(iter.next(), Some(Type::u(8).get_ref()));
+        assert_eq!(iter.next(), Some(Type::u(64)));
+        assert_eq!(iter.next(), Some(Type::u(32)));
         assert_eq!(iter.next(), None);
     }
 
