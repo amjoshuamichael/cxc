@@ -14,6 +14,6 @@ value<T>(data: T); Value {
 
     ; Value {
         typ = typeobj,
-        data = bytes_vec,
+        data = +bytes_vec,
     }
 }

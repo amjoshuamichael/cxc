@@ -37,12 +37,10 @@ fn return_by_small_cast(hlr: &mut FuncRep, load_as: Type) {
         move |_, data, hlr| {
             let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
 
-            hlr.replace_quick(*to_return, DerefGen(
-                CastGen {
-                    cast: RefGen(hlr.tree.get(*to_return)),
-                    to: load_as.get_ref(),
-                }
-            ));
+            hlr.replace_quick(*to_return, CastGen {
+                cast: hlr.tree.get(*to_return),
+                to: load_as.clone(),
+            });
         }
     );
 }
@@ -172,7 +170,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 }
 
 fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
-    let og_call_data = hlr.tree.get(og_call);
+    let mut og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
     let casted_var_name = hlr.add_variable(&casted_var_type, og_call);
@@ -180,6 +178,8 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
     let raw_ret_var_type = casted_var_type.raw_return_type();
     let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type, og_call);
 
+    *og_call_data.ret_type_mut().unwrap() = raw_ret_var_type.clone();
+    
     hlr.insert_statement_before(
         og_call,
         SetGen {

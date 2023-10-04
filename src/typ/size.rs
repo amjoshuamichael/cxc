@@ -31,7 +31,7 @@ pub(super) fn size_of_type(typ: Type) -> usize {
     base_size
 }
 
-fn size_of_largest_field_in(typ: &Type) -> usize {
+pub fn size_of_largest_field_in(typ: &Type) -> usize {
     match typ.as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
             let mut sizes = fields.iter()

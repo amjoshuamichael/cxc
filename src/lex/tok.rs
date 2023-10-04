@@ -29,7 +29,7 @@ impl Default for VarName {
 }
 
 impl Display for VarName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             VarName::Other(o) => write!(f, "{o}"),
             VarName::TupleIndex(ti) => write!(f, "{ti}"),
@@ -41,7 +41,7 @@ impl Display for VarName {
 }
 
 impl Debug for VarName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{self}")
     }
 }
@@ -62,7 +62,17 @@ impl std::ops::Deref for VarName {
     fn deref(&self) -> &Self::Target {
         match self {
             VarName::Other(o) => &**o,
-            VarName::TupleIndex(_) => todo!(),
+            VarName::TupleIndex(0) => "0",
+            VarName::TupleIndex(1) => "1",
+            VarName::TupleIndex(2) => "2",
+            VarName::TupleIndex(3) => "3",
+            VarName::TupleIndex(4) => "4",
+            VarName::TupleIndex(5) => "5",
+            VarName::TupleIndex(6) => "6",
+            VarName::TupleIndex(7) => "7",
+            VarName::TupleIndex(8) => "8",
+            VarName::TupleIndex(9) => "9",
+            VarName::TupleIndex(_) => "#",
             VarName::None => "$none",
             VarName::Error => "$error",
             VarName::Sret => "$sret",
@@ -113,13 +123,13 @@ impl TypeName {
 }
 
 impl Display for TypeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
 impl Debug for TypeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let out = match self {
             Self::Other(name) => name,
             Self::I(size) => return write!(f, "i{size}"),
@@ -315,6 +325,7 @@ impl Tok {
             Tok::AsterickSet(_) => Ok(Opcode::Deref),
             Tok::AmpersandSet(_) => Ok(Opcode::Ref),
             Tok::Bang => Ok(Opcode::Not),
+            Tok::Plus => Ok(Opcode::Transform),
             _ => Err(ParseError::UnexpectedTok {
                 got: self.clone(),
                 expected: vec![TokName::UnaryOperator],

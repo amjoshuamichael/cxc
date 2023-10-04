@@ -105,6 +105,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     detect_binary_ops(&mut atoms)?;
 
     if atoms.len() != 1 {
+        panic!("{atoms:?}");
         return Err(ParseError::ImproperExpression);
     }
 

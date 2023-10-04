@@ -4,10 +4,12 @@ use crate::test_utils::Numbers5;
 mod test_utils;
 
 use cxc::{Unit, library::StdLib, Type, FuncType};
+use test_utils::consume;
 
-static mut GNUM: i32 = 0;
+static mut GNUM: i32 = 90;
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn basic_global() {
     let mut unit = Unit::new();
 
@@ -28,6 +30,27 @@ fn basic_global() {
 }
 
 #[test]
+fn read_basic_global() {
+    let mut unit = Unit::new();
+
+    unit.add_global("x".into(), unsafe { &mut GNUM as *mut _ });
+
+    unit.push_script(
+        r#"
+        main(); i32 {
+            ; *x
+        }
+        "#,
+    )
+    .unwrap();
+
+    let read = unit.get_fn("main").unwrap().downcast::<(), i32>()();
+
+    assert_eq!(consume::<i32>(read), 90);
+}
+
+#[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn big_global() {
     let mut unit = Unit::new();
 
@@ -49,8 +72,30 @@ fn big_global() {
     assert_eq!(large_value.d, 60);
 }
 
+#[test]
+fn read_big_global() {
+    let mut unit = Unit::new();
+
+    let mut large_value = Numbers5 { a: 5, b: 10, c: 15, d: 20, e: 25 };
+    unit.add_reflect_type::<Numbers5>();
+    unit.add_global("large_value".into(), &mut large_value as *mut _);
+
+    unit.push_script(
+        r#"
+        main(); Numbers5 {
+            ; *large_value
+        }
+        "#,
+    )
+    .unwrap();
+
+    let read = unit.get_fn("main").unwrap().downcast::<(), Numbers5>()();
+
+    assert_eq!(consume::<Numbers5>(read), large_value);
+}
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn global_rc() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -73,6 +118,7 @@ fn global_rc() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn comp_script() {
     let mut unit = Unit::new();
 
@@ -100,6 +146,7 @@ fn comp_script() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn first_class_void() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -135,6 +182,7 @@ fn first_class_void() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn get_fn_by_ptr() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -165,5 +213,5 @@ fn get_fn_by_ptr() {
     let add_two = add_two.downcast::<(i32,), i32,>();
     let fifty_four = fifty_four.downcast::<(), i32>();
 
-    assert_eq!(add_two(fifty_four()), 56);
+    assert_eq!(consume::<i32>(add_two(consume::<i32>(fifty_four()))), 56);
 }

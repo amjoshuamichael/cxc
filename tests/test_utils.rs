@@ -3,6 +3,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 use cxc::XcReflect;
+use cxc::Value;
 
 macro_rules! xc_test {
     ($code:expr) => {
@@ -207,6 +208,12 @@ impl<'a> Library for TestUtilsLib<'a> {
         }
     }
 }
+
+#[cfg(not(feature = "backend-interpreter"))]
+pub fn consume<T>(val: T) -> T { val }
+
+#[cfg(feature = "backend-interpreter")]
+pub fn consume<T: std::fmt::Debug + Copy>(val: Value) -> T { val.safe_consume::<T>() }
 
 use cxc::{library::Library, Unit};
 pub(crate) use xc_test;

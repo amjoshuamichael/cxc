@@ -76,7 +76,7 @@ pub struct FuncDowncasted<A, R> {
 impl<A, R> CallableFunc<A, R> for FuncDowncasted<A, R> where A: CallInput<R> {}
 
 impl<A, R> Debug for FuncDowncasted<A, R> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}", self.inner.code().pointer())
     }
 }

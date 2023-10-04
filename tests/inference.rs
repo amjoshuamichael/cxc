@@ -120,8 +120,9 @@ fn infer_alloc() {
     xc_test!(
         r#"
         main() {
-            ptr: &i32 = alloc(i64 1)
+            ptr: &i32 = alloc(u64 1)
             *ptr = 4
+            free(ptr)
         }
         "#
     )

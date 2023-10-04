@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use crate::{unit::{FuncId, backends::CallableFunc, callable::CallInput}, Value};
 
 use super::IntepreterState;
-use super::interpreter::run;
+use super::interpreter::run_with_args;
 
 pub struct LoweredInterpreterFunc<A, R> {
     pub(super) state: Arc<RwLock<IntepreterState>>,
@@ -41,7 +41,31 @@ macro_rules! impl_interpreter_func {
         {
             extern "rust-call" fn call(&self, args: ($($t,)*)) -> Self::Output {
                 let state = self.state.read().unwrap();
-                run(self.func_id, &*state)
+                #[allow(unused_mut)]
+                let mut boxed_args = Vec::<Box<[u8]>>::new();
+
+                #[allow(non_snake_case)]
+                let ($($t,)*) = args;
+
+                $(
+                    let var_size = std::mem::size_of::<$t>();
+                    if var_size > 16 {
+                        let ptr = &$t;
+                        let arg_arr: [u8; 8] = (ptr as *const $t as usize).to_ne_bytes();
+                        boxed_args.push(arg_arr.into());
+                    } else {
+                        unsafe {
+                            let slice = std::slice::from_raw_parts(
+                                &$t as *const $t as *const u8, 
+                                var_size
+                            );
+
+                            boxed_args.push(slice.into());
+                        }
+                    }
+                )*
+
+                run_with_args(self.func_id, &*state, boxed_args, false)
             }
         }
     }

@@ -1,6 +1,6 @@
 use crate::{parse::Opcode, FuncQuery, TypeRelation};
 
-use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen}};
+use super::{hlr_data::FuncRep, expr_tree::{HNodeData, CallGen, UnarOpGen, SetGen}};
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn add_drops(hlr: &mut FuncRep) {
@@ -27,6 +27,7 @@ pub fn add_drops(hlr: &mut FuncRep) {
                     Opcode::Ref => return false,
                     _ => {},
                 },
+                HNodeData::Member { .. } => return false,
                 HNodeData::Set { lhs, .. } => {
                     if matches!(
                             hlr.tree.get_ref(lhs), 
@@ -74,7 +75,24 @@ pub fn add_drops(hlr: &mut FuncRep) {
         };
 
         if let Some(last_return) = last_return {
-            hlr.insert_statement_before(*last_return, drop_call);
+            let mut return_data = hlr.tree.get(*last_return);
+            let HNodeData::Return { to_return, .. } = &mut return_data
+                else { unreachable!() };
+
+            if let Some(to_return) = to_return {
+                let to_return_data = hlr.tree.get(*to_return);
+                let return_var = hlr.add_variable(&to_return_data.ret_type(), block);
+
+                hlr.insert_statement_before(*last_return, SetGen {
+                    lhs: return_var,
+                    rhs: to_return_data,
+                });
+                hlr.insert_statement_before(*last_return, drop_call);
+                *to_return = hlr.insert_quick(*last_return, return_var);
+                hlr.tree.replace(*last_return, return_data);
+            } else {
+                hlr.insert_statement_before(*last_return, drop_call);
+            }
         } else {
             hlr.insert_statement_after(*stmts.last().unwrap(), drop_call);
         }

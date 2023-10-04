@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::{Arc, RwLock}};
+use std::{collections::{HashMap, HashSet}, sync::{Arc, RwLock}};
 
 use slotmap::SecondaryMap;
 
@@ -33,6 +33,7 @@ struct ExternalFunc {
 pub struct InterpreterBackend {
     state: Arc<RwLock<IntepreterState>>,
     func_refs: SecondaryMap<FuncId, LowerableInterpreterFunc>,
+    to_recompile: HashSet<FuncId>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +85,9 @@ impl IsBackend for InterpreterBackend {
 
     fn register_function(&mut self, _: FuncId, _: &ProcessedFuncInfo) { }
 
-    fn mark_to_recompile(&mut self, _: FuncId) { }
+    fn mark_to_recompile(&mut self, func_id: FuncId) { 
+        self.to_recompile.insert(func_id);
+    }
 
     fn compile_functions(&mut self, to_compile: SecondaryMap<FuncId, MIR>) {
         let mut state_lock = self.state.write().unwrap();
@@ -98,10 +101,12 @@ impl IsBackend for InterpreterBackend {
         }
     }
 
-    fn end_compilation_round(&mut self) { }
+    fn end_compilation_round(&mut self) { 
+        self.to_recompile.clear()
+    }
 
     fn has_been_compiled(&self, id: FuncId) -> bool {
-        self.state.read().unwrap().mirs.contains_key(id)
+        !self.to_recompile.contains(&id) && self.state.read().unwrap().mirs.contains_key(id)
     }
 
     fn get_function(&self, func_id: FuncId) -> &Self::LowerableFuncRef {
@@ -112,8 +117,8 @@ impl IsBackend for InterpreterBackend {
         Box::new(self.func_refs.iter())
     }
 
-    fn add_global(&mut self, name: crate::VarName, typ: crate::Type, address: *mut usize) {
-
+    fn add_global(&mut self, name: VarName, typ: Type, pointer: *mut usize) {
+        self.state.write().unwrap().globals.insert(name, Global { typ, pointer });
     }
 
     fn add_external_func(

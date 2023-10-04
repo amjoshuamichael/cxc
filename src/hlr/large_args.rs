@@ -1,5 +1,6 @@
 use super::hlr_data::VarID;
 use super::prelude::*;
+use crate::Type;
 use crate::hlr::expr_tree::*;
 
 use crate::typ::ArgStyle;
@@ -98,11 +99,16 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                     args[0] = hlr.insert_quick(call_id, RefGen(arg));
                 } else if let ArgStyle::Ints(..) = arg_style {
                     let _new_arg_name = format!("{}_arg_{}", query.name, a);
-                    let new_arg = hlr.add_variable(&old_arg_type.raw_arg_type(), hlr.tree.root);
+                    let raw_arg_type = old_arg_type.raw_arg_type();
+                    let new_arg = hlr.add_variable(&raw_arg_type, hlr.tree.root);
 
-                    hlr.insert_statement_before(call_id, SetGen {
-                        lhs: new_arg.clone(),
-                        rhs: arg,
+                    hlr.insert_statement_before(call_id, MemCpyGen {
+                        from: RefGen(arg),
+                        to: RefGen(new_arg),
+                        size: HNodeData::Number {
+                            lit_type: Type::i(64),
+                            value: hlr.tree.get_ref(arg).ret_type().size() as u64,
+                        }
                     });
 
                     args[a] = hlr.insert_quick(call_id, new_arg);

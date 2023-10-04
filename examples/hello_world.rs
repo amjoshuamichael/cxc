@@ -13,5 +13,6 @@ pub fn main() {
     .unwrap();
 
     let hello_world = unit.get_fn("main").unwrap().downcast::<(), ()>();
-    hello_world()
+
+    hello_world();
 }

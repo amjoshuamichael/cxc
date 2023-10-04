@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{collections::{BTreeMap, HashMap}, rc::Rc};
 
 use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery};
 
@@ -8,6 +8,7 @@ mod mir_data;
 mod remove_post_return_statements;
 
 use remove_post_return_statements::remove_post_return_statements;
+use slotmap::SecondaryMap;
 
 impl MIR {
     fn new_block_id(&mut self) -> u32 {
@@ -31,6 +32,8 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
         addr_reg_count: 0,
         reg_types: BTreeMap::new(),
         block_labels: HashMap::new(),
+        from_tree: ExprTree::default(),
+        dbg_map: HashMap::new(),
     };
 
     for goto_label in hlr.tree.nodes.values() {
@@ -40,6 +43,7 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
     }
 
     build_block(hlr.tree.get(hlr.tree.root), &hlr.tree, &mut mir);
+    mir.from_tree = hlr.tree;
 
     remove_post_return_statements(&mut mir);
 
@@ -51,7 +55,9 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
         }
 
         println!("{}", format!("{:?}", &mir.reg_types).replace("\n", " "));
-        println!("{}", format!("{:?}", &mir.variables).replace("\n", " "));
+        for (var_id, var_info) in &mir.variables {
+            println!("{var_id:?}, {var_info:?}");
+        }
     }
 
     mir
@@ -60,8 +66,9 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
 fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
     let HNodeData::Block { stmts, .. }  = node else { unreachable!() };
 
-
     for stmt in stmts {
+        mir.dbg_map.insert(mir.lines.len() + 1, stmt);
+
         match tree.get(stmt) {
             HNodeData::Number { .. } | HNodeData::Float { .. } | HNodeData::Bool { .. } | HNodeData::Ident { .. } => {},
             HNodeData::Set { lhs, rhs, .. } => {
@@ -192,7 +199,7 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
         HNodeData::Ident { var_id: id, .. } => {
             let var = &mir.variables[id];
             if var.is_arg_or_sret() {
-                let addr_var = mir.new_variable(var.typ.clone());
+                let addr_var = mir.new_variable(var.typ.raw_arg_type().clone());
 
                 mir.lines.insert(0, MLine::Store {
                     l: MAddr::Var(addr_var),

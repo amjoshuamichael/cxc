@@ -5,7 +5,7 @@ use crate::{
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation},
     typ::ReturnStyle,
-    Unit, XcReflect,
+    Unit, XcReflect, IntType, TypeEnum, StructType,
 };
 use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
 
@@ -15,11 +15,19 @@ use super::{FuncQuery, backends::IsBackend};
 
 use crate as cxc;
 
-#[derive(Default, Debug, XcReflect)]
-#[xc_opaque]
+#[derive(Default, Debug)]
 pub struct Value {
     pub(crate) typ: Type,
     pub(crate) data: Box<[u8]>,
+}
+
+impl XcReflect for Value {
+    fn spec_code() -> String {
+        "Value = {
+            typ: Type,
+            data: { +ptr: &u8, +len: u64 },
+        }".into()
+    }
 }
 
 // This MAX_BYTES static is used as an output for functions that return a value
@@ -82,22 +90,74 @@ impl Value {
         }
     }
 
-    pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
-        let info = FuncQuery {
-            name: "to_string".into(),
-            relation: TypeRelation::MethodOf(self.typ.clone()),
-            ..Default::default()
+    /// Only converts primitives to strings.
+    pub fn to_string_no_unit(&self) -> Option<String> {
+        macro_rules! int_to_string {
+            ($int_ty:ty, $data:expr) => {{
+                let arr = <[u8; std::mem::size_of::<$int_ty>()]>::try_from(&*self.data).unwrap();
+                <$int_ty>::from_ne_bytes(arr).to_string()
+            }}
+        }
+
+        use TypeEnum::*;
+
+        let string = match self.typ.as_type_enum() {
+            Int(IntType { signed: false, size: 64 }) => int_to_string!(u64, &*self.data),
+            Int(IntType { signed: false, size: 32 }) => int_to_string!(u32, &*self.data),
+            Int(IntType { signed: false, size: 16 }) => int_to_string!(u16, &*self.data),
+            Int(IntType { signed: true, size: 64 }) => int_to_string!(i64, &*self.data),
+            Int(IntType { signed: true, size: 32 }) => int_to_string!(i32, &*self.data),
+            Int(IntType { signed: true, size: 16 }) => int_to_string!(i16, &*self.data),
+            Ref(_) => int_to_string!(u64, &*self.data),
+            Struct(struct_type) => {
+                let mut output = String::from("{ ");
+
+                for (f, field) in struct_type.fields.iter().enumerate() {
+                    output += &*field.name; 
+                    output += ": ";
+                    let field_offset = struct_type.field_offset_in_bytes(f);
+                    let member_value = Value {
+                        typ: field.typ.clone(),
+                        data: self.data[field_offset..(field_offset + field.typ.size())].into(),
+                    };
+
+                    output += &*member_value.to_string_no_unit()?;
+
+                    if f != struct_type.fields.len() - 1 {
+                        output += ", ";
+                    }
+                }
+
+                output += " }";
+
+                output
+            }
+            _ => return None,
         };
 
-        unit.compile_func_set(std::iter::once(info.clone()).collect()).unwrap();
+        Some(string)
+    }
 
-        let mut output = String::new();
+    pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
+        if !self.typ.is_ref() && let Some(serialized_primitive) = self.to_string_no_unit() {
+            return Some(serialized_primitive)
+        } else {
+            let query = FuncQuery {
+                name: "to_string".into(),
+                relation: TypeRelation::MethodOf(self.typ.clone()),
+                ..Default::default()
+            };
 
-        let func = unit.get_fn(info)?;
-        let func = func.downcast::<(&mut String, *const usize), ()>();
-        func(&mut output, self.const_ptr());
+            unit.compile_func_set(std::iter::once(query.clone()).collect()).unwrap();
 
-        Some(indent_parens(output))
+            let mut output = String::new();
+
+            let func = unit.get_fn(query)?;
+            let func = func.downcast::<(&mut String, *const usize), ()>();
+            func(&mut output, self.const_ptr());
+
+            Some(indent_parens(output))
+        }
     }
 
     /// # Safety
@@ -121,6 +181,12 @@ impl Value {
         let _: (u64, u64) = std::mem::transmute(self.data);
 
         Box::from_raw(data_ptr as *mut T)
+    }
+
+    pub fn safe_consume<T: Copy>(self) -> T {
+        // TODO: make this return an error instead of doing assertions
+        assert!(self.typ.size() == self.data.len());
+        unsafe { *(self.data.as_ptr() as *const T) }
     }
 
     pub fn const_ptr(&self) -> *const usize { &*self.data as *const [u8] as *const usize }

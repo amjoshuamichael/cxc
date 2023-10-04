@@ -26,8 +26,7 @@ pub struct FuncRep<'a> {
 
 impl<'a> ToString for FuncRep<'a> {
     fn to_string(&self) -> String {
-        let data = self.tree.get(self.tree.root);
-        data.to_string(self)
+        self.tree.get(self.tree.root).to_string(&self.tree, &self.variables)
     }
 }
 
@@ -372,10 +371,19 @@ impl<'a> FuncRep<'a> {
             Expr::UnarOp(op, hs) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = HNodeData::UnarOp {
-                    ret_type: Type::unknown(),
-                    op: *op,
-                    hs: self.add_expr(&**hs, space),
+                
+                let new_binop = if *op == Opcode::Transform {
+                    HNodeData::Transform {
+                        ret_type: Type::unknown(),
+                        hs: self.add_expr(&**hs, space),
+                        steps: None,
+                    }
+                } else {
+                     HNodeData::UnarOp {
+                        ret_type: Type::unknown(),
+                        op: *op,
+                        hs: self.add_expr(&**hs, space),
+                    }                   
                 };
 
                 self.tree.replace(space, new_binop);
