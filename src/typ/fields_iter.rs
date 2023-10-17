@@ -120,7 +120,7 @@ impl Iterator for FieldsIter {
                 base
             },
             TypeEnum::Array(ArrayType { base, count }) => {
-                if self.index as u32 > *count {
+                if self.index as u32 >= *count {
                     return None;
                 }
                 self.inner = Some(Box::new(FieldsIter::new(base.clone())));

@@ -67,7 +67,7 @@ impl Type {
             } else {
                 ReturnStyle::ThroughI32I32
             }
-        } else if fields.len() >= 3 {
+        } else if size > 8 && fields.len() >= 3 {
             ReturnStyle::SRet
         } else {
             self.return_style()

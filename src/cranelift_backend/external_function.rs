@@ -12,6 +12,7 @@ pub fn add_external_func(
     func_type: FuncType, 
     ptr: *const usize
 ) {
+        dbg!(&func_type);
     let mut ctx = backend.module.make_context();
 
     func_type_to_signature(&func_type, &mut ctx.func.signature, false);
@@ -21,8 +22,10 @@ pub fn add_external_func(
         // a different return style than the equivalent cxc function
         let mut external_signature = backend.module.make_signature();
         func_type_to_signature(&func_type, &mut external_signature, true);
+        dbg!(&external_signature);
         external_signature
     };
+        dbg!(&ctx.func.signature);
     
     backend.external_functions.insert(info, ExternalFuncData {
         ptr,
@@ -73,6 +76,7 @@ pub fn build_external_func_call(
 
         vec![first_ret, second_ret]
     } else if func_data.typ.ret.return_style() != func_data.typ.ret.rust_return_style() {
+        dbg!();
         let stack_slot = builder.create_sized_stack_slot(StackSlotData {
             kind: StackSlotKind::ExplicitSlot,
             size: func_data.typ.ret.size() as u32,
