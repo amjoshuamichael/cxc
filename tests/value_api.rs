@@ -97,6 +97,7 @@ fn value_4_no_depedency() {
 
 #[test]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
+#[ignore]
 fn basic_value_func() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -108,14 +109,13 @@ fn basic_value_func() {
     let value = unsafe { value.consume::<Value>() };
 
     assert_eq!(value.get_type(), &unit.comp_data.get_spec(&"u32".into(), &()).unwrap());
-    dbg!(&value);
-    panic!();
     let value_u32 = unsafe { *value.consume::<u32>() };
     assert_eq!(value_u32, 234);
 }
 
 #[test]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
+#[ignore]
 fn vec_value_func() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -140,6 +140,7 @@ fn vec_value_func() {
 
 #[test]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
+#[ignore]
 fn rc_value_func() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);

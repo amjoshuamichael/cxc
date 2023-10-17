@@ -254,8 +254,8 @@ pub fn infer_types(hlr: &mut FuncRep) {
     let mut x_steps = 0;
 
     loop {
-        match type_solving_round(&mut infer_map, &hlr.comp_data) {
-            Err(_) => panic!(),
+        match type_solving_round(hlr, &mut infer_map, &hlr.comp_data) {
+            Err(_) => break,
             _ => {},
         }
 
@@ -272,8 +272,12 @@ pub fn infer_types(hlr: &mut FuncRep) {
             return;
         }
 
+        solve_with_inference_step(step, &mut infer_map);
+
         if !infer_map.has_been_modified_since_last_round {
-            advance_inference_step(&mut step, &mut infer_map);
+            advance_inference_step(&mut step);
+            solve_with_inference_step(step, &mut infer_map);
+
             if step == InferenceSteps::Failure {
                 x_steps += 1;
             }
@@ -282,6 +286,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
                 break;
             }
         }
+
 
         infer_map.has_been_modified_since_last_round = false;
     }
@@ -774,14 +779,16 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap) {
                 if reversed_spec.is_none() {
                     continue;
                 }
-
-                infer_map.constraints[param_constraint_index].connections.insert(
-                    InferableConnection {
-                        spec: reversed_spec.unwrap(),
-                        gen_params: vec![constraint_index],
-                        method_of: connection.method_of.clone(),
-                    },
-                );
+                let connection = InferableConnection {
+                    spec: reversed_spec.unwrap(),
+                    gen_params: vec![constraint_index],
+                    method_of: connection.method_of.clone(),
+                };
+                let connection_already_added = 
+                    infer_map.constraints[param_constraint_index].connections.insert(connection);
+                if !connection_already_added {
+                    infer_map.has_been_modified_since_last_round = true;
+                }
             }
         }
 
@@ -789,7 +796,11 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap) {
     }
 }
 
-fn type_solving_round(infer_map: &mut InferMap, comp_data: &CompData) -> Result<(), ()> {
+fn type_solving_round(
+    _: &FuncRep, 
+    infer_map: &mut InferMap, 
+    comp_data: &CompData
+) -> Result<(), ()> {
     for constraint_index in 0..infer_map.constraints.len() {
         let constraints = &infer_map.constraints[constraint_index];
 
@@ -1158,7 +1169,6 @@ fn fill_in_call(
 
 fn advance_inference_step(
     step: &mut InferenceSteps,
-    infer_map: &mut InferMap
 ) {
     *step = match step {
         InferenceSteps::Start => InferenceSteps::FillStructLiterals,
@@ -1167,10 +1177,15 @@ fn advance_inference_step(
         InferenceSteps::FillFullStructType => InferenceSteps::Failure,
         InferenceSteps::Failure => InferenceSteps::Failure, // should be caught by infer_types
     };
+}
 
+fn solve_with_inference_step(
+    step: InferenceSteps,
+    infer_map: &mut InferMap
+) {
     let mut fulfilled_usages = Vec::<ConstraintId>::new();
 
-    if *step >= InferenceSteps::FillStructLiterals {
+    if step >= InferenceSteps::FillStructLiterals {
         for constraint_index in 0..infer_map.constraints.len() {
             let constraints = &mut infer_map.constraints[constraint_index];
 
@@ -1184,9 +1199,13 @@ fn advance_inference_step(
             fulfilled_usages.push(constraint_index);
 
             for (name, ids) in &constraints.usages.has_fields.clone() {
-                let field_constraint = infer_map.join_constraints(
-                    ids.iter().map(|id| infer_map.constraint_index_of(*id)).collect()
-                );
+                let field_constraint = if ids.len() == 1 {
+                    infer_map.constraint_index_of(ids[0])
+                } else {
+                    infer_map.join_constraints(
+                        ids.iter().map(|id| infer_map.constraint_index_of(*id)).collect()
+                    )
+                };
 
                 infer_map.constraints[field_constraint].connections.insert(
                     InferableConnection {
@@ -1202,7 +1221,7 @@ fn advance_inference_step(
         }
     }
 
-    if *step >= InferenceSteps::FillIntsAndFloats {
+    if step >= InferenceSteps::FillIntsAndFloats {
         for (constraint_index, constraints) in infer_map.constraints.iter_mut().enumerate() {
             if constraints.is.is_known() { continue }
 
@@ -1218,7 +1237,7 @@ fn advance_inference_step(
         }
     }
 
-    if *step >= InferenceSteps::FillFullStructType {
+    if step >= InferenceSteps::FillFullStructType {
         for constraint_index in 0..infer_map.constraints.len() {
             let constraints = &mut infer_map.constraints[constraint_index];
 
@@ -1255,5 +1274,6 @@ fn advance_inference_step(
 
     for constraint_id in fulfilled_usages {
         infer_map.constraints[constraint_id].usages.fulfilled = true;
+        infer_map.has_been_modified_since_last_round = true;
     }
 }

@@ -11,18 +11,7 @@ impl Library for DefaultLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_static_deriver("default".into(), derive_default);
 
-        // TODO: write this in actual cxc code
-        unit.add_external_default::<i8>();
-        unit.add_external_default::<i16>();
-        unit.add_external_default::<i32>();
-        unit.add_external_default::<i64>();
-        unit.add_external_default::<u8>();
-        unit.add_external_default::<u16>();
-        unit.add_external_default::<u32>();
-        unit.add_external_default::<u64>();
-        unit.add_external_default::<f32>();
-        unit.add_external_default::<f64>();
-        unit.add_external_default::<bool>();
+        unit.push_script(include_str!("default.cxc"));
     }
 }
 

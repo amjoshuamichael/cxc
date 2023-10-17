@@ -43,11 +43,7 @@ impl InvalidState for BoolType {
 
 impl InvalidState for IntType {
     fn invalid_state(&self, _: u32) -> Option<Box<dyn NodeDataGen>> {
-        if self.size % 8 != 0 {
-            todo!()
-        } else {
-            None
-        }
+        panic!()
     }
 }
 

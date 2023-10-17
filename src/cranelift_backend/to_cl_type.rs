@@ -25,7 +25,7 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool
         typ.ret.return_style() 
     };
 
-    if return_style == ReturnStyle::Sret {
+    if return_style == ReturnStyle::SRet {
         let sret_abi = AbiParam::special(cl_types::I64, ArgumentPurpose::StructReturn);
         sig.params.push(sret_abi);
     }
@@ -83,7 +83,7 @@ impl ToCLType for TypeEnum {
 
 impl ToCLType for IntType {
     fn to_cl_type(&self) -> Vec<ClType> {
-        vec![ClType::int(self.size as u16).unwrap()]
+        vec![ClType::int(self.size.to_num() as u16).unwrap()]
     }
 }
 

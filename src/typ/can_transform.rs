@@ -250,9 +250,9 @@ impl Type {
 
         match spec {
             TypeSpec::Int(size) => 
-                type_enum == &TypeEnum::Int(IntType { signed: true, size }),
+                type_enum == &TypeEnum::Int(IntType::new(size, true)),
             TypeSpec::UInt(size) => 
-                type_enum == &TypeEnum::Int(IntType { signed: false, size }),
+                type_enum == &TypeEnum::Int(IntType::new(size, false)),
             TypeSpec::Float(float_type) => 
                 type_enum == &TypeEnum::Float(float_type),
             TypeSpec::Named(name) => self.name() == &name,

@@ -85,7 +85,7 @@ impl FuncType {
     pub fn llvm_func_type<'f>(&self, context: &'static Context, as_rust: bool) -> FunctionType<'f> {
         let return_style = if as_rust { self.ret.rust_return_style() } else { self.ret.return_style() };
 
-        if return_style != ReturnStyle::Sret {
+        if return_style != ReturnStyle::SRet {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
@@ -127,7 +127,7 @@ impl ToLLVMType for StructType {
 
 impl ToLLVMType for IntType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        context.custom_width_int_type(self.size).as_any_type_enum()
+        context.custom_width_int_type(self.size.to_num() as u32).as_any_type_enum()
     }
 }
 

@@ -15,8 +15,8 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     }
 
     match typ.as_type_enum() {
-        TypeEnum::Int(IntType { signed: true, size }) => TypeSpec::Int(*size),
-        TypeEnum::Int(IntType { signed: false, size }) => TypeSpec::UInt(*size),
+        TypeEnum::Int(IntType { signed: true, size }) => TypeSpec::Int(size.to_num() as u32),
+        TypeEnum::Int(IntType { signed: false, size }) => TypeSpec::UInt(size.to_num() as u32),
         TypeEnum::Float(float_type) => TypeSpec::Float(*float_type),
         TypeEnum::Struct(StructType { fields, .. }) => TypeSpec::Struct(
             fields.iter().map(|Field { name, typ, inherited }| (

@@ -164,7 +164,7 @@ impl<'a> FuncRep<'a> {
     pub fn output(mut self) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
-        if self.ret_type.return_style() == ReturnStyle::Sret {
+        if self.ret_type.return_style() == ReturnStyle::SRet {
             func_arg_types.remove(0);
         }
 

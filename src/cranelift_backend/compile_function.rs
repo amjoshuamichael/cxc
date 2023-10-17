@@ -579,7 +579,7 @@ fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand)
         ReturnStyle::ThroughI64I32 => {
             vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I32, 8)]
         },
-        ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => {
+        ReturnStyle::ThroughI64I64 => {
             vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I64, 8)]
         },
         _ => unreachable!("{return_style:?}"),

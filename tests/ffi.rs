@@ -522,5 +522,3 @@ fn strings() {
         String::from("that's cray")
     )
 }
-
-

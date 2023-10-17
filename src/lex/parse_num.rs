@@ -36,7 +36,7 @@ pub fn parse_string(token: &mut Lexer<Tok>) -> Option<Arc<str>> {
     Some(Arc::from(&token.slice()[1..string_len]))
 }
 
-pub fn parse_dotted_int(token: &mut Lexer<Tok>) -> Option<(u32, u32)> {
+pub fn parse_dotted_int(token: &mut Lexer<Tok>) -> Option<(u128, u128)> {
     let num_text = token
         .slice()
         .chars()

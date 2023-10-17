@@ -92,7 +92,10 @@ impl CompData {
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
-            TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_auto_deref(&*self)?,
+            TypeSpec::Deref(base) => {
+                let base_type = self.get_spec(base, generics)?;
+                base_type.get_deref().ok_or_else(|| TErr::CantDeref(base_type.clone()))?
+            }
             TypeSpec::StructMember(struct_type, field_name) => {
                 let struct_type = self.get_spec(struct_type, generics)?;
                 if let Some((trans, typ)) = struct_type.route_to(field_name.clone()) {

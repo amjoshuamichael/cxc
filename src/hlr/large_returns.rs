@@ -26,8 +26,7 @@ fn handle_own_return(hlr: &mut FuncRep) {
         | ReturnStyle::ThroughI64I64 if hlr.ret_type != hlr.ret_type.raw_return_type() => {
             return_by_big_cast(hlr, hlr.ret_type.raw_return_type());
         }
-        ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
-        ReturnStyle::Sret => return_by_pointer(hlr),
+        ReturnStyle::SRet => return_by_pointer(hlr),
         _ => {},
     }
 }
@@ -60,50 +59,6 @@ fn return_by_big_cast(hlr: &mut FuncRep, load_as: Type) {
             hlr.replace_quick(*to_return, casted_ret.clone());
         }
     );
-}
-
-fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
-    let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
-
-    let output_var_name = hlr.add_variable(&i64i64, hlr.tree.root);
-
-    hlr.modify_many_infallible(
-        |return_id, mut data, hlr| {
-            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = &mut data
-                else { return };
-
-            let to_return_data = hlr.tree.get(*to_return);
-
-            hlr.insert_statement_before(
-                return_id,
-                SetGen {
-                    lhs: output_var_name.clone(),
-                    rhs: to_return_data.clone(),
-                },
-            );
-
-            let data_to_return = hlr.insert_quick(
-                return_id,
-                StructLitGen {
-                    var_type: i64i64.clone(),
-                    ..StructLitGen::tuple(vec![
-                        Box::new(MemberGen {
-                            object: output_var_name.clone(),
-                            field: VarName::TupleIndex(0),
-                        }),
-                        Box::new(MemberGen {
-                            object: output_var_name.clone(),
-                            field: VarName::TupleIndex(1),
-                        }),
-                    ])
-                },
-            );
-
-            *to_return = data_to_return;
-        },
-    );
-
-    struct_literals(hlr)
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
@@ -152,8 +107,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
         if let HNodeData::Call { ref query, .. } = data 
             && !hlr.comp_data.name_is_intrinsic(&query.name) {
             match data.ret_type().return_style() {
-                ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
-                ReturnStyle::MoveIntoI64I64 => todo!(),
+                ReturnStyle::SRet => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
                 | ReturnStyle::ThroughDouble

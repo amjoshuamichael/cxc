@@ -45,11 +45,11 @@ pub fn build_external_func_call(
     let sigref = builder.func.import_signature(func_data.sig.clone());
     let func_val = builder.ins().iconst(cl_types::I64, func_data.ptr as i64);
 
-    let ret_vals: Vec<CLValue> = if func_data.typ.ret.return_style() == ReturnStyle::Sret {
+    let ret_vals: Vec<CLValue> = if func_data.typ.ret.return_style() == ReturnStyle::SRet {
         builder.ins().call_indirect(sigref, func_val, &*args);
 
         vec![]
-    } else if func_data.typ.ret.rust_return_style() == ReturnStyle::Sret {
+    } else if func_data.typ.ret.rust_return_style() == ReturnStyle::SRet {
         let stack_slot = builder.create_sized_stack_slot(StackSlotData {
             kind: StackSlotKind::ExplicitSlot,
             size: func_data.typ.ret.size() as u32,

@@ -157,7 +157,7 @@ impl<N: Default + Clone> ParseContext<N> {
         &mut self,
         parser: impl FnMut(&mut Self) -> ParseResult<O>,
     ) -> O {
-        self.recover_with(vec![&Tok::Return], parser)
+        self.recover_with(vec![&Tok::LineFeed], parser)
     }
 
     pub fn recover_with<O: Errable>(

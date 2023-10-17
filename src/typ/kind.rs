@@ -57,7 +57,7 @@ impl Kind for StructType {
 impl Kind for IntType {
     fn to_string(&self) -> String {
         let prefix = if self.signed { 'i' } else { 'u' };
-        format!("{prefix}{}", self.size)
+        format!("{prefix}{}", self.size.to_num())
     }
 }
 

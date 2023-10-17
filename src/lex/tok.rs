@@ -291,7 +291,7 @@ pub enum Tok {
 
     // could be a float (e.g. .1), but could also be a tuple member (e.g. the ".1" in x.1)
     #[regex(r"[0-9_]*\.[0-9_]+", parse_dotted_int)]
-    DottedNum((u32, u32)),
+    DottedNum((u128, u128)),
 
     // this is definitely a float, because it uses e for scientific notation
     #[regex(r"[0-9_]*\.[0-9_]+e[+-]?[0-9_]+", parse_float)]
@@ -309,8 +309,10 @@ pub enum Tok {
     #[regex(r"(#.*\n)+")]
     Comment,
 
-    #[regex(r"\n+")]
-    Return,
+    // Called it line feed instead of return in order to avoid getting it confused with
+    // actual returns
+    #[regex(r"(\r\n?|\n)+")]
+    LineFeed, 
 
     #[regex(r"\t")]
     Tab,
@@ -388,7 +390,7 @@ impl Tok {
 
     pub fn is_whitespace(&self) -> bool {
         use Tok::*;
-        matches!(self, Space | Comment | Return | Tab)
+        matches!(self, Space | Comment | LineFeed | Tab)
     }
 
     pub fn parens() -> (TokWithName, TokWithName) { 
@@ -461,7 +463,7 @@ impl ToString for Tok {
             Strin(value) => value,
             Error => "!error!",
             Comment => "#...\n",
-            Return => "\n",
+            LineFeed => "\n",
             Space => " ",
             Tab => "\t",
         }

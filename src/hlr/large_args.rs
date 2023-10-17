@@ -1,4 +1,4 @@
-use super::hlr_data::VarID;
+use super::hlr_data::{VarID, ArgIndex};
 use super::prelude::*;
 use crate::Type;
 use crate::hlr::expr_tree::*;
@@ -19,6 +19,8 @@ fn handle_own_args(hlr: &mut FuncRep) {
         .collect::<Vec<_>>();
 
     for (id, info) in args {
+        if info.arg_index == ArgIndex::SRet { continue }
+
         match info.typ.arg_style() {
             ArgStyle::Direct => {},
             ArgStyle::Ints(..) => arg_by_ints(hlr, id),

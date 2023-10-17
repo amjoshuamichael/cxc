@@ -4,7 +4,7 @@ use std::{slice, collections::{HashMap, BTreeMap}};
 
 use slotmap::{SecondaryMap, SlotMap, Key, KeyData};
 
-use crate::{unit::FuncId, Value, mir::{MLine, MOperand, MAddr, MLit, MMemLoc, MReg, MExpr, MIR, MCallable, MAddrExpr, MAddrReg}, hlr::hlr_data::{VarID, ArgIndex, VariableInfo}, Type, parse::Opcode, IntType, FloatType, TypeEnum, typ::ReturnStyle, FuncType};
+use crate::{unit::FuncId, Value, mir::{MLine, MOperand, MAddr, MLit, MMemLoc, MReg, MExpr, MIR, MCallable, MAddrExpr, MAddrReg}, hlr::hlr_data::{VarID, ArgIndex, VariableInfo}, Type, parse::Opcode, IntType, FloatType, TypeEnum, typ::{ReturnStyle, IntSize}, FuncType};
 
 use super::IntepreterState;
 
@@ -55,7 +55,6 @@ struct Interpreter<'a> {
     func_id: FuncId,
     current_line: usize,
     force_safety: bool,
-    can_access_external_memory: bool,
     allocator: &'a mut Allocator,
     state: &'a IntepreterState,
     mir: &'a MIR,
@@ -83,7 +82,7 @@ pub fn run_with_args(
         stacks: vec![stack],
     };
 
-    let sret_allocation = (mir.func_type.ret.return_style() == ReturnStyle::Sret).then(|| {
+    let sret_allocation = (mir.func_type.ret.return_style() == ReturnStyle::SRet).then(|| {
         let new_allocation = vec![0u8; mir.func_type.ret.size()].into_boxed_slice();
         let alloc_pointer = new_allocation.as_ptr() as usize;
 
@@ -95,8 +94,6 @@ pub fn run_with_args(
         alloc_pointer
     });
 
-    let can_access_external_memory = func_type_requires_access_to_external_memory(&mir.func_type);
-
     let mut interpreter = Interpreter {
         registers: BTreeMap::new(),
         addr_registers: BTreeMap::new(),
@@ -104,7 +101,6 @@ pub fn run_with_args(
         sret_reg: sret_allocation.map(|ptr| ptr.to_ne_bytes().into()),
         current_line: 0,
         func_id,
-        can_access_external_memory,
         force_safety,
         allocator: &mut allocator,
         state,
@@ -122,16 +118,7 @@ pub fn run_with_args(
     if !allocator.allocations.is_empty() {
         let return_type = &mir.func_type.ret;
 
-        if !return_type.is_shallow() || !return_type.raw_return_type().is_shallow() {
-            for (_, allocation) in allocator.allocations {
-                unsafe {
-                    println!("keeping allocation of size {} around", allocation.data.len());
-                    std::mem::forget(allocation.data);
-                }
-            }
-        } else {
-            panic!("allocations remain after interpretation!");
-        }
+        panic!("allocations remain after interpretation!");
     }
 
     Value {
@@ -356,16 +343,17 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
             let r = ioperand(r, interpreter);
 
             use TypeEnum::*;
+            use IntSize::*;
 
             match left_type.as_type_enum() {
-                Int(IntType { signed: true, size: 64 }) => ibinop_int!(i64, l, r, op),
-                Int(IntType { signed: true, size: 32 }) => ibinop_int!(i32, l, r, op),
-                Int(IntType { signed: true, size: 16 }) => ibinop_int!(i16, l, r, op),
-                Int(IntType { signed: true, size: 8 }) => ibinop_int!(i8, l, r, op),
-                Int(IntType { signed: false, size: 64 }) => ibinop_int!(u64, l, r, op),
-                Int(IntType { signed: false, size: 32 }) => ibinop_int!(u32, l, r, op),
-                Int(IntType { signed: false, size: 16 }) => ibinop_int!(u16, l, r, op),
-                Int(IntType { signed: false, size: 8 }) => ibinop_int!(u8, l, r, op),
+                Int(IntType { signed: true, size: _64 }) => ibinop_int!(i64, l, r, op),
+                Int(IntType { signed: true, size: _32 }) => ibinop_int!(i32, l, r, op),
+                Int(IntType { signed: true, size: _16 }) => ibinop_int!(i16, l, r, op),
+                Int(IntType { signed: true, size: _8 }) => ibinop_int!(i8, l, r, op),
+                Int(IntType { signed: false, size: _64 }) => ibinop_int!(u64, l, r, op),
+                Int(IntType { signed: false, size: _32 }) => ibinop_int!(u32, l, r, op),
+                Int(IntType { signed: false, size: _16 }) => ibinop_int!(u16, l, r, op),
+                Int(IntType { signed: false, size: _8 }) => ibinop_int!(u8, l, r, op),
                 Float(FloatType::F64) => ibinop_float!(f64, l, r, op),
                 Float(FloatType::F32) => ibinop_float!(f32, l, r, op),
                 Bool => {
@@ -375,6 +363,8 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
                     let result = match op {
                         Opcode::Equal => l == r,
                         Opcode::Inequal => l != r,
+                        Opcode::And => l && r,
+                        Opcode::Or => l || r,
                         _ => unreachable!(),
                     };
 
@@ -391,10 +381,10 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
             let hs = ioperand(hs, interpreter);
 
             match ret_type.as_type_enum() {
-                Int(IntType { signed: true, size: 64 }) => iunop!(i64, hs, op),
-                Int(IntType { signed: true, size: 32 }) => iunop!(i32, hs, op),
-                Int(IntType { signed: true, size: 16 }) => iunop!(i16, hs, op),
-                Int(IntType { signed: true, size: 8 }) => iunop!(i8, hs, op),
+                Int(IntType { signed: true, size: _64 }) => iunop!(i64, hs, op),
+                Int(IntType { signed: true, size: _32 }) => iunop!(i32, hs, op),
+                Int(IntType { signed: true, size: _16 }) => iunop!(i16, hs, op),
+                Int(IntType { signed: true, size: _8 }) => iunop!(i8, hs, op),
                 Bool if *op == Opcode::Not => bool_to_boxed_slice(!slice_to_bool(&*hs)),
                 _ => todo!("{ret_type:?}"),
             }
@@ -417,16 +407,12 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
                 let stack = Stack::for_vars(&mir.variables);
                 interpreter.allocator.stacks.push(stack);
 
-                let can_access_external_memory = 
-                    interpreter.can_access_external_memory &&
-                    func_type_requires_access_to_external_memory(&mir.func_type);
                 let mut new_interpreter = Interpreter {
                     registers: BTreeMap::new(),
                     addr_registers: BTreeMap::new(),
                     arg_regs: args,
                     sret_reg: sret,
                     func_id,
-                    can_access_external_memory,
                     force_safety: interpreter.force_safety,
                     current_line: 0,
                     allocator: interpreter.allocator,
@@ -439,14 +425,6 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
                 interpreter.allocator.stacks.pop();
 
                 return value.data;
-            } else if let Some(external_func) = interpreter.state.external_functions.get(func_id) {
-                interpreter.can_access_external_memory = true;
-                super::call_with_values::call_with_boxes(
-                    external_func.pointer, 
-                    external_func.typ.clone(), 
-                    args,
-                    sret.map(|data| slice_to_usize(&*data) as *mut u8),
-                )
             } else {
                 panic!()
             }
@@ -457,13 +435,8 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
 
             if let Some(removed) = interpreter.allocator.allocations.remove(&ptr) {
                 std::mem::drop(removed);
-            } else if interpreter.can_access_external_memory {
-                unsafe {
-                    use libc::*;
-                    libc::free(ptr as *mut libc::c_void);
-                }
             } else {
-
+                panic!();
             }
 
             Vec::new().into_boxed_slice()
@@ -565,7 +538,6 @@ fn imemloc(memloc: &MMemLoc, interpreter: &mut Interpreter) -> RegValue {
             }
         }
         MMemLoc::Global(global_var) => {
-            interpreter.can_access_external_memory = true;
             let global = &interpreter.state.globals[global_var];
             (global.pointer as usize).to_ne_bytes().into()
         },
@@ -636,16 +608,6 @@ fn addr_to_slice<'a>(addr: usize, interpreter: &'a mut Interpreter) -> &'a mut [
 
         if (beginning <= addr && addr < end) {
             return &mut allocation.data[(addr - beginning)..];
-        }
-    }
-
-    if interpreter.can_access_external_memory {
-        let mem_region = region::query(addr as *const u8).unwrap();
-        assert!(mem_region.as_ptr_range().contains(&(addr as *const u8)));
-
-        return unsafe {
-            let mem_range = mem_region.as_range();
-            std::slice::from_raw_parts_mut(addr as *mut u8, mem_range.end - addr)
         }
     }
     

@@ -12,8 +12,7 @@ pub enum ReturnStyle {
     ThroughF32F32,
     ThroughI64I32,
     ThroughI64I64,
-    MoveIntoI64I64,
-    Sret,
+    SRet,
     Void,
 }
 
@@ -33,9 +32,9 @@ pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
         ReturnStyle::ThroughF32F32 => Type::new_tuple(vec![Type::f(32); 2]),
         ReturnStyle::ThroughI64I32 => 
             Type::new_tuple(vec![Type::i(64), Type::i(32)]),
-        ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => 
+        ReturnStyle::ThroughI64I64 => 
             Type::new_tuple(vec![Type::i(64); 2]),
-        ReturnStyle::Sret | ReturnStyle::Void => Type::void(),
+        ReturnStyle::SRet | ReturnStyle::Void => Type::void(),
         ReturnStyle::Direct => on.clone(),
     }
 }
@@ -69,7 +68,7 @@ impl Type {
                 ReturnStyle::ThroughI32I32
             }
         } else if fields.len() >= 3 {
-            ReturnStyle::Sret
+            ReturnStyle::SRet
         } else {
             self.return_style()
         }
@@ -84,34 +83,39 @@ impl Type {
                 let size = self.size();
 
                 if size > 16 {
-                    return ReturnStyle::Sret;
+                    return ReturnStyle::SRet;
                 }
 
                 let mut prim_iter = PrimitiveFieldsIter::new(self.clone());
                 if let Some(first_field) = prim_iter.next() && 
                     let Some(second_field) = prim_iter.next() {
 
-                    if first_field.size() == 4 && second_field.size() == 8 {
-                        ReturnStyle::MoveIntoI64I64
-                    } else {
-                        if size > 16 {
-                            ReturnStyle::Sret
-                        } else if size == 16 {
-                            ReturnStyle::ThroughI64I64
-                        } else if size == 12 {
-                            ReturnStyle::ThroughI64I32
-                        } else if size <= 8 && size > 4 {
-                            // arm processors return a pair of floating point numbers
-                            // differently
-                            if first_field.is_float() && second_field.is_float() 
-                                && cfg!(any(target_arch = "arm", target_arch = "aarch64")) {
-                                ReturnStyle::ThroughF32F32
-                            } else {
-                                ReturnStyle::ThroughI64
-                            }
-                        } else {
-                            ReturnStyle::ThroughI32
+                    
+                    if size > 8 {
+                        let field_count = prim_iter.count() + 2;
+
+                        if field_count > 4 {
+                            return ReturnStyle::SRet
                         }
+                    }
+
+                    if size > 16 {
+                        ReturnStyle::SRet
+                    } else if size == 16 {
+                        ReturnStyle::ThroughI64I64
+                    } else if size == 12 {
+                        ReturnStyle::ThroughI64I32
+                    } else if size <= 8 && size > 4 {
+                        // arm processors return a pair of floating point numbers
+                        // differently
+                        if first_field.is_float() && second_field.is_float() 
+                            && cfg!(any(target_arch = "arm", target_arch = "aarch64")) {
+                            ReturnStyle::ThroughF32F32
+                        } else {
+                            ReturnStyle::ThroughI64
+                        }
+                    } else {
+                        ReturnStyle::ThroughI32
                     }
                 } else {
                     ReturnStyle::Direct
@@ -127,26 +131,24 @@ impl Type {
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
-            _ => match self.size() {
-                0..=8 => {
-                    let int_type = IntType { 
-                        size: (self.size() * 8) as u32,
-                        signed: true
-                    };
-                    ArgStyle::Ints(int_type, None)
-                },
-                9..=16 => {
-                    let first_int_type = IntType { size: 64, signed: true };
-                    let second_int_type = IntType { 
-                        size: (self.size() * 8) as u32 - 64,
-                        signed: true 
-                    };
-                    ArgStyle::Ints(first_int_type, Some(second_int_type))
-                },
-                17.. => {
-                    ArgStyle::Pointer
-                },
-                _ => unreachable!()
+            _ => {
+                let size = (self.size() * 8) as u32;
+                match self.size() {
+                    0 => ArgStyle::Direct,
+                    1..=8 => {
+                        let int_type = IntType::new(size.next_power_of_two(), false);
+                        ArgStyle::Ints(int_type, None)
+                    },
+                    9..=16 => {
+                        let first_int_type = IntType::new(64, false);
+                        let second_int_type = IntType::new((size - 64).next_power_of_two(), false);
+                        ArgStyle::Ints(first_int_type, Some(second_int_type))
+                    },
+                    17.. => {
+                        ArgStyle::Pointer
+                    },
+                    _ => unreachable!()
+                }
             }
         }
     }

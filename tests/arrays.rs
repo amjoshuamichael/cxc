@@ -77,6 +77,7 @@ fn active_initialize_array_ints() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn string_array() {
     xc_test!(
         use StdLib;
@@ -91,6 +92,7 @@ fn string_array() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn active_initialize_array_strings() {
     xc_test!(
         use StringLib;

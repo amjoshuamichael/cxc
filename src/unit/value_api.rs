@@ -4,7 +4,7 @@ use crate::{
     errors::CResultMany,
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation},
-    typ::ReturnStyle,
+    typ::{ReturnStyle, IntSize},
     Unit, XcReflect, IntType, TypeEnum, StructType,
 };
 use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
@@ -100,14 +100,15 @@ impl Value {
         }
 
         use TypeEnum::*;
+        use IntSize::*;
 
         let string = match self.typ.as_type_enum() {
-            Int(IntType { signed: false, size: 64 }) => int_to_string!(u64, &*self.data),
-            Int(IntType { signed: false, size: 32 }) => int_to_string!(u32, &*self.data),
-            Int(IntType { signed: false, size: 16 }) => int_to_string!(u16, &*self.data),
-            Int(IntType { signed: true, size: 64 }) => int_to_string!(i64, &*self.data),
-            Int(IntType { signed: true, size: 32 }) => int_to_string!(i32, &*self.data),
-            Int(IntType { signed: true, size: 16 }) => int_to_string!(i16, &*self.data),
+            Int(IntType { signed: false, size: _64 }) => int_to_string!(u64, &*self.data),
+            Int(IntType { signed: false, size: _32 }) => int_to_string!(u32, &*self.data),
+            Int(IntType { signed: false, size: _16 }) => int_to_string!(u16, &*self.data),
+            Int(IntType { signed: true, size: _64 }) => int_to_string!(i64, &*self.data),
+            Int(IntType { signed: true, size: _32 }) => int_to_string!(i32, &*self.data),
+            Int(IntType { signed: true, size: _16 }) => int_to_string!(i16, &*self.data),
             Ref(_) => int_to_string!(u64, &*self.data),
             Struct(struct_type) => {
                 let mut output = String::from("{ ");
@@ -252,8 +253,7 @@ impl Unit {
                     ReturnStyle::ThroughI32I32
                     | ReturnStyle::ThroughF32F32
                     | ReturnStyle::ThroughI64I32
-                    | ReturnStyle::ThroughI64I64
-                    | ReturnStyle::MoveIntoI64I64 => {
+                    | ReturnStyle::ThroughI64I64 => {
                         let new_func = func_addr.downcast::<(), (i64, i64)>();
                         let out: [u8; 16] = transmute(new_func());
                         Value::new_from_arr(ret_type.clone(), out)
@@ -263,7 +263,7 @@ impl Unit {
                         let out: [u8; 8] = transmute(new_func());
                         Value::new_from_arr(ret_type.clone(), out)
                     },
-                    ReturnStyle::Sret => {
+                    ReturnStyle::SRet => {
                         let new_func = func_addr.downcast::<(), MaxBytes>();
 
                         let data_vec = {

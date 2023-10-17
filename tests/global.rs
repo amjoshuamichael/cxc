@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use serial_test::serial;
 
 use crate::test_utils::Numbers5;
 mod test_utils;
@@ -30,6 +31,7 @@ fn basic_global() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "backend-interpreter"), ignore)]
 fn read_basic_global() {
     let mut unit = Unit::new();
 

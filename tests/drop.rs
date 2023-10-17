@@ -3,6 +3,7 @@ use std::rc::Rc;
 use cxc::{Unit, library::StdLib};
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn basic_drop() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);

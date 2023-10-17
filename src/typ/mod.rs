@@ -153,13 +153,8 @@ impl Type {
     /// Ensure that data is a valid pointer to a TypeData
     pub unsafe fn from_raw(data: *const TypeData) -> Self { Self(Arc::from_raw(data)) }
 
-    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size, signed: true })) }
-    pub fn u(size: u32) -> Type {
-        Type::new(TypeEnum::Int(IntType {
-            size,
-            signed: false,
-        }))
-    }
+    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType::new(size, true))) }
+    pub fn u(size: u32) -> Type { Type::new(TypeEnum::Int(IntType::new(size, false))) }
 
     pub fn f16() -> Type { Type::new(TypeEnum::Float(FloatType::F16)) }
 
@@ -417,10 +412,46 @@ impl StructType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
-    pub size: u32,
+    pub size: IntSize,
     pub signed: bool,
+}
+
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+pub enum IntSize {
+    _8,
+    _16,
+    _32,
+    _64,
+    _128,
+}
+
+impl IntSize {
+    pub const fn to_num(self) -> usize {
+        match self {
+            IntSize::_8 => 8,
+            IntSize::_16 => 16,
+            IntSize::_32 => 32,
+            IntSize::_64 => 64,
+            IntSize::_128 => 128,
+        }
+    }
+}
+
+impl IntType {
+    pub fn new(size: u32, signed: bool) -> Self {
+        let size = match size {
+            8 => IntSize::_8,
+            16 => IntSize::_16,
+            32 => IntSize::_32,
+            64 => IntSize::_64,
+            128 => IntSize::_128,
+            _ => panic!("{size} an invalid int size"),
+        };
+
+        Self { size, signed }
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord, XcReflect)]

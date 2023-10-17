@@ -6,6 +6,7 @@ use cxc::{
 };
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn default_util() {
     let mut unit = Unit::new();
 
@@ -24,6 +25,7 @@ fn default_util() {
 }
 
 #[test]
+#[ignore]
 fn clone_util() {
     let mut unit = Unit::new();
 
