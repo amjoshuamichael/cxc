@@ -1,6 +1,7 @@
 use crate::hlr::hlr_data::VariableInfo;
 use crate::hlr::hlr_data::ArgIndex;
 use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
+use crate::typ::ABI;
 use crate::typ::ReturnStyle;
 use crate::{unit::*, Type, FuncType, VarName};
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -67,7 +68,7 @@ pub fn add_nescessary_attributes_to_func(
     context: &'static Context,
     func_type: &FuncType,
 ) {
-    if func_type.ret.return_style() == ReturnStyle::SRet {
+    if func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
         let sret_id = Attribute::get_named_enum_kind_id("sret");
         let sret_attribute = context.create_type_attribute(
             sret_id, 
@@ -298,7 +299,7 @@ pub fn compile_expr(
                 &*reg.map(MReg::to_string).unwrap_or_default(),
             );
 
-            if typ.ret.return_style() == ReturnStyle::SRet {
+            if typ.ret.return_style(ABI::C) == ReturnStyle::SRet {
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
             }
 
@@ -319,13 +320,13 @@ pub fn compile_expr(
             }
 
             let mut callsite = fcs.builder.build_indirect_call(
-                typ.llvm_func_type(fcs.context, false),
+                typ.llvm_func_type(fcs.context),
                 func, 
                 &*arg_vals,
                 &*reg.map(MReg::to_string).unwrap_or_default(),
             );
 
-            if typ.ret.return_style() == ReturnStyle::SRet {
+            if typ.ret.return_style(ABI::C) == ReturnStyle::SRet {
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
             }
 
@@ -422,7 +423,7 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
             match &fcs.mir.variables[*var_id] {
                 VariableInfo { arg_index: ArgIndex::Some(arg_index), .. } => {
                     let param_index = 
-                        if fcs.mir.func_type.ret.return_style() == ReturnStyle::SRet {
+                        if fcs.mir.func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
                             *arg_index + 1
                         } else {
                             *arg_index

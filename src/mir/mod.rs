@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashMap}, rc::Rc};
 
-use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery};
+use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::ABI};
 
 pub use self::mir_data::*;
 
@@ -199,7 +199,7 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
         HNodeData::Ident { var_id: id, .. } => {
             let var = &mir.variables[id];
             if var.is_arg_or_sret() {
-                let addr_var = mir.new_variable(var.typ.raw_arg_type().clone());
+                let addr_var = mir.new_variable(var.typ.raw_arg_type(ABI::C).clone());
 
                 mir.lines.insert(0, MLine::Store {
                     l: MAddr::Var(addr_var),
@@ -368,6 +368,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option<
             let typ = FuncType {
                 ret: ret_type.clone(),
                 args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
+                abi: ABI::None,
             };
 
             let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();
@@ -381,6 +382,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option<
             let typ = FuncType {
                 ret: ret_type.clone(),
                 args: a.iter().map(|a| tree.get(*a).ret_type()).collect(),
+                abi: ABI::None,
             };
 
             let a = a.iter().map(|a| build_as_operand(tree.get(*a), tree, mir)).collect();

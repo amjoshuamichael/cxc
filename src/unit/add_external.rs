@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use crate::{
     FuncType, Type, TypeEnum,
-    TypeRelation, Unit, XcReflect, parse::{FuncCode, VarDecl, Expr}, VarName, typ::spec_from_type::type_to_type_spec,
+    TypeRelation, Unit, XcReflect, parse::{FuncCode, VarDecl, Expr}, VarName, typ::{spec_from_type::type_to_type_spec, ABI},
 };
 
 use super::{backends::IsBackend, ProcessedFuncInfo};
@@ -12,6 +12,7 @@ use super::{backends::IsBackend, ProcessedFuncInfo};
 pub struct ExternalFuncAdd {
     pub ret_type: Type,
     pub arg_types: Vec<Type>,
+    pub abi: ABI,
     pub relation: TypeRelation,
     pub generics: Vec<Type>,
 }
@@ -23,6 +24,7 @@ impl ExternalFuncAdd {
             arg_types: Vec::new(),
             relation: TypeRelation::Unrelated,
             generics: Vec::new(),
+            abi: ABI::Rust,
         }
     }
 
@@ -34,14 +36,19 @@ impl ExternalFuncAdd {
 }
 
 impl Unit {
-    pub fn add_rust_func<A, R>(&mut self, name: &str, function: [fn(A) -> R; 1]) {
-        let func_type = self.comp_data.type_of(&function[0]);
-        let TypeEnum::Func(FuncType { args, ret: ret_type }) = 
+    pub fn add_rust_func<A: XcReflect, R: XcReflect>(
+        &mut self, 
+        name: &str, 
+        function: [fn(A) -> R; 1],
+    ) {
+        let func_type = self.comp_data.type_of_val(&function[0]);
+        let TypeEnum::Func(FuncType { args, ret: ret_type, abi }) = 
             func_type.as_type_enum() else { panic!() };
 
         let ext_add = ExternalFuncAdd {
             arg_types: args.clone(),
             ret_type: ret_type.clone(),
+            abi: *abi,
             ..ExternalFuncAdd::empty()
         };
 
@@ -101,6 +108,7 @@ impl Unit {
         let func_type = FuncType {
             ret: ext_add.ret_type,
             args: ext_add.arg_types,
+            abi: ext_add.abi,
         };
 
         let func_code_id = self.comp_data.func_code.insert(FuncCode {
@@ -114,6 +122,7 @@ impl Unit {
             generic_count: ext_add.generics.len(),
             code: Expr::default(),
             is_external: true,
+            abi: ABI::Rust,
         });
 
         let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {

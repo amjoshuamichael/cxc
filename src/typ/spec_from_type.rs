@@ -1,6 +1,6 @@
 use crate::{Type, parse::TypeSpec, TypeEnum, StructType, IntType, RefType, FuncType, ArrayType, TypeName};
 
-use super::Field;
+use super::{Field, ABI};
 
 pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     if typ.name() != &TypeName::Anonymous {
@@ -28,10 +28,11 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
         TypeEnum::Ref(RefType { base }) => TypeSpec::Ref(
             Box::new(type_to_type_spec(base.clone()))
         ),
-        TypeEnum::Func(FuncType { args, ret }) => TypeSpec::Function(
+        TypeEnum::Func(FuncType { args, ret, abi: ABI::C }) => TypeSpec::Function(
             args.iter().cloned().map(type_to_type_spec).collect(),
             Box::new(type_to_type_spec(ret.clone())),
         ),
+        TypeEnum::Func(FuncType { abi: ABI::Rust | ABI::None, .. }) => panic!(),
         TypeEnum::Array(ArrayType { base, count }) => TypeSpec::Array(
             Box::new(type_to_type_spec(base.clone())), 
             *count,

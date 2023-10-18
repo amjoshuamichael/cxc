@@ -1,4 +1,4 @@
-use crate::{lex::Tok, TypeName, VarName};
+use crate::{lex::Tok, TypeName, VarName, typ::ABI};
 use std::fmt::{Debug, Display};
 
 use super::{Expr, FuncCode, TypeSpec, TypeSpecRelation, VarDecl};
@@ -49,6 +49,7 @@ impl Errable for FuncCode {
             code: Expr::err(),
             relation: TypeSpecRelation::Unrelated,
             is_external: false,
+            abi: ABI::C,
         }
     }
 }

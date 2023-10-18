@@ -1,4 +1,4 @@
-use crate::lex::{Tok, TypeName, VarName};
+use crate::{lex::{Tok, TypeName, VarName}, typ::ABI};
 
 pub use context::{FuncParseContext, GlobalParseContext, ParseContext, TypeParseContext};
 pub use opcode::Opcode;
@@ -219,6 +219,7 @@ pub fn parse_func_code(
         generic_count,
         relation,
         is_external: false,
+        abi: ABI::C,
     })
 }
 

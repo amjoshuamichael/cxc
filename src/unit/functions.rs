@@ -1,6 +1,6 @@
 use crate::{
     errors::{CResult, FErr, TErr, TResult},
-    FuncType, Type, TypeRelation, typ::can_transform::{transformation_steps_dist, Transformation},
+    FuncType, Type, TypeRelation, typ::{can_transform::{transformation_steps_dist, Transformation}, ABI},
 };
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
@@ -44,6 +44,7 @@ impl CompData {
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -57,6 +58,7 @@ impl CompData {
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -80,6 +82,7 @@ impl CompData {
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -103,6 +106,7 @@ impl CompData {
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -113,6 +117,7 @@ impl CompData {
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -123,6 +128,7 @@ impl CompData {
             code: Expr::Block(Vec::new()),
             relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -136,6 +142,7 @@ impl CompData {
             is_external: true,
             code: Expr::empty_block(),
             relation: TypeSpecRelation::Unrelated,
+            abi: ABI::C,
         });
 
         out.insert_intrinsic(FuncCode {
@@ -146,6 +153,7 @@ impl CompData {
             is_external: true,
             code: Expr::empty_block(),
             relation: TypeSpecRelation::Unrelated,
+            abi: ABI::C,
         });
 
         out.typedefs.insert("Type".into(), TypeSpec::Int(64));
@@ -274,6 +282,7 @@ impl CompData {
         Ok(FuncType {
             ret: ret_type,
             args: arg_types,
+            abi: ABI::C,
         })
     }
 

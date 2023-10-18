@@ -96,7 +96,7 @@ impl IsBackend for CraneliftBackend {
                 self.module.make_context()
             };
 
-        func_type_to_signature(&func_info.typ, &mut ctx.func.signature, false);
+        func_type_to_signature(&func_info.typ, &mut ctx.func.signature);
 
         let name = func_info.to_string(func_id) + &*self.func_counter.to_string();
         self.func_counter += 1;

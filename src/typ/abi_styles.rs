@@ -1,6 +1,8 @@
 use crate::{TypeEnum, Type, typ::fields_iter::PrimitiveFieldsIter, XcReflect};
 
-use crate::{self as cxc, IntType};
+use crate::{self as cxc, IntType, FloatType};
+
+use super::ABI;
 
 #[derive(PartialEq, Eq, Debug, XcReflect)]
 pub enum ReturnStyle {
@@ -52,73 +54,40 @@ pub fn realize_arg_style(arg_style: ArgStyle, on: &Type) -> Type {
 }
 
 impl Type {
-    pub fn rust_return_style(&self) -> ReturnStyle {
-        if self.is_void() {
-            return ReturnStyle::Void;
-        }
-
-        let size = self.size();
-        let fields = self.primitive_fields_iter().take(4).collect::<Vec<_>>();
-
-        if fields.len() == 2 && size > 4 && size <= 8 &&
-            fields[0].size() <= 4 && fields[1].size() <= 4 {
-            if fields[0] == Type::f(32) && fields[1] == Type::f(32) {
-                ReturnStyle::ThroughF32F32
-            } else {
-                ReturnStyle::ThroughI32I32
-            }
-        } else if size > 8 && fields.len() >= 3 {
-            ReturnStyle::SRet
-        } else {
-            self.return_style()
-        }
-    }
-
-    pub fn return_style(&self) -> ReturnStyle {
+    pub fn return_style(&self, abi: ABI) -> ReturnStyle {
         use TypeEnum::*;
+
+        // only take five to avoid spending time 
+        // taking huge chunks of large arrays
+        let fields = self.primitive_fields_iter().take(5).collect::<Vec<_>>();
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) => {
                 let size = self.size();
 
-                if size > 16 {
-                    return ReturnStyle::SRet;
-                }
-
-                let mut prim_iter = PrimitiveFieldsIter::new(self.clone());
-                if let Some(first_field) = prim_iter.next() && 
-                    let Some(second_field) = prim_iter.next() {
-
-                    
-                    if size > 8 {
-                        let field_count = prim_iter.count() + 2;
-
-                        if field_count > 4 {
-                            return ReturnStyle::SRet
-                        }
-                    }
-
-                    if size > 16 {
-                        ReturnStyle::SRet
-                    } else if size == 16 {
-                        ReturnStyle::ThroughI64I64
-                    } else if size == 12 {
-                        ReturnStyle::ThroughI64I32
-                    } else if size <= 8 && size > 4 {
-                        // arm processors return a pair of floating point numbers
-                        // differently
-                        if first_field.is_float() && second_field.is_float() 
-                            && cfg!(any(target_arch = "arm", target_arch = "aarch64")) {
-                            ReturnStyle::ThroughF32F32
-                        } else {
-                            ReturnStyle::ThroughI64
-                        }
-                    } else {
-                        ReturnStyle::ThroughI32
-                    }
-                } else {
+                if abi == ABI::Rust && size > 8 && fields.len() >= 3 {
+                    ReturnStyle::SRet
+                } else if abi == ABI::Rust && fields.len() <= 2 {
                     ReturnStyle::Direct
+                } else if fields.iter().all(Type::is_float) && 
+                    fields.windows(2).all(|f| f[0] == f[1]) &&
+                    fields.len() <= 4 {
+                    ReturnStyle::Direct
+                } else if size > 16 {
+                    ReturnStyle::SRet
+                } else if fields.len() == 1 {
+                    ReturnStyle::Direct
+                } else if size > 16 {
+                    ReturnStyle::SRet
+                } else if size > 12 {
+                    ReturnStyle::ThroughI64I64
+                } else if size > 8 {
+                    ReturnStyle::ThroughI64I32
+                } else if size > 4 {
+                    ReturnStyle::ThroughI64
+                } else {
+                    ReturnStyle::ThroughI32
                 }
             },
             Void => ReturnStyle::Void,
@@ -126,28 +95,69 @@ impl Type {
         }
     }
 
-    pub fn arg_style(&self) -> ArgStyle {
+    pub fn arg_style(&self, abi: ABI) -> ArgStyle {
         use TypeEnum::*;
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
             _ => {
                 let size = (self.size() * 8) as u32;
-                match self.size() {
-                    0 => ArgStyle::Direct,
-                    1..=8 => {
-                        let int_type = IntType::new(size.next_power_of_two(), false);
-                        ArgStyle::Ints(int_type, None)
-                    },
-                    9..=16 => {
-                        let first_int_type = IntType::new(64, false);
-                        let second_int_type = IntType::new((size - 64).next_power_of_two(), false);
-                        ArgStyle::Ints(first_int_type, Some(second_int_type))
-                    },
-                    17.. => {
-                        ArgStyle::Pointer
-                    },
-                    _ => unreachable!()
+
+                // only take five to avoid spending time 
+                // taking huge chunks of large arrays
+                let fields = PrimitiveFieldsIter::new(self.clone())
+                    .take(5).collect::<Vec<_>>();
+
+                if abi == ABI::Rust {
+                    match fields.len() {
+                        0..=2 => {
+                            match self.size() {
+                                0..=16 => ArgStyle::Direct,
+                                17.. => {
+                                    ArgStyle::Pointer
+                                },
+                                _ => unreachable!()
+                            }
+                        },
+                        3.. => {
+                            match self.size() {
+                                0 => ArgStyle::Direct,
+                                1..=8 => {
+                                    let int_type = 
+                                        IntType::new(size.next_power_of_two(), false);
+                                    ArgStyle::Ints(int_type, None)
+                                },
+                                9.. => {
+                                    ArgStyle::Pointer
+                                }
+                                _ => unreachable!()
+                            }
+                        },
+                        _ => unreachable!()
+                    }
+                } else {
+                    match self.size() {
+                        0 => ArgStyle::Direct,
+                        _ if fields.iter().all(Type::is_float) && 
+                            fields.windows(2).all(|f| f[0] == f[1]) &&
+                            fields.len() <= 4 => {
+                            ArgStyle::Direct
+                        },
+                        1..=8 => {
+                            let int_type = IntType::new(size.next_power_of_two(), false);
+                            ArgStyle::Ints(int_type, None)
+                        },
+                        9..=16 => {
+                            let first_int_type = IntType::new(64, false);
+                            let second_int_type = 
+                                IntType::new((size - 64).next_power_of_two(), false);
+                            ArgStyle::Ints(first_int_type, Some(second_int_type))
+                        },
+                        17.. => {
+                            ArgStyle::Pointer
+                        },
+                        _ => unreachable!()
+                    }
                 }
             }
         }

@@ -2,7 +2,7 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use crate::{
     unit::{CompData, FuncQuery},
-    Type, XcReflect,
+    Type, XcReflect, typ::ABI,
 };
 
 use super::*;
@@ -159,6 +159,7 @@ pub struct FuncCode {
     pub code: Expr,
     pub relation: TypeSpecRelation,
     pub is_external: bool,
+    pub abi: ABI,
 }
 
 impl FuncCode {
@@ -184,6 +185,7 @@ impl FuncCode {
             code,
             relation: TypeSpecRelation::Unrelated,
             is_external: false,
+            abi: ABI::C,
         }
     }
 

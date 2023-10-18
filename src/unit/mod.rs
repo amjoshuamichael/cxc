@@ -43,7 +43,6 @@ pub mod callable;
 mod functions;
 pub mod get_type_spec;
 mod reflect;
-mod rust_type_name_conversion;
 mod value_api;
 pub mod backends;
 

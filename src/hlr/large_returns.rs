@@ -1,9 +1,8 @@
 use super::hlr_data::ArgIndex;
 use super::hlr_data::VariableInfo;
-use super::struct_literals::struct_literals;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
-use crate::lex::VarName;
+use crate::typ::ABI;
 use crate::typ::ReturnStyle;
 use crate::Type;
 
@@ -14,17 +13,18 @@ pub fn large_returns(hlr: &mut FuncRep) {
 
 #[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_return(hlr: &mut FuncRep) {
-    match hlr.ret_type.return_style() {
+    dbg!(&hlr.ret_type);
+    match dbg!(hlr.ret_type.return_style(ABI::C)) {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
-        | ReturnStyle::ThroughDouble if hlr.ret_type != hlr.ret_type.raw_return_type() => {
-            return_by_small_cast(hlr, hlr.ret_type.raw_return_type());
+        | ReturnStyle::ThroughDouble if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+            return_by_small_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         },
         ReturnStyle::ThroughF32F32
         | ReturnStyle::ThroughI32I32
         | ReturnStyle::ThroughI64I32
-        | ReturnStyle::ThroughI64I64 if hlr.ret_type != hlr.ret_type.raw_return_type() => {
-            return_by_big_cast(hlr, hlr.ret_type.raw_return_type());
+        | ReturnStyle::ThroughI64I64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+            return_by_big_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         }
         ReturnStyle::SRet => return_by_pointer(hlr),
         _ => {},
@@ -106,7 +106,14 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
         if let HNodeData::Call { ref query, .. } = data 
             && !hlr.comp_data.name_is_intrinsic(&query.name) {
-            match data.ret_type().return_style() {
+            let abi = if let Some(id) = hlr.comp_data.query_for_code(query.code_query()) {
+                hlr.comp_data.func_code[id].abi
+            } else {
+                ABI::C
+            };
+
+            dbg!(&data.ret_type());
+            match dbg!(data.ret_type().return_style(abi)) {
                 ReturnStyle::SRet => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
@@ -115,7 +122,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 | ReturnStyle::ThroughF32F32
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64 => {
-                    format_call_returning_struct(hlr, call_id);
+                    format_call_returning_struct(hlr, call_id, abi);
                 },
                 ReturnStyle::Direct | ReturnStyle::Void => {},
             }
@@ -123,13 +130,13 @@ fn handle_other_calls(hlr: &mut FuncRep) {
     }
 }
 
-fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
+fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID, abi: ABI) {
     let mut og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
     let casted_var_name = hlr.add_variable(&casted_var_type, og_call);
 
-    let raw_ret_var_type = casted_var_type.raw_return_type();
+    let raw_ret_var_type = casted_var_type.raw_return_type(abi);
     let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type, og_call);
 
     *og_call_data.ret_type_mut().unwrap() = raw_ret_var_type.clone();

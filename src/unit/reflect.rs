@@ -77,6 +77,20 @@ macro_rules! impl_reflect_set {
 
         impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for fn($($elem),+) -> R {
             fn spec_code() -> String {
+                let mut code = String::from("ExternRust(");
+                $(
+                    code += &*$elem::spec_code();
+                    code += ", ";
+                )+
+                code += "); ";
+                code += &*R::spec_code();
+                code += ")";
+                code
+            }
+        }
+
+        impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for unsafe extern "C" fn($($elem),+) -> R {
+            fn spec_code() -> String {
                 let mut code = String::from("(");
                 $(
                     code += &*$elem::spec_code();
@@ -130,18 +144,7 @@ impl_reflect_generic!(Arc);
 
 impl Unit {
     pub fn get_reflect_type<T: XcReflect + 'static>(&self) -> Option<Type> {
-        if let Some(typ) = self.comp_data.reflected_types.get(&TypeId::of::<T>()) {
-            return Some(typ.clone());
-        }
-
-        let decl = T::type_decl();
-
-        if decl.name == "Reflected".into() {
-            Some(self.comp_data.get_spec(&decl.typ, &()).unwrap())
-        } else {
-            type_from_decl(&self.comp_data, decl)
-        }
-
+        self.comp_data.get_reflect_type::<T>()
     }
 
     pub fn add_reflect_type<T: XcReflect>(&mut self) -> Option<Type> {
@@ -213,6 +216,25 @@ impl Unit {
     }
 }
 
+impl CompData {
+    pub fn type_of_val<T: XcReflect>(&self, _: &T) -> Type { 
+        self.get_reflect_type::<T>().unwrap() 
+    }
+
+    pub fn get_reflect_type<T: XcReflect + 'static>(&self) -> Option<Type> {
+        if let Some(typ) = self.reflected_types.get(&TypeId::of::<T>()) {
+            return Some(typ.clone());
+        }
+
+        let decl = T::type_decl();
+
+        if decl.name == "Reflected".into() {
+            Some(self.get_spec(&decl.typ, &()).unwrap())
+        } else {
+            type_from_decl(&self, decl)
+        }
+    }
+}
 
 
 fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {

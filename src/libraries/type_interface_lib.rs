@@ -5,6 +5,7 @@ use crate::Type;
 
 use crate::parse::TypeSpec;
 use crate::parse::TypeSpecRelation;
+use crate::typ::ABI;
 use crate::typ::spec_from_type::type_to_type_spec;
 use crate::unit::CompData;
 
@@ -33,5 +34,6 @@ fn size_in_bytes(_: &CompData, typ: Type) -> Option<FuncCode> {
         code: Expr::Number(typ.size() as u64).wrap_in_block(),
         relation: TypeSpecRelation::Static(type_to_type_spec(typ)),
         is_external: false,
+        abi: ABI::C,
     })
 }

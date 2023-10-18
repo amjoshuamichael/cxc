@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::lex::VarName;
 use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDecl};
-use crate::typ::{ArrayType, StructType, Field};
+use crate::typ::{ArrayType, StructType, Field, ABI};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
 use crate::{ExternalFuncAdd, TypeEnum, Unit, typ::spec_from_type::type_to_type_spec};
@@ -217,5 +217,6 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
         code: expr,
         relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
+        abi: ABI::C,
     })
 }

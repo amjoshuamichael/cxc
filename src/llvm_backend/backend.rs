@@ -76,7 +76,7 @@ impl IsBackend for LLVMBackend {
         let mut empty_function =
             self.module.add_function(
                 &*name, 
-                func_info.typ.llvm_func_type(self.context, false), 
+                func_info.typ.llvm_func_type(self.context), 
                 None
             );
 
@@ -169,10 +169,10 @@ impl IsBackend for LLVMBackend {
     ) {
         let ret_type = func_type.ret.clone();
 
-        let calling_func_type = func_type.llvm_func_type(self.context, true);
+        let calling_func_type = func_type.llvm_func_type(self.context);
         let calling_func_ptr_type = calling_func_type.ptr_type(AddressSpace::default());
 
-        let outer_func_type = func_type.llvm_func_type(self.context, false);
+        let outer_func_type = func_type.llvm_func_type(self.context);
 
         let name = func_info.to_string(func_id);
         let mut function =
@@ -201,12 +201,12 @@ impl IsBackend for LLVMBackend {
         let mut arg_vals: Vec<BasicMetadataValueEnum> =
             function.get_params().iter().map(|p| (*p).into()).collect();
 
-        if ret_type.return_style() == ReturnStyle::SRet {
+        if ret_type.return_style(func_type.abi) == ReturnStyle::SRet {
             let mut out =
                 builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
             add_sret_attribute_to_call_site(&mut out, self.context, &ret_type);
             builder.build_return(None);
-        } else if ret_type.rust_return_style() == ReturnStyle::SRet {
+        } else if ret_type.return_style(func_type.abi) == ReturnStyle::SRet {
             let i64i64 = Type::new_tuple(vec![Type::i(64); 2]).to_basic_type(self.context);
 
             let call_out = builder.build_alloca(i64i64, "call_out");
@@ -226,19 +226,6 @@ impl IsBackend for LLVMBackend {
         } else if ret_type.is_void() {
             builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
             builder.build_return(None);
-        } else if ret_type.return_style() != ret_type.rust_return_style() {
-            let xc_ret = ret_type.raw_return_type().to_basic_type(self.context);
-            let rust_ret = ret_type.rust_raw_return_type().to_basic_type(self.context);
-
-            let out_var = builder.build_alloca(rust_ret, "out_var");
-
-            let out =
-                builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call").try_as_basic_value().unwrap_left();
-            builder.build_store(out_var, out);
-
-            let casted = builder.build_load(xc_ret, out_var, "load");
-
-            builder.build_return(Some(&casted));
         } else {
             let out =
                 builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");

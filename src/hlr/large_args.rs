@@ -3,7 +3,7 @@ use super::prelude::*;
 use crate::Type;
 use crate::hlr::expr_tree::*;
 
-use crate::typ::ArgStyle;
+use crate::typ::{ArgStyle, ABI};
 
 pub fn large_args(hlr: &mut FuncRep) {
     handle_other_calls(hlr);
@@ -21,7 +21,7 @@ fn handle_own_args(hlr: &mut FuncRep) {
     for (id, info) in args {
         if info.arg_index == ArgIndex::SRet { continue }
 
-        match info.typ.arg_style() {
+        match info.typ.arg_style(ABI::C) {
             ArgStyle::Direct => {},
             ArgStyle::Ints(..) => arg_by_ints(hlr, id),
             ArgStyle::Pointer => arg_by_pointer(hlr, id),
@@ -38,7 +38,7 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
             lhs: new_arg_load_var.clone(),
             rhs: HNodeData::Ident {
                 var_id: og_arg.clone(),
-                var_type: arg_load_arg_type.raw_arg_type(), 
+                var_type: arg_load_arg_type.raw_arg_type(ABI::C), 
             }
         }
     );
@@ -93,15 +93,21 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 return;
             }
 
+            let abi = if let Some(id) = hlr.comp_data.query_for_code(query.code_query()) {
+                hlr.comp_data.func_code[id].abi
+            } else {
+                ABI::C
+            };
+
             for (a, arg) in args.clone().into_iter().enumerate() {
                 let old_arg_type = hlr.tree.get(arg).ret_type();
-                let arg_style = old_arg_type.arg_style();
+                let arg_style = old_arg_type.arg_style(abi);
 
                 if arg_style == ArgStyle::Pointer {
                     args[0] = hlr.insert_quick(call_id, RefGen(arg));
                 } else if let ArgStyle::Ints(..) = arg_style {
                     let _new_arg_name = format!("{}_arg_{}", query.name, a);
-                    let raw_arg_type = old_arg_type.raw_arg_type();
+                    let raw_arg_type = old_arg_type.raw_arg_type(abi);
                     let new_arg = hlr.add_variable(&raw_arg_type, hlr.tree.root);
 
                     hlr.insert_statement_before(call_id, MemCpyGen {

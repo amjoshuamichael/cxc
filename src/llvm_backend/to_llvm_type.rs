@@ -75,34 +75,34 @@ impl ToLLVMType for RefType {
 
 impl ToLLVMType for FuncType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        self.llvm_func_type(context, false)
+        self.llvm_func_type(context)
             .ptr_type(AddressSpace::default())
             .as_any_type_enum()
     }
 }
 
 impl FuncType {
-    pub fn llvm_func_type<'f>(&self, context: &'static Context, as_rust: bool) -> FunctionType<'f> {
-        let return_style = if as_rust { self.ret.rust_return_style() } else { self.ret.return_style() };
+    pub fn llvm_func_type<'f>(&self, context: &'static Context) -> FunctionType<'f> {
+        let return_style = self.ret.return_style(self.abi);
 
         if return_style != ReturnStyle::SRet {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
-                .map(|t| t.raw_arg_type().to_basic_type(context).into())
+                .map(|t| t.raw_arg_type(self.abi).to_basic_type(context).into())
                 .collect();
 
             if self.ret.is_void() {
                 context.void_type().fn_type(&args[..], false)
             } else {
-                let return_type = if as_rust { self.ret.rust_raw_return_type() } else { self.ret.raw_return_type() };
+                let return_type = self.ret.raw_return_type(self.abi);
 
                 return_type.to_basic_type(context).fn_type(&args, false)
             }
         } else {
             let args: Vec<BasicMetadataTypeEnum> = once(&self.ret.clone().get_ref())
                 .chain(self.args.iter())
-                .map(|t| t.raw_arg_type().to_basic_type(context).into())
+                .map(|t| t.raw_arg_type(self.abi).to_basic_type(context).into())
                 .collect();
 
             context.void_type().fn_type(&args[..], false)

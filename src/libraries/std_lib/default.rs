@@ -2,7 +2,7 @@ use crate::{
     lex::VarName,
     libraries::Library,
     parse::{Expr, FuncCode, InitOpts, TypeSpecRelation},
-    unit::CompData, Type, TypeEnum, typ::{Field, spec_from_type::type_to_type_spec},
+    unit::CompData, Type, TypeEnum, typ::{Field, spec_from_type::type_to_type_spec, ABI},
 };
 
 pub(super) struct DefaultLib;
@@ -50,6 +50,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 code: struct_lit.wrap_in_block(),
                 relation,
                 is_external: false,
+                abi: ABI::C,
             })
         },
         _ => None,

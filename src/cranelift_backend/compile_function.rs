@@ -4,9 +4,9 @@ use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prel
 use cranelift_module::Module;
 use slotmap::SecondaryMap;
 
-use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
+use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::{ReturnStyle, ABI}, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
 
-use super::{to_cl_type::{ToCLType, func_type_to_signature}, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, ClFunctionData, alloc_and_free::AllocAndFree};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, CraneliftBackend, external_function::ExternalFuncData, ClFunctionData, alloc_and_free::AllocAndFree};
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -70,7 +70,7 @@ pub fn make_fcs<'a>(
         };
 
         let mut call_sig = backend.module.make_signature();
-        func_type_to_signature(call_type, &mut call_sig, false);
+        func_type_to_signature(call_type, &mut call_sig);
 
         backend.func_signatures.insert(call_type.clone(), call_sig);
     }
@@ -202,10 +202,13 @@ impl Writeable {
                 let mut values = Vec::new();
                 let mut byte_offset = 0;
 
-                for typ in types {
+                for (t, typ) in types.iter().enumerate() {
                     let val = self.load_offset(builder, *typ, byte_offset);
                     values.push(val);
-                    byte_offset += typ.bytes();
+
+                    if t < types.len() - 1 {
+                        byte_offset += typ.bytes().next_multiple_of(types[t + 1].bytes());
+                    }
                 }
 
                 values
@@ -271,7 +274,7 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
 
         if *location == VarLocation::Reg {
             let writeable = if let ArgIndex::Some(arg_index) = arg_index {
-                let raw_arg_types = typ.raw_arg_type().to_cl_type();
+                let raw_arg_types = typ.raw_arg_type(ABI::C).to_cl_type();
                 let raw_arg_type_count = raw_arg_types.len();
 
                 let writeable = Writeable::Arg { 
@@ -510,12 +513,17 @@ fn write_vals_to_addr(
 ) {
     let value_count = vals.len();
 
+    let types = vals
+        .iter()
+        .map(|val| builder.ins().data_flow_graph().value_type(*val))
+        .collect::<Vec<_>>();
+
     for (v, val) in vals.into_iter().enumerate() {
         builder.ins().store(MemFlags::new(), val, addr, 0);
         
         if v != value_count - 1 {
-            let typ = builder.ins().data_flow_graph().value_type(val);
-            let offset_val = builder.ins().iconst(cl_types::I64, typ.bytes() as i64);
+            let offset = types[v].bytes().next_multiple_of(types[v + 1].bytes());
+            let offset_val = builder.ins().iconst(cl_types::I64, offset as i64);
 
             addr = builder.ins().iadd(addr, offset_val);
         }
@@ -523,7 +531,7 @@ fn write_vals_to_addr(
 }
 
 fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand) {
-    let return_style = fcs.ret_type.return_style();
+    let return_style = fcs.ret_type.return_style(ABI::C);
 
     if return_style == ReturnStyle::Direct {
         let val = compile_operand(fcs, operand);
@@ -641,12 +649,12 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 MCallable::Func(id) => {
                     if let Some(func_ref) = fcs.used_functions.get(*id) {
                         fcs.builder.ins().call(*func_ref, &*all_args)
-                    } else if let Some(ext_func_data) = fcs.external_functions.get(*id) {
-                        return Some(build_external_func_call(
-                            &mut fcs.builder, 
-                            all_args, 
-                            ext_func_data
-                        ));
+                    } else if let Some(ExternalFuncData { ptr, sig, .. }) = 
+                        fcs.external_functions.get(*id) {
+                        let sigref = fcs.builder.func.import_signature(sig.clone());
+                        let func_val = fcs.builder.ins().iconst(cl_types::I64, *ptr as i64);
+
+                        fcs.builder.ins().call_indirect(sigref, func_val, &*all_args)
                     } else {
                         panic!("{id:?}");
                     }

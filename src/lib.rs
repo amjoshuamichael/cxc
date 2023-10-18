@@ -6,6 +6,7 @@
 #![feature(fn_traits)]
 #![feature(tuple_trait)]
 #![feature(exclusive_range_pattern)]
+#![feature(concat_idents)]
 
 // HOW THE DEBUG FlAGS WORK:
 // 1. xc-debug: enables debug printing for the compiler itself

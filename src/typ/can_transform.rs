@@ -343,7 +343,7 @@ impl Type {
             },
             TypeSpec::Sum(_) => todo!(),
             TypeSpec::Function(arg_specs, ret_spec) => {
-                let TypeEnum::Func(FuncType { ret, args }) = type_enum 
+                let TypeEnum::Func(FuncType { ret, args, .. }) = type_enum 
                     else { return false };
 
                 if args.len() != arg_specs.len() {

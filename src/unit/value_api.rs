@@ -4,7 +4,7 @@ use crate::{
     errors::CResultMany,
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation},
-    typ::{ReturnStyle, IntSize},
+    typ::{ReturnStyle, IntSize, ABI},
     Unit, XcReflect, IntType, TypeEnum, StructType,
 };
 use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
@@ -244,7 +244,7 @@ impl Unit {
         #[cfg(not(feature = "backend-interpreter"))]
         {
             let value = unsafe {
-                match ret_type.return_style() {
+                match ret_type.return_style(ABI::C) {
                     ReturnStyle::Direct | ReturnStyle::ThroughI64 | ReturnStyle::ThroughI32 => {
                         let new_func = func_addr.downcast::<(), i64>();
                         let out: [u8; 8] = new_func().to_ne_bytes();

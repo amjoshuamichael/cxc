@@ -2,7 +2,7 @@ use crate::{
     errors::{TErr, TResult},
     parse::TypeSpec,
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
-    VarName, typ::{Field, can_transform::TransformationList},
+    VarName, typ::{Field, can_transform::TransformationList, ABI},
 };
 use std::fmt::Debug;
 
@@ -66,6 +66,11 @@ pub struct GetSpecReport {
 impl CompData {
     pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> TResult<Type> {
         self.get_spec_report(&spec, generics).map(|re| re.typ)
+    }
+
+    pub fn ty(&self, type_spec_code: &str) -> Type {
+        let type_spec = TypeSpec::from(type_spec_code);
+        self.get_spec(&type_spec, &()).unwrap()
     }
 
     pub fn get_spec_report(
@@ -147,7 +152,7 @@ impl CompData {
                     .map(|arg| self.get_spec(arg, generics))
                     .collect::<TResult<Vec<Type>>>()?;
                 let ret_type = self.get_spec(ret_type, generics)?;
-                ret_type.func_with_args(args)
+                ret_type.func_with_args(args, ABI::C)
             },
             TypeSpec::FuncReturnType(func_type) => {
                 let func_type = self.get_spec(func_type, generics)?;

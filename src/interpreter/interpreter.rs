@@ -82,7 +82,8 @@ pub fn run_with_args(
         stacks: vec![stack],
     };
 
-    let sret_allocation = (mir.func_type.ret.return_style() == ReturnStyle::SRet).then(|| {
+    let return_style = mir.func_type.ret.return_style(mir.func_type.abi);
+    let sret_allocation = (return_style == ReturnStyle::SRet).then(|| {
         let new_allocation = vec![0u8; mir.func_type.ret.size()].into_boxed_slice();
         let alloc_pointer = new_allocation.as_ptr() as usize;
 
@@ -198,9 +199,10 @@ fn interpret(interpreter: &mut Interpreter) -> Value {
             MLine::Return(operand) => {
                 if let Some(operand) = operand {
                     let operand = ioperand(operand, interpreter);
+                    let func_type = &interpreter.mir.func_type;
 
                     return Value {
-                        typ: interpreter.mir.func_type.ret.raw_return_type().clone(),
+                        typ: func_type.ret.raw_return_type(func_type.abi).clone(),
                         data: operand,
                     };
                 } else {
@@ -616,6 +618,6 @@ fn addr_to_slice<'a>(addr: usize, interpreter: &'a mut Interpreter) -> &'a mut [
 
 fn func_type_requires_access_to_external_memory(func_type: &FuncType) -> bool {
     !func_type.args.iter().all(|typ|
-        typ.is_shallow() && typ.raw_arg_type().is_shallow() 
+        typ.is_shallow() && typ.raw_arg_type(func_type.abi).is_shallow() 
     )
 }

@@ -4,7 +4,7 @@ use super::expr_tree::*;
 use super::hlr_data_output::HLR;
 use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
-use crate::typ::ReturnStyle;
+use crate::typ::{ReturnStyle, ABI};
 use crate::{parse::*, TypeEnum};
 use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId, Global};
 use crate::Type;
@@ -26,7 +26,17 @@ pub struct FuncRep<'a> {
 
 impl<'a> ToString for FuncRep<'a> {
     fn to_string(&self) -> String {
-        self.tree.get(self.tree.root).to_string(&self.tree, &self.variables)
+        let mut output = self.name.to_string();
+        output += "(";
+        for (_, VariableInfo { name, typ, .. }) in self.args() {
+            output += &*format!("{name}: {typ:?}"); 
+        }
+        output += ")";
+        if self.ret_type != Type::void() {
+            output += &*format!("; {:?} ", self.ret_type);
+        }
+        output += &*self.tree.get(self.tree.root).to_string(&self.tree, &self.variables);
+        output
     }
 }
 
@@ -130,7 +140,7 @@ impl<'a> FuncRep<'a> {
     }
 
     // includes sret argument
-    pub fn args<'b>(&'b mut self) -> Vec<(VarID, &VariableInfo)> {
+    pub fn args<'b>(&'b self) -> Vec<(VarID, &VariableInfo)> {
         let mut names_and_flow = self
             .variables
             .iter()
@@ -145,12 +155,12 @@ impl<'a> FuncRep<'a> {
     }
 
     // includes sret argument
-    pub fn arg_types(&mut self) -> Vec<Type> {
+    pub fn arg_types(&self) -> Vec<Type> {
         self.args().into_iter().map(|(_, v_info)| v_info.typ.clone()).collect::<Vec<_>>()
     }
 
     // includes sret argument
-    pub fn arg_ids(&mut self) -> Vec<VarID> {
+    pub fn arg_ids(&self) -> Vec<VarID> {
         self.args().into_iter().map(|(id, _)| id).collect::<Vec<_>>()
     }
 
@@ -164,11 +174,11 @@ impl<'a> FuncRep<'a> {
     pub fn output(mut self) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
-        if self.ret_type.return_style() == ReturnStyle::SRet {
+        if self.ret_type.return_style(ABI::C) == ReturnStyle::SRet {
             func_arg_types.remove(0);
         }
 
-        let func_type = self.ret_type.clone().func_with_args(func_arg_types);
+        let func_type = self.ret_type.clone().func_with_args(func_arg_types, ABI::C);
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
         let mut specified_dependencies = 

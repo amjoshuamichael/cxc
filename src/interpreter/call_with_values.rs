@@ -24,7 +24,7 @@ pub fn call_with_boxes(
     sret: Option<*mut u8>,
 ) -> Box<[u8]> {
     let arg_sizes: Vec<_> = func_type.args.iter().map(Type::size).collect();
-    let raw_ret = func_type.ret.raw_return_type();
+    let raw_ret = func_type.ret.raw_return_type(func_type.abi);
     let ret_size = func_type.ret.size();
     let ret_field_sizes = if func_type.ret.is_primitive() { 
             if func_type.ret.size() == 0 {

@@ -1,6 +1,7 @@
 use crate::libraries::Library;
 use crate::parse::{InitOpts, VarDecl};
 use crate::RefType;
+use crate::typ::ABI;
 use crate::typ::spec_from_type::type_to_type_spec;
 use crate::{
     lex::VarName,
@@ -49,6 +50,7 @@ fn derive_array_deref(_: &CompData, typ: Type) -> Option<FuncCode> {
         ).wrap_in_block(),
         relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
+        abi: ABI::C,
     })
 }
 
@@ -68,6 +70,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
         ).wrap_in_block(),
         relation: TypeSpecRelation::Static(type_to_type_spec(typ)),
         is_external: false,
+        abi: ABI::C,
     })
 }
 
@@ -91,5 +94,6 @@ fn derive_array_len_m(_: &CompData, typ: Type) -> Option<FuncCode> {
             Box::new(Expr::Number(*count as u64))
         ).wrap_in_block(),
         is_external: false,
+        abi: ABI::C,
     })
 }

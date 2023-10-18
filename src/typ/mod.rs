@@ -53,16 +53,12 @@ impl Type {
         lhs.is_subtype_of(rhs) || rhs.is_subtype_of(lhs)
     }
 
-    pub fn raw_return_type(&self) -> Type {
-        realize_return_style(self.return_style(), self)
+    pub fn raw_return_type(&self, abi: ABI) -> Type {
+        realize_return_style(self.return_style(abi), self)
     }
 
-    pub fn rust_raw_return_type(&self) -> Type {
-        realize_return_style(self.rust_return_style(), self)
-    }
-
-    pub fn raw_arg_type(&self) -> Type {
-        realize_arg_style(self.arg_style(), self)
+    pub fn raw_arg_type(&self, abi: ABI) -> Type {
+        realize_arg_style(self.arg_style(abi), self)
     }
 
     pub fn id(&self) -> u64 {
@@ -197,8 +193,8 @@ impl Type {
     pub fn void() -> Type { Type::new(TypeEnum::Void) }
     pub fn void_ptr() -> Type { Type::new(TypeEnum::Void).get_ref() }
 
-    pub fn func_with_args(self, args: Vec<Type>) -> Type {
-        Type::new(TypeEnum::Func(FuncType { ret: self, args }))
+    pub fn func_with_args(self, args: Vec<Type>, abi: ABI) -> Type {
+        Type::new(TypeEnum::Func(FuncType { ret: self, args, abi }))
     }
 
     pub fn as_type_enum(&self) -> &TypeEnum { &self.0.type_enum }
@@ -353,10 +349,25 @@ pub struct RefType {
     pub base: Type,
 }
 
+/// The ABI of a function, similar to the possible strings after rust's `extern` keyword.
+/// See: https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier
+#[derive(Copy, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
+pub enum ABI {
+    /// Works like extern "Rust".
+    Rust,
+    /// Works like extern "C"– happens to be the cxc default when declaring functions.
+    C,
+    /// No ABI, arguments are passed in as-is. This is used in function types when they
+    /// have moved past the ABI steps in the compiler. It is very unsafe to use in 
+    /// practice.
+    None,
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
 pub struct FuncType {
     pub ret: Type,
     pub args: Vec<Type>,
+    pub abi: ABI,
 }
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Default, PartialOrd, Ord, Debug, XcReflect)]
