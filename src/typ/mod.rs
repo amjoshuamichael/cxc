@@ -1,5 +1,7 @@
 use crate::cache::Cache;
 use crate::errors::{TErr, TResult};
+use crate::hlr::expr_tree::ExprTree;
+use crate::hlr::hlr_data_output::HLR;
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
 use crate::FuncQuery;
@@ -305,7 +307,7 @@ impl TypeData {
     pub fn is_named(&self) -> bool { self.name != TypeName::Anonymous }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(Default, Hash, Clone, XcReflect)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -313,6 +315,7 @@ pub enum TypeEnum {
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
+    Destructor(DestructorType),
     Bool,
     Void,
 
@@ -498,4 +501,10 @@ static VOID_STATIC: VoidType = VoidType();
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
+}
+
+#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord, XcReflect)]
+pub struct DestructorType {
+    pub typ: Type,
+    pub code: Arc<HLR>,
 }

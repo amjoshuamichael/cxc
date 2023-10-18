@@ -119,7 +119,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         Tok::Float(val) => Expr::Float(val).into(),
         Tok::DottedNum((l, r)) => {
             // convert dotted int back into float
-            Expr::Float(format!("{l}.{r}").parse().unwrap()).into()
+            Expr::Float(ParsedFloat { l, r, exp: None }).into()
         },
         Tok::Bool(val) => Expr::Bool(val).into(),
         Tok::Strin(val) => Expr::String(val.clone()).into(),

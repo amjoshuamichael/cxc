@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::lex::Tok;
+use crate::{lex::Tok, parse::ParsedFloat};
 use logos::Lexer;
 
 pub fn parse_int(token: &mut Lexer<Tok>) -> Option<u64> {
@@ -53,33 +53,38 @@ pub fn parse_dotted_int(token: &mut Lexer<Tok>) -> Option<(u128, u128)> {
     Some((left.parse().ok()?, right.parse().ok()?))
 }
 
-pub fn parse_float(token: &mut Lexer<Tok>) -> Option<f64> {
+pub fn parse_float(token: &mut Lexer<Tok>) -> Option<ParsedFloat> {
     let num_text = token
         .slice()
         .chars()
         .filter(|c| *c != '_' && *c != '+')
         .collect::<String>();
 
+
     match num_text.chars().position(|c| c == 'e') {
-        None => num_text.parse().ok(),
+        None => {
+            let dot_loc = num_text.chars().position(|c| c == '.').unwrap();
+            Some(ParsedFloat {
+                l: num_text[0..dot_loc].parse().ok()?,
+                r: num_text[(dot_loc + 1)..].parse().ok()?,
+                exp: None,
+            })
+        },
         Some(e_pos) => parse_scientific_notation(num_text, e_pos),
     }
 }
 
-fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<f64> {
+fn parse_scientific_notation(num_text: String, e_pos: usize) -> Option<ParsedFloat> {
     let coeff_str = &num_text[..e_pos];
     let exp_str = &num_text[e_pos + 1..];
 
-    let without_decimal = coeff_str.chars().filter(|c| *c != '.').collect::<String>();
     let decimal_pos = coeff_str.chars().rev().position(|c| c == '.').unwrap();
 
-    let coefficient: f64 = without_decimal.parse::<f64>().ok()?;
-    let exponent: f64 = exp_str.parse::<f64>().ok()? - decimal_pos as f64;
-    let base: f64 = 10.0;
-
-    let output = coefficient * base.powf(exponent);
-
-    Some(output)
+    Some(ParsedFloat {
+        l: num_text[0..decimal_pos].parse::<u128>().ok()?,
+        r: num_text[(decimal_pos + 1)..e_pos].parse::<u128>().ok()?,
+        exp: Some(num_text[(e_pos + 1)..].parse::<i128>().ok()?),
+    })
 }
 
 fn convert_base(input: &str, base: u32) -> Option<u64> {

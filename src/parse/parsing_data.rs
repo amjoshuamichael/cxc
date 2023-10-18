@@ -16,10 +16,33 @@ pub enum InitOpts {
     NoFill,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq)]
+pub struct ParsedFloat {
+    pub l: u128,
+    pub r: u128,
+    pub exp: Option<i128>,
+}
+
+impl ToString for ParsedFloat {
+    fn to_string(&self) -> String {
+        match self {
+            ParsedFloat { l, r, exp: None } => format!("{l}.{r}"),
+            ParsedFloat { l, r, exp: Some(exp) } => format!("{l}.{r}e{exp}"),
+        }
+    }
+}
+
+impl Into<f64> for ParsedFloat {
+    fn into(self) -> f64 {
+        // TODO: make this faster by not converting to string 
+        self.to_string().parse().unwrap()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Number(u64),
-    Float(f64),
+    Float(ParsedFloat),
     Bool(bool),
     String(Arc<str>),
     Ident(VarName),

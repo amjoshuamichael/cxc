@@ -2,6 +2,7 @@ use super::parse_num::*;
 use crate::parse::Opcode;
 use crate::parse::ParseError;
 use crate::parse::ParseResult;
+use crate::parse::ParsedFloat;
 use crate::parse::TokName;
 use crate::parse::TokWithName;
 use logos::{Lexer, Logos};
@@ -190,6 +191,8 @@ pub enum Tok {
     // classifies as a float under the current regex statement.
     #[token(".", priority = 3)]
     Dot,
+    #[token("~")]
+    Tilde,
 
     #[token("++")]
     DoublePlus,
@@ -295,7 +298,7 @@ pub enum Tok {
 
     // this is definitely a float, because it uses e for scientific notation
     #[regex(r"[0-9_]*\.[0-9_]+e[+-]?[0-9_]+", parse_float)]
-    Float(f64),
+    Float(ParsedFloat),
 
     #[regex("true|false", parse_bool)]
     Bool(bool),
@@ -328,6 +331,7 @@ impl Tok {
             Tok::AmpersandSet(_) => Ok(Opcode::Ref),
             Tok::Bang => Ok(Opcode::Not),
             Tok::Plus => Ok(Opcode::Transform),
+            Tok::Tilde => Ok(Opcode::Destroy),
             _ => Err(ParseError::UnexpectedTok {
                 got: self.clone(),
                 expected: vec![TokName::UnaryOperator],
@@ -425,6 +429,7 @@ impl ToString for Tok {
             BitShiftR => ">>",
             BitShiftL => "<<",
             Dot => ".",
+            Tilde => "~",
             DoublePlus => "++",
             DoubleMinus => "--",
             TripleMinus => "---",

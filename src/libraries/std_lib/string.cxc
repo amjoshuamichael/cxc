@@ -1,7 +1,3 @@
-&String:.drop() {
-    self.0.drop()
-}
-
 String::from_bytes<T>(bytes: &T, len: i64); String {
     ; String:_from_bytes(cast<&T, &u8>(bytes), len)
 }

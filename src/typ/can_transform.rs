@@ -368,6 +368,7 @@ impl Type {
 
                 *count == count_spec && base.is_equivalent(*base_spec, generics)
             },
+            TypeSpec::Destructor(_, _) => panic!(),
             TypeSpec::Void => type_enum == &TypeEnum::Void,
             TypeSpec::GetGeneric(_, _) |
             TypeSpec::Deref(_) |

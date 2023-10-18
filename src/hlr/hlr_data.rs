@@ -227,7 +227,7 @@ impl<'a> FuncRep<'a> {
             Expr::Float(value) => self.tree.insert(
                 parent,
                 HNodeData::Float {
-                    value: *value,
+                    value: (*value).into(),
                     lit_type: Type::unknown(),
                 },
             ),

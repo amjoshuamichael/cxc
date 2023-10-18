@@ -199,6 +199,9 @@ impl CompData {
                     else { return Err(TErr::NotAnArray(array)) };
                 base.clone()
             },
+            TypeSpec::Destructor(base, code) => {
+                todo!()
+            }
             TypeSpec::Void => Type::void(),
             TypeSpec::Unknown => Type::unknown(),
             TypeSpec::Me => {
