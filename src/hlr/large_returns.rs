@@ -13,8 +13,7 @@ pub fn large_returns(hlr: &mut FuncRep) {
 
 #[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_return(hlr: &mut FuncRep) {
-    dbg!(&hlr.ret_type);
-    match dbg!(hlr.ret_type.return_style(ABI::C)) {
+    match hlr.ret_type.return_style(ABI::C) {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
         | ReturnStyle::ThroughDouble if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
@@ -112,8 +111,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 ABI::C
             };
 
-            dbg!(&data.ret_type());
-            match dbg!(data.ret_type().return_style(abi)) {
+            match data.ret_type().return_style(abi) {
                 ReturnStyle::SRet => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
@@ -180,11 +178,13 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let parent = hlr.tree.parent(og_call_id);
 
     if let HNodeData::Set { ref lhs, .. } = hlr.tree.get(parent) {
+        hlr.tree.replace(parent, HNodeData::zero());
         let new_sret = hlr.insert_quick(og_call_id, RefGen(*lhs));
         *sret = Some(new_sret);
         *ret_type = Type::void();
         hlr.replace_quick(parent, new_data);
     } else {
+        // TODO: use separate_expression here
         let call_var = hlr.add_variable(ret_type, og_call_id);
 
         let new_arg = hlr.insert_quick(og_call_id, RefGen(call_var.clone()));

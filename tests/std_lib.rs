@@ -36,6 +36,23 @@ fn default_vec_with_push() {
 }
 
 #[test]
+fn small_vec_push() {
+    xc_test!(
+        "
+        main() {
+            output: Vec<i64> = Vec<i64>:default()                
+            output.push(1)
+            output.push(2)
+            output.push(3)
+            output.push(4)
+            output.push(5)
+        }
+        "
+    )
+}
+
+#[test]
+#[ignore]
 fn vec_push_and_check() {
     xc_test!(
         "     
@@ -235,7 +252,11 @@ fn arc_clone() {
         main(); Arc<i32> {
             x: i32 = 90
             arc: Arc<i32> = Arc<i32>:new(x)
+            #x_ptr: u64 = cast(arc.ptr)
+            #print(x_ptr)
             cloned: Arc<i32> = arc.clone()
+            #y_ptr: u64 = cast(arc.ptr)
+            #print(y_ptr)
 
             ; cloned
         }

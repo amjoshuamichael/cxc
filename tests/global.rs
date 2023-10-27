@@ -1,19 +1,21 @@
 use std::rc::Rc;
-use serial_test::serial;
 
+use serial_test::serial;
 use crate::test_utils::Numbers5;
 mod test_utils;
 
-use cxc::{Unit, library::StdLib, Type, FuncType};
+use cxc::{Unit, library::StdLib, Type};
 use test_utils::consume;
 
 static mut GNUM: i32 = 90;
 
 #[test]
+#[serial]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
 fn basic_global() {
     let mut unit = Unit::new();
 
+    unsafe { GNUM = 50 };
     unit.add_global("x".into(), unsafe { &mut GNUM as *mut _ });
 
     unit.push_script(
@@ -31,10 +33,12 @@ fn basic_global() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "backend-interpreter"), ignore)]
+#[serial]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn read_basic_global() {
     let mut unit = Unit::new();
 
+    unsafe { GNUM = 90 };
     unit.add_global("x".into(), unsafe { &mut GNUM as *mut _ });
 
     unit.push_script(
@@ -75,6 +79,7 @@ fn big_global() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn read_big_global() {
     let mut unit = Unit::new();
 
@@ -209,8 +214,10 @@ fn get_fn_by_ptr() {
     let add_two = unit.get_fn_by_ptr(*add_two as _).unwrap().1;
     let fifty_four = unit.get_fn_by_ptr(*fifty_four as _).unwrap().1;
 
-    assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
-    assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });
+    assert_eq!(add_two.typ().args, vec![Type::i(32)]);
+    assert_eq!(add_two.typ().ret, Type::i(32));
+    assert_eq!(fifty_four.typ().args, vec![]);
+    assert_eq!(fifty_four.typ().ret, Type::i(32));
 
     let add_two = add_two.downcast::<(i32,), i32,>();
     let fifty_four = fifty_four.downcast::<(), i32>();

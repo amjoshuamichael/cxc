@@ -6,6 +6,10 @@ use cxc::XcReflect;
 use cxc::Value;
 
 macro_rules! xc_test {
+    (use $($lib:path),+; $code:expr) => {
+        xc_test! (use $($lib),+; $code; ())
+    };
+
     ($code:expr) => {
         xc_test! (use cxc::library::StdLib; $code; ())
     };

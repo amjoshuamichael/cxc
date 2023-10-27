@@ -1,4 +1,4 @@
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Hash, Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
     #[default]
     Plus,

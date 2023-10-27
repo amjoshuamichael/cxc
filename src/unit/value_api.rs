@@ -102,14 +102,18 @@ impl Value {
         use TypeEnum::*;
         use IntSize::*;
 
-        let string = match self.typ.as_type_enum() {
+        let string = match self.typ.remove_wrappers().as_type_enum() {
             Int(IntType { signed: false, size: _64 }) => int_to_string!(u64, &*self.data),
             Int(IntType { signed: false, size: _32 }) => int_to_string!(u32, &*self.data),
             Int(IntType { signed: false, size: _16 }) => int_to_string!(u16, &*self.data),
             Int(IntType { signed: true, size: _64 }) => int_to_string!(i64, &*self.data),
             Int(IntType { signed: true, size: _32 }) => int_to_string!(i32, &*self.data),
             Int(IntType { signed: true, size: _16 }) => int_to_string!(i16, &*self.data),
-            Ref(_) => int_to_string!(u64, &*self.data),
+            Ref(_) => {
+                let arr = <[u8; 8]>::try_from(&*self.data).unwrap();
+                let val = <usize>::from_ne_bytes(arr);
+                format!("0x{val:x}")
+            },
             Struct(struct_type) => {
                 let mut output = String::from("{ ");
 
@@ -132,6 +136,13 @@ impl Value {
                 output += " }";
 
                 output
+            }
+            Bool => {
+                if self.data[0] == 0 {
+                    "false".into()
+                } else {
+                    "true".into()
+                }
             }
             _ => return None,
         };
@@ -207,7 +218,7 @@ impl Unit {
             let mut lexed = lex(of);
             let mut context = lexed.split(VarName::None, HashMap::new());
 
-            parse::parse_expr(&mut context).unwrap().wrap_in_block()
+            parse::parse_expr(&mut context).unwrap().wrap()
         };
 
         let value_function_name = VarName::from("$val");

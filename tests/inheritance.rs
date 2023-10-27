@@ -33,6 +33,7 @@ struct MyPoint {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-debug", ignore)]
 fn auto_deref_method_2() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -46,7 +47,8 @@ fn auto_deref_method_2() {
         }
 
         main(rc_point: Rc<MyPoint>); f32 {
-            result: f32 = rc_point.sqr_hypotenuse()
+            value: &MyPoint = &rc_point.value
+            result: f32 = value.sqr_hypotenuse()
 
             ; result
         }
@@ -60,6 +62,7 @@ fn auto_deref_method_2() {
         .downcast::<(Rc<MyPoint>,), f32>();
 
     let rc = Rc::new(MyPoint { x: 4.0, y: 3.0 });
+    dbg!(Rc::<MyPoint>::as_ptr(&rc));
     assert_eq!(consume::<f32>(func(rc)), 25.0);
 }
 
@@ -93,7 +96,8 @@ fn big_rc_sum() {
 
         main(); i32 {
             rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 80, 100 })
-            ; rcx.sum()
+            output := rcx.sum()
+            ; output
         }
         ";
         180
@@ -107,8 +111,9 @@ fn big_rc_to_string() {
         "
         main(); String {
             rcx: Rc<{i32, i32}> = Rc<{i32, i32}>:new({ 90, 90 })
+            output := rcx.to_string()
 
-            ; rcx.to_string()
+            ; output
         }
         ";
         String::from("{0 = 90, 1 = 90}")

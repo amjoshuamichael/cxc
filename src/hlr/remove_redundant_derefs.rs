@@ -5,7 +5,7 @@ use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn remove_redundant_derefs(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
-        |_, ref_data, hlr| {
+        |ref_id, ref_data, hlr| {
             use Opcode::*;
 
             let HNodeData::UnarOp { op: first_op, hs: first_hs, .. } = 
@@ -14,7 +14,9 @@ pub fn remove_redundant_derefs(hlr: &mut FuncRep) {
                 &hlr.tree.get(*first_hs) else { return };
 
             if matches!((*second_op, *first_op), (Deref, Ref) | (Ref, Deref)) {
-                *ref_data = hlr.tree.get(*second_hs);
+                let new_parent = hlr.tree.parent(ref_id);
+                hlr.replace_quick(ref_id, *second_hs);
+                *ref_data = hlr.tree.get(ref_id);
             }
         }
     );

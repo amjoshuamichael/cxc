@@ -1,4 +1,5 @@
 use std::collections::{HashSet, HashMap};
+use std::rc::Rc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::HLR;
@@ -22,6 +23,7 @@ pub struct FuncRep<'a> {
     pub variables: SlotMap<VarID, VariableInfo>,
     pub goto_labels: SlotMap<GotoLabelID, ExprID>,
     pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
+    pub(super) gen_slot: Vec<Rc<dyn NodeDataGen>>,
 }
 
 impl<'a> ToString for FuncRep<'a> {
@@ -29,12 +31,17 @@ impl<'a> ToString for FuncRep<'a> {
         let mut output = self.name.to_string();
         output += "(";
         for (_, VariableInfo { name, typ, .. }) in self.args() {
-            output += &*format!("{name}: {typ:?}"); 
+            output += &*format!("{name}: {typ:?}, "); 
+        }
+        if !self.args().is_empty() {
+            output.pop();
+            output.pop();
         }
         output += ")";
         if self.ret_type != Type::void() {
-            output += &*format!("; {:?} ", self.ret_type);
+            output += &*format!("; {:?}", self.ret_type);
         }
+        output += " ";
         output += &*self.tree.get(self.tree.root).to_string(&self.tree, &self.variables);
         output
     }
@@ -49,15 +56,10 @@ slotmap::new_key_type! {
 pub struct VariableInfo {
     pub typ: Type,
     pub arg_index: ArgIndex,
-
-    // specially marks variables that definitely should not be dropped. if this is marked
-    // as false, traditional drop rules still apply. this is not a way to check if a
-    // variable will be dropped.
-    pub do_not_drop: bool,
     pub name: VarName,
 }
 
-#[derive(Copy, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ArgIndex {
     #[default]
     None,
@@ -95,6 +97,7 @@ impl<'a> FuncRep<'a> {
             variables: SlotMap::with_key(),
             goto_labels: SlotMap::with_key(),
             specified_dependencies: HashSet::new(),
+            gen_slot: Vec::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
@@ -104,7 +107,6 @@ impl<'a> FuncRep<'a> {
                 typ,
                 arg_index: ArgIndex::Some(a),
                 name: arg.name.clone(),
-                do_not_drop: false,
             });
         }
 
@@ -124,7 +126,7 @@ impl<'a> FuncRep<'a> {
         let mut statment_ids = Vec::new();
 
         {
-            let Expr::Block(ref stmts) = code.code else { unreachable!() };
+            let Expr::Block(ref stmts) = *code.code else { unreachable!() };
 
             for stmt in stmts {
                 statment_ids.push(new.add_expr(&stmt, new.tree.root));
@@ -171,7 +173,7 @@ impl<'a> FuncRep<'a> {
         self.comp_data.get_spec(spec, &(&self.generics, &self.relation))
     }
 
-    pub fn output(mut self) -> (HLR, ProcessedFuncInfo) {
+    pub fn output(mut self, from: Rc<Expr>) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
         if self.ret_type.return_style(ABI::C) == ReturnStyle::SRet {
@@ -200,6 +202,7 @@ impl<'a> FuncRep<'a> {
 
         (
             HLR {
+                from,
                 func_type: func_type.clone(),
                 tree: self.tree,
                 data_flow: self.variables,
@@ -344,7 +347,6 @@ impl<'a> FuncRep<'a> {
                     name: decl.name.clone(),
                     typ: var_type.clone(),
                     arg_index: ArgIndex::None,
-                    do_not_drop: false,
                 });
 
                 let (_, block) = self.tree.statement_and_block(space);
@@ -449,11 +451,7 @@ impl<'a> FuncRep<'a> {
 
                 self.tree.replace(while_space, new_binop);
 
-                let break_label = self.add_goto_label("break".into(), surrounding_block);
-                let break_ = self.tree.insert(
-                    surrounding_block, 
-                    HNodeData::GotoLabel(break_label),
-                );
+                let break_ = self.add_expr(&Expr::Label("break".into()), surrounding_block);
 
                 let HNodeData::Block { stmts, .. } = self.tree.get_mut(surrounding_block)
                     else { unreachable!() };
@@ -461,11 +459,7 @@ impl<'a> FuncRep<'a> {
                 *stmts = vec![while_space, break_]; 
 
                 if matches!(self.tree.get_ref(d), HNodeData::Block { .. }) {
-                    let continue_label = self.add_goto_label("continue".into(), d);
-                    let continue_ = self.tree.insert(
-                        parent, 
-                        HNodeData::GotoLabel(continue_label),
-                    );
+                    let continue_ = self.add_expr(&Expr::Label("continue".into()), d);
 
                     let HNodeData::Block { stmts, .. } = self.tree.get_mut(d)
                         else { unreachable!() };

@@ -31,7 +31,7 @@ fn size_in_bytes(_: &CompData, typ: Type) -> Option<FuncCode> {
         ret_type: TypeSpec::Int(32),
         args: Vec::new(),
         generic_count: 0,
-        code: Expr::Number(typ.size() as u64).wrap_in_block(),
+        code: Expr::Number(typ.size() as u64).wrap(),
         relation: TypeSpecRelation::Static(type_to_type_spec(typ)),
         is_external: false,
         abi: ABI::C,

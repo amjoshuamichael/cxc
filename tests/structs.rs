@@ -196,7 +196,7 @@ fn deref() {
 }
 
 #[test]
-fn field_of_struct_pointer() {
+fn field_of_struct_pointer_1() {
     xc_test!(
         "
         Point2D = { x: i32, y: i32 }
@@ -209,5 +209,73 @@ fn field_of_struct_pointer() {
         }
         ";
         15
+    )
+}
+
+#[test]
+fn field_of_struct_pointer_2() {
+    xc_test!(
+    "
+    Point2D = { x: i32, y: i32 }
+
+    main(); i32 {
+        point: { Point2D, } = { { x = 5, y = 5 }, }
+        point_ref: &Point2D = &point.0
+        point.0.y = 10
+
+        ; point_ref.x + point_ref.y
+    }
+    ";
+    15
+    )
+}
+
+#[test]
+fn field_of_struct_pointer_3() {
+    xc_test!(
+    "
+    Point2D = { x: i32, y: i32 }
+
+    main(); i32 {
+        point: { { Point2D, }, } = { { { x = 5, y = 5 }, }, }
+        point_container_ref: &{ Point2D, } = &point.0
+        point_ref: &Point2D = &point_container_ref.0
+        point.0.0.y = 10
+
+        ; point_ref.x + point_ref.y
+    }
+    ";
+    15
+    )
+}
+
+#[test]
+fn field_of_struct_pointer_4() {
+    xc_test!(
+    "
+    Point2D = { x: i32, y: i32 }
+
+    Holder = {
+        p1: i64,
+        p2: i64,
+        value: Point2D,
+    } 
+
+    HolderRef = { ptr: &Holder }
+
+    get_ref_to_value(holder_ref: &HolderRef); &Point2D {
+        ; &holder_ref.ptr.value
+    }
+
+    main(); i32 {
+        holder: Holder = { p1=0, p2=0, value = { x=5, y=5 } }
+        holder_ref: HolderRef = { ptr = &holder }
+        value_ptr: &Point2D = get_ref_to_value(&holder_ref)
+        holder.value.y = 10
+
+        ; value_ptr.x + value_ptr.y
+    }
+    ";
+    15
     )
 }

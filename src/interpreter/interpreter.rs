@@ -4,7 +4,7 @@ use std::{slice, collections::{HashMap, BTreeMap}};
 
 use slotmap::{SecondaryMap, SlotMap, Key, KeyData};
 
-use crate::{unit::FuncId, Value, mir::{MLine, MOperand, MAddr, MLit, MMemLoc, MReg, MExpr, MIR, MCallable, MAddrExpr, MAddrReg}, hlr::hlr_data::{VarID, ArgIndex, VariableInfo}, Type, parse::Opcode, IntType, FloatType, TypeEnum, typ::{ReturnStyle, IntSize}, FuncType};
+use crate::{unit::FuncId, Value, mir::{MLine, MOperand, MAddr, MLit, MMemLoc, MReg, MExpr, MIR, MCallable, MAddrExpr, MAddrReg}, hlr::hlr_data::{VarID, ArgIndex, VariableInfo}, Type, parse::Opcode, IntType, FloatType, TypeEnum, typ::{ReturnStyle, IntSize}, FuncType, VarName};
 
 use super::IntepreterState;
 
@@ -12,6 +12,7 @@ use super::IntepreterState;
 struct Allocator {
     allocations: BTreeMap<*const u8, Allocation>,
     stacks: Vec<Stack>,
+    freed: Vec<*const u8>,
 }
 
 #[derive(Debug)]
@@ -60,6 +61,46 @@ struct Interpreter<'a> {
     mir: &'a MIR,
 }
 
+impl<'a> Interpreter<'a> {
+    pub fn print_stack(&self) {
+        let last_stack = self.allocator.stacks.last().unwrap();
+        let mut values = Vec::<(VarID, Value)>::new();
+
+        for (var_id, (location, size)) in &last_stack.var_locations_and_size {
+            let var_type = self.mir.variables[var_id].typ.clone();
+            
+            values.push((var_id, Value::new_from_slice(
+                var_type, 
+                &last_stack.data[(*location)..(*location + *size)]
+            )));
+        }
+
+        for var_id in self.mir.variables.keys() {
+            let ArgIndex::Some(a) = self.mir.variables[var_id].arg_index
+                else { continue };
+
+            values.push((var_id, Value::new_from_slice(
+                self.mir.variables[var_id].typ.clone(), 
+                &self.arg_regs[a]
+            )));
+        }
+
+        for (var_id, value) in values {
+            if let Some(serialized_primitive) = value.to_string_no_unit() {
+                let var_name = self.mir.variables[var_id].name.clone();
+                let var_name_string = if var_name == VarName::None {
+                    format!("{var_id:?}")
+                } else {
+                    var_name.to_string()
+                };    
+
+                print!("{var_name_string} = {serialized_primitive}, ");
+            }
+        }
+        println!();
+    }
+}
+
 type RegValue = Box<[u8]>;
 type AddrRegValue = usize;
 
@@ -80,6 +121,7 @@ pub fn run_with_args(
     let mut allocator = Allocator {
         allocations: BTreeMap::new(),
         stacks: vec![stack],
+        freed: Vec::new(),
     };
 
     let return_style = mir.func_type.ret.return_style(mir.func_type.abi);
@@ -143,21 +185,11 @@ fn interpret(interpreter: &mut Interpreter) -> Value {
 
                 println!("{line_as_string}");
 
-                let last_stack = interpreter.allocator.stacks.last().unwrap();
-                for (var_id, (location, size)) in &last_stack.var_locations_and_size {
-                    let var_type = interpreter.mir.variables[var_id].typ.clone();
+                interpreter.print_stack();
+            }
 
-                    let var_value = Value::new_from_slice(
-                        var_type, 
-                        &last_stack.data[(*location)..(*location + *size)]
-                    );
-
-                    if let Some(serialized_primitive) = var_value.to_string_no_unit() {
-                        let var_name = interpreter.mir.variables[var_id].name.clone();
-                        print!("{var_name} = {serialized_primitive}, ");
-                    }
-                }
-                println!();
+            if interpreter.current_line == 0 {
+                interpreter.print_stack();
             }
 
             println!("{:?}", &interpreter.mir.lines[interpreter.current_line]);
@@ -422,7 +454,16 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
                     mir,
                 };
 
+                #[cfg(feature = "backend-debug")]
+                println!("calling new function");
                 let value = interpret(&mut new_interpreter);
+                #[cfg(feature = "backend-debug")]
+                {
+                    println!("extiting call");
+                    if let Some(serialized_return) = value.to_string_no_unit() {
+                        println!("returning: {serialized_return}");
+                    }
+                }
 
                 interpreter.allocator.stacks.pop();
 
@@ -437,8 +478,11 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
 
             if let Some(removed) = interpreter.allocator.allocations.remove(&ptr) {
                 std::mem::drop(removed);
+                interpreter.allocator.freed.push(ptr);
+            } else if interpreter.allocator.freed.iter().any(|p| *p == ptr) {
+                panic!("attempt to double free memory at {ptr:?}");
             } else {
-                panic!();
+                panic!("attempt to free undefined memory at {ptr:?}");
             }
 
             Vec::new().into_boxed_slice()
@@ -613,11 +657,8 @@ fn addr_to_slice<'a>(addr: usize, interpreter: &'a mut Interpreter) -> &'a mut [
         }
     }
     
-    panic!("tried to access undefined memory!");
-}
-
-fn func_type_requires_access_to_external_memory(func_type: &FuncType) -> bool {
-    !func_type.args.iter().all(|typ|
-        typ.is_shallow() && typ.raw_arg_type(func_type.abi).is_shallow() 
-    )
+    if interpreter.allocator.freed.contains(&(addr as *const u8)) {
+        panic!("tried to access previously freed memory at 0x{addr:x}!");
+    }
+    panic!("tried to access undefined memory at 0x{addr:x}!");
 }

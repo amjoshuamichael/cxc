@@ -1,16 +1,17 @@
 use crate::{typ::TypeSpec, *};
 
-use super::Field;
+use super::{Field, DestructorType};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransformationStep {
     Ref(i32),
     Field(VarName),
-    Fields(Box<[VarName]>),
+    Fields(Box<[(VarName, Transformation)]>),
+    RemoveDestructor,
     ArrayToSlice,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub enum TransformationList {
     Cons(TransformationStep, Box<Self>),
 
@@ -31,7 +32,7 @@ impl TransformationList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Transformation {
     pub generics: Vec<Type>,
     pub steps: TransformationList,
@@ -84,7 +85,7 @@ impl Type {
                     && field_specs.iter().all(|(inherited, _, _)| *inherited) {
                     let mut generics = Vec::new();
 
-                    let mut field_names = Vec::new();
+                    let mut field_moves = Vec::new();
 
                     let mut failure = false;
 
@@ -94,19 +95,35 @@ impl Type {
 
                         let field = &struct_type.fields[field_index];
 
-                        if !field.inherited || !field.typ.is_equivalent(spec, &mut generics) {
+                        if !field.inherited {
                              failure = true;
                              break;
                         }
 
-                        field_names.push(name);
+                        if let Some(transformation) = field.typ.can_transform_to(spec.clone()) {
+                            // merge generics
+                            if transformation.generics.len() > generics.len() {
+                                generics.resize(
+                                    transformation.generics.len(), 
+                                    Type::unknown()
+                                );
+                            }
+                            for (g, generic) in transformation.generics.iter().enumerate() {
+                                if generics[g].is_known() {
+                                    assert_eq!(&generics[g], generic);
+                                }
+                                generics[g] = generic.clone();
+                            }
+
+                            field_moves.push((name, transformation));
+                        }
                     }
 
                     if !failure {
                         return Some(Transformation {
                             generics,
                             steps: TransformationList::Cons(
-                                TransformationStep::Fields(field_names.into_boxed_slice()),
+                                TransformationStep::Fields(field_moves.into_boxed_slice()),
                                 Box::new(TransformationList::Nil),
                             ),
                         })
@@ -143,6 +160,17 @@ impl Type {
                     });
                 }
             },
+            TypeEnum::Destructor(DestructorType { base, .. }) => {
+                if let Some(transformation) = base.can_transform_to(spec.clone()) {
+                    return Some(Transformation {
+                        steps: TransformationList::Cons(
+                           TransformationStep::RemoveDestructor,
+                           Box::new(transformation.steps),
+                       ),
+                       generics: transformation.generics,
+                    })
+                }
+            }
             _ => { }
         }
 
@@ -236,6 +264,17 @@ impl Type {
                     ),
                     field_typ
                 ))
+            },
+            TypeEnum::Destructor(DestructorType { base, .. }) => {
+                base.route_to(field.clone()).map(|(list, typ)|
+                    (
+                        TransformationList::Cons(
+                            TransformationStep::RemoveDestructor,
+                            Box::new(list),
+                        ),
+                        typ.clone()
+                    )
+                )
             }
             _ => None,
         }
@@ -411,7 +450,7 @@ mod tests {
             field_names
                 .into_iter()
                 .copied()
-                .map(VarName::from)
+                .map(|name| (VarName::from(name), Transformation::default()))
                 .collect::<Vec<_>>()
                 .into_boxed_slice()
         );

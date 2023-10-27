@@ -13,10 +13,11 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                 else { return };
 
             if field_exprs.len() == 0 {
-                *struct_data = HNodeData::Number { lit_type: Type::i(32), value: 0 };
+                *struct_data = HNodeData::zero();
                 return;
             }
             
+            hlr.tree.replace(structlit, HNodeData::zero());
             let new_struct = hlr.add_variable(&var_type, structlit);
 
             let mut current_statement = structlit;
@@ -34,8 +35,6 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                         },
                     )
                     .inserted_id();
-
-
             }
 
             *struct_data = HNodeData::Ident {

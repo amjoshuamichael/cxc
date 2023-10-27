@@ -9,6 +9,7 @@ use crate::FuncType;
 use crate::RefType;
 use crate::TypeEnum;
 use crate::typ::ArgStyle;
+use crate::typ::DestructorType;
 use crate::typ::Field;
 use crate::typ::ReturnStyle;
 use crate::typ::UnknownType;
@@ -68,6 +69,7 @@ impl ToCLType for TypeEnum {
             TypeEnum::Ref(t) => t.to_cl_type(),
             TypeEnum::Func(t) => t.to_cl_type(),
             TypeEnum::Array(t) => t.to_cl_type(),
+            TypeEnum::Destructor(DestructorType { base, .. }) => base.to_cl_type(),
             TypeEnum::Bool => (&BoolType).to_cl_type(),
             TypeEnum::Void => VoidType().to_cl_type(),
             TypeEnum::Unknown => UnknownType().to_cl_type(),

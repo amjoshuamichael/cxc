@@ -232,7 +232,7 @@ fn build_as_operand(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MOperand
             MOperand::Lit(MLit::Int { size: lit_type.size() as u32 * 8, val: value })
         },
         HNodeData::Float { lit_type, value } => {
-            MOperand::Lit(MLit::Float { size: lit_type.size() as u32 * 8, val: value })
+            MOperand::Lit(MLit::Float { size: lit_type.size() as u32 * 8, val: value.into() })
         },
         HNodeData::Bool { value } => MOperand::Lit(MLit::Bool(value)),
         HNodeData::GlobalLoad { global: Global::Func(func_query), .. } => {
@@ -283,7 +283,6 @@ fn build_as_addr_reg_with_normal_expr(node: HNodeData, tree: &ExprTree, mir: &mu
 
 pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option<MExpr> {
     let ret_type = node.ret_type();
-
     let expr: MExpr = match node {
         HNodeData::BinOp { lhs, op, rhs, .. } => {
             let left_type = tree.get(lhs).ret_type();
@@ -414,8 +413,9 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
             let object_type = object_node.ret_type().complete_deref();
             let object = build_as_addr(object_node, tree, mir);
 
+            let object_type_unwrapped = object_type.remove_wrappers();
             let TypeEnum::Struct(struct_type) = 
-                object_type.as_type_enum() else { unreachable!() };
+                object_type_unwrapped.as_type_enum() else { unreachable!() };
             let field_index = struct_type.get_field_index(&field).unwrap() as u32;
 
             if field_index == 0 {

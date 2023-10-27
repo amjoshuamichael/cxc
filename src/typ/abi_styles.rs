@@ -63,7 +63,7 @@ impl Type {
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
-            Struct(_) | Array(_) => {
+            Struct(_) | Array(_) | Destructor(_) => {
                 let size = self.size();
 
                 if abi == ABI::Rust && size > 8 && fields.len() >= 3 {

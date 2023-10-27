@@ -2,17 +2,10 @@ RcBox<T> = {
     strong: i64,
     weak: i64,
     +value: T,
-}
+} 
 
 Rc<T> = {
-    +box: &RcBox<T> ~ {
-        self.strong = self.strong - 1
-
-        ? self.strong == 0 {
-            ~self.value
-            free(self)
-        }
-    },
+    +box: &RcBox<T> ~ self.drop_reference()
 }
 
 <T> &RcBox<T>:. {
@@ -20,8 +13,13 @@ Rc<T> = {
         self.strong = self.strong + i64 1
     }
 
-    dec_strong() {
-        self.strong = self.strong - i64 1
+    drop_reference() {
+        self.strong = self.strong - 1
+
+        ? self.strong == 0 {
+            ~self.value
+            free(self)
+        }
     }
 }
 
@@ -48,17 +46,11 @@ Rc<T> = {
     }
 
     to_string(); String {
-        ; (*self.deref()).to_string()
+        ; self.value.to_string()
     }
 
     clone(); *Me {
         self.box.inc_strong()
         ; *self
-    }
-}
-
-<T> &Rc<T>:. {
-    drop() {
-        
     }
 }

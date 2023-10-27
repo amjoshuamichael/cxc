@@ -2,7 +2,7 @@ use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex, VarID, GotoLabelID};
 use crate::{Type, VarName};
 
-use super::{ExprID, ExprTree, HNodeData, NodeDataGen};
+use super::{ExprID, ExprTree, HNodeData, NodeDataGen, SetGen};
 use super::{ExprNode, HNodeData::*};
 
 impl ExprTree {
@@ -17,67 +17,66 @@ impl ExprTree {
     }
 
     pub fn ids_in_order(&self) -> Vec<ExprID> {
+        self.ids_of(self.root)
+    }
+
+    pub fn ids_of(&self, id: ExprID) -> Vec<ExprID> {
         use HNodeData::*;
+        let rest = match self.get(id) {
+            Number { .. } 
+            | Float { .. } 
+            | Bool { .. } 
+            | GlobalLoad { .. }
+            | Ident { .. } 
+            | AccessAlias(_) 
+            | Goto(_) 
+            | GotoLabel(_) => Vec::new(),
+            StructLit { fields, .. } => fields
+                .iter()
+                .flat_map(|(_, id)| self.ids_of(*id))
+                .collect(),
+            ArrayLit { parts: many, .. }
+            | Call { a: many, .. }
+            | Block { stmts: many, .. } => {
+                many.iter().flat_map(|id| self.ids_of(*id)).collect()
+            },
+            IndirectCall {
+                f: one, a: many, ..
+            } => many
+                .iter()
+                .flat_map(|id| self.ids_of(*id))
+                .chain(self.ids_of(one).drain(..))
+                .collect(),
+            BinOp { lhs: l, rhs: r, .. }
+            | Set { lhs: l, rhs: r, .. }
+            | IfThen { i: l, t: r, .. }
+            | While { w: l, d: r, .. }
+            | Index {
+                object: l,
+                index: r,
+                ..
+            } => self.ids_of(l)
+                .drain(..)
+                .chain(self.ids_of(r).drain(..))
+                .collect(),
+            UnarOp { hs: one, .. }
+            | Transform { hs: one, .. }
+            | Member { object: one, .. } => self.ids_of(one),
+            IfThenElse { i, t, e, .. } => self.ids_of(i)
+                .drain(..)
+                .chain(self.ids_of(t).drain(..))
+                .chain(self.ids_of(e).drain(..))
+                .collect(),
+            Return { to_return, .. } => {
+                if let Some(to_return) = to_return {
+                    self.ids_of(to_return)
+                } else {
+                    Vec::new()
+                }
+            },
+        };
 
-        fn ids_of(tree: &ExprTree, id: ExprID) -> Vec<ExprID> {
-            let rest = match tree.get(id) {
-                Number { .. } 
-                | Float { .. } 
-                | Bool { .. } 
-                | GlobalLoad { .. }
-                | Ident { .. } 
-                | AccessAlias(_) 
-                | Goto(_) 
-                | GotoLabel(_) => Vec::new(),
-                StructLit { fields, .. } => fields
-                    .iter()
-                    .flat_map(|(_, id)| ids_of(tree, *id))
-                    .collect(),
-                ArrayLit { parts: many, .. }
-                | Call { a: many, .. }
-                | Block { stmts: many, .. } => {
-                    many.iter().flat_map(|id| ids_of(tree, *id)).collect()
-                },
-                IndirectCall {
-                    f: one, a: many, ..
-                } => many
-                    .iter()
-                    .flat_map(|id| ids_of(tree, *id))
-                    .chain(ids_of(tree, one).drain(..))
-                    .collect(),
-                BinOp { lhs: l, rhs: r, .. }
-                | Set { lhs: l, rhs: r, .. }
-                | IfThen { i: l, t: r, .. }
-                | While { w: l, d: r, .. }
-                | Index {
-                    object: l,
-                    index: r,
-                    ..
-                } => ids_of(tree, l)
-                    .drain(..)
-                    .chain(ids_of(tree, r).drain(..))
-                    .collect(),
-                UnarOp { hs: one, .. }
-                | Transform { hs: one, .. }
-                | Member { object: one, .. } => ids_of(tree, one),
-                IfThenElse { i, t, e, .. } => ids_of(tree, i)
-                    .drain(..)
-                    .chain(ids_of(tree, t).drain(..))
-                    .chain(ids_of(tree, e).drain(..))
-                    .collect(),
-                Return { to_return, .. } => {
-                    if let Some(to_return) = to_return {
-                        ids_of(tree, to_return)
-                    } else {
-                        Vec::new()
-                    }
-                },
-            };
-
-            [id].into_iter().chain(rest.into_iter()).collect()
-        }
-
-        ids_of(self, self.root)
+        [id].into_iter().chain(rest.into_iter()).collect()
     }
     
     pub fn ids_unordered(&self) -> slotmap::basic::Keys<ExprID, ExprNode> {
@@ -109,7 +108,6 @@ impl ExprTree {
     pub fn get_mut(&mut self, at: ExprID) -> &mut HNodeData { &mut self.nodes[at].data }
 
     pub fn parent(&self, of: ExprID) -> ExprID { self.nodes[of].parent }
-    pub fn set_parent(&mut self, of: ExprID, to: ExprID) { self.nodes[of].parent = to }
 
     pub fn statement_and_block(&self, of: ExprID) -> (ExprID, ExprID) {
         if of == self.root {
@@ -133,31 +131,26 @@ impl ExprTree {
         self.statement_and_block(of).1
     }
 
-    pub fn expr_is_in_block(&self, expr: ExprID, block: ExprID) -> bool {
-        let mut check_block: ExprID = self.statement_and_block(expr).1;
-
-        if block == check_block { return true }
-
-        while check_block != self.root {
-            check_block = self.statement_and_block(check_block).1;
-            if block == check_block { return true }
-        }
-
-        return false;
-    }
-
-    pub fn with_space(
-        &mut self,
-        parent: ExprID,
-        closure: impl Fn(ExprID, &mut Self) -> HNodeData,
-    ) -> ExprID {
-        let new_space = self.make_one_space(parent);
-        let new_data = closure(new_space, self);
-        self.replace(new_space, new_data);
-        new_space
-    }
-
     pub fn count(&self) -> usize { self.nodes.len() }
+
+    pub fn remove_node(&mut self, remove_id: ExprID) -> Result<(), ()> {
+        let parent = self.get_mut(self.parent(remove_id));
+        match parent {
+            Block { stmts, .. } => {
+                let old_len = stmts.len();
+                stmts.retain(|id| *id != remove_id);
+                assert_eq!(stmts.len(), old_len - 1);
+            }
+            _ => return Err(()),
+        };
+        self.nodes.remove(remove_id);
+        Ok(())
+    }
+
+    pub fn prune(&mut self) {
+        let ids = self.ids_in_order();
+        self.nodes.retain(|key, _| ids.contains(&key));
+    }
 }
 
 impl<'a> FuncRep<'a> {
@@ -194,13 +187,15 @@ impl<'a> FuncRep<'a> {
         id_iterator: impl Iterator<Item = ExprID>,
         mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
-        for index in id_iterator {
-            let mut data_copy = self.tree.get(index);
+        for id in id_iterator {
+            let mut data_copy = self.tree.get(id);
 
-            modifier(index, &mut data_copy, self)?;
+            modifier(id, &mut data_copy, self)?;
 
             // TODO: remove this??
-            self.tree.replace(index, data_copy);
+            if self.tree.nodes.contains_key(id) {
+                self.tree.replace(id, data_copy);
+            }
         }
 
         Ok(())
@@ -272,6 +267,24 @@ impl<'a> FuncRep<'a> {
         goto_labels.insert(name, label);
 
         label
+    }
+
+    pub fn separate_expression(&mut self, expression: ExprID) -> ExprID {
+        let expr_data = self.tree.get(expression);
+        
+        use HNodeData::*;
+        if matches!(expr_data, Ident { .. } | Number { .. } | Float { .. } | Bool { .. }) {
+            return expression;
+        }
+
+        let new_var = self.add_variable(&expr_data.ret_type(), expression);
+
+        self.insert_statement_before(expression, SetGen {
+            lhs: new_var,
+            rhs: expr_data,
+        });
+        self.replace_quick(expression, new_var);
+        self.insert_quick(expression, new_var)
     }
 }
 

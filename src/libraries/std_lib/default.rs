@@ -47,7 +47,7 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 ret_type: type_spec.clone(),
                 args: Vec::new(),
                 generic_count: 0,
-                code: struct_lit.wrap_in_block(),
+                code: struct_lit.wrap(),
                 relation,
                 is_external: false,
                 abi: ABI::C,

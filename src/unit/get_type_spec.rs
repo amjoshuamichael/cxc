@@ -1,10 +1,10 @@
 use crate::{
     errors::{TErr, TResult},
-    parse::TypeSpec,
+    parse::{TypeSpec, FuncCode, VarDecl},
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
-    VarName, typ::{Field, can_transform::TransformationList, ABI},
+    VarName, typ::{Field, can_transform::TransformationList, ABI, DestructorType},
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 pub trait GenericTable: Debug {
     fn get_at_index(&self, _: u8) -> Option<Type> { None }
@@ -199,8 +199,30 @@ impl CompData {
                     else { return Err(TErr::NotAnArray(array)) };
                 base.clone()
             },
-            TypeSpec::Destructor(base, code) => {
-                todo!()
+            TypeSpec::Destructor(base_spec, code) => {
+                let base = self.get_spec(base_spec, generics)?;
+
+                let query = FuncQuery {
+                    name: VarName::None,
+                    relation: TypeRelation::Unrelated,
+                    generics: generics.all_generics(),
+                };
+
+                let func_code = FuncCode {
+                    args: vec![VarDecl {
+                        name: VarName::from("self"),
+                        type_spec: (**base_spec).clone(),
+                    }],
+                    code: code.clone(),
+                    ..FuncCode::empty()
+                };
+
+                let (hlr, _) = crate::hlr::hlr(query, self, &func_code).unwrap();
+
+                Type::new(TypeEnum::Destructor(DestructorType {
+                    base,
+                    destructor: Arc::new(hlr),
+                }))
             }
             TypeSpec::Void => Type::void(),
             TypeSpec::Unknown => Type::unknown(),

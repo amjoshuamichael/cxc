@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::lex::VarName;
@@ -214,7 +215,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             type_spec: type_to_type_spec(typ.clone()),
         }],
         generic_count: 0,
-        code: expr,
+        code: Rc::new(expr),
         relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
         abi: ABI::C,

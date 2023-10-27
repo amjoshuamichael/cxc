@@ -1,5 +1,5 @@
 Vec<T> = {
-    +ptr: &T,
+    +ptr: &T ~ free<T>(self),
     capacity: u64,
     +len: u64,
 }
@@ -10,7 +10,7 @@ Vec<T> = {
             *self = Vec<T> {
                 len = u64 0,
                 capacity = u64 4,
-                ptr = alloc<T>(u64 4)
+                ptr = cast(alloc<T>(u64 4))
             }
         }
 
@@ -19,10 +19,10 @@ Vec<T> = {
             self.capacity = self.capacity * u64 2
             
             new_ptr: &T = alloc<T>(self.capacity)
-            memmove<T>(self.ptr, new_ptr, self.len * size_of<T>())
-            free<T>(self.ptr)
+            memmove<T>(+self.ptr, new_ptr, self.len * size_of<T>())
+            free<T>(+self.ptr)
             
-            self.ptr = new_ptr
+            self.ptr = cast(new_ptr)
         }
 
         ptr: &T = self.ptr.ptr_add(self.len)
@@ -37,7 +37,7 @@ Vec<T> = {
         self.len = self.len * size_of<T>()
         self.cap = self.cap * size_of<T>()
 
-        cast(self)
+        ; cast(self)
     }
 }
 

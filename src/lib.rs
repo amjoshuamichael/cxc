@@ -1,3 +1,4 @@
+#![allow(warnings)]
 #![feature(type_name_of_val)]
 #![feature(int_roundings)]
 #![feature(let_chains)]

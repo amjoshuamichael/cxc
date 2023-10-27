@@ -32,11 +32,8 @@ impl Default for VarName {
 impl Display for VarName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            VarName::Other(o) => write!(f, "{o}"),
             VarName::TupleIndex(ti) => write!(f, "{ti}"),
-            VarName::None => write!(f, "$none"),
-            VarName::Error => write!(f, "$error"),
-            VarName::Sret => write!(f, "$sret"),
+            _ => write!(f, "{}", &**self),
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::{lex::{Tok, TypeName, VarName}, typ::ABI};
 
 pub use context::{FuncParseContext, GlobalParseContext, ParseContext, TypeParseContext};
 pub use opcode::Opcode;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 pub use std::iter::Peekable;
 
 pub mod context;
@@ -67,8 +67,8 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 }
 
                 let code = FuncCode {
-                    ret_type:TypeSpec::Void,
-                    ..FuncCode::from_expr(Expr::Block(statements))
+                    ret_type: TypeSpec::Void,
+                    ..FuncCode::from_expr(Rc::new(Expr::Block(statements)))
                 };
 
                 script.comp_script = Some(code);
@@ -215,7 +215,7 @@ pub fn parse_func_code(
         name: lexer.name.clone(),
         ret_type,
         args,
-        code,
+        code: Rc::new(code),
         generic_count,
         relation,
         is_external: false,

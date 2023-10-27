@@ -133,8 +133,10 @@ fn get_fn_by_ptr() {
 
     functions.clear();
 
-    assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
-    assert_eq!(ninety.typ(), FuncType { args: vec![], ret: Type::i(32) });
+    assert_eq!(add_two.typ().args, vec![Type::i(32)]);
+    assert_eq!(add_two.typ().ret, Type::i(32));
+    assert_eq!(ninety.typ().args, vec![]);
+    assert_eq!(ninety.typ().ret, Type::i(32));
 
     let add_two = add_two.downcast::<(i32,), i32,>();
     let ninety = ninety.downcast::<(), i32>();

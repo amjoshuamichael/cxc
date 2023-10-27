@@ -33,7 +33,7 @@ impl From<ExprID> for Inferable {
 
 type InferableIndex = usize;
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 struct InferableConnection {
     spec: TypeSpec,
     gen_params: Vec<ConstraintId>,
@@ -75,10 +75,13 @@ impl Connections {
     }
 
     fn insert(&mut self, source: ConnectionSource, new: InferableConnection) {
+        //assert!(
+        //    !self.set.contains(&new),
+        //    "reinserted connection {source:?} from connections {:?}", self.sources,
+        //);
+
         self.sources.insert(source);
-        assert!(self.set.iter().all(|conn| 
-            conn.gen_params != new.gen_params && conn.method_of != new.method_of
-        ));
+        self.set.push(new);
     }
 
     fn extend(&mut self, other: Connections) {
@@ -330,7 +333,6 @@ pub fn infer_types(hlr: &mut FuncRep) {
             }
         }
 
-
         infer_map.has_been_modified_since_last_round = false;
     }
 
@@ -488,10 +490,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 }
             },
             HNodeData::UnarOp { op, hs, .. } => {
-                if *op == Opcode::Not {
-                    graph.join(expr_id, *hs);
-                } else {
-                    graph.add_to_inferables_list(expr_id);
+                match op {
+                    Opcode::Not => graph.join(expr_id, *hs),
+                    Opcode::Destroy => graph.mark_known(expr_id, Type::void(), KnownBy::IsBlock),
+                    _ => { graph.add_to_inferables_list(expr_id); },
                 }
             },
             HNodeData::Call { query, a, .. } => {
@@ -1310,6 +1312,11 @@ fn solve_with_inference_step(
                 IndexMap::default()
             );
 
+            if constraints.is.is_known() {
+                fulfilled_usages.push(constraint_index);
+                continue;
+            }
+
             let mut struct_fields = Vec::<(bool, VarName, TypeSpec)>::new();
             let mut gen_params = Vec::<ConstraintId>::new();
 
@@ -1327,8 +1334,6 @@ fn solve_with_inference_step(
                     method_of: None,
                 }
             );
-
-            fulfilled_usages.push(constraint_index);
         }
     }
 

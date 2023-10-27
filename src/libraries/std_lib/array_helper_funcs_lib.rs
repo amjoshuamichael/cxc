@@ -47,7 +47,7 @@ fn derive_array_deref(_: &CompData, typ: Type) -> Option<FuncCode> {
                 ),
             ], 
             InitOpts::NoFill
-        ).wrap_in_block(),
+        ).wrap(),
         relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
         abi: ABI::C,
@@ -67,7 +67,7 @@ fn derive_array_len(_: &CompData, typ: Type) -> Option<FuncCode> {
         code: Expr::TypedValue(
             TypeSpec::Int(64), 
             Box::new(Expr::Number(*count as u64))
-        ).wrap_in_block(),
+        ).wrap(),
         relation: TypeSpecRelation::Static(type_to_type_spec(typ)),
         is_external: false,
         abi: ABI::C,
@@ -92,7 +92,7 @@ fn derive_array_len_m(_: &CompData, typ: Type) -> Option<FuncCode> {
         code: Expr::TypedValue(
             TypeSpec::Int(64), 
             Box::new(Expr::Number(*count as u64))
-        ).wrap_in_block(),
+        ).wrap(),
         is_external: false,
         abi: ABI::C,
     })

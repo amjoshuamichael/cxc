@@ -29,7 +29,6 @@ pub fn array_literals(hlr: &mut FuncRep) {
                                     lit_type: Type::i(64),
                                     value: index as u64,
                                 },
-                                ret_type: base.clone(),
                             },
                             rhs: *part_expr,
                         },

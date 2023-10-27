@@ -3,7 +3,7 @@ use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
 
 
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Hash, Default, Debug, Clone, PartialEq, Eq)]
 pub enum TypeSpec {
     Named(TypeName),
     Generic(TypeName, Vec<TypeSpec>),
@@ -26,7 +26,7 @@ pub enum TypeSpec {
     TypeLevelFunc(TypeName, Vec<TypeSpec>),
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
-    Destructor(Box<TypeSpec>, Box<Expr>),
+    Destructor(Box<TypeSpec>, Rc<Expr>),
     #[default]
     Void,
     Unknown,
@@ -56,6 +56,7 @@ impl From<&str> for TypeSpec {
 #[derive(PartialEq, Eq, Debug)]
 enum TypeOps {
     Plus,
+    Destructor,
 }
 
 pub fn parse_type_spec(lexer: &mut FuncParseContext) -> Result<TypeSpec, ParseError> {
@@ -64,28 +65,21 @@ pub fn parse_type_spec(lexer: &mut FuncParseContext) -> Result<TypeSpec, ParseEr
 }
 
 fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    let mut types_between_ops = Vec::<TypeSpec>::new();
-    let mut ops = Vec::<TypeOps>::new();
+    let atom = parse_type_atom(lexer)?;
 
-    loop {
-        types_between_ops.push(parse_type_atom(lexer)?);
-
-        let op = match lexer.peek_tok() {
-            Ok(Tok::Plus) => TypeOps::Plus,
-            _ => break,
+    if lexer.move_on(Tok::Tilde) {
+        let mut destructor_parser = 
+            lexer.split(VarName::None, lexer.generic_labels.clone());
+        let destructor = if lexer.peek_tok()? == &Tok::LCurly {
+            parse_block(&mut destructor_parser)?
+        } else {
+            Expr::Block(vec![parse_expr(&mut destructor_parser)?])
         };
 
-        lexer.next_tok()?;
-        ops.push(op);
+        Ok(TypeSpec::Destructor(Box::new(atom), Rc::new(destructor)))
+    } else {
+        Ok(atom)
     }
-
-    while let Some(_plus_pos) = ops.iter().position(|a| *a == TypeOps::Plus) {
-        todo!()
-    }
-
-    assert_eq!(types_between_ops.len(), 1, "fatal error when parsing type operations");
-
-    Ok(types_between_ops.remove(0))
 }
 
 fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
@@ -147,7 +141,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         Tok::AmpersandSet(count) => {
             lexer.next_tok()?;
 
-            let mut output = parse_type(lexer)?;
+            let mut output = parse_type_atom(lexer)?;
 
             for _ in 0..count {
                 output = output.get_ref();
@@ -158,7 +152,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         Tok::AsterickSet(count) => {
             lexer.next_tok()?;
 
-            let mut output = parse_type(lexer)?;
+            let mut output = parse_type_atom(lexer)?;
 
             for _ in 0..count {
                 output = output.get_deref();
@@ -241,16 +235,6 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                     );
                 },
             }
-        } else if lexer.move_on(Tok::Tilde) {
-            let mut destructor_parser = 
-                lexer.split(VarName::None, lexer.generic_labels.clone());
-            let destructor = if lexer.peek_tok()? == &Tok::LCurly {
-                parse_block(&mut destructor_parser)?
-            } else {
-                parse_expr(&mut destructor_parser)?
-            };
-
-            TypeSpec::Destructor(Box::new(type_spec), Box::new(destructor))
         } else {
             break
         }

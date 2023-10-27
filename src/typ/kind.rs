@@ -1,7 +1,6 @@
-use super::invalid_state::InvalidState;
 use super::*;
 
-pub trait Kind: InvalidState {
+pub trait Kind {
     fn to_string(&self) -> String;
 }
 
@@ -81,9 +80,17 @@ impl Kind for ArrayType {
 }
 
 impl Kind for UnknownType {
-    fn to_string(&self) -> String { String::from("Unknown") }
+    fn to_string(&self) -> String { String::from("unknown") }
 }
 
 impl Kind for VoidType {
-    fn to_string(&self) -> String { String::from("Void") }
+    fn to_string(&self) -> String { String::from("void") }
+}
+
+impl Kind for DestructorType {
+    fn to_string(&self) -> String {
+        let root_node = self.destructor.tree.get(self.destructor.tree.root);
+        let code_string = root_node.to_string(&self.destructor.tree, &self.destructor.data_flow);
+        format!("{:?} ~ ...", self.base)
+    }
 }

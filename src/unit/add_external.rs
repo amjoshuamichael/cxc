@@ -120,9 +120,9 @@ impl Unit {
             }).collect(),
             ret_type: type_to_type_spec(func_type.ret.clone()),
             generic_count: ext_add.generics.len(),
-            code: Expr::default(),
             is_external: true,
             abi: ABI::Rust,
+            ..FuncCode::empty()
         });
 
         let func_id = self.comp_data.processed.insert(ProcessedFuncInfo {

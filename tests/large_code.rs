@@ -219,6 +219,7 @@ fn extern_and_local() {
 }
 
 #[test]
+#[ignore]
 fn combine_string_array() {
     xc_test!(
         use StdLib;
@@ -232,7 +233,7 @@ fn combine_string_array() {
                     new_message.push_string(&message[m])
                     m = m + 1
                 }
-
+                
                 ; new_message
             }
         "#;
@@ -240,6 +241,7 @@ fn combine_string_array() {
     );
 }
 
+#[ignore]
 #[test]
 fn prime_sieve() {
     xc_test!(

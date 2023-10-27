@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, HashSet}, sync::Arc};
+use std::{collections::{BTreeMap, HashSet, HashMap}, sync::Arc};
 
 use crate::{unit::{backends::IsBackend, callable::CallInput, FuncId, ProcessedFuncInfo}, FuncDowncasted, Func, FuncType, mir::MIR, VarName, Type};
 
@@ -24,7 +24,7 @@ pub struct CraneliftBackend {
     func_pointers: SecondaryMap<FuncId, Func>,
 
     to_recompile: HashSet<FuncId>,
-    func_signatures: BTreeMap<FuncType, Signature>,
+    func_signatures: HashMap<FuncType, Signature>,
     globals: BTreeMap<VarName, *const usize>,
     module: JITModule,
     isa: Box<Arc<dyn TargetIsa>>,
@@ -56,7 +56,7 @@ impl IsBackend for CraneliftBackend {
             cl_function_data: SecondaryMap::new(),
             func_pointers: SecondaryMap::new(),
             to_recompile: HashSet::new(),
-            func_signatures: BTreeMap::new(),
+            func_signatures: HashMap::new(),
             globals: BTreeMap::new(),
             alloc_and_free: AllocAndFree::new(&module),
             module,

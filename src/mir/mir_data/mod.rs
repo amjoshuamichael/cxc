@@ -41,7 +41,6 @@ impl MIR {
             typ, 
             arg_index: ArgIndex::None, 
             name: VarName::None,
-            do_not_drop: false,
         })
     }
 }

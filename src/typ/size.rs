@@ -1,6 +1,6 @@
 use crate::{Type, IntType, TypeEnum, FloatType, ArrayType, StructType, TypeName};
 
-use super::Field;
+use super::{Field, DestructorType};
 
 pub(super) fn size_of_type(typ: Type) -> usize {
     let base_size = match typ.as_type_enum() {
@@ -32,6 +32,7 @@ pub(super) fn size_of_type(typ: Type) -> usize {
         TypeEnum::Array(ArrayType { base, count }) => {
             base.size().next_multiple_of(size_of_largest_field_in(base)) * *count as usize
         }
+        TypeEnum::Destructor(DestructorType { base, .. }) => base.size(),
         TypeEnum::Void => 0,
         TypeEnum::Unknown => panic!("cannot get size of unknown type"),
     };

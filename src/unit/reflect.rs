@@ -77,14 +77,14 @@ macro_rules! impl_reflect_set {
 
         impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for fn($($elem),+) -> R {
             fn spec_code() -> String {
-                let mut code = String::from("ExternRust(");
+                let mut code = String::from("ExternRust((");
                 $(
                     code += &*$elem::spec_code();
                     code += ", ";
                 )+
                 code += "); ";
                 code += &*R::spec_code();
-                code += ")";
+                code += "))";
                 code
             }
         }
@@ -254,7 +254,7 @@ fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Unit;
+    use crate::{Unit, typ::ABI};
 
     #[test]
     fn reflect_basic() {
@@ -263,6 +263,7 @@ mod tests {
         let typ = unit.get_reflect_type::<i32>().unwrap();
         assert_eq!(typ, Type::i(32));
     }
+    
 
     #[test]
     fn reflect_tuple() {
@@ -277,7 +278,7 @@ mod tests {
         let unit = Unit::new();
 
         let typ = unit.get_reflect_type::<fn(i32, f32) -> i32>().unwrap();
-        assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)]));
+        assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)], ABI::Rust));
     }
 
     #[test]

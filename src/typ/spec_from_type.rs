@@ -37,6 +37,7 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
             Box::new(type_to_type_spec(base.clone())), 
             *count,
         ),
+        TypeEnum::Destructor(_) => TypeSpec::Void,
         TypeEnum::Bool => TypeSpec::Bool,
         TypeEnum::Void => TypeSpec::Void,
         TypeEnum::Unknown => panic!(),

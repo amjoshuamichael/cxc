@@ -1,4 +1,4 @@
-use std::{collections::{BTreeMap, BTreeSet}, iter::once};
+use std::{collections::{BTreeMap, BTreeSet, HashMap}, iter::once};
 
 use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
 use cranelift_module::Module;
@@ -138,7 +138,7 @@ pub struct FunctionCompilationState<'a> {
     reg_types: BTreeMap<MReg, Type>,
     used_functions: SecondaryMap<FuncId, FuncRef>,
     used_globals: BTreeMap<VarName, CLValue>,
-    function_signatures: &'a BTreeMap<FuncType, Signature>,
+    function_signatures: &'a HashMap<FuncType, Signature>,
     external_functions: &'a SecondaryMap<FuncId, ExternalFuncData>,
     frontend_config: &'a TargetFrontendConfig,
     alloc_and_free: &'a AllocAndFree,
@@ -730,7 +730,7 @@ fn compile_unarop(
                 _ => unreachable!(),
             }
         }
-        _ => todo!("{:?}{:?}", op, ret_type),
+        _ => todo!("{:?} on {:?}", op, ret_type),
     }
 }
 
