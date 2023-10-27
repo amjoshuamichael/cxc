@@ -96,7 +96,7 @@ fn value_4_no_depedency() {
 }
 
 #[test]
-#[cfg_attr(feature = "backend-interpreter", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 #[ignore]
 fn basic_value_func() {
     let mut unit = Unit::new();
@@ -114,7 +114,7 @@ fn basic_value_func() {
 }
 
 #[test]
-#[cfg_attr(feature = "backend-interpreter", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 #[ignore]
 fn vec_value_func() {
     let mut unit = Unit::new();
@@ -139,7 +139,7 @@ fn vec_value_func() {
 }
 
 #[test]
-#[cfg_attr(feature = "backend-interpreter", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 #[ignore]
 fn rc_value_func() {
     let mut unit = Unit::new();

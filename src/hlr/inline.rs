@@ -99,14 +99,14 @@ pub fn inline_node(
             }
         },
         Ident { var_type, var_id } => {
-            let arg_index = inline_info.new_tree.data_flow[*var_id].arg_index;
+            let arg_index = inline_info.new_tree.variables[*var_id].arg_index;
 
             if let Some(argument) = inline_info.arguments.get(&arg_index) {
                 node_data = inline_info.base_tree.tree.get(*argument);
             } else if let Some(existing_remap) = inline_info.variable_remap.get(*var_id) {
                 *var_id = *existing_remap;
             } else {
-                let new_var = inline_info.base_tree.add_variable(var_type, node);
+                let new_var = inline_info.base_tree.add_variable(var_type);
                 inline_info.variable_remap.insert(*var_id, new_var);
                 *var_id = new_var;
             }

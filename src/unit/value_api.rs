@@ -30,6 +30,10 @@ impl XcReflect for Value {
     }
 }
 
+enum ValueConsumeErr {
+    SizeMismatch,
+}
+
 // This MAX_BYTES static is used as an output for functions that return a value
 // larger than 16 bytes. These functions really return through a pointer that is
 // passed as an argument, but on ARM machines, this pointer has its own special
@@ -150,6 +154,7 @@ impl Value {
         Some(string)
     }
 
+    #[cfg(not(feature = "backend-interpreter"))]
     pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
         if !self.typ.is_ref() && let Some(serialized_primitive) = self.to_string_no_unit() {
             return Some(serialized_primitive)
@@ -186,7 +191,7 @@ impl Value {
     /// # Safety
     ///
     /// Ensure the generic type 'T' is the same as the type of the value.
-    pub unsafe fn consume<T: std::fmt::Debug>(mut self) -> Box<T> {
+    pub unsafe fn consume<T>(mut self) -> Box<T> {
         let data_ptr = self.data.as_mut_ptr();
 
         // Prevent data from being dropped
@@ -195,10 +200,12 @@ impl Value {
         Box::from_raw(data_ptr as *mut T)
     }
 
-    pub fn safe_consume<T: Copy>(self) -> T {
-        // TODO: make this return an error instead of doing assertions
-        assert!(self.typ.size() == self.data.len());
-        unsafe { *(self.data.as_ptr() as *const T) }
+    pub fn checked_consume<T: Copy>(self) -> Result<T, ValueConsumeErr> {
+        if self.typ.size() != self.data.len() || std::mem::size_of::<T>() != self.data.len() {
+            Err(ValueConsumeErr::SizeMismatch)
+        } else {
+            Ok(unsafe { *(self.data.as_ptr() as *const T) })
+        }
     }
 
     pub fn const_ptr(&self) -> *const usize { &*self.data as *const [u8] as *const usize }
@@ -249,7 +256,7 @@ impl Unit {
         let ret_type = &func_info.typ.ret;
         #[cfg(feature = "backend-interpreter")]
         {
-            Ok(func_addr.call_void())
+            Ok(func_addr.call_no_args())
         }
 
         #[cfg(not(feature = "backend-interpreter"))]

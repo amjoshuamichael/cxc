@@ -138,11 +138,11 @@ fn scopes() {
 // Technically, this will not make the tests fail.
 // On the interpreter backend, the memory leaks will be detected, so these tests wlil fail.
 #[test]
-fn vec() {
+fn vec_basic() {
     xc_test!(
         use StdLib;
         "
-        main(){
+        main() {
             new_vec := Vec<i32>:new()
             new_vec.push(4880)
         }
@@ -155,11 +155,23 @@ fn vec_replace() {
     xc_test!(
         use StdLib;
         "
-        main(){
+        main() {
             new_vec := Vec<i32>:new()
             new_vec.push(4880)
             new_vec = Vec<i32>:new()
             new_vec.push(2439)
+        }
+        "
+    )
+}
+
+#[test]
+fn empty_vec() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            new_vec := Vec<i32>:new()
         }
         "
     )

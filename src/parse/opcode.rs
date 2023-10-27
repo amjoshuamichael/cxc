@@ -27,6 +27,7 @@ pub enum Opcode {
     Deref,
     Dot,
     Transform,
+    RemoveTypeWrapper,
     Destroy,
 }
 
@@ -101,6 +102,7 @@ impl ToString for Opcode {
             Ref => "&",
             Deref => "*",
             Dot => ".",
+            RemoveTypeWrapper => "<>-",
         }
         .into()
     }

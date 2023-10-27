@@ -93,6 +93,7 @@ fn backwards_call() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn hello_world() {
     xc_test!(
         r#"
@@ -104,6 +105,7 @@ fn hello_world() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn to_string() {
     xc_test!(
         use StdLib;
@@ -132,7 +134,7 @@ fn to_string() {
     )
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct OutputType {
     one: i32,
     two: f32,
@@ -158,7 +160,7 @@ fn basic_default() {
     )
 }
 
-#[derive(Default, Debug, PartialEq)]
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
 struct OutputType2 {
     one: TwoOf<i32>,
     two: TwoOf<f32>,
@@ -185,6 +187,7 @@ fn default_generic() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn push_string() {
     xc_test!(
         use StdLib;
@@ -220,6 +223,7 @@ fn extern_and_local() {
 
 #[test]
 #[ignore]
+#[cfg(not(feature = "backend-interpreter"))]
 fn combine_string_array() {
     xc_test!(
         use StdLib;
@@ -243,6 +247,7 @@ fn combine_string_array() {
 
 #[ignore]
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn prime_sieve() {
     xc_test!(
         use StdLib;

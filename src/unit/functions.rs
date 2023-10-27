@@ -354,7 +354,7 @@ use std::{hash::Hash, borrow::Cow};
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, XcReflectMac)]
-#[repr(C)] // TODO: this shouldn't have to be here
+#[repr(C)]
 pub struct FuncQuery {
     pub name: VarName,
     pub relation: TypeRelation,

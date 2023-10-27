@@ -205,7 +205,7 @@ impl<'a> FuncRep<'a> {
                 from,
                 func_type: func_type.clone(),
                 tree: self.tree,
-                data_flow: self.variables,
+                variables: self.variables,
                 dependencies,
             },
             ProcessedFuncInfo {
@@ -473,7 +473,7 @@ impl<'a> FuncRep<'a> {
                 let new_block = self.tree.insert(parent, HNodeData::new_block());
                 let iterating_over = self.add_expr(f, new_block);
 
-                let iterator_var = self.add_variable(&Type::unknown(), new_block);
+                let iterator_var = self.add_variable(&Type::unknown());
                 let set_iterator = self.insert_quick(
                     new_block,
                     SetGen {

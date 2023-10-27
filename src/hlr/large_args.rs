@@ -31,7 +31,7 @@ fn handle_own_args(hlr: &mut FuncRep) {
 
 fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
     let arg_load_arg_type = hlr.variables[og_arg].typ.clone();
-    let new_arg_load_var = hlr.add_variable(&arg_load_arg_type, hlr.tree.root);
+    let new_arg_load_var = hlr.add_variable(&arg_load_arg_type);
     let set_arg_load_var = hlr.insert_quick(
         hlr.tree.root,
         SetGen {
@@ -108,7 +108,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 } else if let ArgStyle::Ints(..) = arg_style {
                     let _new_arg_name = format!("{}_arg_{}", query.name, a);
                     let raw_arg_type = old_arg_type.raw_arg_type(abi);
-                    let new_arg = hlr.add_variable(&raw_arg_type, hlr.tree.root);
+                    let new_arg = hlr.add_variable(&raw_arg_type);
 
                     hlr.insert_statement_before(call_id, MemCpyGen {
                         from: RefGen(arg),

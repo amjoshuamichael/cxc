@@ -24,7 +24,7 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
 
     let mut mir = MIR { 
         lines: Vec::new(), 
-        variables: hlr.data_flow,
+        variables: hlr.variables,
         func_type: hlr.func_type,
         dependencies,
         block_count: 0,
@@ -222,6 +222,8 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
 
             MAddr::Reg(new_areg)
         },
+        HNodeData::UnarOp { op, hs, .. } if op == Opcode::RemoveTypeWrapper =>
+            return build_as_addr(tree.get(hs), tree, mir),
         _ => MAddr::Reg(build_as_addr_reg(node, tree, mir)),
     }
 }
@@ -229,24 +231,24 @@ fn build_as_addr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
 fn build_as_operand(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MOperand {
     match node {
         HNodeData::Number { lit_type, value } => {
-            MOperand::Lit(MLit::Int { size: lit_type.size() as u32 * 8, val: value })
+            MOperand::Int { size: lit_type.size() as u32 * 8, val: value }
         },
         HNodeData::Float { lit_type, value } => {
-            MOperand::Lit(MLit::Float { size: lit_type.size() as u32 * 8, val: value.into() })
+            MOperand::Float { size: lit_type.size() as u32 * 8, val: value.into() }
         },
-        HNodeData::Bool { value } => MOperand::Lit(MLit::Bool(value)),
+        HNodeData::Bool { value } => MOperand::Bool(value),
         HNodeData::GlobalLoad { global: Global::Func(func_query), .. } => {
             let func_id = mir.dependencies[&func_query];
-            MOperand::Lit(MLit::Function(func_id))
+            MOperand::Function(func_id)
         }
         HNodeData::Call { ref query, .. } if &*query.name.to_string() == "size_of" => {
-            MOperand::Lit(MLit::Int { size: 64, val: query.generics[0].size() as u64 })
+            MOperand::Int { size: 64, val: query.generics[0].size() as u64 }
         },
         HNodeData::Call { ref query, .. } if &*query.name.to_string() == "typeobj" => {
-            MOperand::Lit(MLit::Int { 
+            MOperand::Int { 
                 size: 64, 
                 val: unsafe { std::mem::transmute(query.generics[0].clone()) },
-            })
+            }
         },
         _ => {
             MOperand::Memloc(build_as_memloc(node, tree, mir))
@@ -301,6 +303,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option<
                     to: node.ret_type(),
                     on: build_as_memloc(tree.get(hs), tree, mir) 
                 },
+                Opcode::RemoveTypeWrapper => return build_as_expr(tree.get(hs), tree, mir),
                 _ => MExpr::UnarOp { 
                     ret_type, 
                     op, 
@@ -321,7 +324,7 @@ pub fn build_as_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option<
                 mir.lines.push(MLine::MemCpy {
                     from: val, 
                     to: MAddr::Var(new_cast_out.clone()), 
-                    len: MOperand::Lit(MLit::Int { size: 64, val: to_type.size() as u64 }),
+                    len: MOperand::Int { size: 64, val: to_type.size() as u64 },
                 });
 
                 MExpr::MemLoc(MMemLoc::Var(new_cast_out))

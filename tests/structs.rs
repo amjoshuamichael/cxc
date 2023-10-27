@@ -157,7 +157,7 @@ fn active_initialize_struct_ints() {
 }
 
 #[test]
-#[ignore]
+#[cfg(not(feature = "backend-interpreter"))]
 fn active_initialize_struct_strings() {
     xc_test!(
         use StdLib;

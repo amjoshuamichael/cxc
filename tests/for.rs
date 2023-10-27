@@ -47,7 +47,7 @@ fn vec_for() {
     xc_test!(
         use StdLib;
         r#"
-        ; i32 {
+        main(); i32 {
             numbers := Vec<i32>:new()
             numbers.push(4)
             numbers.push(90)

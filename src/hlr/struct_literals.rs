@@ -18,7 +18,7 @@ pub fn struct_literals(hlr: &mut FuncRep) {
             }
             
             hlr.tree.replace(structlit, HNodeData::zero());
-            let new_struct = hlr.add_variable(&var_type, structlit);
+            let new_struct = hlr.add_variable(&var_type);
 
             let mut current_statement = structlit;
 

@@ -5,28 +5,29 @@ use crate::{unit::{FuncId, backends::CallableFunc, callable::CallInput}, Value};
 use super::IntepreterState;
 use super::interpreter::run_with_args;
 
-pub struct LoweredInterpreterFunc<A, R> {
+pub struct LoweredInterpreterFunc<A, R: Copy> {
     pub(super) state: Arc<RwLock<IntepreterState>>,
     pub(super) func_id: FuncId,
     pub(super) _marker: std::marker::PhantomData<(A, R)>,
 }
 
-impl<A, R> CallableFunc<A, R> for LoweredInterpreterFunc<A, R> where A: CallInput<R> {}
+impl<A, R: Copy> CallableFunc<A, R> for LoweredInterpreterFunc<A, R> 
+    where A: CallInput<R>, R: Copy {}
 
 macro_rules! impl_interpreter_func {
     ($($t:ident)*) => {
-        impl<$($t,)* R> FnOnce<($($t,)*)> for LoweredInterpreterFunc<($($t,)*), R>
+        impl<$($t: Copy,)* R: Copy> FnOnce<($($t,)*)> for LoweredInterpreterFunc<($($t,)*), R>
         where
             ($($t,)*): CallInput<R>,
         {
-            type Output = Value;
+            type Output = R;
 
             extern "rust-call" fn call_once(self, args: ($($t,)*)) -> Self::Output {
                 self.call(args)
             }
         }
 
-        impl<$($t,)* R> FnMut<($($t,)*)> for LoweredInterpreterFunc<($($t,)*), R>
+        impl<$($t: Copy,)* R: Copy> FnMut<($($t,)*)> for LoweredInterpreterFunc<($($t,)*), R>
         where
             ($($t,)*): CallInput<R>,
         {
@@ -35,7 +36,7 @@ macro_rules! impl_interpreter_func {
             }
         }
 
-        impl<$($t,)* R> Fn<($($t,)*)> for LoweredInterpreterFunc<($($t,)*), R>
+        impl<$($t: Copy,)* R: Copy> Fn<($($t,)*)> for LoweredInterpreterFunc<($($t,)*), R>
         where
             ($($t,)*): CallInput<R>,
         {
@@ -65,7 +66,9 @@ macro_rules! impl_interpreter_func {
                     }
                 )*
 
-                run_with_args(self.func_id, &*state, boxed_args, false)
+                unsafe {
+                    *run_with_args(self.func_id, &*state, boxed_args, false).consume::<R>()
+                }
             }
         }
     }

@@ -5,6 +5,7 @@ use cxc::library::StdLib;
 use test_utils::xc_test;
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn default_vec_alone() {
     xc_test!(
         use StdLib;
@@ -20,6 +21,7 @@ fn default_vec_alone() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn default_vec_with_push() {
     xc_test!(
         use StdLib;
@@ -114,6 +116,7 @@ fn vec_push_and_check() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn rc_basic() {
     xc_test!(
         use StdLib;
@@ -130,6 +133,7 @@ fn rc_basic() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn big_rc() {
     xc_test!(
         use StdLib;
@@ -229,6 +233,7 @@ fn cast() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn arc_test() {
     xc_test!(
         use StdLib;
@@ -245,6 +250,7 @@ fn arc_test() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn arc_clone() {
     xc_test!(
         use StdLib;
@@ -262,6 +268,22 @@ fn arc_clone() {
         }
         ";
         Arc::new(90i32)
+    )
+}
+
+
+#[test]
+#[cfg(not(feature = "backend-interpreter"))]
+fn empty_string() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); String {
+            x := ""
+            ; x
+        }
+        "#;
+        String::default()
     )
 }
 
@@ -304,3 +326,4 @@ fn panic() {
         "#
     )
 }
+

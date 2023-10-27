@@ -238,15 +238,14 @@ impl<'a> FuncRep<'a> {
         new
     }
 
-    pub fn add_variable(&mut self, typ: &Type, use_block_of: ExprID) -> VarID {
+    pub fn add_variable(&mut self, typ: &Type) -> VarID {
         let var = self.variables.insert(VariableInfo {
             typ: typ.clone(),
             arg_index: ArgIndex::None,
             ..Default::default()
         });
 
-        let (_, block) = self.tree.statement_and_block(use_block_of);
-        let HNodeData::Block { ref mut declared, .. } = self.tree.get_mut(block)
+        let HNodeData::Block { ref mut declared, .. } = self.tree.get_mut(self.tree.root)
             else { unreachable!() };
         declared.insert(var);
 
@@ -277,7 +276,7 @@ impl<'a> FuncRep<'a> {
             return expression;
         }
 
-        let new_var = self.add_variable(&expr_data.ret_type(), expression);
+        let new_var = self.add_variable(&expr_data.ret_type());
 
         self.insert_statement_before(expression, SetGen {
             lhs: new_var,

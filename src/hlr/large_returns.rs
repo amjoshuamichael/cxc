@@ -44,7 +44,7 @@ fn return_by_small_cast(hlr: &mut FuncRep, load_as: Type) {
 }
 
 fn return_by_big_cast(hlr: &mut FuncRep, load_as: Type) {
-    let casted_ret = hlr.add_variable(&load_as, hlr.tree.root);
+    let casted_ret = hlr.add_variable(&load_as);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -132,10 +132,10 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID, abi: ABI) {
     let mut og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
-    let casted_var_name = hlr.add_variable(&casted_var_type, og_call);
+    let casted_var_name = hlr.add_variable(&casted_var_type);
 
     let raw_ret_var_type = casted_var_type.raw_return_type(abi);
-    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type, og_call);
+    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type);
 
     *og_call_data.ret_type_mut().unwrap() = raw_ret_var_type.clone();
     
@@ -184,8 +184,7 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
         *ret_type = Type::void();
         hlr.replace_quick(parent, new_data);
     } else {
-        // TODO: use separate_expression here
-        let call_var = hlr.add_variable(ret_type, og_call_id);
+        let call_var = hlr.add_variable(ret_type);
 
         let new_arg = hlr.insert_quick(og_call_id, RefGen(call_var.clone()));
 

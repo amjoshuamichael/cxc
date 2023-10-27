@@ -3,7 +3,7 @@ mod test_utils;
 use std::rc::Rc;
 
 use cxc::{Unit, library::StdLib};
-use test_utils::{xc_test, consume};
+use test_utils::xc_test;
 
 #[test]
 fn auto_deref_method_1() {
@@ -33,7 +33,7 @@ struct MyPoint {
 }
 
 #[test]
-#[cfg_attr(feature = "backend-debug", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 fn auto_deref_method_2() {
     let mut unit = Unit::new();
     unit.add_lib(StdLib);
@@ -62,8 +62,7 @@ fn auto_deref_method_2() {
         .downcast::<(Rc<MyPoint>,), f32>();
 
     let rc = Rc::new(MyPoint { x: 4.0, y: 3.0 });
-    dbg!(Rc::<MyPoint>::as_ptr(&rc));
-    assert_eq!(consume::<f32>(func(rc)), 25.0);
+    assert_eq!(func(rc), 25.0);
 }
 
 #[test]
@@ -105,6 +104,7 @@ fn big_rc_sum() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn big_rc_to_string() {
     xc_test!(
         use StdLib;

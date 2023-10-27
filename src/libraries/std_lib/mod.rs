@@ -27,9 +27,6 @@ use self::array_helper_funcs_lib::ArrayHelperLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        // TODO: this is a hack
-        unit.push_script("str = u8").unwrap();
-
         unit.push_script(include_str!("ptr.cxc")).unwrap();
 
         unit.add_lib(ArrayHelperLib);

@@ -5,7 +5,6 @@ use crate::test_utils::Numbers5;
 mod test_utils;
 
 use cxc::{Unit, library::StdLib, Type};
-use test_utils::consume;
 
 static mut GNUM: i32 = 90;
 
@@ -52,7 +51,7 @@ fn read_basic_global() {
 
     let read = unit.get_fn("main").unwrap().downcast::<(), i32>()();
 
-    assert_eq!(consume::<i32>(read), 90);
+    assert_eq!(read, 90);
 }
 
 #[test]
@@ -98,7 +97,7 @@ fn read_big_global() {
 
     let read = unit.get_fn("main").unwrap().downcast::<(), Numbers5>()();
 
-    assert_eq!(consume::<Numbers5>(read), large_value);
+    assert_eq!(read, large_value);
 }
 
 #[test]
@@ -222,5 +221,5 @@ fn get_fn_by_ptr() {
     let add_two = add_two.downcast::<(i32,), i32,>();
     let fifty_four = fifty_four.downcast::<(), i32>();
 
-    assert_eq!(consume::<i32>(add_two(consume::<i32>(fifty_four()))), 56);
+    assert_eq!(add_two(fifty_four()), 56);
 }

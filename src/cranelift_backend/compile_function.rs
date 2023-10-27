@@ -4,7 +4,7 @@ use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prel
 use cranelift_module::Module;
 use slotmap::SecondaryMap;
 
-use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::{ReturnStyle, ABI}, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
+use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::{ReturnStyle, ABI}, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
 
 use super::{to_cl_type::{ToCLType, func_type_to_signature}, CraneliftBackend, external_function::ExternalFuncData, ClFunctionData, alloc_and_free::AllocAndFree};
 
@@ -464,7 +464,8 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
         },
         MLine::Return(operand) => {
             if let Some(operand) = operand {
-                build_some_return(fcs, operand);
+                let val = compile_operand(fcs, operand);
+                fcs.builder.ins().return_(&*val);
             } else {
                 fcs.builder.ins().return_(&[]);
             }
@@ -528,74 +529,6 @@ fn write_vals_to_addr(
             addr = builder.ins().iadd(addr, offset_val);
         }
     }
-}
-
-fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand) {
-    let return_style = fcs.ret_type.return_style(ABI::C);
-
-    if return_style == ReturnStyle::Direct {
-        let val = compile_operand(fcs, operand);
-        fcs.builder.ins().return_(&*val);
-
-        return;
-    } 
-
-    let mut get_val_at: Box<dyn FnMut(CLType, u32) -> CLValue> = match operand {
-        MOperand::Memloc(memloc) => {
-            match memloc {
-                MMemLoc::Reg(reg) => {
-                    let values = fcs.registers[reg].clone();
-
-                    Box::new(move |_: CLType, offset: u32| {
-                        if offset == 0 {
-                            values[0]
-                        } else {
-                            values[1]
-                        }
-                    })
-                },
-                MMemLoc::Global(_) => todo!(),
-                MMemLoc::Var(var_name) => {
-                    let writeable = fcs.variables[*var_name].clone();
-
-                    let fcs = &mut fcs;
-                    Box::new(move |typ: CLType, offset: u32| {
-                        writeable.load_offset(&mut fcs.builder, typ, offset)
-                    })
-                },
-            }
-        },
-        MOperand::Lit(_) => unreachable!(), // would be a direct return
-    };
-
-    let ret = match return_style {
-        ReturnStyle::ThroughI32 => {
-            vec![get_val_at(cl_types::I32, 0)]
-        },
-        ReturnStyle::ThroughI64 => {
-            vec![get_val_at(cl_types::I64, 0)]
-        },
-        ReturnStyle::ThroughDouble => {
-            vec![get_val_at(cl_types::F64, 0)]
-        },
-        ReturnStyle::ThroughI32I32 => {
-            vec![get_val_at(cl_types::I32, 0), get_val_at(cl_types::I32, 4)]
-        },
-        ReturnStyle::ThroughF32F32 => {
-            vec![get_val_at(cl_types::F32, 0), get_val_at(cl_types::F32, 4)]
-        },
-        ReturnStyle::ThroughI64I32 => {
-            vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I32, 8)]
-        },
-        ReturnStyle::ThroughI64I64 => {
-            vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I64, 8)]
-        },
-        _ => unreachable!("{return_style:?}"),
-    };
-
-    std::mem::drop(get_val_at);
-
-    fcs.builder.ins().return_(&*ret);
 }
 
 fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr) -> CLValue {
@@ -808,30 +741,26 @@ fn compile_binop(
 fn compile_operand(fcs: &mut FunctionCompilationState, operand: &MOperand) -> Vec<CLValue> {
     match operand {
         MOperand::Memloc(memloc) => load_memloc(fcs, memloc),
-        MOperand::Lit(lit) => vec![compile_lit(fcs, lit)],
-    }
-}
-
-fn compile_lit(fcs: &mut FunctionCompilationState, lit: &MLit) -> CLValue {
-    match lit {
-        MLit::Int { size, val } => {
+        MOperand::Int { size, val } => {
             let int_type = Type::i(*size).to_cl_type()[0];
-            fcs.builder.ins().iconst(int_type, *val as i64)
+            vec![fcs.builder.ins().iconst(int_type, *val as i64)]
         }
-        MLit::Float { size, val } => {
-            match size {
-                32 => fcs.builder.ins().f32const(*val as f32),
-                64 => fcs.builder.ins().f64const(*val as f64),
-                _ => todo!(),
-            }
+        MOperand::Float { size, val } => {
+            vec![
+                match size {
+                    32 => fcs.builder.ins().f32const(*val as f32),
+                    64 => fcs.builder.ins().f64const(*val as f64),
+                    _ => todo!(),
+                }
+            ]
         },
-        MLit::Bool(val) => {
+        MOperand::Bool(val) => {
             let bool_type = Type::bool().to_cl_type()[0];
-            fcs.builder.ins().iconst(bool_type, *val as i64)
+            vec![fcs.builder.ins().iconst(bool_type, *val as i64)]
         },
-        MLit::Function(func_id) => {
+        MOperand::Function(func_id) => {
             let func_ref = fcs.used_functions[*func_id];
-            fcs.builder.ins().func_addr(cl_types::I64, func_ref)
+            vec![fcs.builder.ins().func_addr(cl_types::I64, func_ref)]
         },
     }
 }

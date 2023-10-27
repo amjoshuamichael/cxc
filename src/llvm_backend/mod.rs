@@ -1,6 +1,6 @@
 use crate::hlr::hlr_data::VariableInfo;
 use crate::hlr::hlr_data::ArgIndex;
-use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
+use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
 use crate::typ::ABI;
 use crate::typ::ReturnStyle;
 use crate::{unit::*, Type, FuncType, VarName};
@@ -384,13 +384,7 @@ pub fn compile_addr_expr(
 pub fn compile_operand(fcs: &FunctionCompilationState, operand: &MOperand) -> BasicValueEnum<'static> {
     match operand {
         MOperand::Memloc(memloc) => load_memloc(fcs, memloc),
-        MOperand::Lit(lit) => compile_lit(fcs, lit),
-    }
-}
-
-pub fn compile_lit(fcs: &FunctionCompilationState, lit: &MLit) -> BasicValueEnum<'static> {
-    match lit {
-        MLit::Int { size, val } => {
+        MOperand::Int { size, val } => {
             match size {
                 8 => fcs.context.i8_type().const_int(*val as u64, false),
                 16 => fcs.context.i16_type().const_int(*val as u64, false),
@@ -400,17 +394,17 @@ pub fn compile_lit(fcs: &FunctionCompilationState, lit: &MLit) -> BasicValueEnum
                 size => fcs.context.custom_width_int_type(*size as u32).const_int(*val as u64, false),
             }.as_basic_value_enum()
         },
-        MLit::Float { size, val } => {
+        MOperand::Float { size, val } => {
             match size {
                 32 => fcs.context.f32_type().const_float(*val as f64),
                 64 => fcs.context.f64_type().const_float(*val as f64),
                 _ => unreachable!(),
             }.as_basic_value_enum()
         },
-        MLit::Bool(val) => {
+        MOperand::Bool(val) => {
             fcs.context.bool_type().const_int(*val as u64, false).as_basic_value_enum()
         },
-        MLit::Function(func_id) => {
+        MOperand::Function(func_id) => {
             fcs.used_functions[*func_id].as_global_value().as_pointer_value().as_basic_value_enum()
         }
     }

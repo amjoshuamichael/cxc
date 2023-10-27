@@ -39,8 +39,6 @@ fn make_context() -> &'static Context {
 impl IsBackend for LLVMBackend {
     type LowerableFuncRef = Func;
 
-    type CallableFuncRef<A, R> = FuncDowncasted<A, R> where A: crate::unit::callable::CallInput<R>;
-
     fn create() -> Self {
         let context: &'static _ = make_context();
 

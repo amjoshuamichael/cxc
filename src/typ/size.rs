@@ -54,6 +54,7 @@ pub fn size_of_largest_field_in(typ: &Type) -> usize {
             sizes[0]
         },
         TypeEnum::Array(ArrayType { base, .. }) => base.size(),
+        TypeEnum::Destructor(DestructorType { base, .. }) => size_of_largest_field_in(base),
         _ => typ.size(),
     }
 }

@@ -4,15 +4,10 @@ use inkwell::types::{BasicMetadataTypeEnum, FunctionType};
 use std::collections::btree_map::BTreeMap;
 
 use crate::*;
-use crate::typ::{UnknownType, VoidType, ReturnStyle};
+use crate::typ::{UnknownType, VoidType, ReturnStyle, DestructorType};
 use inkwell::AddressSpace;
 use inkwell::context::Context;
 use inkwell::types::{AnyTypeEnum, BasicTypeEnum, AnyType, BasicType};
-
-std::thread_local! {
-  static MEMOIZED_TO_ANY: RefCell<BTreeMap<Type, AnyTypeEnum<'static>>> =
-      RefCell::new(BTreeMap::new());
-}
 
 pub trait ToLLVMType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static>;
@@ -24,23 +19,7 @@ pub trait ToLLVMType {
 
 impl ToLLVMType for Type {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        let possible_output = MEMOIZED_TO_ANY.with(|memoized| {
-            let memoized = memoized.borrow();
-            memoized.get(&self).cloned()
-        });
-
-        if let Some(possible_output) = possible_output {
-            return possible_output;
-        }
-
-        let output = self.as_type_enum().to_any_type(context);
-
-        MEMOIZED_TO_ANY.with(|memoized| {
-            let mut memoized = memoized.borrow_mut();
-            memoized.insert(self.clone(), output.clone());
-        });
-
-        output
+        self.as_type_enum().to_any_type(context)
     }
 }
 
@@ -53,6 +32,7 @@ impl ToLLVMType for TypeEnum {
             TypeEnum::Ref(t) => t.to_any_type(context),
             TypeEnum::Func(t) => t.to_any_type(context),
             TypeEnum::Array(t) => t.to_any_type(context),
+            TypeEnum::Destructor(DestructorType { base, .. }) => base.to_any_type(context),
             TypeEnum::Bool => BoolType.to_any_type(context),
             TypeEnum::Void => VoidType().to_any_type(context),
             TypeEnum::Unknown => UnknownType().to_any_type(context),

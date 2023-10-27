@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 #![allow(warnings)]
 #![feature(type_name_of_val)]
 #![feature(int_roundings)]

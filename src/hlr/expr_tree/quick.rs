@@ -4,7 +4,7 @@ use crate::{
     hlr::{hlr_data::{FuncRep, VarID}, do_transformations::desugar_transformation},
     lex::VarName,
     parse::{InitOpts, Opcode, TypeSpec, TypeRelationGeneric},
-    Type, FuncQuery, typ::{spec_from_type::type_to_type_spec, can_transform::TransformationList}, TypeRelation, ArrayType, TypeEnum,
+    Type, FuncQuery, typ::{spec_from_type::type_to_type_spec, can_transform::TransformationList}, TypeRelation, ArrayType, TypeEnum, Field,
 };
 
 use super::{ExprID, HNodeData};
@@ -20,7 +20,6 @@ impl<'a> FuncRep<'a> {
 }
 
 pub trait NodeDataGen: std::fmt::Debug + std::any::Any {
-    // TODO: make both of these self, not &self
     fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
         let new_spot = hlr.tree.make_one_space(parent);
         self.put_in_id(hlr, new_spot);
@@ -30,6 +29,10 @@ pub trait NodeDataGen: std::fmt::Debug + std::any::Any {
 }
 
 impl NodeDataGen for Box<dyn NodeDataGen> {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        self.as_ref().add_to_expr_tree(hlr, parent)
+    }
+
     fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
         self.as_ref().put_in_id(hlr, spot)
     }
@@ -273,12 +276,24 @@ impl NodeDataGen for StructLitGen {
             .fields
             .iter()
             .map(|(name, data)| (name.clone(), data.add_to_expr_tree(hlr, spot)))
-            .collect();
+            .collect::<Vec<_>>();
+
+        let var_type = if self.var_type.is_unknown() {
+            Type::new_struct(
+                added_fields.iter().map(|(name, id)| Field { 
+                    name: name.clone(), 
+                    typ: hlr.tree.get_ref(*id).ret_type(),
+                    inherited: false,
+                }).collect::<Vec<_>>()
+            )
+        } else {
+            self.var_type.clone()
+        };
 
         hlr.tree.replace(
             spot,
             HNodeData::StructLit {
-                var_type: self.var_type.clone(),
+                var_type,
                 fields: added_fields,
                 initialize: self.initialize,
             },
@@ -370,7 +385,6 @@ impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for IndexGen<T, U> {
 pub struct TransformationGen<T: NodeDataGen> {
     pub object: T,
     pub steps: TransformationList,
-    pub ret_type: Type,
 }
 
 impl<T: NodeDataGen> NodeDataGen for TransformationGen<T> {
@@ -380,7 +394,7 @@ impl<T: NodeDataGen> NodeDataGen for TransformationGen<T> {
         let mut transform_data = HNodeData::Transform {
             hs,
             steps: Some(self.steps.clone()),
-            ret_type: self.ret_type.clone(),
+            ret_type: Type::unknown(),
         };
 
         desugar_transformation(spot, &mut transform_data, hlr);
@@ -487,5 +501,37 @@ impl<T: NodeDataGen + Clone, U: NodeDataGen> NodeDataGen for SetGenSlot<T, U> {
 impl NodeDataGen for ExprID {
     fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
         hlr.tree.get(*self).put_in_id(hlr, spot);
+    }
+}
+
+pub struct With<T: NodeDataGen, U: NodeDataGen> {
+    pub generate: T,
+    pub then: Box<dyn Fn(Box<dyn NodeDataGen>, Type) -> U>,
+}
+
+impl<T: NodeDataGen, U: NodeDataGen> std::fmt::Debug for With<T, U> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self.generate)
+    }
+}
+
+impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for With<T, U> {
+    fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
+        let object = self.generate.add_to_expr_tree(hlr, spot);
+        let object_type = hlr.tree.get_ref(object).ret_type();
+        
+        let object_gen = Box::new(CopyID(object));
+        (self.then)(object_gen, object_type).put_in_id(hlr, spot);
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CopyID(ExprID);
+impl NodeDataGen for CopyID {
+    fn add_to_expr_tree(&self, hlr: &mut FuncRep, parent: ExprID) -> ExprID {
+        self.0
+    }
+    fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
+        panic!();
     }
 }

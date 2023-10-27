@@ -18,9 +18,6 @@ struct Resource {
 
 #[cfg_attr(debug_assertions, inline(never))]
 pub fn add_implicit_drops(hlr: &mut FuncRep) {
-    // TODO: remove all hanging blocks, so that blocks that aren't in the function
-    // aren't accessed here
-
     let mut resources = Vec::<Resource>::new();
 
     for (var_id, var_info) in &hlr.variables {
@@ -274,9 +271,6 @@ fn value_destination(
                 path,
             })
         },
-        Call { query, .. } if &*query.name == "cast" => {
-            Err(path)
-        },
         Call { .. } => {
             // Since Srets haven't been set yet, this must be an argument
             Ok(ValueDestination {
@@ -326,7 +320,7 @@ fn value_destination(
             kind: ValueDestinationKind::GoesToAnotherFunction,
             path: DestructorPath::default(),
         }),
-        UnarOp { op: Opcode::Ref, .. } => Err(path),
+        UnarOp { op: Opcode::Ref | Opcode::RemoveTypeWrapper, .. } => Err(path),
         UnarOp { ret_type, op: Opcode::Deref, .. } => {
             let deref_parent_id = hlr.tree.parent(parent_id);
             let deref_parent_data = hlr.tree.get(deref_parent_id);
@@ -335,7 +329,7 @@ fn value_destination(
             } else {
                 panic!()
             }
-        }
+        },
         Number { .. } | Float { .. } | Bool { .. } | BinOp { .. } | UnarOp { .. } | 
         AccessAlias(_) | GotoLabel(_) | Goto(_) | GlobalLoad { .. } => unreachable!(),
         _ => Err(path),

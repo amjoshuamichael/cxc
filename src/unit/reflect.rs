@@ -142,6 +142,15 @@ impl_reflect_generic!(Vec);
 impl_reflect_generic!(Rc);
 impl_reflect_generic!(Arc);
 
+impl<T: XcReflect> XcReflect for &'static [T] {
+    fn spec_code() -> String {
+        let mut code = String::from("Reflected = { ptr: &");
+        code += &*T::spec_code();
+        code += ", len: u64 }";
+        code
+    }
+}
+
 impl Unit {
     pub fn get_reflect_type<T: XcReflect + 'static>(&self) -> Option<Type> {
         self.comp_data.get_reflect_type::<T>()

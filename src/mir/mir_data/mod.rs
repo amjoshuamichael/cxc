@@ -154,31 +154,26 @@ impl fmt::Debug for MAddr {
     }
 }
 
-// TODO: combine MLit and MOperand?
-pub enum MLit {
+pub enum MOperand {
+    Memloc(MMemLoc),
     Int { size: u32, val: u64 },
     Float { size: u32, val: f64 },
     Function(FuncId),
     Bool(bool),
 }
 
-impl fmt::Debug for MLit {
+impl fmt::Debug for MOperand {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        use MLit::*;
+        use MOperand::*;
 
         match self {
             Int { size, val } => write!(f, "{val}i{size}"),
             Float { size, val } => write!(f, "{val}f{size}"),
             Function(id) => write!(f, "{id:?}"),
             Bool(val) => write!(f, "{val}"),
+            Memloc(memloc) => write!(f, "{memloc:?}"),
         }
     }
-}
-
-#[derive(Debug)]
-pub enum MOperand {
-    Memloc(MMemLoc),
-    Lit(MLit),
 }
 
 #[derive(Debug)]

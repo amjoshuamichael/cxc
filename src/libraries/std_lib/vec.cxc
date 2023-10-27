@@ -1,16 +1,22 @@
 Vec<T> = {
-    +ptr: &T ~ free<T>(self),
-    capacity: u64,
+    +raw: RawVec<T>,
     +len: u64,
 }
+
+RawVec<T> = {
+    +ptr: &T,
+    +capacity: u64,
+} ~ ? self.capacity != 0 { free(self.ptr) }
 
 <T> &Vec<T>:. {
     push(val: T) {
         ? self.capacity == u64 0 {
             *self = Vec<T> {
+                raw = cast({
+                    ptr = alloc<T>(u64 4),
+                    capacity = u64 4,
+                }),
                 len = u64 0,
-                capacity = u64 4,
-                ptr = cast(alloc<T>(u64 4))
             }
         }
 
@@ -44,9 +50,11 @@ Vec<T> = {
 <T> Vec<T>:: {
     new(); Vec<T> {
         ; Vec<T> {
+            raw = cast({
+                ptr = cast<u64, &T>(u64 0),
+                capacity = u64 0,
+            }),
             len = u64 0,
-            capacity = u64 0,
-            ptr = cast<u64, &T>(u64 0),
         }
     }
 

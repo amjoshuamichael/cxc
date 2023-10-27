@@ -59,3 +59,8 @@ debug = true
 
 [profile.release]
 opt-level = 3
+
+[[bin]]
+path = "src/tests.rs"
+name = "tests"
+test = true

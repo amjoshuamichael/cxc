@@ -2,7 +2,6 @@ mod test_utils;
 
 macro_rules! abi_test {
     ($testname:ident, $rtyp:ty; $($tokens:tt)+) => { mod $testname {
-        use super::super::test_utils::consume;
         const TOKENS: &str = stringify! { $($tokens)+ };
         #[test]
         fn pass() {
@@ -34,7 +33,7 @@ macro_rules! abi_test {
             let function = unit.get_fn("main").unwrap().downcast::<(), bool>();
             #[allow(unused_unsafe)]
             let output = unsafe { function() };
-            assert_eq!(consume::<bool>(output), true);
+            assert_eq!(output, true);
         }
 
         #[test]
@@ -66,7 +65,7 @@ macro_rules! abi_test {
             let function = unit.get_fn("main").unwrap().downcast::<(), bool>();
             #[allow(unused_unsafe)]
             let output = unsafe { function() };
-            assert_eq!(consume::<bool>(output), true);
+            assert_eq!(output, true);
         }
 
         #[test]
@@ -98,7 +97,7 @@ macro_rules! abi_test {
             let function = unit.get_fn("main").unwrap().downcast::<(), bool>();
             #[allow(unused_unsafe)]
             let output = unsafe { function() };
-            assert_eq!(consume::<bool>(output), true);
+            assert_eq!(output, true);
         }
 
         #[test]
@@ -139,8 +138,7 @@ macro_rules! abi_test {
             let function = unit.get_fn("main").unwrap().downcast::<(), bool>();
             #[allow(unused_unsafe)]
             let output = unsafe { function() };
-            assert_eq!(consume::<bool>(output), true);
-
+            assert_eq!(output, true);
         }
     }}
 }

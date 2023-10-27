@@ -42,7 +42,6 @@ impl AllocAndFree {
 
 unsafe extern "C" fn alloc_x_bytes(x: i64) -> *const u8 {
     use std::alloc::*;
-    // TODO: use unchecked
     alloc(Layout::from_size_align_unchecked(x as usize, 4))
 }
 

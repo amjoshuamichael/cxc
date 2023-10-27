@@ -2,12 +2,13 @@ use std::{collections::{HashMap, HashSet}, sync::{Arc, RwLock}};
 
 use slotmap::SecondaryMap;
 
-use crate::{unit::{backends::{IsBackend, LowerableFunc}, FuncId, callable::CallInput, ProcessedFuncInfo}, mir::MIR, FuncType, Value, Type, VarName};
+use crate::{unit::{backends::IsBackend, FuncId, callable::CallInput, ProcessedFuncInfo}, mir::MIR, FuncType, Value, Type, VarName};
 
 mod lowered_func;
 mod interpreter;
 mod call_with_values;
 
+use interpreter::run_with_args;
 use lowered_func::LoweredInterpreterFunc;
 
 #[derive(Default, Debug)]
@@ -51,32 +52,21 @@ impl LowerableInterpreterFunc {
         self.state.read().unwrap().mirs[self.func_id].func_type.clone()
     }
 
-    pub fn downcast<A, R>(&self) -> LoweredInterpreterFunc<A, R> where A: CallInput<R> {
-        self.lower::<A, R>()
-    }
-
-    pub fn call_void(&self) -> Value {
-        // even though we're using the () as the return type in this lower call, the
-        // LoweredInterpreterFunc is still going to produce a cxc::Value.
-        self.lower::<(), ()>()()
-    }
-}
-
-impl LowerableFunc for LowerableInterpreterFunc {
-    type LowerTo<A, R> = LoweredInterpreterFunc<A, R>;
-
-    fn lower<A, R>(&self) -> Self::LowerTo<A, R> where A: CallInput<R> {
+    pub fn downcast<A, R: Copy>(&self) -> LoweredInterpreterFunc<A, R> where A: CallInput<R> {
         LoweredInterpreterFunc::<A, R> {
             state: self.state.clone(),
             func_id: self.func_id,
             _marker: std::marker::PhantomData::default(),
         }
     }
+
+    pub fn call_no_args(&self) -> Value {
+        let state = self.state.read().unwrap();
+        run_with_args(self.func_id, &*state, vec![], false)
+    }
 }
 
 impl IsBackend for InterpreterBackend {
-    type CallableFuncRef<A, R> = LoweredInterpreterFunc<A, R> where A: CallInput<R>;
-
     type LowerableFuncRef = LowerableInterpreterFunc;
 
     fn create() -> Self { Self::default() }

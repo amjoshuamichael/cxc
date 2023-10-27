@@ -13,8 +13,7 @@ use super::{
 pub struct HLR {
     pub from: Rc<Expr>,
     pub tree: ExprTree,
-    // TODO: rename to variables
-    pub data_flow: SlotMap<VarID, VariableInfo>,
+    pub variables: SlotMap<VarID, VariableInfo>,
     pub func_type: FuncType,
     pub dependencies: HashSet<FuncQuery>,
 }

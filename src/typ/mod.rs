@@ -360,6 +360,10 @@ impl StructType {
 
         Some(types[0].clone())
     }
+
+    pub fn has_field(&self, check_name: &VarName) -> bool {
+        self.fields.iter().any(|Field { name, .. }| check_name == name)
+    }
 }
 
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]

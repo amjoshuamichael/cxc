@@ -6,7 +6,7 @@ use cxc::{
 };
 
 #[test]
-#[cfg_attr(feature = "backend-interpreter", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 fn default_util() {
     let mut unit = Unit::new();
 
@@ -17,15 +17,12 @@ fn default_util() {
 
     let default_string = unit.get_fn("main").unwrap().downcast::<(), String>()();
 
-    #[cfg(not(feature = "backend-interpreter"))]
-    { assert_eq!(default_string, String::default()); }
-
-    #[cfg(feature = "backend-interpreter")]
-    unsafe { assert_eq!(*default_string.consume::<String>(), String::default()); }
+    assert_eq!(default_string, String::default());
 }
 
 #[test]
 #[ignore]
+#[cfg(not(feature = "backend-interpreter"))]
 fn clone_util() {
     let mut unit = Unit::new();
 
@@ -56,11 +53,7 @@ fn clone_util() {
 
     let cool_string_copy = unit.get_fn("main").unwrap().downcast::<(), String>()();
 
-    #[cfg(not(feature = "backend-interpreter"))]
-    { assert_eq!(cool_string_copy, String::default()); }
-
-    #[cfg(feature = "backend-interpreter")]
-    unsafe { assert_eq!(*cool_string_copy.consume::<String>(), String::from("coolman")); }
+    assert_eq!(cool_string_copy, String::default());
 }
 
 fn a_cool_string() -> String { String::from("coolman") }

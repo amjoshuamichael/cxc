@@ -1,14 +1,14 @@
 #![allow(unused_must_use)]
+#![allow(unused_imports)]
 mod test_utils;
+
+use cxc::{ExternalFuncAdd, TypeRelation, library::StdLib};
+use cxc::{Type, Unit};
+use test_utils::Point2D;
 use std::rc::Rc;
 
-use cxc::library::StdLib;
-use cxc::{ExternalFuncAdd, TypeRelation};
-use cxc::{Type, Unit};
-use test_utils::{Point2D, consume};
-
 #[test]
-#[cfg_attr(feature = "backend-interpreter", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 fn basic_pointer() {
     let mut unit = Unit::new();
 
@@ -48,17 +48,15 @@ fn struct_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = consume(
-        unit
-            .get_fn("sqr_magnitude_of")
-            .unwrap()
-            .downcast::<(&Point2D,), i32>()(&point)
-    );
+    let sqr_mag = unit
+        .get_fn("sqr_magnitude_of")
+        .unwrap()
+        .downcast::<(&Point2D,), i32>()(&point);
     assert_eq!(sqr_mag, 13);
 }
 
 #[test]
-#[cfg_attr(feature = "backend-interpreter", ignore)]
+#[cfg(not(feature = "backend-interpreter"))]
 fn struct_rc_pointer() {
     let mut unit = Unit::new();
 
@@ -80,12 +78,10 @@ fn struct_rc_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = consume(
-        unit
-            .get_fn("sqr_magnitude_of")
-            .unwrap()
-            .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point))
-    );
+    let sqr_mag = unit
+        .get_fn("sqr_magnitude_of")
+        .unwrap()
+        .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point));
     assert_eq!(sqr_mag, 13);
 }
 
@@ -111,10 +107,7 @@ fn i32_and_ref() {
         .downcast::<(&i32,), (i32, &i32)>();
     let output: (i32, &i32);
 
-    #[cfg(not(feature = "backend-interpreter"))]
-    { output = func(&mut thirty_two); }
-    #[cfg(feature = "backend-interpreter")]
-    unsafe { output = *func(&mut thirty_two).consume() }
+    output = func(&mut thirty_two);
     assert_eq!(output, (10, &thirty_two));
 }
 
@@ -147,7 +140,7 @@ fn method_on_struct_with_arg() {
     .unwrap();
 
     let output = unit.get_fn("main").unwrap().downcast::<(), i32>()();
-    assert_eq!(consume::<i32>(output), 1680);
+    assert_eq!(output, 1680);
 }
 
 macro_rules! ffi_test {
@@ -155,7 +148,6 @@ macro_rules! ffi_test {
         // TODO: make tests will work on ffi with the interpreter.
         #[cfg(not(feature = "backend-interpreter"))]
         mod $testname {
-            use super::super::test_utils::consume;
             #[allow(unused_imports)]
             use super::*;
 
@@ -173,7 +165,7 @@ macro_rules! ffi_test {
                     &*format!("check(x: {xctype}); bool {{ ; {CHECK} }}")
                 ).unwrap();
                 let check = unit.get_fn("check").unwrap().downcast::<($rtyp,), bool>();
-                assert!(consume::<bool>(check($rval)));
+                assert!(check($rval));
             }
 
             #[test]
@@ -187,7 +179,7 @@ macro_rules! ffi_test {
                     &*format!("main(); {xctype} {{ ; {xcval} }}")
                 ).unwrap();
                 let main = unit.get_fn("main").unwrap().downcast::<(), $rtyp>();
-                let x = consume::<$rtyp>(main());
+                let x = main();
 
                 #[cfg(feature = "show-bytes")]
                 cxc::bytesof::print_binary_two(&$rval, &x);
@@ -220,7 +212,7 @@ macro_rules! ffi_test {
                     }}
                 ")).unwrap();
                 let main = unit.get_fn("main").unwrap().downcast::<(), bool>();
-                assert!(consume::<bool>(main()));
+                assert!(main());
             }
 
             #[test]
@@ -248,7 +240,7 @@ macro_rules! ffi_test {
                         "main(); bool {{ ;external({xcval}) }}"
                 )).unwrap();
                 let main = unit.get_fn("main").unwrap().downcast::<(), bool>();
-                assert!(consume::<bool>(main()));
+                assert!(main());
             }
         }
     }

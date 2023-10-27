@@ -105,7 +105,7 @@ enum LastSetBy {
     ReturnTypeOfFunction,
     ArgTypeOfFunction(FuncQuery, usize),
     #[default]
-    None, // TODO: do we need this?
+    Unset,
 }
 
 #[derive(Debug)]
@@ -1196,7 +1196,10 @@ fn fill_in_call(
         let relation_constraint = 
             infer_map.constraint_index_of_option(Inferable::Relation(*call_id));
 
-        // TODO: check if func has too few / too many args
+        if a.len() != code.args.len() {
+            panic!("arg count mismatch!");
+        }
+
         for (arg_index, arg) in code.args.iter().enumerate() {
             infer_map.constraint_of(a[arg_index]).connections.insert(
                 ConnectionSource::CallArg(*call_id, arg_index),

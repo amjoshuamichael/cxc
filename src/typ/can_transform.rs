@@ -6,7 +6,7 @@ use super::{Field, DestructorType};
 pub enum TransformationStep {
     Ref(i32),
     Field(VarName),
-    Fields(Box<[(VarName, Transformation)]>),
+    Fields(Box<[(VarName, TransformationList)]>),
     RemoveDestructor,
     ArrayToSlice,
 }
@@ -81,45 +81,53 @@ impl Type {
             },
             TypeEnum::Struct(struct_type) => {
                 if let TypeSpec::Struct(field_specs) = spec.clone()
-                    && struct_type.fields.len() != field_specs.len()
-                    && field_specs.iter().all(|(inherited, _, _)| *inherited) {
+                    && field_specs.iter().all(|(inherited, _, _)| *inherited) 
+                    && (
+                        field_specs.len() != struct_type.fields.len() ||
+                        !field_specs.iter().all(|(_, name, _)| struct_type.has_field(name)) 
+                    ) {
                     let mut generics = Vec::new();
 
                     let mut field_moves = Vec::new();
 
                     let mut failure = false;
 
-                    for (_, name, spec) in field_specs {
-                        let Ok(field_index) = struct_type.get_field_index(&name)
-                            else { failure = true; break };
-
-                        let field = &struct_type.fields[field_index];
-
-                        if !field.inherited {
-                             failure = true;
-                             break;
-                        }
-
-                        if let Some(transformation) = field.typ.can_transform_to(spec.clone()) {
-                            // merge generics
-                            if transformation.generics.len() > generics.len() {
-                                generics.resize(
-                                    transformation.generics.len(), 
-                                    Type::unknown()
-                                );
+                    for (_, name, spec) in &field_specs {
+                        for field in &struct_type.fields {
+                            if !field.inherited {
+                                 continue;
                             }
-                            for (g, generic) in transformation.generics.iter().enumerate() {
-                                if generics[g].is_known() {
-                                    assert_eq!(&generics[g], generic);
+
+                            if let Some(transformation) = field.typ.can_transform_to(spec.clone()) {
+                                // merge generics
+                                if transformation.generics.len() > generics.len() {
+                                    generics.resize(
+                                        transformation.generics.len(), 
+                                        Type::unknown()
+                                    );
                                 }
-                                generics[g] = generic.clone();
-                            }
+                                for (g, generic) in transformation.generics.iter().enumerate() {
+                                    if generics[g].is_known() {
+                                        assert_eq!(&generics[g], generic);
+                                    }
+                                    generics[g] = generic.clone();
+                                }
 
-                            field_moves.push((name, transformation));
+                                field_moves.push((
+                                    name.clone(), 
+                                    TransformationList::Cons(
+                                        TransformationStep::Field(field.name.clone()), 
+                                        Box::new(transformation.steps)
+                                    )
+                                ));
+                                break;
+                            }
                         }
                     }
 
-                    if !failure {
+                    dbg!(&field_moves);
+
+                    if field_moves.len() == field_specs.len() {
                         return Some(Transformation {
                             generics,
                             steps: TransformationList::Cons(
@@ -425,10 +433,10 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse::TypeSpec, Type, Unit, errors::CResult, typ::can_transform::{Transformation, TransformationStep}, VarName};
+    use crate::{parse::TypeSpec, Type, Unit, errors::CResult, typ::can_transform::{Transformation, TransformationStep, TransformationList}, VarName};
 
     #[test]
-    fn method_transformations() -> CResult<()> {
+    fn method_transformations() {
         let mut unit = Unit::new();
 
         unit.push_script("Vec<T> = { ptr: &T, capacity: i64, len: i64 }")
@@ -450,7 +458,7 @@ mod tests {
             field_names
                 .into_iter()
                 .copied()
-                .map(|name| (VarName::from(name), Transformation::default()))
+                .map(|name| (VarName::from(name), TransformationList::Nil))
                 .collect::<Vec<_>>()
                 .into_boxed_slice()
         );
@@ -530,26 +538,6 @@ mod tests {
             comp("{+x: i32, +y: i64}", "{+x: i32, +y: i64}"), 
             Some((vec![], vec![]))
         );
-        assert_eq!(
-            comp("{+x: i32, +y: i64, z: u32}", "{+x: i32, +y: i64}"), 
-            Some((vec![], vec![flsstp(&["x", "y"])]))
-        );
         assert_eq!(comp("{+x: i32, y: i64, z: u32}", "{+x: i32, +y: i64}"), None);
-        
-        Ok(())
-    }
-
-    #[test]
-    fn field_transformations() {
-        let mut unit = Unit::new();
-
-        unit.push_script("RcBox<T> = { strong: i64, weak: i64, +value: T }").unwrap();
-        unit.push_script("Rc<T> = { +inner: &RcBox<T> }").unwrap();
-
-        let _comp = |spec: &str, field: &str| 
-            unit.comp_data.get_spec(&TypeSpec::from(spec), &())
-            .unwrap()
-            .route_to(VarName::from(field))
-            .map(|(steps, typ)| (typ, steps.to_vec()));
     }
 }

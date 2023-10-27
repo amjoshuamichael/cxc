@@ -25,7 +25,7 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
             let TypeEnum::Struct(struct_type) = var_type.as_type_enum() 
                 else { todo!("This literal can only use a struct type") };
 
-            let new_default = hlr.add_variable(&var_type, structlit_id);
+            let new_default = hlr.add_variable(&var_type);
 
             hlr.insert_statement_before(
                 structlit_id,

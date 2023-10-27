@@ -1,10 +1,8 @@
-#![allow(warnings)]
-
 use std::{slice, collections::{HashMap, BTreeMap}};
 
 use slotmap::{SecondaryMap, SlotMap, Key, KeyData};
 
-use crate::{unit::FuncId, Value, mir::{MLine, MOperand, MAddr, MLit, MMemLoc, MReg, MExpr, MIR, MCallable, MAddrExpr, MAddrReg}, hlr::hlr_data::{VarID, ArgIndex, VariableInfo}, Type, parse::Opcode, IntType, FloatType, TypeEnum, typ::{ReturnStyle, IntSize}, FuncType, VarName};
+use crate::{unit::FuncId, Value, mir::{MLine, MOperand, MAddr, MMemLoc, MReg, MExpr, MIR, MCallable, MAddrExpr, MAddrReg}, hlr::hlr_data::{VarID, ArgIndex, VariableInfo}, Type, parse::Opcode, IntType, FloatType, TypeEnum, typ::{ReturnStyle, IntSize}, FuncType, VarName};
 
 use super::IntepreterState;
 
@@ -104,11 +102,11 @@ impl<'a> Interpreter<'a> {
 type RegValue = Box<[u8]>;
 type AddrRegValue = usize;
 
-pub fn run(func_id: FuncId, state: &IntepreterState, force_safety: bool) -> Value {
+pub(crate) fn run(func_id: FuncId, state: &IntepreterState, force_safety: bool) -> Value {
     run_with_args(func_id, state, Vec::new(), force_safety)
 }
 
-pub fn run_with_args(
+pub(crate) fn run_with_args(
     func_id: FuncId, 
     state: &IntepreterState, 
     args: Vec<Box<[u8]>>, 
@@ -540,30 +538,26 @@ fn iaddrexpr(expr: &MAddrExpr, interpreter: &mut Interpreter) -> AddrRegValue {
 fn ioperand(operand: &MOperand, interpreter: &mut Interpreter) -> RegValue {
     match operand {
         MOperand::Memloc(loc) => imemloc(loc, interpreter),
-        MOperand::Lit(lit) => {
-            match lit {
-                MLit::Int { size, val } => {
-                    match size {
-                        64 => (*val as u64).to_ne_bytes().into(),
-                        32 => (*val as u32).to_ne_bytes().into(),
-                        16 => (*val as u16).to_ne_bytes().into(),
-                        8 => (*val as u8).to_ne_bytes().into(),
-                        _ => unreachable!(),
-                    }
-                },
-                MLit::Float { size, val } => {
-                    match size {
-                        64 => (*val as f64).to_ne_bytes().into(),
-                        32 => (*val as f32).to_ne_bytes().into(),
-                        _ => unreachable!(),
-                    }
-                },
-                MLit::Function(func_id) => {
-                    func_id.data().as_ffi().to_ne_bytes().into()
-                },
-                MLit::Bool(bool) => bool_to_boxed_slice(*bool),
+        MOperand::Int { size, val } => {
+            match size {
+                64 => (*val as u64).to_ne_bytes().into(),
+                32 => (*val as u32).to_ne_bytes().into(),
+                16 => (*val as u16).to_ne_bytes().into(),
+                8 => (*val as u8).to_ne_bytes().into(),
+                _ => unreachable!(),
             }
         },
+        MOperand::Float { size, val } => {
+            match size {
+                64 => (*val as f64).to_ne_bytes().into(),
+                32 => (*val as f32).to_ne_bytes().into(),
+                _ => unreachable!(),
+            }
+        },
+        MOperand::Function(func_id) => {
+            func_id.data().as_ffi().to_ne_bytes().into()
+        },
+        MOperand::Bool(bool) => bool_to_boxed_slice(*bool),
     }
 }
 
@@ -660,5 +654,6 @@ fn addr_to_slice<'a>(addr: usize, interpreter: &'a mut Interpreter) -> &'a mut [
     if interpreter.allocator.freed.contains(&(addr as *const u8)) {
         panic!("tried to access previously freed memory at 0x{addr:x}!");
     }
+
     panic!("tried to access undefined memory at 0x{addr:x}!");
 }

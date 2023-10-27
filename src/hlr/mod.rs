@@ -73,15 +73,15 @@ pub fn hlr(
 
     infer_types(&mut output);
     do_transformations(&mut output)?;
-    #[cfg(feature = "xc-debug")]
-    if info.name != VarName::None {
-        println!("{}", &output.to_string());
-    }
     active_initialization(&mut output);
     struct_literals(&mut output);
     array_literals(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
     remove_redundant_derefs(&mut output);
+    #[cfg(feature = "xc-debug")]
+    if info.name != VarName::None {
+        println!("{}", &output.to_string());
+    }
     add_implicit_drops(&mut output);
     large_returns(&mut output);
     large_args(&mut output);
