@@ -216,10 +216,7 @@ macro_rules! ffi_test {
 
             #[test]
             fn pass_c2r() {
-                fn external(x: $rtyp) -> bool { 
-                    dbg!(&x);
-                    x == $rval
-                }
+                fn external(x: $rtyp) -> bool { x == $rval }
 
                 let mut unit = cxc::Unit::new();
 

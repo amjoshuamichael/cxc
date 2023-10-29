@@ -96,8 +96,6 @@ impl IsBackend for CraneliftBackend {
             };
 
         func_type_to_signature(&func_info.typ, &mut ctx.func.signature);
-        //dbg!(&ctx.func.signature);
-        //dbg!(&func_info.name);
 
         let name = func_info.to_string(func_id) + &*self.func_counter.to_string();
         self.func_counter += 1;
