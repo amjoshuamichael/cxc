@@ -78,10 +78,6 @@ pub fn hlr(
     array_literals(&mut output);
     add_void_return_if_ret_type_is_void(&mut output)?;
     remove_redundant_derefs(&mut output);
-    #[cfg(feature = "xc-debug")]
-    if info.name != VarName::None {
-        println!("{}", &output.to_string());
-    }
     add_implicit_drops(&mut output);
     large_returns(&mut output);
     large_args(&mut output);
@@ -96,6 +92,5 @@ pub fn hlr(
         }
     }
     
-
     Ok(output.output(code.code.clone()))
 }

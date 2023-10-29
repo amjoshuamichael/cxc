@@ -20,7 +20,9 @@ pub fn insert_destructors(hlr: &mut FuncRep) -> CResultMany<()> {
                 destructor_type.as_type_enum() {
                 let mut inline_arguments = HashMap::new();
                 inline_arguments.insert(ArgIndex::Some(0), *hs);
-                *destructor_data = inline(destructor, hlr, inline_arguments);
+                inline(destructor, hlr, inline_arguments, destructor_id);
+                *destructor_data = hlr.tree.get(destructor_id);
+                dbg!();
             } else {
                 hlr.tree.remove_node(destructor_id);
             }

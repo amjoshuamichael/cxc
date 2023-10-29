@@ -352,18 +352,18 @@ impl HNodeData {
                 call += &*query.name;
                 call += WHITE;
 
-                //if !query.generics.is_empty() {
-                //    call += WHITE;
-                //    call += "<";
-                //    for (g, generic) in query.generics.iter().enumerate() {
-                //        if g > 0 {
-                //            call += ", ";
-                //        }
-                //        call += &*format!("{:?}", generic);
-                //    }
-                //    call += WHITE;
-                //    call += ">";
-                //}
+                if !query.generics.is_empty() {
+                    call += WHITE;
+                    call += "<";
+                    for (g, generic) in query.generics.iter().enumerate() {
+                        if g > 0 {
+                            call += ", ";
+                        }
+                        call += &*format!("{:?}", generic);
+                    }
+                    call += WHITE;
+                    call += ">";
+                }
 
                 call += "(";
 

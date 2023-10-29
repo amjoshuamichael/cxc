@@ -79,6 +79,7 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_id: VarID) {
                     var_type: arg_type_reffed.clone(),
                 },
             ));
+
             *var_data = hlr.tree.get(ident_id);
         }
     );
