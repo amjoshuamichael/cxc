@@ -125,8 +125,6 @@ impl Type {
                         }
                     }
 
-                    dbg!(&field_moves);
-
                     if field_moves.len() == field_specs.len() {
                         return Some(Transformation {
                             generics,

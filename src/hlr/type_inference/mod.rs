@@ -549,7 +549,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Bool { .. } => {
                 graph.add_to_inferables_list(expr_id);
             }
-            HNodeData::IfThen { i: cond, .. } |
             HNodeData::IfThenElse { i: cond, .. } |
             HNodeData::While { w: cond, .. } => graph.mark_known(
                 *cond, 
@@ -736,7 +735,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             | HNodeData::AccessAlias { .. }
             | HNodeData::BinOp { .. } 
             | HNodeData::Transform { .. } 
-            | HNodeData::IfThen { .. }
             | HNodeData::IfThenElse { .. } 
             | HNodeData::While { .. }
             | HNodeData::Block { .. } 

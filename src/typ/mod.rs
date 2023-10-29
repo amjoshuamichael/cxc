@@ -401,7 +401,7 @@ impl IntType {
             32 => IntSize::_32,
             64 => IntSize::_64,
             128 => IntSize::_128,
-            _ => panic!("{size} an invalid int size"),
+            _ => panic!("{size} is an invalid int size"),
         };
 
         Self { size, signed }

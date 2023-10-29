@@ -49,7 +49,6 @@ impl ExprTree {
                 .collect(),
             BinOp { lhs: l, rhs: r, .. }
             | Set { lhs: l, rhs: r, .. }
-            | IfThen { i: l, t: r, .. }
             | While { w: l, d: r, .. }
             | Index {
                 object: l,

@@ -4,7 +4,7 @@ use crate::errors::TResult;
 
 use crate::{
     lex::lex,
-    parse::{self, GenericLabels, TypeDecl},
+    parse::{self, GenericLabels, TypeDecl, context::FuncParseData},
     CompData, Type, TypeName, Unit, VarName,
 };
 
@@ -25,7 +25,7 @@ pub trait XcReflect: 'static {
                 .expect("error in type decl")
                 .clone()
         } else {
-            let mut spec_lexer = lexer.split(VarName::None, GenericLabels::default());
+            let mut spec_lexer = lexer.split(FuncParseData::default(), GenericLabels::default());
 
             let name = if let Ok(possible_name) = spec_lexer.peek_tok()
                        && let Ok(name) = possible_name.clone().type_name()

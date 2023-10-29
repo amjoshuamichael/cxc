@@ -1,12 +1,10 @@
 Vec<T> = {
-    +raw: RawVec<T>,
+    +raw: {
+        +ptr: &T,
+        capacity: u64,
+    } ~ ? self.capacity != 0 { free(self.ptr) },
     +len: u64,
 }
-
-RawVec<T> = {
-    +ptr: &T,
-    +capacity: u64,
-} ~ ? self.capacity != 0 { free(self.ptr) }
 
 <T> &Vec<T>:. {
     push(val: T) {

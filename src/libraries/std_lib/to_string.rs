@@ -132,7 +132,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             };
             statements.push(push_closer_call);
 
-            let ret = Expr::Return(Box::new(output_var_expr.clone()));
+            let ret = Expr::Return(Some(Box::new(output_var_expr.clone())));
             statements.push(ret);
             Expr::Block(statements)
         },
@@ -200,7 +200,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             };
             statements.push(push_closer_call);
 
-            let ret = Expr::Return(output_var_expr);
+            let ret = Expr::Return(Some(output_var_expr));
             statements.push(ret);
             Expr::Block(statements)
         },

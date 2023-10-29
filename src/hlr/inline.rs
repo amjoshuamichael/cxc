@@ -79,7 +79,6 @@ pub fn inline_node(
         }
         BinOp { lhs: l, rhs: r, .. } | 
         Set { lhs: l, rhs: r, .. } | 
-        IfThen { i: l, t: r, .. } | 
         While { w: l, d: r, .. } | 
         Index { object: l, index: r, .. } => {
             replace_with_new_id(l, node, inline_info);

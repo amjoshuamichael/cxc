@@ -3,7 +3,7 @@ use cxc_derive::xc_opaque;
 use crate::{
     errors::CResultMany,
     lex::{indent_parens, lex, VarName},
-    parse::{self, FuncCode, TypeRelation},
+    parse::{self, FuncCode, TypeRelation, context::FuncParseData},
     typ::{ReturnStyle, IntSize, ABI},
     Unit, XcReflect, IntType, TypeEnum, StructType,
 };
@@ -223,7 +223,7 @@ impl Unit {
 
         let expr = {
             let mut lexed = lex(of);
-            let mut context = lexed.split(VarName::None, HashMap::new());
+            let mut context = lexed.split(FuncParseData::default(), HashMap::new());
 
             parse::parse_expr(&mut context).unwrap().wrap()
         };

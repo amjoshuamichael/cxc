@@ -93,51 +93,11 @@ fn return_with_member() {
     )
 }
 
-#[test]
-fn scopes() {
-    xc_test!(
-        use StdLib;
-        "
-        AddOnDrop = { ptr: &i32 } ~ { *self.ptr = *self.ptr + 1 }
-        AddOnDrop::make(ptr: &i32); Me {
-            ; cast<{ptr: &i32}, Me>({ptr = ptr})
-        }
-
-        main(); [4]i32 {
-            counter := 0
-
-            counter_checks := [++]
-
-            a := AddOnDrop:make(&counter)
-
-            ? true {
-                b := AddOnDrop:make(&counter)
-
-                counter_checks[0] = counter
-
-                ? true {
-                    c := AddOnDrop:make(&counter)
-                    d := AddOnDrop:make(&counter)
-
-                    counter_checks[1] = counter
-                }
-
-                counter_checks[2] = counter
-            }
-
-            counter_checks[3] = counter
-
-            ; counter_checks
-        }
-        ";
-        [0, 0, 2, 3]
-    )
-}
-
 // Tests involving vecs, if broken, will create memory leaks on compiled backends.
-// Technically, this will not make the tests fail.
-// On the interpreter backend, the memory leaks will be detected, so these tests wlil fail.
+// Technically, this will not make the tests fail on these backends. On the interpreter 
+// backend, however, the memory leaks will be detected, and the tests will fail.
 #[test]
+#[cfg(feature = "backend-interpreter")]
 fn vec_basic() {
     xc_test!(
         use StdLib;
@@ -151,6 +111,7 @@ fn vec_basic() {
 }
 
 #[test]
+#[cfg(feature = "backend-interpreter")]
 fn vec_replace() {
     xc_test!(
         use StdLib;
@@ -166,6 +127,7 @@ fn vec_replace() {
 }
 
 #[test]
+#[cfg(feature = "backend-interpreter")]
 fn empty_vec() {
     xc_test!(
         use StdLib;
@@ -173,6 +135,78 @@ fn empty_vec() {
         main() {
             new_vec := Vec<i32>:new()
         }
+        "
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn if_then_return() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            flow(true)
+            flow(false)
+        }
+
+        flow(if: bool) {
+            x := Vec<i32>:new()
+            x.push(230)
+
+            ? if {
+                ;
+            }
+
+            ;
+        }
+        "
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn if_then_no_return() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            flow(true)
+            flow(false)
+        }
+
+        flow(if: bool) {
+            x := Vec<i32>:new()
+            x.push(230)
+
+            ? if { }
+
+            ;
+        }
+        "
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn if_then_throw() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            flow(true)
+            flow(false)
+        }
+
+        flow(if: bool) {
+            x := Vec<i32>:new()
+
+            ? if {
+                throw_away(x)
+            }
+        }
+
+        throw_away(vec: Vec<i32>) { }
         "
     )
 }

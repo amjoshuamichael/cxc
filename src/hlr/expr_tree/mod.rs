@@ -43,6 +43,7 @@ impl Debug for ExprTree {
 }
 
 new_key_type! {
+    // TODO: rename to HNodeID or NodeID
     pub struct ExprID;
 }
 
@@ -78,7 +79,6 @@ impl ExprNode {
             UnarOp { op, hs, .. } => format!("{op:?} {hs:?}"),
             Transform { hs, .. } => format!("+{hs:?}"),
             BinOp { lhs, op, rhs, .. } => format!("{lhs:?} {op:?} {rhs:?}"),
-            IfThen { i, t, .. } => format!("? {i:?} {t:?}"),
             IfThenElse { i, t, e, .. } => format!("? {i:?} {t:?} : {e:?}"),
             While { w, d, .. } => format!("@ {w:?} {d:?}"),
             Block { stmts, .. } => format!("{{{stmts:?}}}"),
@@ -165,11 +165,6 @@ pub enum HNodeData {
         op: Opcode,
         rhs: ExprID,
     },
-    IfThen {
-        ret_type: Type,
-        i: ExprID,
-        t: ExprID,
-    },
     IfThenElse {
         ret_type: Type,
         i: ExprID,
@@ -209,7 +204,6 @@ impl HNodeData {
             | Return { ret_type, .. }
             | UnarOp { ret_type, .. }
             | Transform { ret_type, .. }
-            | IfThen { ret_type, .. }
             | IfThenElse { ret_type, .. }
             | Call { ret_type, .. }
             | IndirectCall { ret_type, .. }
@@ -237,7 +231,6 @@ impl HNodeData {
             | Return { ref mut ret_type, .. }
             | UnarOp { ref mut ret_type, .. }
             | Transform { ref mut ret_type, .. }
-            | IfThen { ref mut ret_type, .. }
             | IfThenElse { ref mut ret_type, .. }
             | Call { ref mut ret_type, .. }
             | IndirectCall { ref mut ret_type, .. }
@@ -438,16 +431,6 @@ impl HNodeData {
                 binop += &*op.to_string();
                 binop += " ";
                 binop + &*tree.get(*rhs).to_string(tree, variables)
-            },
-            IfThen { i, t, .. } => {
-                let mut it = RED.to_string() + "? ".into();
-                it += WHITE;
-                it += &*tree.get(*i).to_string(tree, variables);
-                it += " ";
-                it += WHITE;
-                it += &*tree.get(*t).to_string(tree, variables);
-                it += WHITE;
-                it
             },
             IfThenElse { i, t, e, .. } => {
                 let mut ite = RED.to_string() + "? ".into();

@@ -68,7 +68,7 @@ pub enum Expr {
     IfThenElse(Box<Expr>, Box<Expr>, Box<Expr>),
     While(Box<Expr>, Box<Expr>),
     Block(Vec<Expr>),
-    Return(Box<Expr>),
+    Return(Option<Box<Expr>>),
     Enclosed(Box<Expr>),
     With(Box<Expr>),
     WithAs(Box<Expr>, VarName),
@@ -88,7 +88,7 @@ impl Expr {
     pub fn wrap(self) -> Rc<Expr> {
         match self {
             Expr::Block(_) => Rc::new(self),
-            _ => Rc::new(Expr::Block(vec![Expr::Return(Box::new(self))])),
+            _ => Rc::new(Expr::Block(vec![Expr::Return(Some(Box::new(self)))])),
         }
     }
 

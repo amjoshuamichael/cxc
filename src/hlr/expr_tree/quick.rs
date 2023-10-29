@@ -92,7 +92,6 @@ impl NodeDataGen for HNodeData {
             Set { lhs: l, rhs: r } |
             BinOp { lhs: l, rhs: r, .. } | 
             Set { lhs: l, rhs: r, .. } | 
-            IfThen { i: l, t: r, .. } | 
             While { w: l, d: r, .. } | 
             Index { object: l, index: r, .. } => {
                 *l = hlr.tree.get(*l).add_to_expr_tree(hlr, spot);

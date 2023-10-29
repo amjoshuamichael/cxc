@@ -59,17 +59,20 @@ enum TypeOps {
     Destructor,
 }
 
-pub fn parse_type_spec(lexer: &mut FuncParseContext) -> Result<TypeSpec, ParseError> {
+pub fn parse_type_spec<T: Clone>(lexer: &mut ParseContext<T>) -> Result<TypeSpec, ParseError> {
     let mut temp_lexer = lexer.split(TypeName::Anonymous, lexer.generic_labels.clone());
     parse_type(&mut temp_lexer)
 }
 
-fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
+pub fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     let atom = parse_type_atom(lexer)?;
 
     if lexer.move_on(Tok::Tilde) {
-        let mut destructor_parser = 
-            lexer.split(VarName::None, lexer.generic_labels.clone());
+        let mut destructor_parser = lexer.split(FuncParseData {
+            name: VarName::None,
+            has_return: false,
+        }, lexer.generic_labels.clone());
+
         let destructor = if lexer.peek_tok()? == &Tok::LCurly {
             parse_block(&mut destructor_parser)?
         } else {
@@ -247,7 +250,7 @@ pub fn parse_type_decl(mut lexer: TypeParseContext) -> Result<TypeDecl, ParseErr
     let spec = parse_type(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
-    let name = lexer.name.clone();
+    let name = lexer.inner_data.clone();
 
     let type_decl = TypeDecl {
         name,

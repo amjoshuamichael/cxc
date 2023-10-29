@@ -132,25 +132,6 @@ fn build_block(node: HNodeData, tree: &ExprTree, mir: &mut MIR) {
 
                 mir.lines.push(MLine::Marker(pastwhile));
             },
-            HNodeData::IfThen { i, t, .. } => {
-                let i = build_as_operand(tree.get(i), tree, mir);
-
-                let then = mir.new_block_id();
-                let after = mir.new_block_id();
-
-                mir.lines.push(MLine::Branch { 
-                    if_: i, 
-                    yes: then,
-                    no: after,
-                });
-
-                mir.lines.push(MLine::Marker(then));
-
-                build_block(tree.get(t), tree, mir);
-                mir.lines.push(MLine::Goto(after));
-
-                mir.lines.push(MLine::Marker(after));
-            }
             HNodeData::IfThenElse { i, t, e, .. } => {
                 let i = build_as_operand(tree.get(i), tree, mir);
 

@@ -26,7 +26,7 @@ fn default_util() {
 fn clone_util() {
     let mut unit = Unit::new();
 
-    unit.push_script("Vec<T> = { u64, u64, u64}");
+    unit.push_script("Vec<T> = { u64, u64, u64 }");
     unit.add_reflect_type::<String>();
     unit.add_external_clone::<String>();
 
@@ -59,7 +59,8 @@ fn clone_util() {
 fn a_cool_string() -> String { String::from("coolman") }
 
 fn add_an_i32(args: Vec<Type>, _: &CompData) -> Type {
-    let TypeEnum::Struct(StructType { mut fields, .. }) = args[0].clone_type_enum() else { panic!() };
+    let TypeEnum::Struct(StructType { mut fields, .. }) = args[0].clone_type_enum() 
+        else { panic!() };
     fields.push(Field { 
         name: VarName::from("thei32"), 
         typ: Type::i(32), 

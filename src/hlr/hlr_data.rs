@@ -417,10 +417,11 @@ impl<'a> FuncRep<'a> {
             Expr::IfThen(i, t) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = HNodeData::IfThen {
+                let new_binop = HNodeData::IfThenElse {
                     ret_type: Type::void(),
                     i: self.add_expr(&**i, space),
                     t: self.add_expr(&**t, space),
+                    e: self.tree.insert(space, HNodeData::new_block()),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -686,19 +687,26 @@ impl<'a> FuncRep<'a> {
                 space
             },
             Expr::Return(to_return) => {
-                if let Expr::Label(label) = &**to_return {
-                    return self.tree.insert(parent, HNodeData::Goto(label.clone()));
+                if let Some(to_return) = to_return {
+                    if let Expr::Label(label) = &**to_return {
+                        return self.tree.insert(parent, HNodeData::Goto(label.clone()));
+                    }
+
+                    let space = self.tree.make_one_space(parent);
+
+                    let new_return = HNodeData::Return {
+                        ret_type: Type::unknown(),
+                        to_return: Some(self.add_expr(&**to_return, space)),
+                    };
+
+                    self.tree.replace(space, new_return);
+                    space
+                } else {
+                    self.tree.insert(parent, HNodeData::Return {
+                        ret_type: Type::void(),
+                        to_return: None,
+                    })
                 }
-
-                let space = self.tree.make_one_space(parent);
-
-                let new_return = HNodeData::Return {
-                    ret_type: Type::unknown(),
-                    to_return: Some(self.add_expr(&**to_return, space)),
-                };
-
-                self.tree.replace(space, new_return);
-                space
             },
             Expr::Array(expr_parts, initialize) => {
                 let space = self.tree.make_one_space(parent);
