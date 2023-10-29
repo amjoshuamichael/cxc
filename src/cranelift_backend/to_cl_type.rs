@@ -48,6 +48,8 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
         // When this is removed, Rust ABI returns of {f32, f32}, {f64, f32} {f32, f64}, 
         // and {f64, f64} no longer work.
         sig.call_conv = CallConv::Cold;
+    } else if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
+        sig.call_conv = CallConv::WindowsFastcall;
     }
 
     for (c, cl_type) in raw_return.into_iter().enumerate() {
