@@ -16,6 +16,7 @@ fn main() {
             .arg(format!(r#"{feature} ffi-assertions"#))
             .status()
             .expect("failed to start cargo test");
+
         if !status.success() {
             std::process::exit(status.code().unwrap_or(1));
         }

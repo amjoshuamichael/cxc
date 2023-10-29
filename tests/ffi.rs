@@ -204,7 +204,6 @@ macro_rules! ffi_test {
                     }
                 );
 
-                unit.add_lib(cxc::library::StdLib);
                 unit.push_script(&*format!("
                     main(); bool {{ 
                         x := external()
@@ -217,9 +216,7 @@ macro_rules! ffi_test {
 
             #[test]
             fn pass_c2r() {
-                fn external(x: $rtyp) -> bool { 
-                    x == $rval
-                }
+                fn external(x: $rtyp) -> bool { x == $rval }
 
                 let mut unit = cxc::Unit::new();
 
