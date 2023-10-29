@@ -70,16 +70,14 @@ impl Type {
                     ReturnStyle::SRet
                 } else if abi == ABI::Rust && fields.len() <= 2 {
                     ReturnStyle::Direct
-                } else if fields.iter().all(Type::is_float) && 
-                    fields.windows(2).all(|f| f[0] == f[1]) &&
-                    fields.len() <= 4 {
+                } else if size > 8 {
+                    ReturnStyle::SRet
+                } else if abi == ABI::Rust && fields.iter().all(Type::is_float) {
                     ReturnStyle::Direct
-                } else if size > 16 {
+                } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
                     ReturnStyle::SRet
                 } else if fields.len() == 1 {
                     ReturnStyle::Direct
-                } else if size > 16 {
-                    ReturnStyle::SRet
                 } else if size > 12 {
                     ReturnStyle::ThroughI64I64
                 } else if size > 8 {
@@ -138,22 +136,17 @@ impl Type {
                 } else {
                     match self.size() {
                         0 => ArgStyle::Direct,
-                        _ if fields.iter().all(Type::is_float) && 
-                            fields.windows(2).all(|f| f[0] == f[1]) &&
-                            fields.len() <= 4 => {
+                        _ if fields.len() == 1 && fields[0].is_float() => {
                             ArgStyle::Direct
+                        },
+                        s if s % 4 != 0 && fields.len() >= 3 => {
+                            ArgStyle::Pointer
                         },
                         1..=8 => {
                             let int_type = IntType::new(size.next_power_of_two(), false);
                             ArgStyle::Ints(int_type, None)
                         },
-                        9..=16 => {
-                            let first_int_type = IntType::new(64, false);
-                            let second_int_type = 
-                                IntType::new((size - 64).next_power_of_two(), false);
-                            ArgStyle::Ints(first_int_type, Some(second_int_type))
-                        },
-                        17.. => {
+                        9.. => {
                             ArgStyle::Pointer
                         },
                         _ => unreachable!()

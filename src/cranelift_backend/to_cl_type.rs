@@ -2,7 +2,9 @@ use cranelift::codegen::ir::ArgumentPurpose;
 use cranelift::prelude::AbiParam;
 use cranelift::prelude::Signature;
 use cranelift::prelude::Type as ClType;
+use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::types as cl_types;
+use crate::ABI;
 use crate::ArrayType;
 use crate::BoolType;
 use crate::FuncType;
@@ -30,22 +32,25 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
     }
 
     for typ in &typ.args {
-        if typ.arg_style(abi) == ArgStyle::Pointer 
-            && cfg!(not(any(target_arch = "arm", target_arch = "aarch64"))) {
-            sig.params.push(AbiParam::special(
-                cl_types::I64, 
-                ArgumentPurpose::StructArgument(typ.size().next_multiple_of(8) as u32),
-            ))
-        } else {
-            for cl_type in typ.raw_arg_type(abi).to_cl_type() {
-                sig.params.push(AbiParam::new(cl_type));
-            }
+        for cl_type in typ.raw_arg_type(abi).to_cl_type() {
+            sig.params.push(AbiParam::new(cl_type));
         }
     }
 
-    let raw_return = typ.ret.raw_return_type(abi);
+    let raw_return = typ.ret.raw_return_type(abi).to_cl_type();
 
-    for cl_type in raw_return.to_cl_type() {
+    if (abi == ABI::Rust || abi == ABI::None) && 
+        typ.ret.return_style(ABI::Rust) == ReturnStyle::Direct &&
+        typ.ret.primitive_fields_iter().next().is_some() &&
+        typ.ret.primitive_fields_iter().all(|typ| typ.is_float()) {
+        // I don't know why this works, but I tried it and it did.
+        //
+        // When this is removed, Rust ABI returns of {f32, f32}, {f64, f32} {f32, f64}, 
+        // and {f64, f64} no longer work.
+        sig.call_conv = CallConv::Cold;
+    }
+
+    for (c, cl_type) in raw_return.into_iter().enumerate() {
         sig.returns.push(AbiParam::new(cl_type));
     }
 }
