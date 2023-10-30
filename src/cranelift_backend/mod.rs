@@ -150,6 +150,7 @@ impl IsBackend for CraneliftBackend {
     }
 
     fn end_compilation_round(&mut self) {
+        //dbg!(&self.module.declarations());
         self.module.finalize_definitions().unwrap();
         self.to_recompile.clear();
 

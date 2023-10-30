@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use serial_test::serial;
 use crate::test_utils::Numbers5;
 mod test_utils;
 
@@ -9,12 +8,10 @@ use cxc::{Unit, library::StdLib, Type};
 static mut GNUM: i32 = 90;
 
 #[test]
-#[serial]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
 fn basic_global() {
     let mut unit = Unit::new();
 
-    unsafe { GNUM = 50 };
     unit.add_global("x".into(), unsafe { &mut GNUM as *mut _ });
 
     unit.push_script(
@@ -31,14 +28,14 @@ fn basic_global() {
     assert_eq!(unsafe { GNUM }, 50);
 }
 
+static mut GNUMR: i32 = 90;
+
 #[test]
-#[serial]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
 fn read_basic_global() {
     let mut unit = Unit::new();
 
-    unsafe { GNUM = 90 };
-    unit.add_global("x".into(), unsafe { &mut GNUM as *mut _ });
+    unit.add_global("x".into(), unsafe { &mut GNUMR as *mut _ });
 
     unit.push_script(
         r#"

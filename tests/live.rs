@@ -253,7 +253,24 @@ fn conversion_dependents() {
 
 #[test]
 #[serial]
-fn change_type() {
+fn change_type_2i32() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();
+    let fifty_four = unit.get_fn("fifty_four").unwrap().clone();
+
+    assert_eq!(fifty_four.typ().args, Vec::new());
+    assert_eq!(fifty_four.typ().ret, Type::i(32));
+    assert_eq!(fifty_four.downcast::<(), i32>()(), 54);
+
+    unit.push_script(r#"fifty_four(); {i32, i32} { ; {32, 33} }"#).unwrap();
+    assert_eq!(fifty_four.typ().args, Vec::new());
+    assert_eq!(fifty_four.typ().ret, Type::new_tuple(vec![Type::i(32), Type::i(32)]));
+    assert_eq!(fifty_four.downcast::<(), (i32, i32)>()(), (32, 33));
+}
+
+#[test]
+#[serial]
+fn change_type_f32() {
     let mut unit = Unit::new();
     unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();
     let fifty_four = unit.get_fn("fifty_four").unwrap().clone();
@@ -264,6 +281,23 @@ fn change_type() {
 
     unit.push_script(r#"fifty_four(); f32 { ; 54.0 }"#).unwrap();
     assert_eq!(fifty_four.typ().args, Vec::new());
-    assert_eq!(fifty_four.typ().ret, Type::f32());
+    assert_eq!(fifty_four.typ().ret, Type::f(32));
     assert_eq!(fifty_four.downcast::<(), f32>()(), 54.0);
+}
+
+#[test]
+#[serial]
+fn change_type_2f32() {
+    let mut unit = Unit::new();
+    unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();
+    let fifty_four = unit.get_fn("fifty_four").unwrap().clone();
+
+    assert_eq!(fifty_four.typ().args, Vec::new());
+    assert_eq!(fifty_four.typ().ret, Type::i(32));
+    assert_eq!(fifty_four.downcast::<(), i32>()(), 54);
+
+    unit.push_script(r#"fifty_four(); {f32, f32} { ; {54.0, 72.7} }"#).unwrap();
+    assert_eq!(fifty_four.typ().args, Vec::new());
+    assert_eq!(fifty_four.typ().ret, Type::new_tuple(vec![Type::f(32), Type::f(32)]));
+    assert_eq!(fifty_four.downcast::<(), (f32, f32)>()(), (54.0, 72.7));
 }
