@@ -210,3 +210,53 @@ fn if_then_throw() {
         "
     )
 }
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn drop_while() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            x := Vec<i32>:new()
+            
+            sum := 0
+
+            @ sum < 4 {
+                x.push(30)
+                sum = sum + 1
+            }
+        }
+        "
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn drop_nested_while() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); i32 {
+            x := Vec<i32>:new()
+            x.push(0)
+            x.push(0)
+            x.push(0)
+            y := Vec<i32>:new()
+            
+            sum := 0
+
+            for x {
+                for y {
+                    sum = sum + 1
+                }
+
+                y.push(23)
+            }
+
+            ; sum
+        }
+        ";
+        3
+    )
+}

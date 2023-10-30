@@ -585,7 +585,9 @@ fn node_after(id: ExprID, hlr: &FuncRep) -> NodeAfter {
                 panic!()
             }
         },
-        HNodeData::While { w: l, d: r } => todo!(),
+        HNodeData::While { w: l, d: r } => {
+            return NodeAfter::Branch(parent)
+        },
         _ => parent,
     };
 

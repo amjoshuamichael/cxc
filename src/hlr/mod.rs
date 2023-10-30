@@ -79,12 +79,6 @@ pub fn hlr(
     add_void_return_if_ret_type_is_void(&mut output)?;
     remove_redundant_derefs(&mut output);
     add_implicit_drops(&mut output);
-    if info.name != VarName::None {
-        println!("{}", &output.to_string());
-        for (var_id, info) in &output.variables {
-            println!("{}: {:?} || {:?} {:?}", info.name, info.typ, var_id, info.arg_index);
-        }
-    }
     large_returns(&mut output);
     large_args(&mut output);
     large_set_to_memcpy(&mut output);

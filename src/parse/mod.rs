@@ -321,7 +321,7 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         _ if lexer.move_on(Tok::Question) => parse_if(lexer),
         _ if lexer.move_on(Tok::For) => parse_for(lexer),
         _ if lexer.move_on(Tok::Semicolon) => {
-            if lexer.inner_data.has_return {
+            if lexer.inner_data.has_return || matches!(lexer.peek_tok()?, Tok::Label(_)) {
                 Ok(Expr::Return(Some(Box::new(parse_expr(lexer)?))))
             } else {
                 Ok(Expr::Return(None))

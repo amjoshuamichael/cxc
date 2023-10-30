@@ -533,6 +533,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 for ab in parts.windows(2) {
                     graph.join(ab[0], ab[1]);
                 }
+                graph.add_to_inferables_list(expr_id);
             },
             HNodeData::Set { lhs, rhs, .. } => {
                 graph.join(*lhs, *rhs);
