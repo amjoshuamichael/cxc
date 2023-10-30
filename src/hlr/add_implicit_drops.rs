@@ -56,7 +56,8 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
                 let HNodeData::Block { stmts, .. } = hlr.tree.get_ref(hlr.tree.root)
                     else { unreachable!() };
 
-                let next_use = next_use_of_var(var_id, hlr.tree.root, hlr, &all_ids)
+                let first_exec = first_exec_in(hlr.tree.root, hlr);
+                let next_use = next_use_of_var(var_id, first_exec, hlr, false)
                     .unwrap();
                 let dest_info = DestinationInfo {
                     path: resource.path,
@@ -64,7 +65,7 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
                     resource: Rc::new(resource.origin),
                 };
                 let dests = 
-                    next_destinations_of_var(var_id, next_use, hlr, &all_ids, dest_info);
+                    next_destinations_of_var(var_id, next_use, hlr, dest_info);
 
                 for dest in dests {
                     prospective_destinations.insert(dest);
@@ -104,10 +105,12 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
 
         match destination.kind {
             InVar(var_id, expr_id) => {
-                let next_use = next_use_of_var(var_id, expr_id, hlr, &all_ids)
+                let (NodeAfter::Some(next) | NodeAfter::Branch(next)) = 
+                    node_after(expr_id, hlr) else { panic!() };
+                let next_use = next_use_of_var(var_id, next, hlr, false)
                     .unwrap();
                 let next_dests = 
-                    next_destinations_of_var(var_id, next_use, hlr, &all_ids, destination.info);
+                    next_destinations_of_var(var_id, next_use, hlr, destination.info);
                 for dest in next_dests {
                     prospective_destinations.insert(dest);
                 }
@@ -224,6 +227,7 @@ enum ValueDestinationKind {
     GoesIntoPointer,
 }
 
+#[derive(Debug)]
 enum NextUseOfVar {
     Some(ExprID),
     Dies(ExprID),
@@ -234,7 +238,6 @@ fn next_destinations_of_var(
     var_id: VarID, 
     next_use: NextUseOfVar, 
     hlr: &FuncRep,
-    all_ids: &Vec<ExprID>,
     info: DestinationInfo,
 ) -> Vec<ValueDestination> {
     match next_use {
@@ -250,13 +253,13 @@ fn next_destinations_of_var(
         },
         NextUseOfVar::IfThenElse(if_id, then_id, else_id) => {
             let mut then_dests = 
-                next_destinations_of_var(var_id, *then_id, hlr, all_ids, info.clone());
+                next_destinations_of_var(var_id, *then_id, hlr, info.clone());
             for dest in &mut then_dests {
                 dest.info.conditions.push(ValueCondition::True(if_id));
             }
 
             let mut else_dests = 
-                next_destinations_of_var(var_id, *else_id, hlr, all_ids, info);
+                next_destinations_of_var(var_id, *else_id, hlr, info);
             for dest in &mut else_dests {
                 dest.info.conditions.push(ValueCondition::False(if_id));
             }
@@ -268,42 +271,42 @@ fn next_destinations_of_var(
 
 fn next_use_of_var(
     value: VarID, 
-    start_search_at: ExprID, 
+    mut search: ExprID, 
     hlr: &FuncRep,
-    all_ids: &Vec<ExprID>,
+    skip_returns: bool,
 ) -> Result<NextUseOfVar, ()> {
-    let mut next = node_after(start_search_at, hlr);
-
     loop {
-        next = node_after(start_search_at, hlr);
-
-        match hlr.tree.get_ref(next) {
+        match hlr.tree.get_ref(search) {
             HNodeData::IfThenElse { i, t, e, .. } => {
-                let l = next_use_of_var(value, *t, hlr, all_ids)?;
-                let r = next_use_of_var(value, *e, hlr, all_ids)?;
+                let l = next_use_of_var(value, first_exec_in(*t, hlr), hlr, false)?;
+                let r = next_use_of_var(value, first_exec_in(*e, hlr), hlr, false)?;
 
                 return Ok(NextUseOfVar::IfThenElse(*i, Box::new(l), Box::new(r)));
             },
-            HNodeData::Return { to_return: Some(to_return), .. } => {
-                let to_return_ids = hlr.tree.ids_of(next);
+            HNodeData::Return { to_return: Some(to_return), .. } if !skip_returns => {
+                let to_return_ids = hlr.tree.ids_of(search);
 
-                if let Ok(use_in_var) = next_use_of_var(value, next, hlr, &to_return_ids) {
+                if let Ok(use_in_var) = next_use_of_var(value, *to_return, hlr, true) {
                     return Ok(use_in_var);
                 } else {
-                    return Ok(NextUseOfVar::Dies(next));
+                    return Ok(NextUseOfVar::Dies(search));
                 }
             }
             HNodeData::Return { to_return: None, .. } => {
-                return Ok(NextUseOfVar::Dies(next));
+                return Ok(NextUseOfVar::Dies(search));
             }
             HNodeData::Ident { var_id, .. } if *var_id == value => {
-                return Ok(NextUseOfVar::Some(next));
+                return Ok(NextUseOfVar::Some(search));
             }
             _ => {},
         }
-    }
 
-    Err(())
+        search = match node_after(search, hlr) {
+            NodeAfter::Some(next) | NodeAfter::Branch(next) => next,
+            NodeAfter::Finished => return Err(()),
+            NodeAfter::Returns(return_id) => return Ok(NextUseOfVar::Dies(search)),
+        };
+    }
 }
 
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
@@ -501,33 +504,56 @@ pub fn destructor_paths(typ: &Type) -> Vec<DestructorPath> {
     }
 }
 
-fn node_after(id: ExprID, hlr: &FuncRep) -> ExprID {
-    fn first_exec_in(id: ExprID, hlr: &FuncRep) -> ExprID {
-        match hlr.tree.get_ref(hlr.tree.parent(id)) {
-            HNodeData::StructLit { fields, .. } => first_exec_in(fields[0].1, hlr),
-            HNodeData::ArrayLit { parts: many, .. } |
-            HNodeData::Call { a: many, .. } |
-            HNodeData::IndirectCall { a: many, .. } |
-            HNodeData::Block { stmts: many, .. } => first_exec_in(many[0], hlr),
-            HNodeData::Set { lhs: x, .. } |
-            HNodeData::Member { object: x, .. } |
-            HNodeData::Index { object: x, .. } |
-            HNodeData::UnarOp { hs: x, .. } |
-            HNodeData::BinOp { lhs: x, .. } |
-            HNodeData::IfThenElse { i: x, .. } |
-            HNodeData::While { w: x, .. } |
-            HNodeData::Return { to_return: Some(x), .. } => first_exec_in(*x, hlr),
-            _ => id,
-        }
+fn first_exec_in(id: ExprID, hlr: &FuncRep) -> ExprID {
+    match hlr.tree.get_ref(id) {
+        HNodeData::StructLit { fields, .. } => first_exec_in(fields[0].1, hlr),
+        HNodeData::ArrayLit { parts: many, .. } |
+        HNodeData::Call { a: many, .. } |
+        HNodeData::IndirectCall { a: many, .. } |
+        HNodeData::Block { stmts: many, .. } => {
+            if many.len() == 0 {
+                id
+            } else {
+                first_exec_in(many[0], hlr)
+            }
+        },
+        HNodeData::Set { lhs: x, .. } |
+        HNodeData::Member { object: x, .. } |
+        HNodeData::Index { object: x, .. } |
+        HNodeData::UnarOp { hs: x, .. } |
+        HNodeData::BinOp { lhs: x, .. } |
+        HNodeData::IfThenElse { i: x, .. } |
+        HNodeData::While { w: x, .. } |
+        HNodeData::Return { to_return: Some(x), .. } => first_exec_in(*x, hlr),
+        _ => id,
+    }
+}
+
+#[derive(Debug)]
+enum NodeAfter {
+    Some(ExprID),
+    Finished,
+    Returns(ExprID),
+    Branch(ExprID),
+}
+
+fn node_after(id: ExprID, hlr: &FuncRep) -> NodeAfter {
+    if id == hlr.tree.root {
+        return NodeAfter::Finished; 
+    }
+
+    if matches!(hlr.tree.get_ref(id), HNodeData::Return { .. }) {
+        return NodeAfter::Returns(id);
     }
 
     let parent = hlr.tree.parent(id);
-    match hlr.tree.get_ref(parent) {
+
+    let some = match hlr.tree.get_ref(parent) {
         HNodeData::StructLit { fields, .. } => {
             if let Some(next) = fields.iter().skip_while(|fid| fid.1 != id).skip(1).next() {
                 first_exec_in(next.1, hlr)
             } else {
-                id
+                return node_after(parent, hlr);
             }
         },
         HNodeData::ArrayLit { parts: many, .. } |
@@ -537,7 +563,7 @@ fn node_after(id: ExprID, hlr: &FuncRep) -> ExprID {
             if let Some(next) = many.iter().skip_while(|fid| **fid != id).skip(1).next() {
                 first_exec_in(*next, hlr)
             } else {
-                id
+                return node_after(parent, hlr);
             }
         }
         HNodeData::Goto(_) => todo!(),
@@ -547,19 +573,21 @@ fn node_after(id: ExprID, hlr: &FuncRep) -> ExprID {
             if *l == id {
                 *r
             } else {
-                parent
+                return node_after(parent, hlr);
             }
         },
         HNodeData::IfThenElse { i, t, e, .. } => {
-            if *t == id {
-                node_after(*t, hlr)
-            } else if *e == id {
-                node_after(*e, hlr)
+            if *t == id || *e == id {
+                return node_after(parent, hlr);
+            } else if *i == id {
+                return NodeAfter::Branch(parent)
             } else {
                 panic!()
             }
         },
         HNodeData::While { w: l, d: r } => todo!(),
-        _ => id,
-    }
+        _ => parent,
+    };
+
+    NodeAfter::Some(some)
 }

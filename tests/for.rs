@@ -98,3 +98,26 @@ fn break_inner_with_as() {
         18
     );
 }
+
+#[test]
+fn hehe() {
+    xc_test!(
+    use StdLib;
+    "
+    main() {
+        arr := [0, 1, 2, 3, 4] 
+        vec := Vec<i32>:new() 
+        vec.push(1) 
+        yuh := 1
+        for arr {
+            for vec {
+                print(yuh)
+            }
+            vec.push(1)
+            yuh = yuh + 1
+        }
+    }
+    "
+    );
+}
+

@@ -22,7 +22,6 @@ pub fn insert_destructors(hlr: &mut FuncRep) -> CResultMany<()> {
                 inline_arguments.insert(ArgIndex::Some(0), *hs);
                 inline(destructor, hlr, inline_arguments, destructor_id);
                 *destructor_data = hlr.tree.get(destructor_id);
-                dbg!();
             } else {
                 hlr.tree.remove_node(destructor_id);
             }

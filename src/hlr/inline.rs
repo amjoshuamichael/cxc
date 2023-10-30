@@ -21,7 +21,6 @@ pub fn inline(
 
     let new_data = inline_node(new_tree.tree.root, put_into, &mut inline_info);
     inline_info.base_tree.tree.replace(put_into, new_data);
-    println!("{}", base_tree.to_string());
 }
 
 // these are packed into a struct in order to make the recursion cleaner
