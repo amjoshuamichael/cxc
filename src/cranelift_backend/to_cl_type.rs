@@ -24,7 +24,6 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
 
     let abi = typ.abi;
 
-    dbg!(&typ.ret);
     let return_style = typ.ret.return_style(abi);
 
     if return_style == ReturnStyle::SRet {
@@ -33,9 +32,6 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
     }
 
     for typ in &typ.args {
-        dbg!(cfg!(not(any(target_arch = "arm", target_arch = "aarch64"))));
-        dbg!(&typ);
-        dbg!(typ.arg_style(abi));
         if typ.arg_style(abi) == ArgStyle::Pointer 
             && cfg!(not(any(target_arch = "arm", target_arch = "aarch64"))) {
             sig.params.push(AbiParam::special(

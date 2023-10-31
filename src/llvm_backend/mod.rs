@@ -75,29 +75,6 @@ pub fn add_nescessary_attributes_to_func(
         );
         function.add_attribute(AttributeLoc::Param(0), sret_attribute);
     }
-
-    if crate::ARCH_ARM {
-        for (a, arg) in func_type.args.iter().enumerate() {
-            if arg.arg_style(ABI::C) == ArgStyle::Pointer {
-                let byval_id = Attribute::get_named_enum_kind_id("byval");
-                let byval_attribute = context.create_type_attribute(
-                    byval_id, 
-                    arg.to_any_type(context)
-                );
-
-                let arg_pos_offset = if func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
-                    1
-                } else {
-                    0 
-                };
-
-                function.add_attribute(
-                    AttributeLoc::Param(a as u32 + arg_pos_offset), 
-                    byval_attribute
-                );
-            }
-        }
-    }
 }
 
 pub fn add_sret_attribute_to_call_site(

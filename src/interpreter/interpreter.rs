@@ -370,10 +370,6 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
             let pointer = iaddr(addr, interpreter);
             let val = load_addr_with_len(pointer, interpreter, load_size);
 
-            if let Ok(val) = TryInto::<[u8; 8]>::try_into(&*val) {
-                unsafe { std::mem::transmute::<_, *const u8>(val) };
-            }
-
             val
         }
         MExpr::BinOp { left_type, op, l, r } => {

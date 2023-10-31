@@ -1,4 +1,5 @@
 use super::hlr_data::ArgIndex;
+use super::hlr_data::VarID;
 use super::hlr_data::VariableInfo;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
@@ -14,17 +15,17 @@ pub fn large_returns(hlr: &mut FuncRep) {
 #[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style(ABI::C) {
-        ReturnStyle::ThroughI32
-        | ReturnStyle::ThroughI64
-        | ReturnStyle::ThroughF64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+        ReturnStyle::ThroughI32 |
+        ReturnStyle::ThroughI64 |
+        ReturnStyle::ThroughF64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
             return_by_small_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         },
-        ReturnStyle::ThroughF32F32
-        | ReturnStyle::ThroughI32I32
-        | ReturnStyle::ThroughI64I32
-        | ReturnStyle::ThroughI64I64 
-        | ReturnStyle::ThroughF64F32
-        | ReturnStyle::ThroughF64F64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+        ReturnStyle::ThroughI32I32 |
+        ReturnStyle::ThroughI64I32 |
+        ReturnStyle::ThroughI64I64 |
+        ReturnStyle::ThroughF32F32 |
+        ReturnStyle::ThroughF64F32 |
+        ReturnStyle::ThroughF64F64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
             return_by_big_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         }
         ReturnStyle::SRet => return_by_pointer(hlr),

@@ -292,10 +292,10 @@ impl Unit {
                         let out: [u8; 8] = new_func().to_ne_bytes();
                         Value::new_from_arr(ret_type.clone(), out)
                     },
-                    ReturnStyle::ThroughI32I32
-                    | ReturnStyle::ThroughF32F32
-                    | ReturnStyle::ThroughI64I32
-                    | ReturnStyle::ThroughI64I64 => {
+                    ReturnStyle::ThroughI32I32 | 
+                    ReturnStyle::ThroughI64I32 | 
+                    ReturnStyle::ThroughI64I64 |
+                    ReturnStyle::ThroughF32F32 => {
                         let new_func = func_addr.downcast::<(), (i64, i64)>();
                         let out: [u8; 16] = transmute(new_func());
                         Value::new_from_arr(ret_type.clone(), out)
@@ -305,7 +305,7 @@ impl Unit {
                         let out: [u8; 8] = transmute(new_func());
                         Value::new_from_arr(ret_type.clone(), out)
                     },
-                    ReturnStyle::ThroughF64F64 | ReturnStyle::ThroughF64F32 => {
+                    ReturnStyle::ThroughF64F32 | ReturnStyle::ThroughF64F64 => {
                         let new_func = func_addr.downcast::<(), (f64, f64)>();
                         let out: [u8; 16] = transmute(new_func());
                         Value::new_from_arr(ret_type.clone(), out)

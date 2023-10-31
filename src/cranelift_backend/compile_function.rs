@@ -637,7 +637,7 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
         MExpr::Ref { on } => Some(vec![get_addr(fcs, on, 0)]),
         MExpr::Deref { to, on } => {
             let ptr = one(load_memloc(fcs, on));
-            let typ = to.to_cl_type()[0];
+            let typ = one(to.to_cl_type());
             Some(vec![fcs.builder.ins().load(typ, MemFlags::new(), ptr, 0)])
         },
     }
