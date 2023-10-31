@@ -391,20 +391,22 @@ impl IntSize {
             IntSize::_128 => 128,
         }
     }
-}
 
-impl IntType {
-    pub fn new(size: u32, signed: bool) -> Self {
-        let size = match size {
+    pub fn from_num(size: usize) -> Self {
+        match size {
             8 => IntSize::_8,
             16 => IntSize::_16,
             32 => IntSize::_32,
             64 => IntSize::_64,
             128 => IntSize::_128,
             _ => panic!("{size} is an invalid int size"),
-        };
+        }
+    }
+}
 
-        Self { size, signed }
+impl IntType {
+    pub fn new(size: u32, signed: bool) -> Self {
+        Self { size: IntSize::from_num(size as usize), signed }
     }
 }
 
@@ -415,8 +417,8 @@ pub enum FloatType {
     F64,
 }
 
-impl From<u32> for FloatType {
-    fn from(size: u32) -> FloatType {
+impl From<usize> for FloatType {
+    fn from(size: usize) -> FloatType {
         match size {
             16 => FloatType::F16,
             32 => FloatType::F32,

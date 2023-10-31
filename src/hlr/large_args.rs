@@ -23,13 +23,13 @@ fn handle_own_args(hlr: &mut FuncRep) {
 
         match info.typ.arg_style(ABI::C) {
             ArgStyle::Direct => {},
-            ArgStyle::Ints(..) => arg_by_ints(hlr, id),
+            ArgStyle::Ints(..) | ArgStyle::Floats(..) => arg_by_ints_or_floats(hlr, id),
             ArgStyle::Pointer => arg_by_pointer(hlr, id),
         }
     }
 }
 
-fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
+fn arg_by_ints_or_floats(hlr: &mut FuncRep, og_arg: VarID) {
     let arg_load_arg_type = hlr.variables[og_arg].typ.clone();
     let new_arg_load_var = hlr.add_variable(&arg_load_arg_type);
     let set_arg_load_var = hlr.insert_quick(

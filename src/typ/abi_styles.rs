@@ -3,7 +3,7 @@ use crate::{TypeEnum, Type, typ::fields_iter::PrimitiveFieldsIter, XcReflect};
 
 use crate::{self as cxc, IntType, FloatType};
 
-use super::ABI;
+use super::{ABI, IntSize};
 
 #[derive(PartialEq, Eq, Debug, XcReflect)]
 pub enum ReturnStyle {
@@ -22,7 +22,8 @@ pub enum ReturnStyle {
 #[derive(PartialEq, Eq, Debug, XcReflect)]
 pub enum ArgStyle {
     Direct,
-    Ints(IntType, Option<IntType>),
+    Ints(IntSize, Option<IntSize>),
+    Floats(FloatType, Option<FloatType>),
     Pointer,
 }
 
@@ -46,10 +47,15 @@ pub fn realize_arg_style(arg_style: ArgStyle, on: &Type) -> Type {
     match arg_style {
         ArgStyle::Direct => on.clone(),
         ArgStyle::Pointer => on.get_ref(),
-        ArgStyle::Ints(l, None) => Type::new(TypeEnum::Int(l)),
+        ArgStyle::Ints(l, None) => Type::new(TypeEnum::Int(IntType { size: l, signed: false })),
+        ArgStyle::Floats(l, None) => Type::new(TypeEnum::Float(l)),
         ArgStyle::Ints(l, Some(r)) => Type::new_tuple(vec![
-            Type::new(TypeEnum::Int(l)),
-            Type::new(TypeEnum::Int(r)),
+            Type::new(TypeEnum::Int(IntType { size: l, signed: false })),
+            Type::new(TypeEnum::Int(IntType { size: r, signed: false })),
+        ]),
+        ArgStyle::Floats(l, Some(r)) => Type::new_tuple(vec![
+            Type::new(TypeEnum::Float(l)),
+            Type::new(TypeEnum::Float(r)),
         ]),
     }
 }
@@ -146,9 +152,8 @@ impl Type {
                             match size {
                                 0 => ArgStyle::Direct,
                                 1..=8 => {
-                                    let int_size = (size * 8).next_power_of_two() as u32;
-                                    let int_type = IntType::new(int_size, false);
-                                    ArgStyle::Ints(int_type, None)
+                                    let int_size = (size * 8).next_power_of_two();
+                                    ArgStyle::Ints(IntSize::from_num(int_size), None)
                                 },
                                 9.. => {
                                     ArgStyle::Pointer
@@ -159,27 +164,42 @@ impl Type {
                         _ => unreachable!()
                     }
                 } else {
+                    let all_floats = fields.iter().all(Type::is_float);
+
                     match self.size() {
                         _ if fields.len() == 0 || fields.len() == 1 => ArgStyle::Direct,
                         s if crate::ARCH_x86 && cfg!(windows) && s % 4 != 0 && fields.len() >= 3 => {
                             ArgStyle::Pointer
                         },
                         _ if crate::ARCH_ARM && 
-                            fields.iter().all(Type::is_float) && 
+                            all_floats && 
                             fields.windows(2).all(|f| f[0] == f[1]) &&
                             fields.len() <= 4 => {
                             ArgStyle::Direct
                         },
                         1..=8 => {
-                            let int_size = (size * 8).next_power_of_two() as u32;
-                            let int_type = IntType::new(int_size, false);
-                            ArgStyle::Ints(int_type, None)
+                            let first_size = (size * 8).next_power_of_two();
+
+                            if all_floats && crate::ARCH_x86 && cfg!(unix) {
+                                ArgStyle::Floats(FloatType::from(first_size), None)
+                            } else {
+                                ArgStyle::Ints(IntSize::from_num(first_size), None)
+                            }
                         },
-                        9..=16 /*if crate::ARCH_ARM*/ => {
-                            let first_int_type = IntType::new(64, false);
-                            let second_int_size = (size * 8 - 64).next_power_of_two() as u32;
-                            let second_int_type = IntType::new(second_int_size, false);
-                            ArgStyle::Ints(first_int_type, Some(second_int_type))
+                        9..=16 => {
+                            let second_size = (size * 8 - 64).next_power_of_two();
+
+                            if all_floats && crate::ARCH_x86 && cfg!(unix) {
+                                ArgStyle::Floats(
+                                    FloatType::F64, 
+                                    Some(FloatType::from(second_size))
+                                )
+                            } else {
+                                ArgStyle::Ints(
+                                    IntSize::_64, 
+                                    Some(IntSize::from_num(second_size))
+                                )
+                            }
                         },
                         _ => {
                             ArgStyle::Pointer
