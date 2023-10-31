@@ -10,10 +10,12 @@ pub enum ReturnStyle {
     Direct,
     ThroughI32,
     ThroughI64,
-    ThroughDouble,
+    ThroughF64,
+    ThroughF64F64,
     ThroughI32I32,
     ThroughF32F32,
     ThroughI64I32,
+    ThroughF64F32,
     ThroughI64I64,
     SRet,
     Void,
@@ -31,7 +33,9 @@ pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
     match return_style {
         ReturnStyle::ThroughI32 => Type::i(32),
         ReturnStyle::ThroughI64 => Type::i(64),
-        ReturnStyle::ThroughDouble => Type::f(64),
+        ReturnStyle::ThroughF64 => Type::f(64),
+        ReturnStyle::ThroughF64F64 => Type::new_tuple(vec![Type::f(64), Type::f(64)]),
+        ReturnStyle::ThroughF64F32 => Type::new_tuple(vec![Type::f(64), Type::f(32)]),
         ReturnStyle::ThroughI32I32 => Type::new_tuple(vec![Type::i(32); 2]),
         ReturnStyle::ThroughF32F32 => Type::new_tuple(vec![Type::f(32); 2]),
         ReturnStyle::ThroughI64I32 => 
@@ -64,14 +68,16 @@ impl Type {
     pub fn return_style(&self, abi: ABI) -> ReturnStyle {
         use TypeEnum::*;
 
-        // only take five to avoid spending time 
-        // taking huge chunks of large arrays
-        let fields = self.primitive_fields_iter().take(5).collect::<Vec<_>>();
-
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) => {
+                // only take five to avoid spending time 
+                // taking huge chunks of large arrays
+                let fields = self.primitive_fields_iter().take(5).collect::<Vec<_>>();
+
                 let size = self.size();
+
+                let all_floats = fields.iter().all(Type::is_float);
 
                 if abi == ABI::Rust {
                     if size > 8 && fields.len() >= 3 {
@@ -88,14 +94,14 @@ impl Type {
                     return ReturnStyle::Direct;
                 }
 
-                const MAX_RET_SIZE: usize = if crate::ARCH_ARM { 16 } else { 16 };
+                const MAX_RET_SIZE: usize = if cfg!(unix) { 16 } else { 8 };
 
                 if size > MAX_RET_SIZE {
                     return ReturnStyle::SRet;
                 }
 
                 if crate::ARCH_x86 && cfg!(windows) {
-                    if fields.iter().all(Type::is_float) {
+                    if all_floats {
                         return ReturnStyle::Direct;
                     } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
                         return ReturnStyle::SRet;
@@ -104,18 +110,20 @@ impl Type {
                  
                 if fields.len() == 1 {
                     ReturnStyle::Direct
-                } else if size > 12 {
-                    ReturnStyle::ThroughI64I64
-                } else if size > 8 {
-                    ReturnStyle::ThroughI64I32
-                } else if size > 4 {
-                    if dbg!(fields.iter().all(Type::is_float) && crate::ARCH_x86 && cfg!(unix)) {
-                        ReturnStyle::ThroughDouble
-                    } else {
-                        ReturnStyle::ThroughI64
+                } else if all_floats && crate::ARCH_x86 && cfg!(unix)  {
+                    match size {
+                        0..=4 => ReturnStyle::ThroughI32,
+                        4..=8 => ReturnStyle::ThroughF64,
+                        8..=12 => ReturnStyle::ThroughF64F32,
+                        _ => ReturnStyle::ThroughF64F64,
                     }
                 } else {
-                    ReturnStyle::ThroughI32
+                    match size {
+                        0..=4 => ReturnStyle::ThroughI32,
+                        4..=8 => ReturnStyle::ThroughI64,
+                        8..=12 => ReturnStyle::ThroughI64I32,
+                        _ => ReturnStyle::ThroughI64I64,
+                    }
                 }
             },
             Void => ReturnStyle::Void,
@@ -171,8 +179,7 @@ impl Type {
                         s if crate::ARCH_x86 && cfg!(windows) && s % 4 != 0 && fields.len() >= 3 => {
                             ArgStyle::Pointer
                         },
-                        _ if crate::ARCH_ARM && 
-                            all_floats && 
+                        _ if crate::ARCH_ARM && cfg!(windows) && all_floats &&
                             fields.windows(2).all(|f| f[0] == f[1]) &&
                             fields.len() <= 4 => {
                             ArgStyle::Direct

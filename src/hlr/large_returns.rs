@@ -16,13 +16,15 @@ fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style(ABI::C) {
         ReturnStyle::ThroughI32
         | ReturnStyle::ThroughI64
-        | ReturnStyle::ThroughDouble if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+        | ReturnStyle::ThroughF64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
             return_by_small_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         },
         ReturnStyle::ThroughF32F32
         | ReturnStyle::ThroughI32I32
         | ReturnStyle::ThroughI64I32
-        | ReturnStyle::ThroughI64I64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+        | ReturnStyle::ThroughI64I64 
+        | ReturnStyle::ThroughF64F32
+        | ReturnStyle::ThroughF64F64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
             return_by_big_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         }
         ReturnStyle::SRet => return_by_pointer(hlr),
@@ -115,9 +117,11 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 ReturnStyle::SRet => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
-                | ReturnStyle::ThroughDouble
+                | ReturnStyle::ThroughF64
                 | ReturnStyle::ThroughI32I32
                 | ReturnStyle::ThroughF32F32
+                | ReturnStyle::ThroughF64F64
+                | ReturnStyle::ThroughF64F32
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64 => {
                     format_call_returning_struct(hlr, call_id, abi);

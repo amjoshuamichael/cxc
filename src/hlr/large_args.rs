@@ -106,7 +106,7 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
                 if arg_style == ArgStyle::Pointer {
                     args[a] = hlr.insert_quick(call_id, RefGen(arg));
-                } else if let ArgStyle::Ints(..) = arg_style {
+                } else if let ArgStyle::Ints(..) | ArgStyle::Floats(..) = arg_style {
                     let _new_arg_name = format!("{}_arg_{}", query.name, a);
                     let raw_arg_type = old_arg_type.raw_arg_type(abi);
                     let new_arg = hlr.add_variable(&raw_arg_type);

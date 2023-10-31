@@ -23,8 +23,9 @@ fn basic_pointer() {
     let mut num = 4;
     unit.get_fn("square")
         .unwrap()
-        .downcast::<(&mut i32,), i32>()(&mut num);
+        .downcast::<(&mut i32,), ()>()(&mut num);
     assert_eq!(num, 16);
+
 }
 
 #[test]
