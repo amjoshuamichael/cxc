@@ -2,7 +2,6 @@ use crate::parse::Opcode;
 
 use super::{expr_tree::HNodeData, hlr_data::FuncRep};
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn remove_redundant_derefs(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |ref_id, ref_data, hlr| {

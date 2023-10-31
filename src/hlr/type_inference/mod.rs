@@ -290,7 +290,6 @@ enum InferenceSteps {
     Failure = 4,
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn infer_types(hlr: &mut FuncRep) {
     let mut infer_map = InferMap::default();
 

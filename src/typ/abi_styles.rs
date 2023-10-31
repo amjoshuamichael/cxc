@@ -62,6 +62,9 @@ pub fn realize_arg_style(arg_style: ArgStyle, on: &Type) -> Type {
     }
 }
 
+
+const MAX_REG_SIZE: usize = if cfg!(unix) { 16 } else { 8 };
+
 impl Type {
     pub fn return_style(&self, abi: ABI) -> ReturnStyle {
         use TypeEnum::*;
@@ -93,9 +96,7 @@ impl Type {
                     return ReturnStyle::Direct;
                 }
 
-                const MAX_RET_SIZE: usize = if cfg!(unix) { 16 } else { 8 };
-
-                if size > MAX_RET_SIZE {
+                if size > MAX_REG_SIZE {
                     return ReturnStyle::SRet;
                 }
 
@@ -183,6 +184,9 @@ impl Type {
                             fields.len() <= 4 => {
                             ArgStyle::Direct
                         },
+                        s if s > MAX_REG_SIZE => {
+                            ArgStyle::Pointer
+                        },
                         1..=8 => {
                             let first_size = (size * 8).next_power_of_two();
 
@@ -207,9 +211,7 @@ impl Type {
                                 )
                             }
                         },
-                        _ => {
-                            ArgStyle::Pointer
-                        },
+                        _ => unreachable!(),
                     }
                 }
             }

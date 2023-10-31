@@ -53,7 +53,7 @@ backend-interpreter = ["region", "libc"]
 ffi-assertions = ["region"]
 show-bytes = []
 
-[profile.bench]
+[profile.test]
 opt-level = 3
 debug = true
 

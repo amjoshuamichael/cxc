@@ -18,7 +18,6 @@ struct Resource {
     path: DestructorPath,
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn add_implicit_drops(hlr: &mut FuncRep) {
     let all_ids = hlr.tree.ids_in_order();
     let mut resources = Vec::<Resource>::new();

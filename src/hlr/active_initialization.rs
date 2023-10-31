@@ -5,13 +5,11 @@ use super::{
     hlr_data::FuncRep,
 };
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn active_initialization(hlr: &mut FuncRep) {
     handle_struct_active_initialization(hlr);
     handle_array_active_initialization(hlr);
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_struct_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |structlit_id, structlit_data, hlr| {

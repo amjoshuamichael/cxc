@@ -12,7 +12,6 @@ pub fn large_returns(hlr: &mut FuncRep) {
     handle_own_return(hlr);
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_return(hlr: &mut FuncRep) {
     match hlr.ret_type.return_style(ABI::C) {
         ReturnStyle::ThroughI32 |
@@ -93,7 +92,6 @@ fn return_by_pointer(hlr: &mut FuncRep) {
     );
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
     let calls = hlr
         .tree

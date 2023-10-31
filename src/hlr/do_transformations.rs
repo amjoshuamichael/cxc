@@ -7,7 +7,6 @@ use crate::{
 
 use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, TransformationGen, ExprID, SetGenSlot, CastGen, With, UnarOpGen}, hlr_data::FuncRep};
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_infallible_rev(
         |member_id, member_data, hlr| {

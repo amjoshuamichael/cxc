@@ -67,9 +67,6 @@ pub fn hlr(
     }
 
     // the following hlr passes are nescessary, not just optimization
-    //
-    // each hlr pass is marked with #[cfg_attr(debug_assertions, inline(never))] so we can 
-    // see the individual perf impact of each pass when using a flamegraph
 
     infer_types(&mut output);
     do_transformations(&mut output)?;

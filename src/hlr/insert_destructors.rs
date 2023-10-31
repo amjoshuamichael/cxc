@@ -6,7 +6,6 @@ use crate::{parse::Opcode, errors::CResultMany, typ::DestructorType, TypeEnum};
 
 use super::{hlr_data::{FuncRep, ArgIndex}, expr_tree::HNodeData, add_implicit_drops, inline::inline};
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn insert_destructors(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_infallible(
         |destructor_id, destructor_data, hlr| {
