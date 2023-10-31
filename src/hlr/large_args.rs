@@ -65,7 +65,6 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
 
 fn arg_by_pointer(hlr: &mut FuncRep, arg_id: VarID) {
     let arg_type_reffed = hlr.variables[arg_id].typ.get_ref();
-    hlr.variables[arg_id].typ = arg_type_reffed.clone();
 
     hlr.modify_many_infallible_rev(
         move |ident_id, mut var_data, hlr| {

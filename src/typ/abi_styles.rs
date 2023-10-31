@@ -82,14 +82,14 @@ impl Type {
                     return ReturnStyle::Direct;
                 }
 
-                const MAX_RET_SIZE: usize = if crate::ARCH_ARM { 16 } else { 8 };
+                const MAX_RET_SIZE: usize = if crate::ARCH_ARM { 16 } else { 16 };
 
                 if size > MAX_RET_SIZE {
                     return ReturnStyle::SRet;
                 }
 
-                if crate::ARCH_x86 {
-                    if abi == ABI::Rust && fields.iter().all(Type::is_float) {
+                if crate::ARCH_x86 && cfg!(windows) {
+                    if fields.iter().all(Type::is_float) {
                         return ReturnStyle::Direct;
                     } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
                         return ReturnStyle::SRet;
@@ -103,7 +103,11 @@ impl Type {
                 } else if size > 8 {
                     ReturnStyle::ThroughI64I32
                 } else if size > 4 {
-                    ReturnStyle::ThroughI64
+                    if dbg!(fields.iter().all(Type::is_float) && crate::ARCH_x86 && cfg!(unix)) {
+                        ReturnStyle::ThroughDouble
+                    } else {
+                        ReturnStyle::ThroughI64
+                    }
                 } else {
                     ReturnStyle::ThroughI32
                 }
@@ -157,7 +161,7 @@ impl Type {
                 } else {
                     match self.size() {
                         _ if fields.len() == 0 || fields.len() == 1 => ArgStyle::Direct,
-                        s if crate::ARCH_x86 && s % 4 != 0 && fields.len() >= 3 => {
+                        s if crate::ARCH_x86 && cfg!(windows) && s % 4 != 0 && fields.len() >= 3 => {
                             ArgStyle::Pointer
                         },
                         _ if crate::ARCH_ARM && 
@@ -171,7 +175,7 @@ impl Type {
                             let int_type = IntType::new(int_size, false);
                             ArgStyle::Ints(int_type, None)
                         },
-                        9..=16 if crate::ARCH_ARM => {
+                        9..=16 /*if crate::ARCH_ARM*/ => {
                             let first_int_type = IntType::new(64, false);
                             let second_int_size = (size * 8 - 64).next_power_of_two() as u32;
                             let second_int_type = IntType::new(second_int_size, false);
