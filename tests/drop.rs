@@ -247,9 +247,7 @@ fn drop_nested_while() {
             sum := 0
 
             for x {
-                for y {
-                    sum = sum + 1
-                }
+                for y { sum = sum + 1 }
 
                 y.push(23)
             }
@@ -258,5 +256,71 @@ fn drop_nested_while() {
         }
         ";
         3
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn conditional_initialization_1way() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            init(true)
+            init(false)
+        }
+
+        init(if: bool) {
+            ? if {
+                x := Rc<i32>:new(23)
+            }
+        }
+        "
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn conditional_initialization_2way() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            init(true)
+            init(false)
+        }
+
+        init(if: bool) {
+            ? if {
+                x := Rc<i32>:new(23)
+            } : {
+                x := Rc<i32>:new(90)
+            }
+        }
+        "
+    )
+}
+
+#[test]
+#[cfg(feature = "backend-interpreter")]
+fn conditional_set() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            init(true)
+            init(false)
+        }
+
+        init(if: bool) {
+            x := { -- }
+
+            ? if {
+                x = Rc<i32>:new(23)
+            } : {
+                x = Rc<i32>:new(90)
+            }
+        }
+        "
     )
 }

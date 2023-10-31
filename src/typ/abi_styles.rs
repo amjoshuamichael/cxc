@@ -1,3 +1,4 @@
+use crate::typ::DestructorType;
 use crate::{TypeEnum, Type, typ::fields_iter::PrimitiveFieldsIter, XcReflect};
 
 use crate::{self as cxc, IntType, FloatType};
@@ -63,20 +64,39 @@ impl Type {
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
-            Struct(_) | Array(_) | Destructor(_) => {
+            Struct(_) | Array(_) => {
                 let size = self.size();
 
-                if abi == ABI::Rust && size > 8 && fields.len() >= 3 {
-                    ReturnStyle::SRet
-                } else if abi == ABI::Rust && fields.len() <= 2 {
-                    ReturnStyle::Direct
-                } else if size > 8 {
-                    ReturnStyle::SRet
-                } else if abi == ABI::Rust && fields.iter().all(Type::is_float) {
-                    ReturnStyle::Direct
-                } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
-                    ReturnStyle::SRet
-                } else if fields.len() == 1 {
+                if abi == ABI::Rust {
+                    if size > 8 && fields.len() >= 3 {
+                        return ReturnStyle::SRet;
+                    } else if fields.len() <= 2 {
+                        return ReturnStyle::Direct;
+                    }
+                }
+
+                if crate::ARCH_ARM &&
+                    fields.iter().all(Type::is_float) && 
+                    fields.windows(2).all(|f| f[0] == f[1]) &&
+                    fields.len() <= 4 {
+                    return ReturnStyle::Direct;
+                }
+
+                const MAX_RET_SIZE: usize = if crate::ARCH_ARM { 16 } else { 8 };
+
+                if size > MAX_RET_SIZE {
+                    return ReturnStyle::SRet;
+                }
+
+                if crate::ARCH_x86 {
+                    if abi == ABI::Rust && fields.iter().all(Type::is_float) {
+                        return ReturnStyle::Direct;
+                    } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
+                        return ReturnStyle::SRet;
+                    }
+                }
+                 
+                if fields.len() == 1 {
                     ReturnStyle::Direct
                 } else if size > 12 {
                     ReturnStyle::ThroughI64I64
@@ -89,6 +109,7 @@ impl Type {
                 }
             },
             Void => ReturnStyle::Void,
+            Destructor(DestructorType { base, .. }) => base.return_style(abi),
             Unknown => panic!("cannot return unknown type"),
         }
     }
@@ -99,7 +120,7 @@ impl Type {
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
             _ => {
-                let size = (self.size() * 8) as u32;
+                let size = self.size();
 
                 // only take five to avoid spending time 
                 // taking huge chunks of large arrays
@@ -109,7 +130,7 @@ impl Type {
                 if abi == ABI::Rust {
                     match fields.len() {
                         0..=2 => {
-                            match self.size() {
+                            match size {
                                 0..=16 => ArgStyle::Direct,
                                 17.. => {
                                     ArgStyle::Pointer
@@ -118,11 +139,11 @@ impl Type {
                             }
                         },
                         3.. => {
-                            match self.size() {
+                            match size {
                                 0 => ArgStyle::Direct,
                                 1..=8 => {
-                                    let int_type = 
-                                        IntType::new(size.next_power_of_two(), false);
+                                    let int_size = (size * 8).next_power_of_two() as u32;
+                                    let int_type = IntType::new(int_size, false);
                                     ArgStyle::Ints(int_type, None)
                                 },
                                 9.. => {
@@ -135,21 +156,30 @@ impl Type {
                     }
                 } else {
                     match self.size() {
-                        0 => ArgStyle::Direct,
-                        _ if fields.len() == 1 && fields[0].is_float() => {
+                        _ if fields.len() == 0 || fields.len() == 1 => ArgStyle::Direct,
+                        s if crate::ARCH_x86 && s % 4 != 0 && fields.len() >= 3 => {
+                            ArgStyle::Pointer
+                        },
+                        _ if crate::ARCH_ARM && 
+                            fields.iter().all(Type::is_float) && 
+                            fields.windows(2).all(|f| f[0] == f[1]) &&
+                            fields.len() <= 4 => {
                             ArgStyle::Direct
                         },
-                        s if s % 4 != 0 && fields.len() >= 3 => {
-                            ArgStyle::Pointer
-                        },
                         1..=8 => {
-                            let int_type = IntType::new(size.next_power_of_two(), false);
+                            let int_size = (size * 8).next_power_of_two() as u32;
+                            let int_type = IntType::new(int_size, false);
                             ArgStyle::Ints(int_type, None)
                         },
-                        9.. => {
+                        9..=16 if crate::ARCH_ARM => {
+                            let first_int_type = IntType::new(64, false);
+                            let second_int_size = (size * 8 - 64).next_power_of_two() as u32;
+                            let second_int_type = IntType::new(second_int_size, false);
+                            ArgStyle::Ints(first_int_type, Some(second_int_type))
+                        },
+                        _ => {
                             ArgStyle::Pointer
                         },
-                        _ => unreachable!()
                     }
                 }
             }

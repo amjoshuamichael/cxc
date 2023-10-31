@@ -345,7 +345,7 @@ impl HNodeData {
                 call += &*query.name;
                 call += WHITE;
 
-                if !query.generics.is_empty() {
+                if !query.generics.is_empty() && !matches!(&*query.name, "memmove" | "memcpy") {
                     call += WHITE;
                     call += "<";
                     for (g, generic) in query.generics.iter().enumerate() {

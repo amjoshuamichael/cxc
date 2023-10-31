@@ -257,9 +257,16 @@ fn build_as_addr_reg(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrRe
 
 fn build_as_addr_reg_with_normal_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrReg {
     let l = mir.new_addr_reg();
-    let r = build_as_expr(node, tree, mir);
+    let node_type = node.ret_type();
+    let r = build_as_expr(node, tree, mir).unwrap();
 
-    mir.lines.push(MLine::SetAddr { l, r: MAddrExpr::Expr(r.unwrap()), });
+    if let MExpr::Addr(addr) = r {
+        let lr = mir.new_reg(node_type);
+        mir.lines.push(MLine::Set { l: lr, r: MExpr::Addr(addr) });
+        mir.lines.push(MLine::SetAddr { l, r: MAddrExpr::Expr(MExpr::MemLoc(MMemLoc::Reg(lr))), });
+    } else {
+        mir.lines.push(MLine::SetAddr { l, r: MAddrExpr::Expr(r), });
+    }
 
     l
 }
@@ -402,11 +409,11 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
                 object_type_unwrapped.as_type_enum() else { unreachable!() };
             let field_index = struct_type.get_field_index(&field).unwrap() as u32;
 
-            if field_index == 0 {
-                MAddrExpr::Addr(object)
-            } else {
+            //if field_index == 0 {
+            //    MAddrExpr::Addr(object)
+            //} else {
                 MAddrExpr::Member { object_type, object, field_index }
-            }
+            //}
         },
         HNodeData::Index { object, index, .. } => {
             let array_type = tree.get(object).ret_type();
@@ -420,6 +427,8 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
 
             MAddrExpr::Index { array_type, element_type, object, index }
         },
+        HNodeData::UnarOp { op, hs, .. } if op == Opcode::RemoveTypeWrapper =>
+            return build_as_addr_expr(tree.get(hs), tree, mir),
         HNodeData::ArrayLit { .. } 
         | HNodeData::Number { .. } 
         | HNodeData::Float { .. } 

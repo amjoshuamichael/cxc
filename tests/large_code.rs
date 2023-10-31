@@ -222,7 +222,6 @@ fn extern_and_local() {
 }
 
 #[test]
-#[ignore]
 #[cfg(not(feature = "backend-interpreter"))]
 fn combine_string_array() {
     xc_test!(
@@ -245,7 +244,6 @@ fn combine_string_array() {
     );
 }
 
-#[ignore]
 #[test]
 #[cfg(not(feature = "backend-interpreter"))]
 fn prime_sieve() {

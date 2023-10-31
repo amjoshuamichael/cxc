@@ -89,7 +89,7 @@ impl<'a> Interpreter<'a> {
                 let var_name_string = if var_name == VarName::None {
                     format!("{var_id:?}")
                 } else {
-                    var_name.to_string()
+                    var_name.to_string() + &*format!("||{var_id:?}")
                 };    
 
                 print!("{var_name_string} = {serialized_primitive}, ");
@@ -368,7 +368,13 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
         MExpr::Addr(addr) => {
             let load_size = interpreter.mir.reg_types[reg.unwrap()].size();
             let pointer = iaddr(addr, interpreter);
-            load_addr_with_len(pointer, interpreter, load_size)
+            let val = load_addr_with_len(pointer, interpreter, load_size);
+
+            if let Ok(val) = TryInto::<[u8; 8]>::try_into(&*val) {
+                unsafe { std::mem::transmute::<_, *const u8>(val) };
+            }
+
+            val
         }
         MExpr::BinOp { left_type, op, l, r } => {
             let l = ioperand(l, interpreter);
@@ -455,6 +461,7 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
                 #[cfg(feature = "backend-debug")]
                 println!("calling new function");
                 let value = interpret(&mut new_interpreter);
+
                 #[cfg(feature = "backend-debug")]
                 {
                     println!("extiting call");
@@ -467,7 +474,7 @@ fn iexpr(reg: Option<&MReg>, expr: &MExpr, interpreter: &mut Interpreter) -> Reg
 
                 return value.data;
             } else {
-                panic!()
+                panic!("{typ:?}")
             }
         },
         MExpr::Free { ptr } => {

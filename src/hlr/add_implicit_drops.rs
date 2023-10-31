@@ -2,7 +2,7 @@ use std::{any::Any, rc::Rc, collections::HashMap};
 
 use slotmap::{SlotMap, DefaultKey};
 
-use crate::{parse::Opcode, FuncQuery, TypeRelation, Type, StructType, TypeEnum, hlr::expr_tree::{MemberGen, GenSlot}, VarName};
+use crate::{parse::Opcode, FuncQuery, TypeRelation, Type, StructType, TypeEnum, hlr::expr_tree::{MemberGen, GenSlot}, VarName, ArrayType};
 
 use super::{hlr_data::{FuncRep, VarID, ArgIndex}, expr_tree::{HNodeData, CallGen, UnarOpGen, SetGen, ExprID, NodeDataGen, IndexGen, SetGenSlot}};
 
@@ -61,7 +61,8 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
                     .unwrap();
                 let dest_info = DestinationInfo {
                     path: resource.path,
-                    conditions: Vec::new(),
+                    init_conditions: Vec::new(),
+                    final_conditions: Vec::new(),
                     resource: Rc::new(resource.origin),
                 };
                 let dests = 
@@ -74,7 +75,8 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
             ResourceOrigin::Call(call_id) => {
                 let destination_info = DestinationInfo {
                     path: resource.path,
-                    conditions: Vec::new(),
+                    init_conditions: conditions_for_node(call_id, hlr),
+                    final_conditions: Vec::new(),
                     resource: Rc::new(resource.origin),
                 };
 
@@ -97,7 +99,7 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
 
     let mut ending_destinations = Vec::<ValueDestination>::new();
 
-    'prospective_loop: while !prospective_destinations.is_empty() {
+    while !prospective_destinations.is_empty() {
         let a_key = prospective_destinations.keys().next().unwrap();
         let mut destination = prospective_destinations.remove(a_key).unwrap();
 
@@ -121,32 +123,37 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
         }
     }
 
-    let mut destinations_by_resource = 
-        HashMap::<Rc<ResourceOrigin>, Vec<ValueDestination>>::new();
+    'filtering: loop {
+        for (da, dest_a) in ending_destinations.iter().enumerate() {
+            for (db, dest_b) in ending_destinations[(da + 1)..].iter().enumerate() {
+                if dest_a.kind == dest_b.kind && dest_a.info.path == dest_b.info.path {
+                    // these two destinations end up in the same place.
+                    if dest_a.info.final_conditions == dest_b.info.final_conditions &&
+                        dest_a.info.init_conditions == dest_b.info.init_conditions {
+                        ending_destinations.remove(da);
+                        continue 'filtering;
+                    }
 
-    for destination in ending_destinations {
-        destinations_by_resource
-            .entry(destination.info.resource.clone())
-            .or_default()
-            .push(destination);
-    }
+                    for (ca, cond_a) in dest_a.info.final_conditions.iter().enumerate() {
+                        let cond_a_inv = cond_a.invert();
 
-    let mut filtered_destinations = Vec::<ValueDestination>::new();
-
-    for (origin, mut destinations) in destinations_by_resource {
-        let first_destination = destinations.remove(0);
-
-        for destination in destinations {
-            if destination.kind != first_destination.kind {
-                assert_ne!(destination.info.conditions, first_destination.info.conditions);
-                filtered_destinations.push(destination);
-            }
+                        if let Some(pos) = dest_b.info.final_conditions.iter()
+                            .position(|c| *c == cond_a_inv) {
+                            let mut dest = ending_destinations.remove(da);
+                            ending_destinations.remove(db);
+                            dest.info.final_conditions.remove(da);
+                            ending_destinations.push(dest);
+                            continue 'filtering;
+                        }
+                    }
+                }
+            } 
         }
 
-        filtered_destinations.push(first_destination);
+        break;
     }
 
-    for destination in filtered_destinations {
+    for destination in ending_destinations {
         match destination.kind {
             ValueDestinationKind::Dies { value_at, after_statement } => {
                 let separated_val = hlr.separate_expression(value_at);
@@ -178,17 +185,43 @@ pub fn add_implicit_drops(hlr: &mut FuncRep) {
                 hlr.insert_statement_before(at, destroy_gen);
             },
             ValueDestinationKind::VarDies { var_id, return_id } => {
-                hlr.insert_statement_before(
-                    return_id,
-                    SetGenSlot {
-                        set_to: var_id,
-                        then: UnarOpGen {
-                            op: Opcode::Destroy,
-                            hs: destination.info.path,
-                            ret_type: Type::void(),
-                        }
-                    },
-                );
+                let destructor = SetGenSlot {
+                    set_to: var_id,
+                    then: UnarOpGen {
+                        op: Opcode::Destroy,
+                        hs: destination.info.path,
+                        ret_type: Type::void(),
+                    }
+                };
+
+                if let Some(cond) = destination.info.init_conditions.get(0) {
+                    let id = match cond {
+                        ValueCondition::True(id) => {
+                            let HNodeData::IfThenElse { t, .. } = hlr.tree.get_ref(*id)
+                                else { unreachable!() };
+                            let t = *t;
+                            let space = hlr.tree.make_one_space(t);
+                            let HNodeData::Block { stmts, .. } = hlr.tree.get_mut(t)
+                                else { unreachable!() };
+                            stmts.push(space);
+                            space
+                        },
+                        ValueCondition::False(id) => {
+                            let HNodeData::IfThenElse { e, .. } = hlr.tree.get_ref(*id)
+                                else { unreachable!() };
+                            let e = *e;
+                            let space = hlr.tree.make_one_space(e);
+                            let HNodeData::Block { stmts, .. } = hlr.tree.get_mut(e)
+                                else { unreachable!() };
+                            stmts.push(space);
+                            space
+                        },
+                    };
+
+                    hlr.replace_quick(id, destructor);
+                } else {
+                    hlr.insert_statement_before(return_id, destructor);
+                }
             }
             _ => {},
         }
@@ -204,7 +237,8 @@ struct ValueDestination {
 #[derive(Clone, Debug)]
 struct DestinationInfo {
     path: DestructorPath,
-    conditions: Vec<ValueCondition>,
+    init_conditions: Vec<ValueCondition>,
+    final_conditions: Vec<ValueCondition>,
     resource: Rc<ResourceOrigin>,
 }
 
@@ -214,7 +248,16 @@ enum ValueCondition {
     False(ExprID), 
 }
 
-#[derive(PartialEq, Eq, Debug)]
+impl ValueCondition {
+    pub fn invert(self) -> Self {
+        match self {
+            ValueCondition::True(id) => ValueCondition::False(id),
+            ValueCondition::False(id) => ValueCondition::True(id),
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum ValueDestinationKind {
     InVar(VarID, ExprID),
     Dies { 
@@ -255,13 +298,13 @@ fn next_destinations_of_var(
             let mut then_dests = 
                 next_destinations_of_var(var_id, *then_id, hlr, info.clone());
             for dest in &mut then_dests {
-                dest.info.conditions.push(ValueCondition::True(if_id));
+                dest.info.final_conditions.push(ValueCondition::True(if_id));
             }
 
             let mut else_dests = 
                 next_destinations_of_var(var_id, *else_id, hlr, info);
             for dest in &mut else_dests {
-                dest.info.conditions.push(ValueCondition::False(if_id));
+                dest.info.final_conditions.push(ValueCondition::False(if_id));
             }
 
             then_dests.into_iter().chain(else_dests.into_iter()).collect()
@@ -281,7 +324,7 @@ fn next_use_of_var(
                 let l = next_use_of_var(value, first_exec_in(*t, hlr), hlr, false)?;
                 let r = next_use_of_var(value, first_exec_in(*e, hlr), hlr, false)?;
 
-                return Ok(NextUseOfVar::IfThenElse(*i, Box::new(l), Box::new(r)));
+                return Ok(NextUseOfVar::IfThenElse(search, Box::new(l), Box::new(r)));
             },
             HNodeData::Return { to_return: Some(to_return), .. } if !skip_returns => {
                 let to_return_ids = hlr.tree.ids_of(search);
@@ -436,7 +479,7 @@ fn value_destination(
             if matches!(deref_parent_data, HNodeData::Member { .. } | HNodeData::Index { .. }) {
                 Err(info)
             } else {
-                panic!()
+                Err(info)
             }
         },
         Number { .. } | Float { .. } | Bool { .. } | BinOp { .. } | UnarOp { .. } | 
@@ -497,7 +540,13 @@ pub fn destructor_paths(typ: &Type) -> Vec<DestructorPath> {
             .flatten()
             .collect::<Vec<_>>()
         },
-        Array(_) => todo!(),
+        Array(ArrayType { base, .. }) => {
+            if destructor_paths(&base).len() > 0 {
+                panic!();
+            } else {
+                Vec::new()
+            }
+        },
         Destructor(_) => vec![
             DestructorPath::default(),
         ],
@@ -571,7 +620,7 @@ fn node_after(id: ExprID, hlr: &FuncRep) -> NodeAfter {
         HNodeData::Index { object: l, index: r, .. } |
         HNodeData::BinOp { lhs: l, rhs: r, .. } => {
             if *l == id {
-                *r
+                first_exec_in(*r, hlr)
             } else {
                 return node_after(parent, hlr);
             }
@@ -592,4 +641,27 @@ fn node_after(id: ExprID, hlr: &FuncRep) -> NodeAfter {
     };
 
     NodeAfter::Some(some)
+}
+
+fn conditions_for_node(mut id: ExprID, hlr: &FuncRep) -> Vec<ValueCondition> {
+    let mut conditions = Vec::new();
+
+    while id != hlr.tree.root {
+        let parent = hlr.tree.parent(id);
+
+        match hlr.tree.get_ref(parent) {
+            HNodeData::IfThenElse { t, e, .. } => {
+                if id == *t {
+                    conditions.push(ValueCondition::True(parent));
+                } else if id == *e {
+                    conditions.push(ValueCondition::False(parent));
+                }
+            },
+            _ => {},
+        }
+
+        id = parent;
+    }
+
+    conditions
 }

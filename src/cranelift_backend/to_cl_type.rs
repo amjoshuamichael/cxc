@@ -39,17 +39,19 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
 
     let raw_return = typ.ret.raw_return_type(abi).to_cl_type();
 
-    if (abi == ABI::Rust || abi == ABI::None) && 
-        typ.ret.return_style(ABI::Rust) == ReturnStyle::Direct &&
-        typ.ret.primitive_fields_iter().next().is_some() &&
-        typ.ret.primitive_fields_iter().all(|typ| typ.is_float()) {
-        // I don't know why this works, but I tried it and it did.
-        //
-        // When this is removed, Rust ABI returns of {f32, f32}, {f64, f32} {f32, f64}, 
-        // and {f64, f64} no longer work.
-        sig.call_conv = CallConv::Cold;
-    } else if cfg!(any(target_arch = "x86", target_arch = "x86_64")) {
-        sig.call_conv = CallConv::WindowsFastcall;
+    if crate::ARCH_x86 {
+        if (abi == ABI::Rust || abi == ABI::None) && 
+            typ.ret.return_style(ABI::Rust) == ReturnStyle::Direct &&
+            typ.ret.primitive_fields_iter().next().is_some() &&
+            typ.ret.primitive_fields_iter().all(|typ| typ.is_float()) {
+            // I don't know why this works, but I tried it and it did.
+            //
+            // When this is removed, Rust ABI returns of {f32, f32}, {f64, f32},
+            // {f32, f64}, and {f64, f64} no longer work.
+            sig.call_conv = CallConv::Cold;
+        } else {
+            sig.call_conv = CallConv::WindowsFastcall;
+        }
     }
 
     for (c, cl_type) in raw_return.into_iter().enumerate() {

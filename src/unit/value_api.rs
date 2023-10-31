@@ -5,7 +5,7 @@ use crate::{
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation, context::FuncParseData},
     typ::{ReturnStyle, IntSize, ABI},
-    Unit, XcReflect, IntType, TypeEnum, StructType,
+    Unit, XcReflect, IntType, TypeEnum, StructType, ArrayType,
 };
 use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
 
@@ -16,6 +16,7 @@ use super::{FuncQuery, backends::IsBackend};
 use crate as cxc;
 
 #[derive(Default, Debug)]
+#[repr(C)]
 pub struct Value {
     pub(crate) typ: Type,
     pub(crate) data: Box<[u8]>,
@@ -25,7 +26,7 @@ impl XcReflect for Value {
     fn spec_code() -> String {
         "Value = {
             typ: Type,
-            data: { +ptr: &u8, +len: u64 },
+            data: { +ptr: &u8 ~ free(self), +len: u64 },
         }".into()
     }
 }
@@ -110,9 +111,11 @@ impl Value {
             Int(IntType { signed: false, size: _64 }) => int_to_string!(u64, &*self.data),
             Int(IntType { signed: false, size: _32 }) => int_to_string!(u32, &*self.data),
             Int(IntType { signed: false, size: _16 }) => int_to_string!(u16, &*self.data),
+            Int(IntType { signed: false, size: _8 }) => int_to_string!(u8, &*self.data),
             Int(IntType { signed: true, size: _64 }) => int_to_string!(i64, &*self.data),
             Int(IntType { signed: true, size: _32 }) => int_to_string!(i32, &*self.data),
             Int(IntType { signed: true, size: _16 }) => int_to_string!(i16, &*self.data),
+            Int(IntType { signed: true, size: _8 }) => int_to_string!(i8, &*self.data),
             Ref(_) => {
                 let arr = <[u8; 8]>::try_from(&*self.data).unwrap();
                 let val = <usize>::from_ne_bytes(arr);
@@ -147,6 +150,27 @@ impl Value {
                 } else {
                     "true".into()
                 }
+            },
+            Array(ArrayType { base, count }) => {
+                let mut output = String::from("[ ");
+
+                for i in 0..*count {
+                    let offset = i as usize * base.size();
+                    let member_value = Value {
+                        typ: base.clone(),
+                        data: self.data[offset..(offset + base.size())].into(),
+                    };
+
+                    output += &*member_value.to_string_no_unit()?;
+
+                    if i != count - 1 {
+                        output += ", ";
+                    }
+                }
+
+                output += " ]";
+
+                output
             }
             _ => return None,
         };

@@ -1,6 +1,6 @@
 use crate::{Type, parse::TypeSpec, TypeEnum, StructType, IntType, RefType, FuncType, ArrayType, TypeName};
 
-use super::{Field, ABI};
+use super::{Field, ABI, DestructorType};
 
 pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     if typ.name() != &TypeName::Anonymous {
@@ -37,7 +37,10 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
             Box::new(type_to_type_spec(base.clone())), 
             *count,
         ),
-        TypeEnum::Destructor(_) => TypeSpec::Void,
+        TypeEnum::Destructor(DestructorType { base, destructor }) => TypeSpec::Destructor(
+            Box::new(type_to_type_spec(base.clone())),
+            destructor.from.clone(),
+        ),
         TypeEnum::Bool => TypeSpec::Bool,
         TypeEnum::Void => TypeSpec::Void,
         TypeEnum::Unknown => panic!(),

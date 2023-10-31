@@ -75,7 +75,13 @@ mod typ;
 mod unit;
 
 #[cfg(not(any(feature = "backend-llvm", feature = "backend-cranelift", feature = "backend-interpreter")))]
-compile_error!("No backend chosen: in your Cargo.toml, enable either backend-cranelift (recommended) or backend-llvm (requires LLVM to be installed)");
+compile_error!("cxc: No backend chosen.");
 
 #[cfg(not(target_pointer_width = "64"))]
-compile_error!("cxc only works for 64 bit architectures.");
+compile_error!("cxc: does not yet support a target pointer width of {}.", std::mem::size_of<usize>());
+
+pub(crate) const ARCH_x86: bool = cfg!(any(target_arch = "x86", target_arch = "x86_64"));
+pub(crate) const ARCH_ARM: bool = cfg!(any(target_arch = "arm", target_arch = "aarch64"));
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "arm", target_arch = "aarch64")))]
+compile_error!("cxc: has not been verified to work on this architecture. If you need support, please submit an issue on Github.");

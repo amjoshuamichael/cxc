@@ -1,8 +1,7 @@
 use crate::hlr::hlr_data::VariableInfo;
 use crate::hlr::hlr_data::ArgIndex;
 use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
-use crate::typ::ABI;
-use crate::typ::ReturnStyle;
+use crate::typ::{ReturnStyle, ABI, ArgStyle};
 use crate::{unit::*, Type, FuncType, VarName};
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
@@ -77,30 +76,30 @@ pub fn add_nescessary_attributes_to_func(
         function.add_attribute(AttributeLoc::Param(0), sret_attribute);
     }
 
-    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
-    for (a, arg) in func_type.args.iter().enumerate() {
-        if arg.arg_style() == ArgStyle::Pointer {
-            let byval_id = Attribute::get_named_enum_kind_id("byval");
-            let byval_attribute = context.create_type_attribute(
-                byval_id, 
-                arg.to_any_type(context)
-            );
+    if crate::ARCH_ARM {
+        for (a, arg) in func_type.args.iter().enumerate() {
+            if arg.arg_style(ABI::C) == ArgStyle::Pointer {
+                let byval_id = Attribute::get_named_enum_kind_id("byval");
+                let byval_attribute = context.create_type_attribute(
+                    byval_id, 
+                    arg.to_any_type(context)
+                );
 
-            let arg_pos_offset = if func_type.ret.return_style() == ReturnStyle::SRet {
-                1
-            } else { 
-                0 
-            };
+                let arg_pos_offset = if func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
+                    1
+                } else {
+                    0 
+                };
 
-            function.add_attribute(
-                AttributeLoc::Param(a as u32 + arg_pos_offset), 
-                byval_attribute
-            );
+                function.add_attribute(
+                    AttributeLoc::Param(a as u32 + arg_pos_offset), 
+                    byval_attribute
+                );
+            }
         }
     }
 }
 
-// Adds no matter what
 pub fn add_sret_attribute_to_call_site(
     callsite: &mut CallSiteValue<'static>,
     context: &'static Context,

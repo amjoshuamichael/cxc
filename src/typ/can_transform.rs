@@ -230,6 +230,10 @@ impl Type {
             },
             TypeEnum::Struct(StructType { fields, .. }) => {
                 for Field { name, typ, .. } in fields {
+                    if typ.is_void() {
+                        panic!();
+                    }
+
                     if name == &field {
                         return Some((TransformationList::Nil, typ.clone()));
                     }
@@ -272,7 +276,7 @@ impl Type {
                 ))
             },
             TypeEnum::Destructor(DestructorType { base, .. }) => {
-                base.route_to(field.clone()).map(|(list, typ)|
+                base.route_to(field.clone()).map(|(list, typ)| 
                     (
                         TransformationList::Cons(
                             TransformationStep::RemoveDestructor,

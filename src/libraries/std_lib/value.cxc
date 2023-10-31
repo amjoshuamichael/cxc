@@ -12,8 +12,12 @@ value<T>(data: T); Value {
         b = b + 1
     }
 
-    ; Value {
+    slice := bytes_vec.to_slice()
+
+    value := Value {
         typ = typeobj,
-        data = +bytes_vec,
+        data = slice,
     }
+
+    ; value
 }

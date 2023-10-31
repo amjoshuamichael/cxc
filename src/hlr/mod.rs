@@ -84,6 +84,7 @@ pub fn hlr(
     large_set_to_memcpy(&mut output);
     remove_redundant_derefs(&mut output);
     insert_destructors(&mut output)?;
+
     #[cfg(feature = "xc-debug")]
     if info.name != VarName::None {
         println!("{}", &output.to_string());
@@ -91,6 +92,5 @@ pub fn hlr(
             println!("{}: {:?} || {:?} {:?}", info.name, info.typ, var_id, info.arg_index);
         }
     }
-    
     Ok(output.output(code.code.clone()))
 }

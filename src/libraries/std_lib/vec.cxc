@@ -68,9 +68,11 @@ Vec<T> = {
         }
 
         ; Vec<T> {
+            raw = cast({
+                ptr = ptr,
+                capacity = len,
+            }),
             len = len,
-            capacity = len,
-            ptr = ptr,
         }
     }
 
@@ -90,5 +92,17 @@ Vec<T> = {
 <T> &Vec<T>:. {
     drop() {
         free<T>(self.ptr)
+    }
+}
+
+<T> Vec<T>:. {
+    to_slice(); { +ptr: &T ~ free(self), +len: u64 } {
+        new_memory := alloc<T>(self.len)
+        memmove(self.ptr, new_memory, self.len * size_of<T>())
+
+        ; {
+            ptr = cast(new_memory),
+            len = self.len,
+        }
     }
 }

@@ -53,6 +53,8 @@ unsafe extern "C" fn free(ptr: *mut u8) {
     // allocation API. because the cxc allocation api does not require that the 
     // user specify the size of their deallocation, the only way to fix this in 
     // this backend is to stash the size of allocation for every allocation.
+    //
+    // TODO: we could also use libc
     let possibly_wrong_layout = Layout::from_size_align(4 as usize, 4).unwrap();
     dealloc(ptr, possibly_wrong_layout)
 }

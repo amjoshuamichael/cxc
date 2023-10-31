@@ -21,7 +21,6 @@ fn default_util() {
 }
 
 #[test]
-#[ignore]
 #[cfg(not(feature = "backend-interpreter"))]
 fn clone_util() {
     let mut unit = Unit::new();
@@ -53,7 +52,7 @@ fn clone_util() {
 
     let cool_string_copy = unit.get_fn("main").unwrap().downcast::<(), String>()();
 
-    assert_eq!(cool_string_copy, String::default());
+    assert_eq!(cool_string_copy, String::from("coolman"));
 }
 
 fn a_cool_string() -> String { String::from("coolman") }
