@@ -5,7 +5,7 @@ cxc is a high-performance scripting language designed for speed: both of writing
 Put the following in your `Cargo.toml`:
 ```toml
 [dependencies]
-cxc = "0.2"
+cxc = "0.3"
 ```
 
 The default features of the crate use [cranelift](https://cranelift.dev/) as a compiler backend. Alternatively, you can activate the "backend-llvm" feature, which uses [LLVM](https://llvm.org/), but it does require that you have LLVM installed, and the subdirectories `llvm/includes` and `llvm/bin` both in your path. Both backends have full feature parity. The Cranelift backend has faster compile times, and is more portable, but the emitted code is slower. The LLVM backend is less portable because it requires that users have LLVM installed, but the emitted code is faster.
@@ -14,7 +14,7 @@ You can access the LLVM backend by putting this in your `Cargo.toml`:
 ```toml
 [dependencies]
 cxc = {
-    version = "0.2",
+    version = "0.3",
     default-features = false, 
     features = ["backend-llvm", "ffi-assertions"]
 }
