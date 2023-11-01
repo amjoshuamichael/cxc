@@ -401,19 +401,20 @@ pub fn build_as_addr_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MA
     match node {
         HNodeData::Member { object, field, .. } => {
             let object_node = tree.get(object);
-            let object_type = object_node.ret_type().complete_deref();
+            let object_type = object_node.ret_type();
             let object = build_as_addr(object_node, tree, mir);
 
-            let object_type_unwrapped = object_type.remove_wrappers();
             let TypeEnum::Struct(struct_type) = 
-                object_type_unwrapped.as_type_enum() else { unreachable!() };
+                object_type.as_type_enum() else { unreachable!() };
             let field_index = struct_type.get_field_index(&field).unwrap() as u32;
 
-            //if field_index == 0 {
-            //    MAddrExpr::Addr(object)
-            //} else {
+            if field_index == 0 {
+                // Since this is the first field, we don't have to add an offset to the
+                // pointer in order to access it.
+                MAddrExpr::Addr(object)
+            } else {
                 MAddrExpr::Member { object_type, object, field_index }
-            //}
+            }
         },
         HNodeData::Index { object, index, .. } => {
             let array_type = tree.get(object).ret_type();

@@ -86,7 +86,6 @@ pub enum TypeName {
     U(u32),
     F64,
     F32,
-    F16,
     Bool,
     Me,
     #[default]
@@ -107,7 +106,6 @@ impl TypeName {
                 num => Self::U(num.parse().expect("improper int type")),
             },
             _ => match t.slice() {
-                "f16" => Self::F16,
                 "f32" => Self::F32,
                 "f64" => Self::F64,
                 "bool" => Self::Bool,
@@ -134,7 +132,6 @@ impl Debug for TypeName {
             Self::U(size) => return write!(f, "u{size}"),
             Self::F64 => "f64",
             Self::F32 => "f32",
-            Self::F16 => "f16",
             Self::Bool => "bool",
             Self::Me => "Me",
             Self::Anonymous => "unnamed",

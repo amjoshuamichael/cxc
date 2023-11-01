@@ -4,8 +4,8 @@ use crate::{
     errors::CResultMany,
     lex::{indent_parens, lex, VarName},
     parse::{self, FuncCode, TypeRelation, context::FuncParseData},
-    typ::{ReturnStyle, IntSize, ABI},
-    Unit, XcReflect, IntType, TypeEnum, StructType, ArrayType,
+    typ::{ReturnStyle, IntSize, ABI, DestructorType},
+    Unit, XcReflect, IntType, TypeEnum, StructType, ArrayType, FloatType,
 };
 use std::{collections::{HashMap, HashSet}, mem::transmute, sync::Mutex};
 
@@ -17,6 +17,8 @@ use crate as cxc;
 
 #[derive(Default, Debug)]
 #[repr(C)]
+/// A dynamic representation of a value in cxc. Contains a [`Type`] for its data type 
+/// and a [`Box<u8>`] for its data.
 pub struct Value {
     pub(crate) typ: Type,
     pub(crate) data: Box<[u8]>,
@@ -29,10 +31,6 @@ impl XcReflect for Value {
             data: { +ptr: &u8 ~ free(self), +len: u64 },
         }".into()
     }
-}
-
-enum ValueConsumeErr {
-    SizeMismatch,
 }
 
 // This MAX_BYTES static is used as an output for functions that return a value
@@ -49,6 +47,7 @@ lazy_static::lazy_static! {
 }
 
 impl Value {
+    /// Creates a new [`Value`] from a given [`Type`] and an array of a given size.
     pub fn new_from_arr<const N: usize>(typ: Type, data: [u8; N]) -> Self {
         let size = typ.size();
         let data = data[0..size].to_vec().into_boxed_slice();
@@ -56,14 +55,17 @@ impl Value {
         Self { typ, data }
     }
 
-    pub fn new_from_boxed_slice(typ: Type, data: Box<[u8]>) -> Self { 
-        Self { typ, data } 
-    }
-
+    /// Creates a new [`Value`] from a given [`Type`] and a [`u8`] slice.
     pub fn new_from_slice(typ: Type, data: &[u8]) -> Self { 
         Self { typ, data: data.into() } 
     }
 
+    /// Creates a new [`Value`] from a given [`Type`] and a boxed [`u8`] slice.
+    pub fn new_from_boxed_slice(typ: Type, data: Box<[u8]>) -> Self { 
+        Self { typ, data } 
+    }
+
+    /// Creates a [`Value`] with [`Type::void`] and no data.
     pub fn void() -> Self {
         Self {
             typ: Type::void(),
@@ -71,6 +73,7 @@ impl Value {
         }
     }
 
+    /// Creates a new [`Value`] from a given [`Type`] and a pointer to a value.
     /// # Safety
     ///
     /// Ensure the pointer is pointing to a type equivalent to typ.
@@ -83,19 +86,9 @@ impl Value {
         }
     }
 
-    #[cfg(feature = "bytemuck")]
-    pub fn new_reflect<T: XcReflect + bytemuck::NoUninit>(data: T, unit: &Unit) -> Self {
-        let typ = unit
-            .get_reflect_type::<T>()
-            .expect("type contains generics");
-
-        Self {
-            typ,
-            data: Vec::from(bytemuck::bytes_of(&data)),
-        }
-    }
-
-    /// Only converts primitives to strings.
+    /// Converts [`Value`]s to Strings, the way they would be implemented by default.
+    /// Because it can't reference external data, this function will print out references
+    /// as their inner values in hexicimal. In general, this is helpful for debugging.
     pub fn to_string_no_unit(&self) -> Option<String> {
         macro_rules! int_to_string {
             ($int_ty:ty, $data:expr) => {{
@@ -107,16 +100,20 @@ impl Value {
         use TypeEnum::*;
         use IntSize::*;
 
-        let string = match self.typ.remove_wrappers().as_type_enum() {
+        let string = match self.typ.as_type_enum() {
+            Int(IntType { signed: false, size: _128 }) => int_to_string!(u128, &*self.data),
             Int(IntType { signed: false, size: _64 }) => int_to_string!(u64, &*self.data),
             Int(IntType { signed: false, size: _32 }) => int_to_string!(u32, &*self.data),
             Int(IntType { signed: false, size: _16 }) => int_to_string!(u16, &*self.data),
             Int(IntType { signed: false, size: _8 }) => int_to_string!(u8, &*self.data),
+            Int(IntType { signed: true, size: _128 }) => int_to_string!(i128, &*self.data),
             Int(IntType { signed: true, size: _64 }) => int_to_string!(i64, &*self.data),
             Int(IntType { signed: true, size: _32 }) => int_to_string!(i32, &*self.data),
             Int(IntType { signed: true, size: _16 }) => int_to_string!(i16, &*self.data),
             Int(IntType { signed: true, size: _8 }) => int_to_string!(i8, &*self.data),
-            Ref(_) => {
+            Float(FloatType::F32) => int_to_string!(f32, &*self.data),
+            Float(FloatType::F64) => int_to_string!(f64, &*self.data),
+            Ref(_) | Func(_) => {
                 let arr = <[u8; 8]>::try_from(&*self.data).unwrap();
                 let val = <usize>::from_ne_bytes(arr);
                 format!("0x{val:x}")
@@ -171,15 +168,29 @@ impl Value {
                 output += " ]";
 
                 output
-            }
-            _ => return None,
+            },
+            Destructor(DestructorType { base, .. }) => {
+                Value {
+                    typ: base.clone(),
+                    data: self.data.clone(),
+                }.to_string_no_unit()?
+            },
+            Void => "void".into(),
+            Unknown => "unknown".into(),
         };
 
         Some(string)
     }
 
+    /// Runs the `to_string` function from cxc on the value's type using the value's
+    /// data. If the `to_string` function doesn't already exist, it compiles the function.
+    ///
+    /// # Safety
+    ///
+    /// - Of course, the `to_string` implementation has to be safe.
+    /// - The data in the [`Value`] has to be valid.
     #[cfg(not(feature = "backend-interpreter"))]
-    pub fn to_string(&self, unit: &mut Unit) -> Option<String> {
+    pub unsafe fn to_string(&self, unit: &mut Unit) -> Option<String> {
         if !self.typ.is_ref() && let Some(serialized_primitive) = self.to_string_no_unit() {
             return Some(serialized_primitive)
         } else {
@@ -194,8 +205,8 @@ impl Value {
             let mut output = String::new();
 
             let func = unit.get_fn(query)?;
-            let func = func.downcast::<(&mut String, *const usize), ()>();
-            func(&mut output, self.const_ptr());
+            let func = func.downcast::<(&mut String, *const u8), ()>();
+            func(&mut output, self.get_slice().as_ptr());
 
             Some(indent_parens(output))
         }
@@ -206,15 +217,17 @@ impl Value {
     /// Ensure the generic type 'T' is the same as the type of the value.
     pub unsafe fn get_data_as<T>(&self) -> *const T { self.data.as_ptr() as *const T }
 
-    /// # Safety
-    ///
-    /// Ensure the generic type 'T' is the same as the type of the value.
+    /// Consumes the [`Value`] and returns the inner data.
     pub unsafe fn get_data(self) -> Box<[u8]> { self.data }
 
-
+    /// Consumes the [`Value`] and [`std::mem::transmute`]s the value to a given type.
+    /// 
     /// # Safety
+    /// 
+    /// Because this uses a `transmute`, it is very unsafe.
     ///
-    /// Ensure the generic type 'T' is the same as the type of the value.
+    /// - Ensure the generic type `T` is the same as the type of the value.
+    /// - Ensure the inner data is a valid `T`.
     pub unsafe fn consume<T>(mut self) -> Box<T> {
         let data_ptr = self.data.as_mut_ptr();
 
@@ -224,18 +237,11 @@ impl Value {
         Box::from_raw(data_ptr as *mut T)
     }
 
-    pub fn checked_consume<T: Copy>(self) -> Result<T, ValueConsumeErr> {
-        if self.typ.size() != self.data.len() || std::mem::size_of::<T>() != self.data.len() {
-            Err(ValueConsumeErr::SizeMismatch)
-        } else {
-            Ok(unsafe { *(self.data.as_ptr() as *const T) })
-        }
-    }
-
-    pub fn const_ptr(&self) -> *const usize { &*self.data as *const [u8] as *const usize }
-
+    /// Gets the length of the data on the value.
     pub fn get_size(&self) -> usize { self.data.len() }
+    /// Gets the type of the value.
     pub fn get_type(&self) -> &Type { &self.typ }
+    /// Gets the data inside the value as a slice.
     pub fn get_slice(&self) -> &[u8] { &self.data }
 }
 

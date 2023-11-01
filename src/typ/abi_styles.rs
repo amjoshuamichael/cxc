@@ -66,10 +66,9 @@ pub fn realize_arg_style(arg_style: ArgStyle, on: &Type) -> Type {
 const MAX_REG_SIZE: usize = if cfg!(unix) { 16 } else { 8 };
 
 impl Type {
-    pub fn return_style(&self, abi: ABI) -> ReturnStyle {
+    pub(crate) fn return_style(&self, abi: ABI) -> ReturnStyle {
         use TypeEnum::*;
 
-        dbg!(self);
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) => {
@@ -132,7 +131,7 @@ impl Type {
         }
     }
 
-    pub fn arg_style(&self, abi: ABI) -> ArgStyle {
+    pub(crate) fn arg_style(&self, abi: ABI) -> ArgStyle {
         use TypeEnum::*;
 
         match self.as_type_enum() {
@@ -216,5 +215,13 @@ impl Type {
                 }
             }
         }
+    }
+
+    pub(crate) fn raw_return_type(&self, abi: ABI) -> Type {
+        realize_return_style(self.return_style(abi), self)
+    }
+
+    pub(crate) fn raw_arg_type(&self, abi: ABI) -> Type {
+        realize_arg_style(self.arg_style(abi), self)
     }
 }

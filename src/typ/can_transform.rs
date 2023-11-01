@@ -55,7 +55,7 @@ pub fn transformation_steps_dist(list: &TransformationList) -> u32 {
 }
 
 impl Type {
-    pub fn can_transform_to(
+    pub(crate) fn can_transform_to(
         &self, 
         spec: TypeSpec, 
     ) -> Option<Transformation> {
@@ -207,7 +207,7 @@ impl Type {
         })
     }
 
-    pub fn route_to(&self, field: VarName) -> Option<(TransformationList, Type)> {
+    pub(crate) fn route_to(&self, field: VarName) -> Option<(TransformationList, Type)> {
         match self.as_type_enum() {
             TypeEnum::Ref(RefType { base }) => {
                 let mut base = base.clone();

@@ -1,18 +1,19 @@
 use super::*;
 
-pub trait Kind {
+/// A variant of [`TypeEnum`].
+pub trait TypeEnumVariant {
     fn to_string(&self) -> String;
 }
 
-impl Kind for Type {
+impl TypeEnumVariant for Type {
     fn to_string(&self) -> String { self.as_type_enum().to_string() }
 }
 
-impl Kind for RefType {
+impl TypeEnumVariant for RefType {
     fn to_string(&self) -> String { "&".to_string() + &*format!("{:?}", self.base) }
 }
 
-impl Kind for FuncType {
+impl TypeEnumVariant for FuncType {
     fn to_string(&self) -> String {
         let args_names: String = self
             .args
@@ -26,7 +27,7 @@ impl Kind for FuncType {
     }
 }
 
-impl Kind for StructType {
+impl TypeEnumVariant for StructType {
     fn to_string(&self) -> String {
         let mut output = String::new();
         let fields_iter = self.fields.iter().enumerate();
@@ -53,17 +54,16 @@ impl Kind for StructType {
     }
 }
 
-impl Kind for IntType {
+impl TypeEnumVariant for IntType {
     fn to_string(&self) -> String {
         let prefix = if self.signed { 'i' } else { 'u' };
         format!("{prefix}{}", self.size.to_num())
     }
 }
 
-impl Kind for FloatType {
+impl TypeEnumVariant for FloatType {
     fn to_string(&self) -> String {
         match self {
-            FloatType::F16 => "f16",
             FloatType::F32 => "f32",
             FloatType::F64 => "f64",
         }
@@ -71,23 +71,23 @@ impl Kind for FloatType {
     }
 }
 
-impl Kind for BoolType {
+impl TypeEnumVariant for BoolType {
     fn to_string(&self) -> String { "bool".into() }
 }
 
-impl Kind for ArrayType {
+impl TypeEnumVariant for ArrayType {
     fn to_string(&self) -> String { format!("[{}]{:?}", self.count, self.base) }
 }
 
-impl Kind for UnknownType {
+impl TypeEnumVariant for UnknownType {
     fn to_string(&self) -> String { String::from("unknown") }
 }
 
-impl Kind for VoidType {
+impl TypeEnumVariant for VoidType {
     fn to_string(&self) -> String { String::from("void") }
 }
 
-impl Kind for DestructorType {
+impl TypeEnumVariant for DestructorType {
     fn to_string(&self) -> String {
         let root_node = self.destructor.tree.get(self.destructor.tree.root);
         let code_string = root_node.to_string(&self.destructor.tree, &self.destructor.variables);

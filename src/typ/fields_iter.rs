@@ -138,7 +138,10 @@ impl Iterator for FieldsIter {
 }
 
 impl Type {
+    /// Creates a new [`FieldsIter`] with this type.
     pub fn fields_iter(&self) -> FieldsIter { FieldsIter::new(self.clone()) }
+
+    /// Creates a new [`PrimitiveFieldsIter`] with this type.
     pub fn primitive_fields_iter(&self) -> PrimitiveFieldsIter { PrimitiveFieldsIter::new(self.clone()) }
 }
 

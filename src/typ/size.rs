@@ -5,7 +5,6 @@ use super::{Field, DestructorType};
 pub(super) fn size_of_type(typ: Type) -> usize {
     let base_size = match typ.as_type_enum() {
         TypeEnum::Int(IntType { size, .. }) => size.to_num() / 8,
-        TypeEnum::Float(FloatType::F16) => 2,
         TypeEnum::Float(FloatType::F32) => 4,
         TypeEnum::Float(FloatType::F64) => 8,
         TypeEnum::Bool => 1,
@@ -40,7 +39,7 @@ pub(super) fn size_of_type(typ: Type) -> usize {
     base_size
 }
 
-pub fn size_of_largest_field_in(typ: &Type) -> usize {
+pub(super) fn size_of_largest_field_in(typ: &Type) -> usize {
     match typ.as_type_enum() {
         TypeEnum::Struct(StructType { fields, .. }) => {
             let mut sizes = fields.iter()
@@ -58,21 +57,3 @@ pub fn size_of_largest_field_in(typ: &Type) -> usize {
         _ => typ.size(),
     }
 }
-
-impl StructType {
-    pub fn field_offset_in_bytes(&self, field_index: usize) -> usize {
-        let mut size_sum: usize = 0;
-
-        for field in &self.fields[0..field_index] {
-            let size = field.typ.size();
-            let field_alignment = size_of_largest_field_in(&field.typ);
-
-            size_sum = size_sum.next_multiple_of(field_alignment);
-            size_sum += size;
-        }
-
-        let last_field_alignment = size_of_largest_field_in(&self.fields[field_index].typ);
-        size_sum.next_multiple_of(last_field_alignment)
-    }   
-}
-

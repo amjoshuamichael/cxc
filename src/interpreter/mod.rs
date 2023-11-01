@@ -6,7 +6,6 @@ use crate::{unit::{backends::IsBackend, FuncId, callable::CallInput, ProcessedFu
 
 mod lowered_func;
 mod interpreter;
-mod call_with_values;
 
 use interpreter::run_with_args;
 use lowered_func::LoweredInterpreterFunc;

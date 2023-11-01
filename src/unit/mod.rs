@@ -47,6 +47,10 @@ pub mod backends;
 
 use crate as cxc;
 
+/// One of the most important structs in the compiler, `Unit` is a God object that contains
+/// everything. Most of the important interactions with Cxc as a scripting language are
+/// done through the `Unit`, including, but not limited to [`Unit::push_script`], which
+/// adds code to the Cxc module.
 pub struct Unit {
     pub comp_data: Pin<Box<CompData>>,
     pub(crate) backend: Backend,

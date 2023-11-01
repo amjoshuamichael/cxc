@@ -504,7 +504,7 @@ impl HNodeData {
 
     pub fn void() -> Self {
         HNodeData::StructLit {
-            var_type: Type::empty(),
+            var_type: Type::empty_struct(),
             fields: Vec::new(),
             initialize: InitOpts::NoFill,
         }

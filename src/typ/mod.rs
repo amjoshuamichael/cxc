@@ -21,91 +21,107 @@ mod abi_styles;
 
 use cxc_derive::XcReflect;
 
-pub use kind::Kind;
+pub use kind::TypeEnumVariant;
 pub use abi_styles::{ReturnStyle, realize_return_style, realize_arg_style, ArgStyle};
 use crate::xc_opaque;
 
 use crate as cxc;
 
-#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
+/// One of the most important structs in the compiler, [`Type`] holds a data type.
+/// 
+/// Cxc's structural type system is reflected in its compiler design. Instead of holding
+/// a type id, or the name of a type, this object holds everything needed to describe and
+/// analyze the contents of the type, including the types behind references. Internally,
+/// [`Type`] holds a `Arc<[TypeData]>`, which contains a [`TypeName`], generics, and a 
+/// [`TypeEnum`]. `TypeEnum` holds the actual type information–the integer sizes, the struct 
+/// fields, etc. `TypeEnum`s containing variants like [`StructType`] and [`FuncType`] hold 
+/// their inner data, like fields and arguments, behind `Type` objects as well. In this
+/// way, data types stretch out into a network of `Type`s, each pointing to each other,
+/// making type inspection trivial. For instance, if you wanted to find the first argument
+/// of a `FuncType`, you would do it like this:
+/// 
+/// ```ignore
+/// let typ = /* something ... */;
+/// let FuncType { args, .. } = type.as_type_enum() else { panic!("not a func!") };
+/// let first_arg = args[0].clone();
+/// ```
+///
+/// This has minimal overhead. If you wanted to place the `first_arg` somewhere else,
+/// calling `Type::func_with_args` would not clone the inner types, and would instead
+/// create new references.
+#[derive(PartialEq, Eq, Hash, Clone, Default, XcReflect)]
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result { write!(f, "{:?}", self.0) }
 }
 
-impl Default for Type {
-    fn default() -> Self { Type::unknown() }
-}
-
 impl Type {
-    pub fn new(type_enum: TypeEnum) -> Self { Self(Arc::new(type_enum.into())) }
+    /// Moves a [`TypeEnum`] into a new [`Type`].
+    pub fn new(type_enum: TypeEnum) -> Self { 
+        Self(Arc::new(TypeData {
+            type_enum,
+            ..Default::default()
+        })) 
+    }
 
+    /// Calculates the size of the [`Type`], in bytes. The inner [`TypeData`] caches the size
+    /// once it has already been calculated, so this should be a pretty low-overhead call.
     pub fn size(&self) -> usize { 
         self.0.cached_size.retrieve_or_call(|| size::size_of_type(self.clone()) )
     }
 
-    pub fn raw_return_type(&self, abi: ABI) -> Type {
-        realize_return_style(self.return_style(abi), self)
-    }
-
-    pub fn raw_arg_type(&self, abi: ABI) -> Type {
-        realize_arg_style(self.arg_style(abi), self)
-    }
-
-    pub fn complete_deref(mut self) -> Type {
-        while let Some(derefed) = self.clone().get_deref() {
-            self = derefed;
-        }
-
-        self
-    }
-
+    /// Creates a new [`Type`], containing a reference to this type.
     pub fn get_ref(&self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self.clone() })) }
 
+    /// If this is holding a [`RefType`], returns a clone of the type that is being pointed
+    /// to. Otherwise, returns [`None`].
     pub fn get_deref(&self) -> Option<Type> {
-        match self.remove_wrappers().as_type_enum() {
+        match self.as_type_enum() {
             TypeEnum::Ref(t) => Some(t.base.clone()),
             _ => None,
         }
     }
 
+    /// Creates a new [`Type`], containing an [`ArrayType`] with this type as a base, and
+    /// a given count as the array length.
     pub fn get_array(self, count: u32) -> Type {
         Type::new(TypeEnum::Array(ArrayType { base: self, count }))
     }
 
-    pub fn wrap(self) -> Type { Type::new_tuple(vec![self]) }
-
-    pub fn as_u64(self) -> u64 { self.into_raw() as u64 }
-    pub fn into_raw(self) -> *const TypeData { Arc::into_raw(self.0) }
-
-    /// # Safety
-    ///
-    /// Ensure that data is a valid pointer to a TypeData
-    pub unsafe fn from_raw(data: *const TypeData) -> Self { Self(Arc::from_raw(data)) }
-
+    /// Crates a signed int type with the given `size`.
+    /// # Panics
+    /// - Panics if the size is not a valid [`IntSize`].
     pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType::new(size, true))) }
+    /// Crates an unsigned int type with the given `size`.
+    /// # Panics
+    /// - Panics if the size is not a valid [`IntSize`].
     pub fn u(size: u32) -> Type { Type::new(TypeEnum::Int(IntType::new(size, false))) }
 
-    pub fn f16() -> Type { Type::new(TypeEnum::Float(FloatType::F16)) }
-
+    /// Creates an `f32` type.
     pub fn f32() -> Type { Type::new(TypeEnum::Float(FloatType::F32)) }
 
+    /// Creates an `f64` type.
     pub fn f64() -> Type { Type::new(TypeEnum::Float(FloatType::F64)) }
 
+    /// Creates a floating point type using the given [`FloatType`].
     pub fn f(size: impl Into<FloatType>) -> Type { Type::new(TypeEnum::Float(size.into())) }
 
+    /// Creates a `bool` type.
     pub fn bool() -> Type { Type::new(TypeEnum::Bool) }
 
-    pub fn empty() -> Type { Type::new_struct(Vec::new()) }
-
+    /// Creates a new struct, with the given [`Field`]s.
     pub fn new_struct(fields: Vec<Field>) -> Type {
         Type::new(TypeEnum::Struct(StructType {
             fields,
-            repr: Repr::Rust,
+            repr: Repr::default(),
         }))
     }
 
+    /// Creates a new empty struct type, with no fields.
+    pub fn empty_struct() -> Type { Type::new_struct(Vec::new()) }
+
+    /// Creates a new tuple, with the given [`Type`]s. None of the fields are inherited.
     pub fn new_tuple(fields: Vec<Type>) -> Type {
         let indexed_fields = fields
             .into_iter()
@@ -119,30 +135,40 @@ impl Type {
 
         Type::new(TypeEnum::Struct(StructType {
             fields: indexed_fields,
-            repr: Repr::Rust,
+            repr: Repr::default(),
         }))
     }
 
+    /// Creates a new unknown type. (See: [`UnknownType`])
     pub fn unknown() -> Type { Type::new(TypeEnum::Unknown) }
 
+    /// Creates a new void type. (See: [`UnknownType`])
     pub fn void() -> Type { Type::new(TypeEnum::Void) }
-    pub fn void_ptr() -> Type { Type::new(TypeEnum::Void).get_ref() }
 
+    /// Creates a new function type, with `self` as the return type, and a given set of
+    /// arguments.
     pub fn func_with_args(self, args: Vec<Type>, abi: ABI) -> Type {
         Type::new(TypeEnum::Func(FuncType { ret: self, args, abi }))
     }
 
-    pub fn remove_wrappers(&self) -> &Type {
-        match self.as_type_enum() {
-            TypeEnum::Destructor(DestructorType { base, .. }) => base,
-            _ => self
+    /// Derefs the type to a non-reference by repeatedly calling [`Type::get_deref`].
+    pub fn complete_deref(mut self) -> Type {
+        while let Some(derefed) = self.clone().get_deref() {
+            self = derefed;
         }
+
+        self
     }
 
+    /// Gets the inner TypeEnum of a type, as a referenece.
     pub fn as_type_enum(&self) -> &TypeEnum { &self.0.type_enum }
+    /// Gets the inner TypeEnum of a type, as a clone.
     pub fn clone_type_enum(&self) -> TypeEnum { self.0.type_enum.clone() }
 
+    /// Gets the type's inner [`TypeName`].
     pub fn name(&self) -> &TypeName { &self.0.name }
+    /// Gets the type's inner generics, which it will have if it was created using a type
+    /// declaration with generics.
     pub fn generics(&self) -> &Vec<Type> { &self.0.generics }
 
     pub(crate) fn with_name(self, name: TypeName) -> Self {
@@ -153,7 +179,7 @@ impl Type {
         self.modify_type_data(|data| data.generics = generics.to_owned())
     }
 
-    pub fn modify_type_data(self, function: impl FnOnce(&mut TypeData)) -> Self {
+    pub(crate) fn modify_type_data(self, function: impl FnOnce(&mut TypeData)) -> Self {
         match Arc::try_unwrap(self.0) {
             Ok(mut type_data) => {
                 function(&mut type_data);
@@ -167,37 +193,29 @@ impl Type {
         }
     }
 
+    /// Checks if the type is an [`UnknownType`].
     pub fn is_unknown(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Unknown) }
+    /// Checks if the type is not an [`UnknownType`].
     pub fn is_known(&self) -> bool { !self.is_unknown() }
+    /// Checks if the type is a [`VoidType`].
     pub fn is_void(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Void) }
+    /// Checks if the type is a [`FloatType`].
     pub fn is_float(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Float { .. }) }
-    pub fn is_empty(&self) -> bool { self == &Type::empty() }
+    /// Checks if the type is a [`RefType`].
+    pub fn is_ref(&self) -> bool { matches!(self.as_type_enum(), TypeEnum::Ref(_)) }
 
+    /// Checks if the type is an empty struct.
     pub fn repr(&self) -> Repr {
         match self.as_type_enum() {
             TypeEnum::Struct(StructType { repr, .. }) => *repr,
-            _ => Repr::Rust,
+            _ => Repr::default(),
         }
     }
-
-    pub fn is_primitive(&self) -> bool {
-        !matches!(
-            self.as_type_enum(), 
-            TypeEnum::Struct(_) | 
-            TypeEnum::Array(_)
-        )
-    }
-
-    pub fn is_ref(&self) -> bool {
-        matches!(self.as_type_enum(), TypeEnum::Ref(_))
-    }
-
-    pub fn full_name(&self) -> String { format!("{self:?}") }
 }
 
 #[derive(PartialEq, Eq, Default, Hash, Clone, XcReflect)]
 #[xc_opaque]
-pub struct TypeData {
+pub(crate) struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
     pub generics: Vec<Type>,
@@ -229,20 +247,10 @@ impl Debug for TypeData {
     }
 }
 
-impl From<TypeEnum> for TypeData {
-    fn from(type_enum: TypeEnum) -> Self {
-        Self {
-            type_enum,
-            ..Default::default()
-        }
-    }
-}
-
-impl TypeData {
-    pub fn is_named(&self) -> bool { self.name != TypeName::Anonymous }
-}
-
 #[derive(PartialEq, Eq, Default, Hash, Clone, XcReflect)]
+/// The inner data of a type. This exists as a wrapper over the various types that
+/// implement [TypeEnumVariant]. You can access a given [Type]'s inner TypeEnum using
+/// [Type::as_type_enum] and [Type::clone_type_enum].
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -265,7 +273,7 @@ impl Debug for TypeEnum {
 }
 
 impl Deref for TypeEnum {
-    type Target = dyn Kind;
+    type Target = dyn TypeEnumVariant;
 
     fn deref(&self) -> &Self::Target {
         match self {
@@ -284,12 +292,13 @@ impl Deref for TypeEnum {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, XcReflect)]
+/// A reference data type.
 pub struct RefType {
     pub base: Type,
 }
 
 /// The ABI of a function, similar to the possible strings after rust's `extern` keyword.
-/// See: https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier
+/// See [the Rust documentation](https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier) for more explanation.
 #[derive(Copy, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
 pub enum ABI {
     /// Works like extern "Rust".
@@ -303,6 +312,9 @@ pub enum ABI {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, XcReflect)]
+/// A function data type. This is used both for the value of a first class function, and
+/// to represent the specified argument and return types for a declared and compiled 
+/// function.
 pub struct FuncType {
     pub ret: Type,
     pub args: Vec<Type>,
@@ -310,6 +322,7 @@ pub struct FuncType {
 }
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Default, Debug, XcReflect)]
+/// The way that the data of a struct is organized. This currently has no effect.
 pub enum Repr {
     #[default]
     Rust,
@@ -318,12 +331,14 @@ pub enum Repr {
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
+/// A struct data type, including the [Repr].
 pub struct StructType {
     pub fields: Vec<Field>,
     pub repr: Repr,
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
+/// The individual field of a [StructType].
 pub struct Field {
     pub name: VarName,
     pub typ: Type,
@@ -331,48 +346,55 @@ pub struct Field {
 }
 
 impl StructType {
-    pub fn get_field_type(&self, field_name: &VarName) -> TResult<Type> {
-        for field in &self.fields {
-            if field.name == *field_name {
-                return Ok(field.typ.clone());
-            }
+    /// For a field at a given index, returns the offset in bytes. For instance, calling
+    /// `.field_offset_in_bytes(2)` on struct `{ u32, f32, i8 }` would return 8.
+    pub fn field_offset_in_bytes(&self, field_index: usize) -> usize {
+        let mut size_sum: usize = 0;
+
+        for field in &self.fields[0..field_index] {
+            let size = field.typ.size();
+            let field_alignment = size::size_of_largest_field_in(&field.typ);
+
+            size_sum = size_sum.next_multiple_of(field_alignment);
+            size_sum += size;
         }
 
-        Err(TErr::FieldNotFound(TypeEnum::Struct(self.clone()), field_name.clone()))
+        let last_field_alignment = 
+            size::size_of_largest_field_in(&self.fields[field_index].typ);
+
+        size_sum.next_multiple_of(last_field_alignment)
     }
 
-    pub fn get_field_index(&self, field_name: &VarName) -> TResult<usize> {
+    /// Gets the index of a particular field, given a [`VarName`]. Returns [`None`] if the 
+    /// field doesn't exist.
+    pub fn get_field_index(&self, field_name: &VarName) -> Option<usize> {
         self.fields
             .iter()
             .position(|field| field.name == *field_name)
-            .ok_or(TErr::FieldNotFound(TypeEnum::Struct(self.clone()), field_name.clone()))
     }
 
-    pub fn is_tuple(&self) -> bool { self.fields.is_empty() || matches!(self.fields[0].name, VarName::TupleIndex(0)) }
-
-    pub fn largest_field(&self) -> Option<Type> {
-        if self.fields.len() == 0 {
-            return None
-        }
-
-        let mut types = self.fields.iter().map(|Field { typ, .. }| typ).collect::<Vec<_>>();
-        types.sort_by(|a, b| b.size().cmp(&a.size()));
-
-        Some(types[0].clone())
+    /// Checks if this Struct is a tuple by analyzing its field names. Here, the empty 
+    /// struct classifies as a tuple.
+    pub fn is_tuple(&self) -> bool { 
+        self.fields.is_empty() || 
+            matches!(self.fields[0].name, VarName::TupleIndex(0)) 
     }
 
+    /// Checks if this field exists on this [`StructType`].
     pub fn has_field(&self, check_name: &VarName) -> bool {
         self.fields.iter().any(|Field { name, .. }| check_name == name)
     }
 }
 
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+/// An integer data type, wrapping [`IntSize`].
 pub struct IntType {
     pub size: IntSize,
     pub signed: bool,
 }
 
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+/// The size of an integer type (e.g. u8, i64).
 pub enum IntSize {
     _8,
     _16,
@@ -411,8 +433,8 @@ impl IntType {
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord, XcReflect)]
+/// A floating point data type, with several variations.
 pub enum FloatType {
-    F16,
     F32,
     F64,
 }
@@ -420,7 +442,6 @@ pub enum FloatType {
 impl From<usize> for FloatType {
     fn from(size: usize) -> FloatType {
         match size {
-            16 => FloatType::F16,
             32 => FloatType::F32,
             64 => FloatType::F64,
             _ => panic!("{size} is an invalid float size"),
@@ -429,25 +450,34 @@ impl From<usize> for FloatType {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, XcReflect)]
+/// A boolean data type.
 pub struct BoolType;
 
 #[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
+/// This represents the "Unknown" data type. By the time the compiler gets past the type
+/// inference step of the HLR passes, this should not be present. Notably, unknown
+/// is the default value for [`TypeEnum`] and [`Type`].
 pub struct UnknownType();
 static UNKNOWN_STATIC: UnknownType = UnknownType();
 
 #[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
+/// A void data type.
 pub struct VoidType();
 static VOID_STATIC: VoidType = VoidType();
 
 #[derive(PartialEq, Hash, Eq, Clone, XcReflect)]
+/// An array data type.
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
 }
 
 #[derive(Clone, XcReflect)]
+/// A Destructor data type.
 pub struct DestructorType {
     pub base: Type,
+    /// Notably, the destructor code is stored with the DestructorType in an Arc<HLR>, 
+    /// not a [`crate::FuncID`].
     pub destructor: Arc<HLR>,
 }
 

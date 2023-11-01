@@ -8,9 +8,13 @@ use crate::{
     CompData, Type, TypeName, Unit, VarName,
 };
 
+/// Allows for reflection of a given type, using [`Unit::add_reflect_type`] or
+/// [`Unit::get_reflect_type`].
 pub trait XcReflect: 'static {
+    /// Provide the code that would produce this type, as a string.
     fn spec_code() -> String;
 
+    /// Provide the type declaration for this type.
     fn type_decl() -> TypeDecl {
         let spec_code = Self::spec_code();
         let is_named = spec_code.contains('=');

@@ -179,7 +179,6 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                 TypeName::Bool => TypeSpec::Bool,
                 TypeName::F64 => TypeSpec::Float(FloatType::F64),
                 TypeName::F32 => TypeSpec::Float(FloatType::F32),
-                TypeName::F16 => TypeSpec::Float(FloatType::F16),
                 TypeName::Me => TypeSpec::Me,
                 TypeName::Other(_) => {
                     let name = name.clone();

@@ -104,8 +104,6 @@ impl ToCLType for FloatType {
     fn to_cl_type(&self) -> Vec<ClType> {
         vec![
             match self {
-                FloatType::F16 => 
-                    panic!("cranelift does not support half precision float types"),
                 FloatType::F32 => cl_types::F32,
                 FloatType::F64 => cl_types::F64,
             }

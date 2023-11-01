@@ -114,7 +114,6 @@ impl ToLLVMType for IntType {
 impl ToLLVMType for FloatType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
         match self {
-            FloatType::F16 => context.f16_type().as_any_type_enum(),
             FloatType::F32 => context.f32_type().as_any_type_enum(),
             FloatType::F64 => context.f64_type().as_any_type_enum(),
         }
