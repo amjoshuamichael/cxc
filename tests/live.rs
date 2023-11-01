@@ -1,10 +1,8 @@
 use cxc::{Unit, library::StdLib, Type, ExternalFuncAdd};
-use serial_test::serial;
 
 mod test_utils;
 
 #[test]
-#[serial]
 fn hot_reload_one() {
     let mut unit = Unit::new();
     unit.push_script("the_best_num(); i32 { ; 41 } ").unwrap();
@@ -16,7 +14,6 @@ fn hot_reload_one() {
 }
 
 #[test]
-#[serial]
 fn hot_reload_many_1() {
     let mut unit = Unit::new();
 
@@ -42,7 +39,6 @@ fn hot_reload_many_1() {
 }
 
 #[test]
-#[serial]
 fn depended_on() {
     let mut unit = Unit::new();
 
@@ -60,7 +56,6 @@ fn depended_on() {
 }
 
 #[test]
-#[serial]
 fn generic_depended_on() {
     let mut unit = Unit::new();
 
@@ -75,7 +70,6 @@ fn generic_depended_on() {
 }
 
 #[test]
-#[serial]
 fn depends_on() {
     let mut unit = Unit::new();
 
@@ -93,7 +87,6 @@ fn depends_on() {
 }
 
 #[test]
-#[serial]
 #[cfg_attr(feature = "backend-interpreter", ignore)]
 fn get_fn_by_ptr() {
     let mut unit = Unit::new();
@@ -145,7 +138,6 @@ fn get_fn_by_ptr() {
 }
 
 #[test]
-#[serial]
 fn hot_reload_many_2() {
     let mut unit = Unit::new();
     unit.push_script("the_best_num(); i32 { ; 200 } ").unwrap();
@@ -165,7 +157,6 @@ fn hot_reload_many_2() {
 }
 
 #[test]
-#[serial]
 fn get_previous() {
     let mut unit = Unit::new();
     unit.push_script("func_one(); i32 { ; 1 } ").unwrap();
@@ -183,7 +174,6 @@ fn get_previous() {
 }
 
 #[test]
-#[serial]
 fn call_previous() {
     let mut unit = Unit::new();
     unit.push_script(r#"
@@ -200,7 +190,6 @@ fn call_previous() {
 }
 
 #[test]
-#[serial]
 fn call_2_previous() {
     let mut unit = Unit::new();
     unit.push_script(r#"fifty_four<T>(); T { ; T 54 }"#).unwrap();
@@ -216,7 +205,6 @@ fn call_2_previous() {
 }
 
 #[test]
-#[serial]
 fn conversion_dependents() {
     let mut unit = Unit::new();
 
@@ -252,7 +240,6 @@ fn conversion_dependents() {
 }
 
 #[test]
-#[serial]
 fn change_type_2i32() {
     let mut unit = Unit::new();
     unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();
@@ -269,7 +256,6 @@ fn change_type_2i32() {
 }
 
 #[test]
-#[serial]
 fn change_type_f32() {
     let mut unit = Unit::new();
     unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();
@@ -286,7 +272,6 @@ fn change_type_f32() {
 }
 
 #[test]
-#[serial]
 fn change_type_2f32() {
     let mut unit = Unit::new();
     unit.push_script(r#"fifty_four(); i32 { ; 54 } "#).unwrap();

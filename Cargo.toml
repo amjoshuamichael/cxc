@@ -18,12 +18,11 @@ logos = "0.12.0"
 llvm-sys = { version = "150", optional = true }
 inkwell = { version = "0.2", optional = true, features = ["llvm15-0"] }
 
-cranelift = { version = "0.95", optional = true }
-cranelift-jit = { version = "0.95", optional = true }
-cranelift-module = { version = "0.95", optional = true }
-cranelift-native = { version = "0.95", optional = true }
+cranelift = { version = "0.101.3", optional = true }
+cranelift-jit = { version = "0.101.3", optional = true }
+cranelift-module = { version = "0.101.3", optional = true }
+cranelift-native = { version = "0.101.3", optional = true }
 
-memoize = "0.3"
 slotmap = "1"
 indexmap = "1"
 passable = "1"
@@ -34,13 +33,6 @@ region = { version = "3", optional = true }
 libc = { version = "0.2", optional = true }
 
 cxc_derive = "0.2"
-
-# these libraries are re-exported into cxc
-
-glam = { version = "0.22", optional = true }
-
-[dev-dependencies]
-serial_test = "1.0.0"
 
 [features]
 default = ["backend-cranelift", "ffi-assertions"]

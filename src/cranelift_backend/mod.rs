@@ -2,7 +2,7 @@ use std::{collections::{BTreeMap, HashSet, HashMap}, sync::Arc};
 
 use crate::{unit::{backends::IsBackend, callable::CallInput, FuncId, ProcessedFuncInfo}, FuncDowncasted, Func, FuncType, mir::MIR, VarName, Type};
 
-use cranelift::prelude::{*, isa::{TargetIsa, TargetFrontendConfig}};
+use cranelift::{prelude::{*, isa::{TargetIsa, TargetFrontendConfig}}, codegen::control::ControlPlane};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Module, FuncId as ClFuncId, Linkage, default_libcall_names};
 use slotmap::SecondaryMap;
@@ -32,6 +32,7 @@ pub struct CraneliftBackend {
     external_functions: SecondaryMap<FuncId, ExternalFuncData>,
     alloc_and_free: AllocAndFree,
     func_counter: u32,
+    control_plane: ControlPlane,
 }
 
 unsafe impl Send for CraneliftBackend {}
@@ -63,6 +64,7 @@ impl IsBackend for CraneliftBackend {
             isa: Box::new(isa),
             external_functions: SecondaryMap::new(),
             func_counter: 0,
+            control_plane: ControlPlane::default(),
         };
 
         new
@@ -143,7 +145,7 @@ impl IsBackend for CraneliftBackend {
 
             self.module.define_function(cl_data.cl_func_id, &mut cl_data.ctx).unwrap();
 
-            cl_data.ctx.compile(&**self.isa).unwrap();
+            cl_data.ctx.compile(&**self.isa, &mut self.control_plane).unwrap();
 
             self.cl_function_data.insert(func_id, cl_data);
         }

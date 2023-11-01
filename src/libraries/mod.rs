@@ -1,9 +1,7 @@
-mod crates;
 pub mod std_lib;
 pub mod core_lib;
 mod test_lib;
 mod type_interface_lib;
-pub use crates::*;
 pub use std_lib::{StdLib, string::StringLib};
 pub use type_interface_lib::TypeInterfaceLib;
 
