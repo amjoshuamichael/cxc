@@ -7,7 +7,14 @@ use passable::Pass;
 use super::{ParseErrorSpanned, TokenSpan};
 
 pub type GlobalParseContext = ParseContext<()>;
-pub type FuncParseContext = ParseContext<VarName>;
+
+#[derive(Default, Debug, Clone)]
+pub struct FuncParseData {
+    pub name: VarName,
+    pub has_return: bool,
+}
+
+pub type FuncParseContext = ParseContext<FuncParseData>;
 pub type TypeParseContext = ParseContext<TypeName>;
 
 #[derive(Debug, Clone, Default)]
@@ -29,12 +36,12 @@ pub struct ParseContext<N> {
     pub spans: Rc<Vec<(usize, usize)>>,
     tok_pos: SharedNum,
     scope: SharedNum,
-    pub name: N,
+    pub inner_data: N,
     pub generic_labels: GenericLabels,
     pub errors: Pass<Vec<ParseErrorSpanned>>,
 }
 
-impl<N: Default + Clone> ParseContext<N> {
+impl GlobalParseContext {
     pub fn new(tokens: Vec<Tok>, spans: Vec<(usize, usize)>) -> Self {
         Self {
             tokens: Rc::new(tokens),
@@ -42,7 +49,9 @@ impl<N: Default + Clone> ParseContext<N> {
             ..Default::default()
         }
     }
+}
 
+impl<N: Clone> ParseContext<N> {
     pub fn get_generic_label(&self, label: &TypeName) -> Option<u8> {
         self.generic_labels.get(label).copied()
     }
@@ -55,7 +64,7 @@ impl<N: Default + Clone> ParseContext<N> {
         generic_labels: GenericLabels,
     ) -> ParseContext<T> {
         ParseContext {
-            name,
+            inner_data: name,
             generic_labels,
             tokens: self.tokens.clone(),
             spans: self.spans.clone(),
@@ -67,7 +76,7 @@ impl<N: Default + Clone> ParseContext<N> {
 
     pub fn detach(&mut self) -> Self {
         Self {
-            name: self.name.clone(),
+            inner_data: self.inner_data.clone(),
             generic_labels: self.generic_labels.clone(),
             tokens: self.tokens.clone(),
             spans: self.spans.clone(),
@@ -157,7 +166,7 @@ impl<N: Default + Clone> ParseContext<N> {
         &mut self,
         parser: impl FnMut(&mut Self) -> ParseResult<O>,
     ) -> O {
-        self.recover_with(vec![&Tok::Return], parser)
+        self.recover_with(vec![&Tok::LineFeed], parser)
     }
 
     pub fn recover_with<O: Errable>(

@@ -43,7 +43,7 @@ glam = { version = "0.22", optional = true }
 serial_test = "1.0.0"
 
 [features]
-default = ["backend-interpreter", "ffi-assertions"]
+default = ["backend-cranelift", "ffi-assertions"]
 xc-debug = []
 mir-debug = []
 backend-debug = []
@@ -53,9 +53,14 @@ backend-interpreter = ["region", "libc"]
 ffi-assertions = ["region"]
 show-bytes = []
 
-[profile.bench]
+[profile.test]
 opt-level = 3
 debug = true
 
 [profile.release]
 opt-level = 3
+
+[[bin]]
+path = "src/tests.rs"
+name = "tests"
+test = true

@@ -1,8 +1,8 @@
-use crate::lex::{Tok, TypeName, VarName};
+use crate::{lex::{Tok, TypeName, VarName}, typ::ABI};
 
 pub use context::{FuncParseContext, GlobalParseContext, ParseContext, TypeParseContext};
 pub use opcode::Opcode;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 pub use std::iter::Peekable;
 
 pub mod context;
@@ -20,6 +20,8 @@ pub(super) use list::*;
 pub use opcode::*;
 pub use parsing_data::*;
 pub(super) use structure::*;
+
+use self::context::FuncParseData;
 
 pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpanned>> {
     let script = file(&mut lexer);
@@ -59,7 +61,14 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 )));
             },
             _ if lexer.move_on(Tok::TripleMinus) => {
-                let mut func_parser = lexer.split(VarName::from("comp_script"), HashMap::new());
+                let mut func_parser = lexer.split(
+                    FuncParseData {
+                        name: VarName::from("comp_script"),
+                        has_return: false,
+                    },
+                    HashMap::new()
+                );
+
                 let mut statements = Vec::new();
 
                 while lexer.peek_tok() != Err(ParseError::UnexpectedEndOfFile) {
@@ -67,8 +76,8 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 }
 
                 let code = FuncCode {
-                    ret_type:TypeSpec::Void,
-                    ..FuncCode::from_expr(Expr::Block(statements))
+                    ret_type: TypeSpec::Void,
+                    ..FuncCode::from_expr(Rc::new(Expr::Block(statements)))
                 };
 
                 script.comp_script = Some(code);
@@ -103,8 +112,8 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                 } else {
                     let method_of = {
                         let mut method_of_parser = lexer
-                            .split(VarName::from("beginning_of_impl"), generic_labels.clone());
-                        parse_type_spec(&mut method_of_parser)?
+                            .split(TypeName::Anonymous, generic_labels.clone());
+                        parse_type(&mut method_of_parser)?
                     };
 
                     let relation = match lexer.next_tok()? {
@@ -164,12 +173,12 @@ pub fn parse_generic_label(lexer: &mut GlobalParseContext) -> ParseResult<TypeNa
 }
 
 pub fn parse_func(
-    lexer: &mut GlobalParseContext,
+    glexer: &mut GlobalParseContext,
     relation: TypeSpecRelation,
     outer_generics: GenericLabels,
-) -> Result<FuncCode, ParseError> {
-    let func_name = lexer.next_tok()?.var_name()?;
-    let generic_labels = parse_generics(lexer)?;
+) -> ParseResult<FuncCode> {
+    let func_name = glexer.next_tok()?.var_name()?;
+    let generic_labels = parse_generics(glexer)?;
 
     let all_generics = merge(&generic_labels, &outer_generics);
 
@@ -177,20 +186,14 @@ pub fn parse_func(
         todo!("reused generics error")
     }
 
-    let func_context = lexer.split(func_name, all_generics);
-    parse_func_code(func_context, relation)
-}
+    glexer.generic_labels = all_generics.clone();
 
-pub fn parse_func_code(
-    mut lexer: FuncParseContext,
-    relation: TypeSpecRelation,
-) -> ParseResult<FuncCode> {
-    let mut args = parse_list(Tok::parens(), COMMAS, parse_var_decl, &mut lexer)?;
+    let mut args = parse_list(Tok::parens(), COMMAS, parse_var_decl, glexer)?;
 
-    let ret_type = match lexer.peek_tok()? {
+    let ret_type = match glexer.peek_tok()? {
         Tok::Semicolon => {
-            lexer.next_tok()?;
-            parse_type_spec(&mut lexer)?
+            glexer.next_tok()?;
+            parse_type_spec(glexer)?
         },
         Tok::LCurly => {
             TypeSpec::Void
@@ -200,9 +203,14 @@ pub fn parse_func_code(
         }
     };
 
-    let code = parse_block(&mut lexer)?;
+    let mut flexer = glexer.split(FuncParseData {
+        name: func_name,
+        has_return: ret_type != TypeSpec::Void,
+    }, all_generics);
 
-    let generic_count = lexer.generic_count();
+    let code = parse_block(&mut flexer)?;
+
+    let generic_count = flexer.generic_count();
 
     if let TypeSpecRelation::MethodOf(relation) = &relation {
         args.insert(0, VarDecl {
@@ -212,17 +220,18 @@ pub fn parse_func_code(
     }
 
     Ok(FuncCode {
-        name: lexer.name.clone(),
+        name: flexer.inner_data.name.clone(),
         ret_type,
         args,
-        code,
+        code: Rc::new(code),
         generic_count,
         relation,
         is_external: false,
+        abi: ABI::C,
     })
 }
 
-fn parse_var_decl(lexer: &mut FuncParseContext) -> ParseResult<VarDecl> {
+fn parse_var_decl<T: Clone>(lexer: &mut ParseContext<T>) -> ParseResult<VarDecl> {
     let var_name = lexer.next_tok()?.var_name()?;
 
     let type_spec = match lexer.peek_tok()? {
@@ -312,7 +321,11 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         _ if lexer.move_on(Tok::Question) => parse_if(lexer),
         _ if lexer.move_on(Tok::For) => parse_for(lexer),
         _ if lexer.move_on(Tok::Semicolon) => {
-            Ok(Expr::Return(Box::new(parse_expr(lexer)?)))
+            if lexer.inner_data.has_return || matches!(lexer.peek_tok()?, Tok::Label(_)) {
+                Ok(Expr::Return(Some(Box::new(parse_expr(lexer)?))))
+            } else {
+                Ok(Expr::Return(None))
+            }
         },
         got => {
             return ParseError::unexpected(&got, vec![

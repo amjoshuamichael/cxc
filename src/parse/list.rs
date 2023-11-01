@@ -3,7 +3,7 @@ use crate::lex::Tok;
 
 pub const COMMAS: Option<TokWithName> = Some((Tok::Comma, TokName::Comma));
 
-pub fn parse_list<T: Default + Clone, O: Errable>(
+pub fn parse_list<T: Clone, O: Errable>(
     opener_and_closer: (TokWithName, TokWithName), // tuple used to make calls cleaner
     separator: Option<TokWithName>,
     parser: impl Fn(&mut ParseContext<T>) -> ParseResult<O>,

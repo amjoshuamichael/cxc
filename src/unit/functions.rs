@@ -1,6 +1,6 @@
 use crate::{
     errors::{CResult, FErr, TErr, TResult},
-    FuncType, Type, TypeRelation, typ::can_transform::{transformation_steps_dist, Transformation},
+    FuncType, Type, TypeRelation, typ::{can_transform::{transformation_steps_dist, Transformation}, ABI},
 };
 
 pub type DeriverFunc = fn(&CompData, Type) -> Option<FuncCode>;
@@ -41,9 +41,8 @@ impl CompData {
             }],
             ret_type: TypeSpec::UInt(8).get_ref(),
             generic_count: 0,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -54,9 +53,8 @@ impl CompData {
                 type_spec: TypeSpec::GenParam(0).get_ref(),
             }],
             generic_count: 1,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -77,9 +75,8 @@ impl CompData {
                 },
             ],
             generic_count: 1,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -100,9 +97,8 @@ impl CompData {
                 },
             ],
             generic_count: 1,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -110,9 +106,8 @@ impl CompData {
             ret_type: TypeSpec::UInt(64),
             args: Vec::new(),
             generic_count: 1,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -120,9 +115,8 @@ impl CompData {
             ret_type: TypeSpec::UInt(64),
             args: Vec::new(),
             generic_count: 1,
-            code: Expr::Block(Vec::new()),
-            relation: TypeSpecRelation::Unrelated,
             is_external: true,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -134,8 +128,7 @@ impl CompData {
             ret_type: "U".into(),
             generic_count: 2,
             is_external: true,
-            code: Expr::empty_block(),
-            relation: TypeSpecRelation::Unrelated,
+            ..FuncCode::empty()
         });
 
         out.insert_intrinsic(FuncCode {
@@ -144,8 +137,7 @@ impl CompData {
             ret_type: "Type".into(),
             generic_count: 1,
             is_external: true,
-            code: Expr::empty_block(),
-            relation: TypeSpecRelation::Unrelated,
+            ..FuncCode::empty()
         });
 
         out.typedefs.insert("Type".into(), TypeSpec::Int(64));
@@ -201,6 +193,7 @@ impl CompData {
                 if let Some(result) = 
                     looking_for_relation.can_transform_to(looking_at_relation.clone()) {
                     let result_dist = transformation_steps_dist(&result.steps);
+                    
                     if closest_function_dist > result_dist {
                         closest_function_dist = result_dist;
                         closest_function = Some((id, Some(result)));
@@ -274,6 +267,7 @@ impl CompData {
         Ok(FuncType {
             ret: ret_type,
             args: arg_types,
+            abi: ABI::C,
         })
     }
 
@@ -359,8 +353,8 @@ use std::{hash::Hash, borrow::Cow};
 
 use super::*;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, PartialOrd, Ord, XcReflectMac)]
-#[repr(C)] // TODO: this shouldn't have to be here
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, XcReflectMac)]
+#[repr(C)]
 pub struct FuncQuery {
     pub name: VarName,
     pub relation: TypeRelation,
@@ -394,7 +388,7 @@ impl FuncQuery {
     }
 }
 
-#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Copy, Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct FuncCodeQuery<'a> {
     pub name: &'a VarName,
@@ -410,7 +404,7 @@ impl<'a> FuncCodeQuery<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(C)]
 // TODO: rename this to code query?? idk why it's called function code query. 
 // where else would code be. where else did i think code was.

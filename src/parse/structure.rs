@@ -3,7 +3,7 @@ use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
 
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Hash, Default, Debug, Clone, PartialEq, Eq)]
 pub enum TypeSpec {
     Named(TypeName),
     Generic(TypeName, Vec<TypeSpec>),
@@ -26,6 +26,7 @@ pub enum TypeSpec {
     TypeLevelFunc(TypeName, Vec<TypeSpec>),
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
+    Destructor(Box<TypeSpec>, Rc<Expr>),
     #[default]
     Void,
     Unknown,
@@ -55,42 +56,39 @@ impl From<&str> for TypeSpec {
 #[derive(PartialEq, Eq, Debug)]
 enum TypeOps {
     Plus,
+    Destructor,
 }
 
-pub fn parse_type_spec(lexer: &mut FuncParseContext) -> Result<TypeSpec, ParseError> {
+pub fn parse_type_spec<T: Clone>(lexer: &mut ParseContext<T>) -> Result<TypeSpec, ParseError> {
     let mut temp_lexer = lexer.split(TypeName::Anonymous, lexer.generic_labels.clone());
     parse_type(&mut temp_lexer)
 }
 
-fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    let mut types_between_ops = Vec::<TypeSpec>::new();
-    let mut ops = Vec::<TypeOps>::new();
+pub fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
+    let atom = parse_type_atom(lexer)?;
 
-    loop {
-        types_between_ops.push(parse_type_atom(lexer)?);
+    if lexer.move_on(Tok::Tilde) {
+        let mut destructor_parser = lexer.split(FuncParseData {
+            name: VarName::None,
+            has_return: false,
+        }, lexer.generic_labels.clone());
 
-        let op = match lexer.peek_tok() {
-            Ok(Tok::Plus) => TypeOps::Plus,
-            _ => break,
+        let destructor = if lexer.peek_tok()? == &Tok::LCurly {
+            parse_block(&mut destructor_parser)?
+        } else {
+            Expr::Block(vec![parse_expr(&mut destructor_parser)?])
         };
 
-        lexer.next_tok()?;
-        ops.push(op);
+        Ok(TypeSpec::Destructor(Box::new(atom), Rc::new(destructor)))
+    } else {
+        Ok(atom)
     }
-
-    while let Some(_plus_pos) = ops.iter().position(|a| *a == TypeOps::Plus) {
-        todo!()
-    }
-
-    assert_eq!(types_between_ops.len(), 1, "fatal error when parsing type operations");
-
-    Ok(types_between_ops.remove(0))
 }
 
 fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     let beginning_of_spec = lexer.peek_tok()?.clone();
 
-    let type_spec = match beginning_of_spec {
+    let mut type_spec = match beginning_of_spec {
         Tok::LCurly => match (lexer.peek_by(1), lexer.peek_by(2), lexer.peek_by(3)) {
             (Ok(Tok::VarName(_)), Ok(Tok::Colon), _) |
             (Ok(Tok::Plus), Ok(Tok::VarName(_)), Ok(Tok::Colon))
@@ -146,7 +144,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         Tok::AmpersandSet(count) => {
             lexer.next_tok()?;
 
-            let mut output = parse_type(lexer)?;
+            let mut output = parse_type_atom(lexer)?;
 
             for _ in 0..count {
                 output = output.get_ref();
@@ -157,7 +155,7 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         Tok::AsterickSet(count) => {
             lexer.next_tok()?;
 
-            let mut output = parse_type(lexer)?;
+            let mut output = parse_type_atom(lexer)?;
 
             for _ in 0..count {
                 output = output.get_deref();
@@ -226,31 +224,33 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
         },
     };
 
-    let final_output = match lexer.peek_tok() {
-        Ok(Tok::Dot) => {
-            lexer.next_tok()?;
-
+    loop {
+        type_spec = if lexer.move_on(Tok::Dot) {
             match lexer.next_tok()? {
                 Tok::VarName(name) => 
                     TypeSpec::StructMember(Box::new(type_spec), name.clone()),
                 Tok::TypeName(name) => 
                     TypeSpec::SumMember(Box::new(type_spec), name.clone()),
                 got => {
-                    return ParseError::unexpected(got, vec![TokName::VarName, TokName::TypeName]);
+                    return ParseError::unexpected(
+                        got, 
+                        vec![TokName::VarName, TokName::TypeName]
+                    );
                 },
             }
-        },
-        _ => type_spec,
+        } else {
+            break
+        }
     };
 
-    Ok(final_output)
+    Ok(type_spec)
 }
 
 pub fn parse_type_decl(mut lexer: TypeParseContext) -> Result<TypeDecl, ParseError> {
     let spec = parse_type(&mut lexer)?;
 
     let contains_generics = lexer.has_generics();
-    let name = lexer.name.clone();
+    let name = lexer.inner_data.clone();
 
     let type_decl = TypeDecl {
         name,

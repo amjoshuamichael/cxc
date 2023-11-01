@@ -4,15 +4,10 @@ use inkwell::types::{BasicMetadataTypeEnum, FunctionType};
 use std::collections::btree_map::BTreeMap;
 
 use crate::*;
-use crate::typ::{UnknownType, VoidType, ReturnStyle};
+use crate::typ::{UnknownType, VoidType, ReturnStyle, DestructorType};
 use inkwell::AddressSpace;
 use inkwell::context::Context;
 use inkwell::types::{AnyTypeEnum, BasicTypeEnum, AnyType, BasicType};
-
-std::thread_local! {
-  static MEMOIZED_TO_ANY: RefCell<BTreeMap<Type, AnyTypeEnum<'static>>> =
-      RefCell::new(BTreeMap::new());
-}
 
 pub trait ToLLVMType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static>;
@@ -24,23 +19,7 @@ pub trait ToLLVMType {
 
 impl ToLLVMType for Type {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        let possible_output = MEMOIZED_TO_ANY.with(|memoized| {
-            let memoized = memoized.borrow();
-            memoized.get(&self).cloned()
-        });
-
-        if let Some(possible_output) = possible_output {
-            return possible_output;
-        }
-
-        let output = self.as_type_enum().to_any_type(context);
-
-        MEMOIZED_TO_ANY.with(|memoized| {
-            let mut memoized = memoized.borrow_mut();
-            memoized.insert(self.clone(), output.clone());
-        });
-
-        output
+        self.as_type_enum().to_any_type(context)
     }
 }
 
@@ -53,6 +32,7 @@ impl ToLLVMType for TypeEnum {
             TypeEnum::Ref(t) => t.to_any_type(context),
             TypeEnum::Func(t) => t.to_any_type(context),
             TypeEnum::Array(t) => t.to_any_type(context),
+            TypeEnum::Destructor(DestructorType { base, .. }) => base.to_any_type(context),
             TypeEnum::Bool => BoolType.to_any_type(context),
             TypeEnum::Void => VoidType().to_any_type(context),
             TypeEnum::Unknown => UnknownType().to_any_type(context),
@@ -75,34 +55,34 @@ impl ToLLVMType for RefType {
 
 impl ToLLVMType for FuncType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        self.llvm_func_type(context, false)
+        self.llvm_func_type(context)
             .ptr_type(AddressSpace::default())
             .as_any_type_enum()
     }
 }
 
 impl FuncType {
-    pub fn llvm_func_type<'f>(&self, context: &'static Context, as_rust: bool) -> FunctionType<'f> {
-        let return_style = if as_rust { self.ret.rust_return_style() } else { self.ret.return_style() };
+    pub fn llvm_func_type<'f>(&self, context: &'static Context) -> FunctionType<'f> {
+        let return_style = self.ret.return_style(self.abi);
 
-        if return_style != ReturnStyle::Sret {
+        if return_style != ReturnStyle::SRet {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
-                .map(|t| t.raw_arg_type().to_basic_type(context).into())
+                .map(|t| t.raw_arg_type(self.abi).to_basic_type(context).into())
                 .collect();
 
             if self.ret.is_void() {
                 context.void_type().fn_type(&args[..], false)
             } else {
-                let return_type = if as_rust { self.ret.rust_raw_return_type() } else { self.ret.raw_return_type() };
+                let return_type = self.ret.raw_return_type(self.abi);
 
                 return_type.to_basic_type(context).fn_type(&args, false)
             }
         } else {
             let args: Vec<BasicMetadataTypeEnum> = once(&self.ret.clone().get_ref())
                 .chain(self.args.iter())
-                .map(|t| t.raw_arg_type().to_basic_type(context).into())
+                .map(|t| t.raw_arg_type(self.abi).to_basic_type(context).into())
                 .collect();
 
             context.void_type().fn_type(&args[..], false)
@@ -127,7 +107,7 @@ impl ToLLVMType for StructType {
 
 impl ToLLVMType for IntType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
-        context.custom_width_int_type(self.size).as_any_type_enum()
+        context.custom_width_int_type(self.size.to_num() as u32).as_any_type_enum()
     }
 }
 

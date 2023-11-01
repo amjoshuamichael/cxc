@@ -1,4 +1,4 @@
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Hash, Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
     #[default]
     Plus,
@@ -27,19 +27,22 @@ pub enum Opcode {
     Deref,
     Dot,
     Transform,
+    RemoveTypeWrapper,
+    Destroy,
 }
 
 use Opcode::*;
 
 impl Opcode {
-    pub const MAX_UNARY_PRECEDENT_LEVEL: u8 = 3;
+    pub const MAX_UNARY_PRECEDENT_LEVEL: u8 = 4;
     pub fn un_prec_level(&self) -> Option<u8> {
         use Opcode::*;
 
         match self {
-            Ref | Deref => Some(3),
-            Not => Some(2),
-            Transform => Some(1),
+            Ref | Deref => Some(4),
+            Not => Some(3),
+            Transform => Some(2),
+            Destroy => Some(1),
             _ => None,
         }
     }
@@ -85,6 +88,7 @@ impl ToString for Opcode {
             Not => "!",
             Or => "||",
             Transform => "+",
+            Destroy => "~",
             And => "&&",
             LessThan => "<",
             GrtrThan => ">",
@@ -98,6 +102,7 @@ impl ToString for Opcode {
             Ref => "&",
             Deref => "*",
             Dot => ".",
+            RemoveTypeWrapper => "<>-",
         }
         .into()
     }

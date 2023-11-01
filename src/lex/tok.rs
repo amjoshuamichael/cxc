@@ -2,6 +2,7 @@ use super::parse_num::*;
 use crate::parse::Opcode;
 use crate::parse::ParseError;
 use crate::parse::ParseResult;
+use crate::parse::ParsedFloat;
 use crate::parse::TokName;
 use crate::parse::TokWithName;
 use logos::{Lexer, Logos};
@@ -31,11 +32,8 @@ impl Default for VarName {
 impl Display for VarName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            VarName::Other(o) => write!(f, "{o}"),
             VarName::TupleIndex(ti) => write!(f, "{ti}"),
-            VarName::None => write!(f, "$none"),
-            VarName::Error => write!(f, "$error"),
-            VarName::Sret => write!(f, "$sret"),
+            _ => write!(f, "{}", &**self),
         }
     }
 }
@@ -190,6 +188,8 @@ pub enum Tok {
     // classifies as a float under the current regex statement.
     #[token(".", priority = 3)]
     Dot,
+    #[token("~")]
+    Tilde,
 
     #[token("++")]
     DoublePlus,
@@ -291,11 +291,11 @@ pub enum Tok {
 
     // could be a float (e.g. .1), but could also be a tuple member (e.g. the ".1" in x.1)
     #[regex(r"[0-9_]*\.[0-9_]+", parse_dotted_int)]
-    DottedNum((u32, u32)),
+    DottedNum((u128, u128)),
 
     // this is definitely a float, because it uses e for scientific notation
     #[regex(r"[0-9_]*\.[0-9_]+e[+-]?[0-9_]+", parse_float)]
-    Float(f64),
+    Float(ParsedFloat),
 
     #[regex("true|false", parse_bool)]
     Bool(bool),
@@ -309,8 +309,10 @@ pub enum Tok {
     #[regex(r"(#.*\n)+")]
     Comment,
 
-    #[regex(r"\n+")]
-    Return,
+    // Called it line feed instead of return in order to avoid getting it confused with
+    // actual returns
+    #[regex(r"(\r\n?|\n)+")]
+    LineFeed, 
 
     #[regex(r"\t")]
     Tab,
@@ -326,6 +328,7 @@ impl Tok {
             Tok::AmpersandSet(_) => Ok(Opcode::Ref),
             Tok::Bang => Ok(Opcode::Not),
             Tok::Plus => Ok(Opcode::Transform),
+            Tok::Tilde => Ok(Opcode::Destroy),
             _ => Err(ParseError::UnexpectedTok {
                 got: self.clone(),
                 expected: vec![TokName::UnaryOperator],
@@ -388,7 +391,7 @@ impl Tok {
 
     pub fn is_whitespace(&self) -> bool {
         use Tok::*;
-        matches!(self, Space | Comment | Return | Tab)
+        matches!(self, Space | Comment | LineFeed | Tab)
     }
 
     pub fn parens() -> (TokWithName, TokWithName) { 
@@ -423,6 +426,7 @@ impl ToString for Tok {
             BitShiftR => ">>",
             BitShiftL => "<<",
             Dot => ".",
+            Tilde => "~",
             DoublePlus => "++",
             DoubleMinus => "--",
             TripleMinus => "---",
@@ -461,7 +465,7 @@ impl ToString for Tok {
             Strin(value) => value,
             Error => "!error!",
             Comment => "#...\n",
-            Return => "\n",
+            LineFeed => "\n",
             Space => " ",
             Tab => "\t",
         }

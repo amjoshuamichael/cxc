@@ -1,0 +1,10 @@
+i64::default(); Me { ; 0 }
+i32::default(); Me { ; 0 }
+i16::default(); Me { ; 0 }
+i8::default(); Me { ; 0 }
+u64::default(); Me { ; 0 }
+u32::default(); Me { ; 0 }
+u16::default(); Me { ; 0 }
+u8::default(); Me { ; 0 }
+f32::default(); Me { ; 0.0 }
+f64::default(); Me { ; 0.0 }

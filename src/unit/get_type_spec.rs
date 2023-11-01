@@ -1,10 +1,10 @@
 use crate::{
     errors::{TErr, TResult},
-    parse::TypeSpec,
+    parse::{TypeSpec, FuncCode, VarDecl},
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
-    VarName, typ::{Field, can_transform::TransformationList},
+    VarName, typ::{Field, can_transform::TransformationList, ABI, DestructorType},
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 pub trait GenericTable: Debug {
     fn get_at_index(&self, _: u8) -> Option<Type> { None }
@@ -68,6 +68,11 @@ impl CompData {
         self.get_spec_report(&spec, generics).map(|re| re.typ)
     }
 
+    pub fn ty(&self, type_spec_code: &str) -> Type {
+        let type_spec = TypeSpec::from(type_spec_code);
+        self.get_spec(&type_spec, &()).unwrap()
+    }
+
     pub fn get_spec_report(
         &self,
         spec: &TypeSpec,
@@ -92,7 +97,10 @@ impl CompData {
             TypeSpec::Float(size) => Type::f(*size),
             TypeSpec::Bool => Type::bool(),
             TypeSpec::Ref(base) => self.get_spec(base, generics)?.get_ref(),
-            TypeSpec::Deref(base) => self.get_spec(base, generics)?.get_auto_deref(&*self)?,
+            TypeSpec::Deref(base) => {
+                let base_type = self.get_spec(base, generics)?;
+                base_type.get_deref().ok_or_else(|| TErr::CantDeref(base_type.clone()))?
+            }
             TypeSpec::StructMember(struct_type, field_name) => {
                 let struct_type = self.get_spec(struct_type, generics)?;
                 if let Some((trans, typ)) = struct_type.route_to(field_name.clone()) {
@@ -144,7 +152,7 @@ impl CompData {
                     .map(|arg| self.get_spec(arg, generics))
                     .collect::<TResult<Vec<Type>>>()?;
                 let ret_type = self.get_spec(ret_type, generics)?;
-                ret_type.func_with_args(args)
+                ret_type.func_with_args(args, ABI::C)
             },
             TypeSpec::FuncReturnType(func_type) => {
                 let func_type = self.get_spec(func_type, generics)?;
@@ -191,6 +199,31 @@ impl CompData {
                     else { return Err(TErr::NotAnArray(array)) };
                 base.clone()
             },
+            TypeSpec::Destructor(base_spec, code) => {
+                let base = self.get_spec(base_spec, generics)?;
+
+                let query = FuncQuery {
+                    name: VarName::None,
+                    relation: TypeRelation::Unrelated,
+                    generics: generics.all_generics(),
+                };
+
+                let func_code = FuncCode {
+                    args: vec![VarDecl {
+                        name: VarName::from("self"),
+                        type_spec: (**base_spec).clone(),
+                    }],
+                    code: code.clone(),
+                    ..FuncCode::empty()
+                };
+
+                let (hlr, _) = crate::hlr::hlr(query, self, &func_code).unwrap();
+
+                Type::new(TypeEnum::Destructor(DestructorType {
+                    base,
+                    destructor: Arc::new(hlr),
+                }))
+            }
             TypeSpec::Void => Type::void(),
             TypeSpec::Unknown => Type::unknown(),
             TypeSpec::Me => {

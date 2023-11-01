@@ -85,7 +85,7 @@ fn variables_in_expr(mexpr: &MExpr, vars: &mut VarsInMIR) {
 fn variables_in_operand(moperand: &MOperand, vars: &mut VarsInMIR) {
     match moperand {
         MOperand::Memloc(memloc) => variables_in_memloc(memloc, vars),
-        MOperand::Lit(_) => {},
+        _ => {},
     }
 }
 

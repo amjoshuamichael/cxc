@@ -9,8 +9,7 @@ use super::{callable::CallInput, FuncId, ProcessedFuncInfo};
 pub mod function;
 
 pub trait IsBackend: Sized {
-    type CallableFuncRef<A, R>: CallableFunc<A, R> where A: CallInput<R>;
-    type LowerableFuncRef: LowerableFunc;
+    type LowerableFuncRef;
 
     fn create() -> Self;
 
@@ -36,8 +35,3 @@ pub trait IsBackend: Sized {
 }
 
 pub trait CallableFunc<A, R> where A: CallInput<R> { }
-
-pub trait LowerableFunc: Clone + fmt::Debug {
-    type LowerTo<A, R>;
-    fn lower<A, R>(&self) -> Self::LowerTo<A, R> where A: CallInput<R>;
-}

@@ -1,9 +1,9 @@
 use super::hlr_data::ArgIndex;
+use super::hlr_data::VarID;
 use super::hlr_data::VariableInfo;
-use super::struct_literals::struct_literals;
 use super::prelude::*;
 use crate::hlr::expr_tree::*;
-use crate::lex::VarName;
+use crate::typ::ABI;
 use crate::typ::ReturnStyle;
 use crate::Type;
 
@@ -12,22 +12,22 @@ pub fn large_returns(hlr: &mut FuncRep) {
     handle_own_return(hlr);
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_return(hlr: &mut FuncRep) {
-    match hlr.ret_type.return_style() {
-        ReturnStyle::ThroughI32
-        | ReturnStyle::ThroughI64
-        | ReturnStyle::ThroughDouble if hlr.ret_type != hlr.ret_type.raw_return_type() => {
-            return_by_small_cast(hlr, hlr.ret_type.raw_return_type());
+    match hlr.ret_type.return_style(ABI::C) {
+        ReturnStyle::ThroughI32 |
+        ReturnStyle::ThroughI64 |
+        ReturnStyle::ThroughF64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+            return_by_small_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         },
-        ReturnStyle::ThroughF32F32
-        | ReturnStyle::ThroughI32I32
-        | ReturnStyle::ThroughI64I32
-        | ReturnStyle::ThroughI64I64 if hlr.ret_type != hlr.ret_type.raw_return_type() => {
-            return_by_big_cast(hlr, hlr.ret_type.raw_return_type());
+        ReturnStyle::ThroughI32I32 |
+        ReturnStyle::ThroughI64I32 |
+        ReturnStyle::ThroughI64I64 |
+        ReturnStyle::ThroughF32F32 |
+        ReturnStyle::ThroughF64F32 |
+        ReturnStyle::ThroughF64F64 if hlr.ret_type != hlr.ret_type.raw_return_type(ABI::C) => {
+            return_by_big_cast(hlr, hlr.ret_type.raw_return_type(ABI::C));
         }
-        ReturnStyle::MoveIntoI64I64 => return_by_move_into_i64i64(hlr),
-        ReturnStyle::Sret => return_by_pointer(hlr),
+        ReturnStyle::SRet => return_by_pointer(hlr),
         _ => {},
     }
 }
@@ -46,7 +46,7 @@ fn return_by_small_cast(hlr: &mut FuncRep, load_as: Type) {
 }
 
 fn return_by_big_cast(hlr: &mut FuncRep, load_as: Type) {
-    let casted_ret = hlr.add_variable(&load_as, hlr.tree.root);
+    let casted_ret = hlr.add_variable(&load_as);
 
     hlr.modify_many_infallible(
         move |return_id, data, hlr| {
@@ -60,50 +60,6 @@ fn return_by_big_cast(hlr: &mut FuncRep, load_as: Type) {
             hlr.replace_quick(*to_return, casted_ret.clone());
         }
     );
-}
-
-fn return_by_move_into_i64i64(hlr: &mut FuncRep) {
-    let i64i64 = Type::new_tuple(vec![Type::i(64), Type::i(64)]);
-
-    let output_var_name = hlr.add_variable(&i64i64, hlr.tree.root);
-
-    hlr.modify_many_infallible(
-        |return_id, mut data, hlr| {
-            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = &mut data
-                else { return };
-
-            let to_return_data = hlr.tree.get(*to_return);
-
-            hlr.insert_statement_before(
-                return_id,
-                SetGen {
-                    lhs: output_var_name.clone(),
-                    rhs: to_return_data.clone(),
-                },
-            );
-
-            let data_to_return = hlr.insert_quick(
-                return_id,
-                StructLitGen {
-                    var_type: i64i64.clone(),
-                    ..StructLitGen::tuple(vec![
-                        Box::new(MemberGen {
-                            object: output_var_name.clone(),
-                            field: VarName::TupleIndex(0),
-                        }),
-                        Box::new(MemberGen {
-                            object: output_var_name.clone(),
-                            field: VarName::TupleIndex(1),
-                        }),
-                    ])
-                },
-            );
-
-            *to_return = data_to_return;
-        },
-    );
-
-    struct_literals(hlr)
 }
 
 fn return_by_pointer(hlr: &mut FuncRep) {
@@ -136,7 +92,6 @@ fn return_by_pointer(hlr: &mut FuncRep) {
     );
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
     let calls = hlr
         .tree
@@ -151,17 +106,24 @@ fn handle_other_calls(hlr: &mut FuncRep) {
 
         if let HNodeData::Call { ref query, .. } = data 
             && !hlr.comp_data.name_is_intrinsic(&query.name) {
-            match data.ret_type().return_style() {
-                ReturnStyle::Sret => format_call_returning_pointer(hlr, call_id),
-                ReturnStyle::MoveIntoI64I64 => todo!(),
+            let abi = if let Some(id) = hlr.comp_data.query_for_code(query.code_query()) {
+                hlr.comp_data.func_code[id].abi
+            } else {
+                ABI::C
+            };
+
+            match data.ret_type().return_style(abi) {
+                ReturnStyle::SRet => format_call_returning_pointer(hlr, call_id),
                 ReturnStyle::ThroughI32
                 | ReturnStyle::ThroughI64
-                | ReturnStyle::ThroughDouble
+                | ReturnStyle::ThroughF64
                 | ReturnStyle::ThroughI32I32
                 | ReturnStyle::ThroughF32F32
+                | ReturnStyle::ThroughF64F64
+                | ReturnStyle::ThroughF64F32
                 | ReturnStyle::ThroughI64I32
                 | ReturnStyle::ThroughI64I64 => {
-                    format_call_returning_struct(hlr, call_id);
+                    format_call_returning_struct(hlr, call_id, abi);
                 },
                 ReturnStyle::Direct | ReturnStyle::Void => {},
             }
@@ -169,14 +131,14 @@ fn handle_other_calls(hlr: &mut FuncRep) {
     }
 }
 
-fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID) {
+fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID, abi: ABI) {
     let mut og_call_data = hlr.tree.get(og_call);
 
     let casted_var_type = og_call_data.ret_type();
-    let casted_var_name = hlr.add_variable(&casted_var_type, og_call);
+    let casted_var_name = hlr.add_variable(&casted_var_type);
 
-    let raw_ret_var_type = casted_var_type.raw_return_type();
-    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type, og_call);
+    let raw_ret_var_type = casted_var_type.raw_return_type(abi);
+    let raw_ret_var_name = hlr.add_variable(&raw_ret_var_type);
 
     *og_call_data.ret_type_mut().unwrap() = raw_ret_var_type.clone();
     
@@ -219,12 +181,13 @@ fn format_call_returning_pointer(hlr: &mut FuncRep, og_call_id: ExprID) {
     let parent = hlr.tree.parent(og_call_id);
 
     if let HNodeData::Set { ref lhs, .. } = hlr.tree.get(parent) {
+        hlr.tree.replace(parent, HNodeData::zero());
         let new_sret = hlr.insert_quick(og_call_id, RefGen(*lhs));
         *sret = Some(new_sret);
         *ret_type = Type::void();
         hlr.replace_quick(parent, new_data);
     } else {
-        let call_var = hlr.add_variable(ret_type, og_call_id);
+        let call_var = hlr.add_variable(ret_type);
 
         let new_arg = hlr.insert_quick(og_call_id, RefGen(call_var.clone()));
 

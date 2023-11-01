@@ -1,8 +1,7 @@
-use crate::Type;
+use crate::{Type, parse::Opcode};
 
 use super::{hlr_data::FuncRep, expr_tree::{HNodeData, MemCpyGen, RefGen}};
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         |set_id, data, hlr| {
@@ -18,12 +17,10 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
             let max_set_size = lhs_size.max(rhs_size);
 
             if max_set_size <= 8 && 
-                rhs_type.primitive_fields_iter().count() <= 1 && 
-                lhs_type.primitive_fields_iter().count() <= 1 { return; }
+                rhs_type.primitive_fields_iter().skip(1).next().is_none() && 
+                lhs_type.primitive_fields_iter().skip(1).next().is_none() { return; }
 
-            if let HNodeData::Ident { var_id: name, .. } = hlr.tree.get_ref(*rhs) {
-                hlr.variables[*name].do_not_drop = true;
-            }
+            hlr.tree.replace(set_id, HNodeData::zero());
 
             let new_data = hlr.insert_quick(
                 hlr.tree.parent(set_id),
@@ -39,5 +36,5 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
 
             *data = hlr.tree.get(new_data);
         }
-    )
+    );
 }

@@ -13,6 +13,7 @@ use crate::hlr::hlr_data_output::HLR;
 use crate::hlr::prelude::*;
 use crate::lex::*;
 use crate::libraries::Library;
+use crate::libraries::core_lib::CoreLib;
 use crate::mir::MIR;
 use crate::mir::mir;
 use crate::parse;
@@ -29,8 +30,6 @@ use slotmap::new_key_type;
 use std::any::TypeId;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::iter::once;
@@ -43,7 +42,6 @@ pub mod callable;
 mod functions;
 pub mod get_type_spec;
 mod reflect;
-mod rust_type_name_conversion;
 mod value_api;
 pub mod backends;
 
@@ -63,12 +61,12 @@ pub struct CompData {
     pub(crate) func_code: SlotMap<FuncCodeId, FuncCode>,
     pub(crate) realizations: SecondaryMap<FuncCodeId, HashSet<FuncId>>, // TODO: use secondary set
     derivers: BTreeMap<DeriverInfo, DeriverFunc>,
-    intrinsics: BTreeSet<FuncCodeId>,
+    intrinsics: HashSet<FuncCodeId>,
     processed: SlotMap<FuncId, ProcessedFuncInfo>,
     pub globals: BTreeMap<VarName, Global>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Debug, Clone)]
 pub enum Global {
     Value {
         name: VarName,
@@ -131,6 +129,8 @@ impl Unit {
 
         let comp_data_ptr = &mut *new.comp_data as *mut _;
         new.add_global("comp_data".into(), comp_data_ptr);
+
+        new.add_lib(CoreLib);
 
         new
     }
@@ -294,9 +294,9 @@ impl Unit {
                     }}
                 })
                 .cloned()
-                .collect::<BTreeSet<FuncQuery>>();
+                .collect::<HashSet<FuncQuery>>();
 
-            let mut dependents = BTreeSet::new();
+            let mut dependents = HashSet::new();
             for (
                 dependent_id, 
                 ProcessedFuncInfo { specified_dependencies, name, relation, generics, .. }

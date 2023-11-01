@@ -6,7 +6,11 @@ pub fn main() {
     unit.push_script(
         r#"
         main() {
-            print("Hello, World!")
+            numbers := [4, 90, 32, 9]
+
+            for numbers as number {
+                print(*number)
+            }
         }
         "#,
     )

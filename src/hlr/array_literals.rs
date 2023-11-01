@@ -5,7 +5,6 @@ use super::{
     hlr_data::FuncRep,
 };
 
-#[cfg_attr(debug_assertions, inline(never))]
 pub fn array_literals(hlr: &mut FuncRep) {
     hlr.modify_many_infallible_rev(
         |arr_id, arr_data, hlr| {
@@ -14,7 +13,7 @@ pub fn array_literals(hlr: &mut FuncRep) {
             let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() 
                 else { unreachable!() };
 
-            let new_array = hlr.add_variable(&var_type, arr_id);
+            let new_array = hlr.add_variable(&var_type);
 
             let mut current_statement = arr_id;
 
@@ -29,7 +28,6 @@ pub fn array_literals(hlr: &mut FuncRep) {
                                     lit_type: Type::i(64),
                                     value: index as u64,
                                 },
-                                ret_type: base.clone(),
                             },
                             rhs: *part_expr,
                         },

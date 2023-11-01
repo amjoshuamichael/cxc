@@ -1,10 +1,11 @@
 use std::collections::{HashSet, HashMap};
+use std::rc::Rc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::HLR;
 use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
-use crate::typ::ReturnStyle;
+use crate::typ::{ReturnStyle, ABI};
 use crate::{parse::*, TypeEnum};
 use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId, Global};
 use crate::Type;
@@ -22,11 +23,27 @@ pub struct FuncRep<'a> {
     pub variables: SlotMap<VarID, VariableInfo>,
     pub goto_labels: SlotMap<GotoLabelID, ExprID>,
     pub specified_dependencies: HashSet<OwnedFuncCodeQuery>,
+    pub(super) gen_slot: Vec<Rc<dyn NodeDataGen>>,
 }
 
 impl<'a> ToString for FuncRep<'a> {
     fn to_string(&self) -> String {
-        self.tree.get(self.tree.root).to_string(&self.tree, &self.variables)
+        let mut output = self.name.to_string();
+        output += "(";
+        for (_, VariableInfo { name, typ, .. }) in self.args() {
+            output += &*format!("{name}: {typ:?}, "); 
+        }
+        if !self.args().is_empty() {
+            output.pop();
+            output.pop();
+        }
+        output += ")";
+        if self.ret_type != Type::void() {
+            output += &*format!("; {:?}", self.ret_type);
+        }
+        output += " ";
+        output += &*self.tree.get(self.tree.root).to_string(&self.tree, &self.variables);
+        output
     }
 }
 
@@ -39,15 +56,10 @@ slotmap::new_key_type! {
 pub struct VariableInfo {
     pub typ: Type,
     pub arg_index: ArgIndex,
-
-    // specially marks variables that definitely should not be dropped. if this is marked
-    // as false, traditional drop rules still apply. this is not a way to check if a
-    // variable will be dropped.
-    pub do_not_drop: bool,
     pub name: VarName,
 }
 
-#[derive(Copy, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ArgIndex {
     #[default]
     None,
@@ -85,6 +97,7 @@ impl<'a> FuncRep<'a> {
             variables: SlotMap::with_key(),
             goto_labels: SlotMap::with_key(),
             specified_dependencies: HashSet::new(),
+            gen_slot: Vec::new(),
         };
 
         for (a, arg) in code.args.iter().enumerate() {
@@ -94,7 +107,6 @@ impl<'a> FuncRep<'a> {
                 typ,
                 arg_index: ArgIndex::Some(a),
                 name: arg.name.clone(),
-                do_not_drop: false,
             });
         }
 
@@ -114,7 +126,7 @@ impl<'a> FuncRep<'a> {
         let mut statment_ids = Vec::new();
 
         {
-            let Expr::Block(ref stmts) = code.code else { unreachable!() };
+            let Expr::Block(ref stmts) = *code.code else { unreachable!() };
 
             for stmt in stmts {
                 statment_ids.push(new.add_expr(&stmt, new.tree.root));
@@ -130,7 +142,7 @@ impl<'a> FuncRep<'a> {
     }
 
     // includes sret argument
-    pub fn args<'b>(&'b mut self) -> Vec<(VarID, &VariableInfo)> {
+    pub fn args<'b>(&'b self) -> Vec<(VarID, &VariableInfo)> {
         let mut names_and_flow = self
             .variables
             .iter()
@@ -145,12 +157,12 @@ impl<'a> FuncRep<'a> {
     }
 
     // includes sret argument
-    pub fn arg_types(&mut self) -> Vec<Type> {
+    pub fn arg_types(&self) -> Vec<Type> {
         self.args().into_iter().map(|(_, v_info)| v_info.typ.clone()).collect::<Vec<_>>()
     }
 
     // includes sret argument
-    pub fn arg_ids(&mut self) -> Vec<VarID> {
+    pub fn arg_ids(&self) -> Vec<VarID> {
         self.args().into_iter().map(|(id, _)| id).collect::<Vec<_>>()
     }
 
@@ -161,14 +173,14 @@ impl<'a> FuncRep<'a> {
         self.comp_data.get_spec(spec, &(&self.generics, &self.relation))
     }
 
-    pub fn output(mut self) -> (HLR, ProcessedFuncInfo) {
+    pub fn output(mut self, from: Rc<Expr>) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
-        if self.ret_type.return_style() == ReturnStyle::Sret {
+        if self.ret_type.return_style(ABI::C) == ReturnStyle::SRet {
             func_arg_types.remove(0);
         }
 
-        let func_type = self.ret_type.clone().func_with_args(func_arg_types);
+        let func_type = self.ret_type.clone().func_with_args(func_arg_types, ABI::C);
         let TypeEnum::Func(func_type) = func_type.clone_type_enum() else { unreachable!() };
 
         let mut specified_dependencies = 
@@ -190,9 +202,10 @@ impl<'a> FuncRep<'a> {
 
         (
             HLR {
+                from,
                 func_type: func_type.clone(),
                 tree: self.tree,
-                data_flow: self.variables,
+                variables: self.variables,
                 dependencies,
             },
             ProcessedFuncInfo {
@@ -217,7 +230,7 @@ impl<'a> FuncRep<'a> {
             Expr::Float(value) => self.tree.insert(
                 parent,
                 HNodeData::Float {
-                    value: *value,
+                    value: (*value).into(),
                     lit_type: Type::unknown(),
                 },
             ),
@@ -334,7 +347,6 @@ impl<'a> FuncRep<'a> {
                     name: decl.name.clone(),
                     typ: var_type.clone(),
                     arg_index: ArgIndex::None,
-                    do_not_drop: false,
                 });
 
                 let (_, block) = self.tree.statement_and_block(space);
@@ -405,10 +417,11 @@ impl<'a> FuncRep<'a> {
             Expr::IfThen(i, t) => {
                 let space = self.tree.make_one_space(parent);
 
-                let new_binop = HNodeData::IfThen {
+                let new_binop = HNodeData::IfThenElse {
                     ret_type: Type::void(),
                     i: self.add_expr(&**i, space),
                     t: self.add_expr(&**t, space),
+                    e: self.tree.insert(space, HNodeData::new_block()),
                 };
 
                 self.tree.replace(space, new_binop);
@@ -439,11 +452,7 @@ impl<'a> FuncRep<'a> {
 
                 self.tree.replace(while_space, new_binop);
 
-                let break_label = self.add_goto_label("break".into(), surrounding_block);
-                let break_ = self.tree.insert(
-                    surrounding_block, 
-                    HNodeData::GotoLabel(break_label),
-                );
+                let break_ = self.add_expr(&Expr::Label("break".into()), surrounding_block);
 
                 let HNodeData::Block { stmts, .. } = self.tree.get_mut(surrounding_block)
                     else { unreachable!() };
@@ -451,11 +460,7 @@ impl<'a> FuncRep<'a> {
                 *stmts = vec![while_space, break_]; 
 
                 if matches!(self.tree.get_ref(d), HNodeData::Block { .. }) {
-                    let continue_label = self.add_goto_label("continue".into(), d);
-                    let continue_ = self.tree.insert(
-                        parent, 
-                        HNodeData::GotoLabel(continue_label),
-                    );
+                    let continue_ = self.add_expr(&Expr::Label("continue".into()), d);
 
                     let HNodeData::Block { stmts, .. } = self.tree.get_mut(d)
                         else { unreachable!() };
@@ -469,7 +474,7 @@ impl<'a> FuncRep<'a> {
                 let new_block = self.tree.insert(parent, HNodeData::new_block());
                 let iterating_over = self.add_expr(f, new_block);
 
-                let iterator_var = self.add_variable(&Type::unknown(), new_block);
+                let iterator_var = self.add_variable(&Type::unknown());
                 let set_iterator = self.insert_quick(
                     new_block,
                     SetGen {
@@ -682,19 +687,26 @@ impl<'a> FuncRep<'a> {
                 space
             },
             Expr::Return(to_return) => {
-                if let Expr::Label(label) = &**to_return {
-                    return self.tree.insert(parent, HNodeData::Goto(label.clone()));
+                if let Some(to_return) = to_return {
+                    if let Expr::Label(label) = &**to_return {
+                        return self.tree.insert(parent, HNodeData::Goto(label.clone()));
+                    }
+
+                    let space = self.tree.make_one_space(parent);
+
+                    let new_return = HNodeData::Return {
+                        ret_type: Type::unknown(),
+                        to_return: Some(self.add_expr(&**to_return, space)),
+                    };
+
+                    self.tree.replace(space, new_return);
+                    space
+                } else {
+                    self.tree.insert(parent, HNodeData::Return {
+                        ret_type: Type::void(),
+                        to_return: None,
+                    })
                 }
-
-                let space = self.tree.make_one_space(parent);
-
-                let new_return = HNodeData::Return {
-                    ret_type: Type::unknown(),
-                    to_return: Some(self.add_expr(&**to_return, space)),
-                };
-
-                self.tree.replace(space, new_return);
-                space
             },
             Expr::Array(expr_parts, initialize) => {
                 let space = self.tree.make_one_space(parent);

@@ -1,13 +1,13 @@
-use std::{fmt::Debug, hash::Hash, sync::Arc};
+use std::{hash::Hash, sync::Arc, rc::Rc};
 
 use crate::{
     unit::{CompData, FuncQuery},
-    Type, XcReflect,
+    Type, XcReflect, typ::ABI,
 };
 
 use super::*;
 
-#[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+#[derive(Hash, Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub enum InitOpts {
     Default,
     Uninit,
@@ -16,10 +16,33 @@ pub enum InitOpts {
     NoFill,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Hash, Copy, Debug, Clone, PartialEq, Eq)]
+pub struct ParsedFloat {
+    pub l: u128,
+    pub r: u128,
+    pub exp: Option<i128>,
+}
+
+impl std::fmt::Display for ParsedFloat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsedFloat { l, r, exp: None } => write!(f, "{l}.{r}"),
+            ParsedFloat { l, r, exp: Some(exp) } => write!(f, "{l}.{r}e{exp}"),
+        }
+    }
+}
+
+impl Into<f64> for ParsedFloat {
+    fn into(self) -> f64 {
+        // TODO: make this faster by not converting to string 
+        self.to_string().parse().unwrap()
+    }
+}
+
+#[derive(Hash, Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Number(u64),
-    Float(f64),
+    Float(ParsedFloat),
     Bool(bool),
     String(Arc<str>),
     Ident(VarName),
@@ -45,7 +68,7 @@ pub enum Expr {
     IfThenElse(Box<Expr>, Box<Expr>, Box<Expr>),
     While(Box<Expr>, Box<Expr>),
     Block(Vec<Expr>),
-    Return(Box<Expr>),
+    Return(Option<Box<Expr>>),
     Enclosed(Box<Expr>),
     With(Box<Expr>),
     WithAs(Box<Expr>, VarName),
@@ -61,10 +84,11 @@ impl Default for Expr {
 impl Expr {
     pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, Box::new(self.clone())) }
 
-    pub fn wrap_in_block(self) -> Expr {
+    /// wraps self in an Rc, and in a block if self is not already a block.
+    pub fn wrap(self) -> Rc<Expr> {
         match self {
-            Expr::Block(_) => self,
-            _ => Expr::Block(vec![Expr::Return(Box::new(self))]),
+            Expr::Block(_) => Rc::new(self),
+            _ => Rc::new(Expr::Block(vec![Expr::Return(Some(Box::new(self)))])),
         }
     }
 
@@ -81,7 +105,7 @@ impl Expr {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub struct VarDecl {
     pub name: VarName,
     pub type_spec: TypeSpec,
@@ -128,7 +152,6 @@ impl<T: Clone> TypeRelationGeneric<T> {
         }
     }
 
-    // TODO: return pointer here
     pub fn inner_type(&self) -> Option<&T> {
         match self {
             Self::Static(inner) | Self::MethodOf(inner) => Some(&inner),
@@ -156,9 +179,10 @@ pub struct FuncCode {
     pub ret_type: TypeSpec,
     pub args: Vec<VarDecl>,
     pub generic_count: usize,
-    pub code: Expr,
+    pub code: Rc<Expr>,
     pub relation: TypeSpecRelation,
     pub is_external: bool,
+    pub abi: ABI,
 }
 
 impl FuncCode {
@@ -175,7 +199,7 @@ impl FuncCode {
         }
     }
 
-    pub fn from_expr(code: Expr) -> Self {
+    pub fn from_expr(code: Rc<Expr>) -> Self {
         Self {
             name: VarName::None,
             ret_type: TypeSpec::Unknown,
@@ -184,10 +208,24 @@ impl FuncCode {
             code,
             relation: TypeSpecRelation::Unrelated,
             is_external: false,
+            abi: ABI::C,
         }
     }
 
     pub fn has_generics(&self) -> bool { self.generic_count > 0 }
+
+    pub fn empty() -> FuncCode {
+        FuncCode {
+            name: VarName::None,
+            ret_type: TypeSpec::Void,
+            args: Vec::new(),
+            generic_count: 0,
+            code: Expr::empty_block().into(),
+            relation: TypeSpecRelation::Unrelated,
+            is_external: false,
+            abi: ABI::C,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

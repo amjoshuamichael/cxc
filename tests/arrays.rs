@@ -77,6 +77,7 @@ fn active_initialize_array_ints() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn string_array() {
     xc_test!(
         use StdLib;
@@ -91,6 +92,7 @@ fn string_array() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn active_initialize_array_strings() {
     xc_test!(
         use StringLib;
@@ -114,7 +116,7 @@ fn slice_basic() {
             numbers: [5]u32 = [543, 60, 44, 222, 994]
 
             range: Range<u64> = Range<u64>:from(u64 2, u64 4)
-            slice: { +ptr: &u32, len: u64 } = numbers.slice(range)
+            slice: { +ptr: &u32, +len: u64 } = numbers.slice(range)
             ; { slice.len, *slice.ptr }
         }
         "#;

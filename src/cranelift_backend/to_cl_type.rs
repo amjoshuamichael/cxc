@@ -2,55 +2,67 @@ use cranelift::codegen::ir::ArgumentPurpose;
 use cranelift::prelude::AbiParam;
 use cranelift::prelude::Signature;
 use cranelift::prelude::Type as ClType;
+use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::types as cl_types;
+use crate::ABI;
 use crate::ArrayType;
 use crate::BoolType;
 use crate::FuncType;
 use crate::RefType;
 use crate::TypeEnum;
 use crate::typ::ArgStyle;
+use crate::typ::DestructorType;
 use crate::typ::Field;
 use crate::typ::ReturnStyle;
 use crate::typ::UnknownType;
 use crate::typ::VoidType;
 use crate::{Type, IntType, FloatType, StructType};
 
-pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature, as_rust: bool) {
+pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
     sig.params.clear();
     sig.returns.clear();
 
-    let return_style = if as_rust { 
-        typ.ret.rust_return_style() 
-    } else { 
-        typ.ret.return_style() 
-    };
+    let abi = typ.abi;
 
-    if return_style == ReturnStyle::Sret {
+    let return_style = typ.ret.return_style(abi);
+
+    if return_style == ReturnStyle::SRet {
         let sret_abi = AbiParam::special(cl_types::I64, ArgumentPurpose::StructReturn);
         sig.params.push(sret_abi);
     }
 
     for typ in &typ.args {
-        if typ.arg_style() == ArgStyle::Pointer 
-            && cfg!(not(any(target_arch = "arm", target_arch = "aarch64"))) {
+        if typ.arg_style(abi) == ArgStyle::Pointer && crate::ARCH_x86 && cfg!(unix) {
             sig.params.push(AbiParam::special(
                 cl_types::I64, 
                 ArgumentPurpose::StructArgument(typ.size().next_multiple_of(8) as u32),
             ))
         } else {
-            for cl_type in typ.raw_arg_type().to_cl_type() {
+            for cl_type in typ.raw_arg_type(abi).to_cl_type() {
                 sig.params.push(AbiParam::new(cl_type));
             }
         }
     }
+    
 
-    let raw_return = if as_rust {
-        typ.ret.rust_raw_return_type()
-    } else { 
-        typ.ret.raw_return_type()
-    };
+    let raw_return = typ.ret.raw_return_type(abi).to_cl_type();
 
-    for cl_type in raw_return.to_cl_type() {
+    if crate::ARCH_x86 && cfg!(windows) {
+        if (abi == ABI::Rust || abi == ABI::None) && 
+            typ.ret.return_style(ABI::Rust) == ReturnStyle::Direct &&
+            typ.ret.primitive_fields_iter().next().is_some() &&
+            typ.ret.primitive_fields_iter().all(|typ| typ.is_float()) {
+            // I don't know why this works, but I tried it and it did.
+            //
+            // When this is removed, Rust ABI returns of {f32, f32}, {f64, f32},
+            // {f32, f64}, and {f64, f64} no longer work.
+            sig.call_conv = CallConv::Cold;
+        } else {
+            sig.call_conv = CallConv::WindowsFastcall;
+        }
+    }
+
+    for (c, cl_type) in raw_return.into_iter().enumerate() {
         sig.returns.push(AbiParam::new(cl_type));
     }
 }
@@ -74,6 +86,7 @@ impl ToCLType for TypeEnum {
             TypeEnum::Ref(t) => t.to_cl_type(),
             TypeEnum::Func(t) => t.to_cl_type(),
             TypeEnum::Array(t) => t.to_cl_type(),
+            TypeEnum::Destructor(DestructorType { base, .. }) => base.to_cl_type(),
             TypeEnum::Bool => (&BoolType).to_cl_type(),
             TypeEnum::Void => VoidType().to_cl_type(),
             TypeEnum::Unknown => UnknownType().to_cl_type(),
@@ -83,7 +96,7 @@ impl ToCLType for TypeEnum {
 
 impl ToCLType for IntType {
     fn to_cl_type(&self) -> Vec<ClType> {
-        vec![ClType::int(self.size as u16).unwrap()]
+        vec![ClType::int(self.size.to_num() as u16).unwrap()]
     }
 }
 

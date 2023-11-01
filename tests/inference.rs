@@ -90,6 +90,7 @@ fn factorial_while() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn hello_world() {
     xc_test!(
         r#"
@@ -108,7 +109,8 @@ fn infer_vec_push() {
         main(); i32 {
             x := Vec<i32>:new()
             x.push(432)
-            ; x.get(0)
+            output := x.get(0)
+            ; output
         }
         "#;
         432

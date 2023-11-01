@@ -1,5 +1,6 @@
 use crate::cache::Cache;
 use crate::errors::{TErr, TResult};
+use crate::hlr::hlr_data_output::HLR;
 use crate::lex::{TypeName, VarName};
 use crate::parse::TypeSpec;
 use crate::FuncQuery;
@@ -12,7 +13,6 @@ use std::sync::Arc;
 
 pub mod can_transform;
 pub mod fields_iter;
-pub mod invalid_state;
 pub mod spec_from_type;
 mod kind;
 mod nested_field_count;
@@ -27,7 +27,7 @@ use crate::xc_opaque;
 
 use crate as cxc;
 
-#[derive(Clone, PartialEq, Hash, Eq, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
@@ -45,40 +45,12 @@ impl Type {
         self.0.cached_size.retrieve_or_call(|| size::size_of_type(self.clone()) )
     }
 
-    pub fn is_subtype_of(&self, of: &Type) -> bool {
-        self == of
+    pub fn raw_return_type(&self, abi: ABI) -> Type {
+        realize_return_style(self.return_style(abi), self)
     }
 
-    pub fn are_subtypes(lhs: &Self, rhs: &Self) -> bool {
-        lhs.is_subtype_of(rhs) || rhs.is_subtype_of(lhs)
-    }
-
-    pub fn raw_return_type(&self) -> Type {
-        realize_return_style(self.return_style(), self)
-    }
-
-    pub fn rust_raw_return_type(&self) -> Type {
-        realize_return_style(self.rust_return_style(), self)
-    }
-
-    pub fn raw_arg_type(&self) -> Type {
-        realize_arg_style(self.arg_style(), self)
-    }
-
-    pub fn id(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.as_type_enum().hash(&mut hasher);
-        self.name().hash(&mut hasher);
-        self.generics().hash(&mut hasher);
-        hasher.finish()
-    }
-
-    pub fn ref_x_times(mut self, count: u8) -> Type {
-        for _ in 0..count {
-            self = self.get_ref();
-        }
-
-        self
+    pub fn raw_arg_type(&self, abi: ABI) -> Type {
+        realize_arg_style(self.arg_style(abi), self)
     }
 
     pub fn complete_deref(mut self) -> Type {
@@ -89,54 +61,13 @@ impl Type {
         self
     }
 
-    pub fn deref_x_times(self, count: u8) -> Option<Type> {
-        let mut output = self;
-
-        for _ in 0..count {
-            output = output.get_deref()?;
-        }
-
-        Some(output)
-    }
-
     pub fn get_ref(&self) -> Type { Type::new(TypeEnum::Ref(RefType { base: self.clone() })) }
 
     pub fn get_deref(&self) -> Option<Type> {
-        match &self.0.type_enum {
+        match self.remove_wrappers().as_type_enum() {
             TypeEnum::Ref(t) => Some(t.base.clone()),
             _ => None,
         }
-    }
-
-    // TODO: remove
-    pub fn get_auto_deref(&self, comp_data: &CompData) -> TResult<Type> {
-        if let TypeEnum::Ref(RefType { base }) = self.as_type_enum() {
-            Ok(base.clone())
-        } else {
-            Ok(comp_data
-                .get_func_type(&FuncQuery {
-                    name: "deref".into(),
-                    relation: TypeRelation::MethodOf(self.get_ref()),
-                    generics: self.generics().clone(),
-                })
-                .map_err(|_| TErr::CantDeref(self.clone()))?
-                .ret
-                )
-        }
-    }
-
-    // TODO: remove
-    pub fn deref_chain(&self) -> Vec<Type> {
-        let mut chain = Vec::new();
-        chain.push(self.clone());
-
-        while let Some(derefed) = chain.last().cloned().unwrap().get_deref() {
-            chain.push(derefed);
-        }
-
-        chain.insert(1, self.get_ref());
-
-        chain
     }
 
     pub fn get_array(self, count: u32) -> Type {
@@ -153,13 +84,8 @@ impl Type {
     /// Ensure that data is a valid pointer to a TypeData
     pub unsafe fn from_raw(data: *const TypeData) -> Self { Self(Arc::from_raw(data)) }
 
-    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType { size, signed: true })) }
-    pub fn u(size: u32) -> Type {
-        Type::new(TypeEnum::Int(IntType {
-            size,
-            signed: false,
-        }))
-    }
+    pub fn i(size: u32) -> Type { Type::new(TypeEnum::Int(IntType::new(size, true))) }
+    pub fn u(size: u32) -> Type { Type::new(TypeEnum::Int(IntType::new(size, false))) }
 
     pub fn f16() -> Type { Type::new(TypeEnum::Float(FloatType::F16)) }
 
@@ -202,8 +128,15 @@ impl Type {
     pub fn void() -> Type { Type::new(TypeEnum::Void) }
     pub fn void_ptr() -> Type { Type::new(TypeEnum::Void).get_ref() }
 
-    pub fn func_with_args(self, args: Vec<Type>) -> Type {
-        Type::new(TypeEnum::Func(FuncType { ret: self, args }))
+    pub fn func_with_args(self, args: Vec<Type>, abi: ABI) -> Type {
+        Type::new(TypeEnum::Func(FuncType { ret: self, args, abi }))
+    }
+
+    pub fn remove_wrappers(&self) -> &Type {
+        match self.as_type_enum() {
+            TypeEnum::Destructor(DestructorType { base, .. }) => base,
+            _ => self
+        }
     }
 
     pub fn as_type_enum(&self) -> &TypeEnum { &self.0.type_enum }
@@ -247,11 +180,6 @@ impl Type {
         }
     }
 
-    pub fn is_shallow(&self) -> bool {
-        !self.is_ref() &&
-        !self.fields_iter().any(|field| matches!(field.as_type_enum(), TypeEnum::Ref(_)))
-    }
-
     pub fn is_primitive(&self) -> bool {
         !matches!(
             self.as_type_enum(), 
@@ -267,7 +195,7 @@ impl Type {
     pub fn full_name(&self) -> String { format!("{self:?}") }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, PartialOrd, Clone, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Default, Hash, Clone, XcReflect)]
 #[xc_opaque]
 pub struct TypeData {
     pub type_enum: TypeEnum,
@@ -314,7 +242,7 @@ impl TypeData {
     pub fn is_named(&self) -> bool { self.name != TypeName::Anonymous }
 }
 
-#[derive(Default, Hash, PartialEq, Eq, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Default, Hash, Clone, XcReflect)]
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
@@ -322,6 +250,7 @@ pub enum TypeEnum {
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
+    Destructor(DestructorType),
     Bool,
     Void,
 
@@ -346,6 +275,7 @@ impl Deref for TypeEnum {
             TypeEnum::Struct(t) => t,
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
+            TypeEnum::Destructor(t) => t,
             TypeEnum::Bool => &BoolType,
             TypeEnum::Void => &VOID_STATIC,
             TypeEnum::Unknown => &UNKNOWN_STATIC,
@@ -353,18 +283,33 @@ impl Deref for TypeEnum {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug, XcReflect)]
 pub struct RefType {
     pub base: Type,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
+/// The ABI of a function, similar to the possible strings after rust's `extern` keyword.
+/// See: https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier
+#[derive(Copy, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
+pub enum ABI {
+    /// Works like extern "Rust".
+    Rust,
+    /// Works like extern "C"– happens to be the cxc default when declaring functions.
+    C,
+    /// No ABI, arguments are passed in as-is. This is used in function types when they
+    /// have moved past the ABI steps in the compiler. It is very unsafe to use in 
+    /// practice.
+    None,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug, XcReflect)]
 pub struct FuncType {
     pub ret: Type,
     pub args: Vec<Type>,
+    pub abi: ABI,
 }
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Default, PartialOrd, Ord, Debug, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Default, Debug, XcReflect)]
 pub enum Repr {
     #[default]
     Rust,
@@ -372,13 +317,13 @@ pub enum Repr {
     Transparent,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
 pub struct StructType {
     pub fields: Vec<Field>,
     pub repr: Repr,
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
 pub struct Field {
     pub name: VarName,
     pub typ: Type,
@@ -415,12 +360,54 @@ impl StructType {
 
         Some(types[0].clone())
     }
+
+    pub fn has_field(&self, check_name: &VarName) -> bool {
+        self.fields.iter().any(|Field { name, .. }| check_name == name)
+    }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
-    pub size: u32,
+    pub size: IntSize,
     pub signed: bool,
+}
+
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+pub enum IntSize {
+    _8,
+    _16,
+    _32,
+    _64,
+    _128,
+}
+
+impl IntSize {
+    pub const fn to_num(self) -> usize {
+        match self {
+            IntSize::_8 => 8,
+            IntSize::_16 => 16,
+            IntSize::_32 => 32,
+            IntSize::_64 => 64,
+            IntSize::_128 => 128,
+        }
+    }
+
+    pub fn from_num(size: usize) -> Self {
+        match size {
+            8 => IntSize::_8,
+            16 => IntSize::_16,
+            32 => IntSize::_32,
+            64 => IntSize::_64,
+            128 => IntSize::_128,
+            _ => panic!("{size} is an invalid int size"),
+        }
+    }
+}
+
+impl IntType {
+    pub fn new(size: u32, signed: bool) -> Self {
+        Self { size: IntSize::from_num(size as usize), signed }
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord, XcReflect)]
@@ -430,8 +417,8 @@ pub enum FloatType {
     F64,
 }
 
-impl From<u32> for FloatType {
-    fn from(size: u32) -> FloatType {
+impl From<usize> for FloatType {
+    fn from(size: usize) -> FloatType {
         match size {
             16 => FloatType::F16,
             32 => FloatType::F32,
@@ -441,19 +428,41 @@ impl From<u32> for FloatType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, XcReflect)]
 pub struct BoolType;
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 pub struct UnknownType();
 static UNKNOWN_STATIC: UnknownType = UnknownType();
 
-#[derive(PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 pub struct VoidType();
 static VOID_STATIC: VoidType = VoidType();
 
-#[derive(PartialEq, Hash, Eq, Clone, PartialOrd, Ord, XcReflect)]
+#[derive(PartialEq, Hash, Eq, Clone, XcReflect)]
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
+}
+
+#[derive(Clone, XcReflect)]
+pub struct DestructorType {
+    pub base: Type,
+    pub destructor: Arc<HLR>,
+}
+
+impl PartialEq for DestructorType {
+    fn eq(&self, other: &Self) -> bool {
+        self.base == other.base &&
+        self.destructor.from == other.destructor.from
+    }
+}
+
+impl Eq for DestructorType {}
+
+impl Hash for DestructorType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.base.hash(state);
+        self.destructor.from.hash(state);
+    }
 }

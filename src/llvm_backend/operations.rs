@@ -51,6 +51,13 @@ pub fn compile_bin_op(
                 BitAND => fcs.builder.build_and(l, r, "and"),
                 BitOR => fcs.builder.build_or(l, r, "or"),
                 BitXOR => fcs.builder.build_xor(l, r, "xor"),
+                _ if math_type.as_type_enum() == &TypeEnum::Bool => {
+                    match op {
+                        And => fcs.builder.build_and(l, r, reg),
+                        Or => fcs.builder.build_or(l, r, reg),
+                        _ => todo!(),
+                    }
+                },
                 _ => todo!(),
             }.as_basic_value_enum()
         },

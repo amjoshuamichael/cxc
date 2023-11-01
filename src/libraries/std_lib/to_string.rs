@@ -1,8 +1,9 @@
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::lex::VarName;
 use crate::parse::{Expr, Opcode, TypeRelation, TypeSpec, TypeSpecRelation, VarDecl};
-use crate::typ::{ArrayType, StructType, Field};
+use crate::typ::{ArrayType, StructType, Field, ABI};
 
 use crate::{parse::FuncCode, unit::CompData, Type};
 use crate::{ExternalFuncAdd, TypeEnum, Unit, typ::spec_from_type::type_to_type_spec};
@@ -131,7 +132,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             };
             statements.push(push_closer_call);
 
-            let ret = Expr::Return(Box::new(output_var_expr.clone()));
+            let ret = Expr::Return(Some(Box::new(output_var_expr.clone())));
             statements.push(ret);
             Expr::Block(statements)
         },
@@ -199,7 +200,7 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             };
             statements.push(push_closer_call);
 
-            let ret = Expr::Return(output_var_expr);
+            let ret = Expr::Return(Some(output_var_expr));
             statements.push(ret);
             Expr::Block(statements)
         },
@@ -214,8 +215,9 @@ pub fn derive_to_string(comp_data: &CompData, typ: Type) -> Option<FuncCode> {
             type_spec: type_to_type_spec(typ.clone()),
         }],
         generic_count: 0,
-        code: expr,
+        code: Rc::new(expr),
         relation: TypeSpecRelation::MethodOf(type_to_type_spec(typ)),
         is_external: false,
+        abi: ABI::C,
     })
 }

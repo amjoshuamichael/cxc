@@ -23,16 +23,10 @@ use to_string::ToStringLib;
 use type_helpers::TypeHelperLib;
 use unit_lib::UnitLib;
 use value_lib::ValueLib;
-use drop_lib::DropLib;
 use self::array_helper_funcs_lib::ArrayHelperLib;
 
 impl Library for StdLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
-        // TODO: this is a hack
-        unit.push_script("str = u8").unwrap();
-
-        unit.add_lib(DropLib);
-
         unit.push_script(include_str!("ptr.cxc")).unwrap();
 
         unit.add_lib(ArrayHelperLib);

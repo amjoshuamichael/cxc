@@ -1,5 +1,5 @@
 BitArray<T> = {
-    inner: NumOfSize(T)
+    inner: NumOfSize(T),
 }
 
 <T> &BitArray<T>:. {

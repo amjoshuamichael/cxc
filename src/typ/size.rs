@@ -1,10 +1,10 @@
-use crate::{Type, IntType, TypeEnum, FloatType, ArrayType, StructType};
+use crate::{Type, IntType, TypeEnum, FloatType, ArrayType, StructType, TypeName};
 
-use super::Field;
+use super::{Field, DestructorType};
 
 pub(super) fn size_of_type(typ: Type) -> usize {
     let base_size = match typ.as_type_enum() {
-        TypeEnum::Int(IntType { size, .. }) => (*size / 8) as usize,
+        TypeEnum::Int(IntType { size, .. }) => size.to_num() / 8,
         TypeEnum::Float(FloatType::F16) => 2,
         TypeEnum::Float(FloatType::F32) => 4,
         TypeEnum::Float(FloatType::F64) => 8,
@@ -14,9 +14,17 @@ pub(super) fn size_of_type(typ: Type) -> usize {
                 return 0
             }
             
-            let size_sum: usize = fields.iter().map(|Field { typ, .. }| typ.size()).sum();
-            let alignment = size_of_largest_field_in(&typ);
+            let mut size_sum: usize = 0;
 
+            for field in fields {
+                let size = field.typ.size();
+                let field_alignment = size_of_largest_field_in(&field.typ);
+
+                size_sum = size_sum.next_multiple_of(field_alignment);
+                size_sum += size;
+            }
+
+            let alignment = size_of_largest_field_in(&typ);
             size_sum.next_multiple_of(alignment)
         },
         TypeEnum::Ref(_) => 8,
@@ -24,6 +32,7 @@ pub(super) fn size_of_type(typ: Type) -> usize {
         TypeEnum::Array(ArrayType { base, count }) => {
             base.size().next_multiple_of(size_of_largest_field_in(base)) * *count as usize
         }
+        TypeEnum::Destructor(DestructorType { base, .. }) => base.size(),
         TypeEnum::Void => 0,
         TypeEnum::Unknown => panic!("cannot get size of unknown type"),
     };
@@ -45,23 +54,25 @@ pub fn size_of_largest_field_in(typ: &Type) -> usize {
             sizes[0]
         },
         TypeEnum::Array(ArrayType { base, .. }) => base.size(),
+        TypeEnum::Destructor(DestructorType { base, .. }) => size_of_largest_field_in(base),
         _ => typ.size(),
     }
 }
 
 impl StructType {
     pub fn field_offset_in_bytes(&self, field_index: usize) -> usize {
-        let nescessary_fields = &self.fields[0..field_index];
-        let size_sum: usize = nescessary_fields
-            .iter()
-            .map(|Field { typ, .. }| typ.size())
-            .sum();
+        let mut size_sum: usize = 0;
 
-        let nescessary_fields_and_after = &self.fields[0..(field_index + 1)];
-        // TODO: make size_of_largest_field a trait? That way we wouldn't have to do this 
-        // Type::new_struct hack
-        let alignment = size_of_largest_field_in(&Type::new_struct(nescessary_fields_and_after.to_vec()));
-        size_sum.next_multiple_of(alignment)
+        for field in &self.fields[0..field_index] {
+            let size = field.typ.size();
+            let field_alignment = size_of_largest_field_in(&field.typ);
+
+            size_sum = size_sum.next_multiple_of(field_alignment);
+            size_sum += size;
+        }
+
+        let last_field_alignment = size_of_largest_field_in(&self.fields[field_index].typ);
+        size_sum.next_multiple_of(last_field_alignment)
     }   
 }
 

@@ -1,7 +1,7 @@
 use crate::hlr::hlr_data::VariableInfo;
 use crate::hlr::hlr_data::ArgIndex;
-use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MLit, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
-use crate::typ::ReturnStyle;
+use crate::mir::{MLine, MIR, MMemLoc, MOperand, MExpr, MReg, MAddr, MAddrExpr, MAddrReg, MCallable};
+use crate::typ::{ReturnStyle, ABI, ArgStyle};
 use crate::{unit::*, Type, FuncType, VarName};
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::basic_block::BasicBlock;
@@ -67,7 +67,7 @@ pub fn add_nescessary_attributes_to_func(
     context: &'static Context,
     func_type: &FuncType,
 ) {
-    if func_type.ret.return_style() == ReturnStyle::Sret {
+    if func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
         let sret_id = Attribute::get_named_enum_kind_id("sret");
         let sret_attribute = context.create_type_attribute(
             sret_id, 
@@ -75,31 +75,8 @@ pub fn add_nescessary_attributes_to_func(
         );
         function.add_attribute(AttributeLoc::Param(0), sret_attribute);
     }
-
-    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
-    for (a, arg) in func_type.args.iter().enumerate() {
-        if arg.arg_style() == ArgStyle::Pointer {
-            let byval_id = Attribute::get_named_enum_kind_id("byval");
-            let byval_attribute = context.create_type_attribute(
-                byval_id, 
-                arg.to_any_type(context)
-            );
-
-            let arg_pos_offset = if func_type.ret.return_style() == ReturnStyle::Sret {
-                1
-            } else { 
-                0 
-            };
-
-            function.add_attribute(
-                AttributeLoc::Param(a as u32 + arg_pos_offset), 
-                byval_attribute
-            );
-        }
-    }
 }
 
-// Adds no matter what
 pub fn add_sret_attribute_to_call_site(
     callsite: &mut CallSiteValue<'static>,
     context: &'static Context,
@@ -298,7 +275,7 @@ pub fn compile_expr(
                 &*reg.map(MReg::to_string).unwrap_or_default(),
             );
 
-            if typ.ret.return_style() == ReturnStyle::Sret {
+            if typ.ret.return_style(ABI::C) == ReturnStyle::SRet {
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
             }
 
@@ -319,19 +296,18 @@ pub fn compile_expr(
             }
 
             let mut callsite = fcs.builder.build_indirect_call(
-                typ.llvm_func_type(fcs.context, false),
+                typ.llvm_func_type(fcs.context),
                 func, 
                 &*arg_vals,
                 &*reg.map(MReg::to_string).unwrap_or_default(),
             );
 
-            if typ.ret.return_style() == ReturnStyle::Sret {
+            if typ.ret.return_style(ABI::C) == ReturnStyle::SRet {
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
             }
 
             callsite.try_as_basic_value().left()
         },
-        MExpr::Void => None,
     }
 }
 
@@ -384,13 +360,7 @@ pub fn compile_addr_expr(
 pub fn compile_operand(fcs: &FunctionCompilationState, operand: &MOperand) -> BasicValueEnum<'static> {
     match operand {
         MOperand::Memloc(memloc) => load_memloc(fcs, memloc),
-        MOperand::Lit(lit) => compile_lit(fcs, lit),
-    }
-}
-
-pub fn compile_lit(fcs: &FunctionCompilationState, lit: &MLit) -> BasicValueEnum<'static> {
-    match lit {
-        MLit::Int { size, val } => {
+        MOperand::Int { size, val } => {
             match size {
                 8 => fcs.context.i8_type().const_int(*val as u64, false),
                 16 => fcs.context.i16_type().const_int(*val as u64, false),
@@ -400,17 +370,17 @@ pub fn compile_lit(fcs: &FunctionCompilationState, lit: &MLit) -> BasicValueEnum
                 size => fcs.context.custom_width_int_type(*size as u32).const_int(*val as u64, false),
             }.as_basic_value_enum()
         },
-        MLit::Float { size, val } => {
+        MOperand::Float { size, val } => {
             match size {
                 32 => fcs.context.f32_type().const_float(*val as f64),
                 64 => fcs.context.f64_type().const_float(*val as f64),
                 _ => unreachable!(),
             }.as_basic_value_enum()
         },
-        MLit::Bool(val) => {
+        MOperand::Bool(val) => {
             fcs.context.bool_type().const_int(*val as u64, false).as_basic_value_enum()
         },
-        MLit::Function(func_id) => {
+        MOperand::Function(func_id) => {
             fcs.used_functions[*func_id].as_global_value().as_pointer_value().as_basic_value_enum()
         }
     }
@@ -423,7 +393,7 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
             match &fcs.mir.variables[*var_id] {
                 VariableInfo { arg_index: ArgIndex::Some(arg_index), .. } => {
                     let param_index = 
-                        if fcs.mir.func_type.ret.return_style() == ReturnStyle::Sret {
+                        if fcs.mir.func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
                             *arg_index + 1
                         } else {
                             *arg_index

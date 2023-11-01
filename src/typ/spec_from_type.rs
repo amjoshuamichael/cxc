@@ -1,6 +1,6 @@
 use crate::{Type, parse::TypeSpec, TypeEnum, StructType, IntType, RefType, FuncType, ArrayType, TypeName};
 
-use super::Field;
+use super::{Field, ABI, DestructorType};
 
 pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     if typ.name() != &TypeName::Anonymous {
@@ -15,8 +15,8 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     }
 
     match typ.as_type_enum() {
-        TypeEnum::Int(IntType { signed: true, size }) => TypeSpec::Int(*size),
-        TypeEnum::Int(IntType { signed: false, size }) => TypeSpec::UInt(*size),
+        TypeEnum::Int(IntType { signed: true, size }) => TypeSpec::Int(size.to_num() as u32),
+        TypeEnum::Int(IntType { signed: false, size }) => TypeSpec::UInt(size.to_num() as u32),
         TypeEnum::Float(float_type) => TypeSpec::Float(*float_type),
         TypeEnum::Struct(StructType { fields, .. }) => TypeSpec::Struct(
             fields.iter().map(|Field { name, typ, inherited }| (
@@ -28,13 +28,18 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
         TypeEnum::Ref(RefType { base }) => TypeSpec::Ref(
             Box::new(type_to_type_spec(base.clone()))
         ),
-        TypeEnum::Func(FuncType { args, ret }) => TypeSpec::Function(
+        TypeEnum::Func(FuncType { args, ret, abi: ABI::C }) => TypeSpec::Function(
             args.iter().cloned().map(type_to_type_spec).collect(),
             Box::new(type_to_type_spec(ret.clone())),
         ),
+        TypeEnum::Func(FuncType { abi: ABI::Rust | ABI::None, .. }) => panic!(),
         TypeEnum::Array(ArrayType { base, count }) => TypeSpec::Array(
             Box::new(type_to_type_spec(base.clone())), 
             *count,
+        ),
+        TypeEnum::Destructor(DestructorType { base, destructor }) => TypeSpec::Destructor(
+            Box::new(type_to_type_spec(base.clone())),
+            destructor.from.clone(),
         ),
         TypeEnum::Bool => TypeSpec::Bool,
         TypeEnum::Void => TypeSpec::Void,

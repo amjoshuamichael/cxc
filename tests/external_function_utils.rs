@@ -6,6 +6,7 @@ use cxc::{
 };
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn default_util() {
     let mut unit = Unit::new();
 
@@ -16,18 +17,15 @@ fn default_util() {
 
     let default_string = unit.get_fn("main").unwrap().downcast::<(), String>()();
 
-    #[cfg(not(feature = "backend-interpreter"))]
-    { assert_eq!(default_string, String::default()); }
-
-    #[cfg(feature = "backend-interpreter")]
-    unsafe { assert_eq!(*default_string.consume::<String>(), String::default()); }
+    assert_eq!(default_string, String::default());
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn clone_util() {
     let mut unit = Unit::new();
 
-    unit.push_script("Vec<T> = { u64, u64, u64}");
+    unit.push_script("Vec<T> = { u64, u64, u64 }");
     unit.add_reflect_type::<String>();
     unit.add_external_clone::<String>();
 
@@ -54,17 +52,14 @@ fn clone_util() {
 
     let cool_string_copy = unit.get_fn("main").unwrap().downcast::<(), String>()();
 
-    #[cfg(not(feature = "backend-interpreter"))]
-    { assert_eq!(cool_string_copy, String::default()); }
-
-    #[cfg(feature = "backend-interpreter")]
-    unsafe { assert_eq!(*cool_string_copy.consume::<String>(), String::from("coolman")); }
+    assert_eq!(cool_string_copy, String::from("coolman"));
 }
 
 fn a_cool_string() -> String { String::from("coolman") }
 
 fn add_an_i32(args: Vec<Type>, _: &CompData) -> Type {
-    let TypeEnum::Struct(StructType { mut fields, .. }) = args[0].clone_type_enum() else { panic!() };
+    let TypeEnum::Struct(StructType { mut fields, .. }) = args[0].clone_type_enum() 
+        else { panic!() };
     fields.push(Field { 
         name: VarName::from("thei32"), 
         typ: Type::i(32), 

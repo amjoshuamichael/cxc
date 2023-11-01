@@ -1,16 +1,15 @@
-use super::hlr_data::VarID;
+use super::hlr_data::{VarID, ArgIndex};
 use super::prelude::*;
 use crate::Type;
 use crate::hlr::expr_tree::*;
 
-use crate::typ::ArgStyle;
+use crate::typ::{ArgStyle, ABI};
 
 pub fn large_args(hlr: &mut FuncRep) {
     handle_other_calls(hlr);
     handle_own_args(hlr);
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_own_args(hlr: &mut FuncRep) {
     let args: Vec<_> = hlr
         .args()
@@ -19,24 +18,26 @@ fn handle_own_args(hlr: &mut FuncRep) {
         .collect::<Vec<_>>();
 
     for (id, info) in args {
-        match info.typ.arg_style() {
+        if info.arg_index == ArgIndex::SRet { continue }
+
+        match info.typ.arg_style(ABI::C) {
             ArgStyle::Direct => {},
-            ArgStyle::Ints(..) => arg_by_ints(hlr, id),
+            ArgStyle::Ints(..) | ArgStyle::Floats(..) => arg_by_ints_or_floats(hlr, id),
             ArgStyle::Pointer => arg_by_pointer(hlr, id),
         }
     }
 }
 
-fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
+fn arg_by_ints_or_floats(hlr: &mut FuncRep, og_arg: VarID) {
     let arg_load_arg_type = hlr.variables[og_arg].typ.clone();
-    let new_arg_load_var = hlr.add_variable(&arg_load_arg_type, hlr.tree.root);
+    let new_arg_load_var = hlr.add_variable(&arg_load_arg_type);
     let set_arg_load_var = hlr.insert_quick(
         hlr.tree.root,
         SetGen {
             lhs: new_arg_load_var.clone(),
             rhs: HNodeData::Ident {
                 var_id: og_arg.clone(),
-                var_type: arg_load_arg_type.raw_arg_type(), 
+                var_type: arg_load_arg_type.raw_arg_type(ABI::C), 
             }
         }
     );
@@ -63,25 +64,27 @@ fn arg_by_ints(hlr: &mut FuncRep, og_arg: VarID) {
 
 fn arg_by_pointer(hlr: &mut FuncRep, arg_id: VarID) {
     let arg_type_reffed = hlr.variables[arg_id].typ.get_ref();
+    // TODO: change hlr.ret_type to hlr.func_type and set this arg type as a variable
+     //hlr.variables[arg_id].typ = arg_type_reffed.clone();
 
     hlr.modify_many_infallible_rev(
-        move |var_id, var_data, hlr| {
-            if !matches!(var_data, HNodeData::Ident { var_id: other_id, .. } if other_id == &arg_id) {
-                return;
-            }
+        move |ident_id, mut var_data, hlr| {
+            let HNodeData::Ident { var_id, var_type, .. } = &mut var_data
+                else { return };
+            if arg_id != *var_id { return }
 
-            hlr.replace_quick(var_id, DerefGen(
+            hlr.replace_quick(ident_id, DerefGen(
                 HNodeData::Ident {
                     var_id: arg_id.clone(),
                     var_type: arg_type_reffed.clone(),
                 },
             ));
-            *var_data = hlr.tree.get(var_id);
+
+            *var_data = hlr.tree.get(ident_id);
         }
     );
 }
 
-#[cfg_attr(debug_assertions, inline(never))]
 fn handle_other_calls(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
         move |call_id, data, hlr| {
@@ -91,16 +94,22 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 return;
             }
 
+            let abi = if let Some(id) = hlr.comp_data.query_for_code(query.code_query()) {
+                hlr.comp_data.func_code[id].abi
+            } else {
+                ABI::C
+            };
+
             for (a, arg) in args.clone().into_iter().enumerate() {
                 let old_arg_type = hlr.tree.get(arg).ret_type();
-                let arg_style = old_arg_type.arg_style();
+                let arg_style = old_arg_type.arg_style(abi);
 
                 if arg_style == ArgStyle::Pointer {
-                    args[0] = hlr.insert_quick(call_id, RefGen(arg));
-                } else if let ArgStyle::Ints(..) = arg_style {
+                    args[a] = hlr.insert_quick(call_id, RefGen(arg));
+                } else if let ArgStyle::Ints(..) | ArgStyle::Floats(..) = arg_style {
                     let _new_arg_name = format!("{}_arg_{}", query.name, a);
-                    let raw_arg_type = old_arg_type.raw_arg_type();
-                    let new_arg = hlr.add_variable(&raw_arg_type, hlr.tree.root);
+                    let raw_arg_type = old_arg_type.raw_arg_type(abi);
+                    let new_arg = hlr.add_variable(&raw_arg_type);
 
                     hlr.insert_statement_before(call_id, MemCpyGen {
                         from: RefGen(arg),

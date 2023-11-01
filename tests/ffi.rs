@@ -1,42 +1,14 @@
 #![allow(unused_must_use)]
+#![allow(unused_imports)]
 mod test_utils;
+
+use cxc::{ExternalFuncAdd, TypeRelation, library::StdLib};
+use cxc::{Type, Unit};
+use test_utils::Point2D;
 use std::rc::Rc;
 
-use cxc::library::StdLib;
-use cxc::{ExternalFuncAdd, TypeRelation};
-use cxc::{Type, Unit};
-use test_utils::{xc_test, Numbers5, Point2D, Point3D, consume};
-
 #[test]
-fn return_arg() {
-    let mut unit = Unit::new();
-    unit.push_script("main(a: i32); i32 { ; a }");
-
-    let num = unit.get_fn("main").unwrap().downcast::<(i32,), i32>()(32);
-    assert_eq!(consume::<i32>(num), 32);
-}
-
-#[test]
-fn multiple_args() {
-    let mut unit = Unit::new();
-
-    unit.push_script(
-        "
-        add(a: i32, b: i32); i32 {
-            ; a + b
-        }
-
-        add2(a: i32, b: i32); i32 {
-            ; a + b
-        }
-        ",
-    );
-
-    let num = unit.get_fn("add").unwrap().downcast::<(i32, i32), i32>()(4, 5);
-    assert_eq!(consume::<i32>(num), 9);
-}
-
-#[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn basic_pointer() {
     let mut unit = Unit::new();
 
@@ -51,22 +23,13 @@ fn basic_pointer() {
     let mut num = 4;
     unit.get_fn("square")
         .unwrap()
-        .downcast::<(&mut i32,), i32>()(&mut num);
+        .downcast::<(&mut i32,), ()>()(&mut num);
     assert_eq!(num, 16);
+
 }
 
 #[test]
-fn one_el_array_out() { xc_test!("; [1]i32 { ; [34986] }"; [34986]) }
-#[test]
-fn two_el_array_out() { xc_test!( "; [2]i32 { ; [1, 4] }"; [1, 4]) }
-#[test]
-fn three_el_array_out() { xc_test!( "; [3]i32 { ; [1, 4, 9] }"; [1, 4, 9]) }
-#[test]
-fn four_el_array_out() { xc_test!( "; [4]i32 { ; [1, 4, 9, 90] }"; [1, 4, 9, 90]) }
-#[test]
-fn five_el_array_out() { xc_test!( "; [5]i32 { ; [1, 4, 9, 90, 129] }"; [1, 4, 9, 90, 129]) }
-
-#[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn struct_pointer() {
     let mut unit = Unit::new();
 
@@ -86,16 +49,15 @@ fn struct_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = consume(
-        unit
-            .get_fn("sqr_magnitude_of")
-            .unwrap()
-            .downcast::<(&Point2D,), i32>()(&point)
-    );
+    let sqr_mag = unit
+        .get_fn("sqr_magnitude_of")
+        .unwrap()
+        .downcast::<(&Point2D,), i32>()(&point);
     assert_eq!(sqr_mag, 13);
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn struct_rc_pointer() {
     let mut unit = Unit::new();
 
@@ -108,7 +70,8 @@ fn struct_rc_pointer() {
         }
 
         sqr_magnitude_of(in: Rc<Point2D>); i32 {
-            ; in.x * in.x + in.y * in.y
+            output := in.x * in.x + in.y * in.y
+            ; output
         }
         "#,
     )
@@ -116,49 +79,15 @@ fn struct_rc_pointer() {
 
     let point = Point2D { x: 2, y: 3 };
 
-    let sqr_mag: i32 = consume(
-        unit
-            .get_fn("sqr_magnitude_of")
-            .unwrap()
-            .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point))
-    );
+    let sqr_mag = unit
+        .get_fn("sqr_magnitude_of")
+        .unwrap()
+        .downcast::<(Rc<Point2D>,), i32>()(Rc::new(point));
     assert_eq!(sqr_mag, 13);
 }
 
 #[test]
-fn small_struct_i() {
-    xc_test!(
-        "; Point2D { ; Point2D { x = 32, y = 43 } }";
-        Point2D { x: 32, y: 43 }
-    )
-}
-
-#[test]
-fn small_struct_f() {
-    xc_test!(
-        use StdLib;
-        r#"; { f32, f32 } { ; { 200.0, 100.0 } }"#;
-        (200.0f32, 100.0f32)
-    );
-}
-
-#[test]
-fn medium_struct() {
-    xc_test!(
-        "; Point3D { ; Point3D { x = 32, y = 43, z = 13 } }";
-        Point3D { x: 32, y: 43, z: 13 }
-    )
-}
-
-#[test]
-fn large_struct() {
-    xc_test!(
-        "; Numbers5 { ; Numbers5 { a = 1, b = 2, c = 3, d = 4, e = 5 } }";
-        Numbers5 { a: 1, b: 2, c: 3, d: 4, e: 5 }
-    )
-}
-
-#[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn i32_and_ref() {
     let mut unit = Unit::new();
 
@@ -179,14 +108,12 @@ fn i32_and_ref() {
         .downcast::<(&i32,), (i32, &i32)>();
     let output: (i32, &i32);
 
-    #[cfg(not(feature = "backend-interpreter"))]
-    { output = func(&mut thirty_two); }
-    #[cfg(feature = "backend-interpreter")]
-    unsafe { output = *func(&mut thirty_two).consume() }
+    output = func(&mut thirty_two);
     assert_eq!(output, (10, &thirty_two));
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn method_on_struct_with_arg() {
     let mut unit = Unit::new();
 
@@ -201,7 +128,7 @@ fn method_on_struct_with_arg() {
             ..ExternalFuncAdd::empty()
         },
     );
-
+    
     unit.push_script(
         "
         main(); i32 {
@@ -214,313 +141,269 @@ fn method_on_struct_with_arg() {
     .unwrap();
 
     let output = unit.get_fn("main").unwrap().downcast::<(), i32>()();
-    assert_eq!(consume::<i32>(output), 1680);
+    assert_eq!(output, 1680);
 }
 
-#[test]
-fn external_function() {
-    pub fn assert_is_less_than_100(input: i32) {
-        assert!(input < 100);
-    }
+macro_rules! ffi_test {
+    ($testname:ident, $rtyp:ty, $rval:expr, $check:expr, $($xctypeandval:tt)+) => { 
+        // TODO: make tests will work on ffi with the interpreter.
+        #[cfg(not(feature = "backend-interpreter"))]
+        mod $testname {
+            #[allow(unused_imports)]
+            use super::*;
 
-    let mut unit = Unit::new();
+            const CHECK: &str = $check;
+            const XCTYPEANDVAL: &str = stringify! { $($xctypeandval)+ };
 
-    unit.add_rust_func_explicit(
-        "assert_is_less_than_100",
-        assert_is_less_than_100 as *const usize,
-        ExternalFuncAdd {
-            arg_types: vec![Type::i(32)],
-            ..ExternalFuncAdd::empty()
-        },
-    );
-    unit.push_script(
-        "
-        call(); i32 {
-            x: i32 = 0
-            @ x < 100 {
-                assert_is_less_than_100(x)
-                x = x + 1
+            #[test]
+            fn pass_r2c() {
+                let mut unit = cxc::Unit::new();
+
+                let [xctype, _] = &*XCTYPEANDVAL.split("as").collect::<Vec<_>>()
+                    else { unreachable!() };
+                
+                unit.push_script(
+                    &*format!("check(x: {xctype}); bool {{ ; {CHECK} }}")
+                ).unwrap();
+                let check = unit.get_fn("check").unwrap().downcast::<($rtyp,), bool>();
+                assert!(check($rval));
             }
 
-            ; x
+            #[test]
+            fn ret_c2r() {
+                let mut unit = cxc::Unit::new();
+
+                let [xctype, xcval] = &*XCTYPEANDVAL.split("as").collect::<Vec<_>>()
+                    else { unreachable!() };
+
+                unit.push_script(
+                    &*format!("main(); {xctype} {{ ; {xcval} }}")
+                ).unwrap();
+                let main = unit.get_fn("main").unwrap().downcast::<(), $rtyp>();
+                let x = main();
+
+                #[cfg(feature = "show-bytes")]
+                cxc::bytesof::print_binary_two(&$rval, &x);
+                assert_eq!(x, $rval);
+            }
+
+            #[test]
+            fn ret_r2c() {
+                fn external() -> $rtyp { $rval }
+
+                let mut unit = cxc::Unit::new();
+
+                let [xctype, _] = &*XCTYPEANDVAL.split("as").collect::<Vec<_>>()
+                    else { unreachable!() };
+
+                unit.add_rust_func_explicit(
+                    "external",
+                    external as *const usize,
+                    cxc::ExternalFuncAdd {
+                        ret_type: unit.comp_data.ty(xctype),
+                        ..cxc::ExternalFuncAdd::empty()
+                    }
+                );
+
+                unit.push_script(&*format!("
+                    main(); bool {{ 
+                        x := external()
+                        ; {CHECK}
+                    }}
+                ")).unwrap();
+                let main = unit.get_fn("main").unwrap().downcast::<(), bool>();
+                assert!(main());
+            }
+
+            #[test]
+            fn pass_c2r() {
+                fn external(x: $rtyp) -> bool { x == $rval }
+
+                let mut unit = cxc::Unit::new();
+
+                let [xctype, xcval] = &*XCTYPEANDVAL.split("as").collect::<Vec<_>>()
+                    else { unreachable!() };
+
+                unit.add_rust_func_explicit(
+                    "external",
+                    external as *const usize,
+                    cxc::ExternalFuncAdd {
+                        ret_type: cxc::Type::bool(),
+                        arg_types: vec![unit.comp_data.ty(xctype)],
+                        ..cxc::ExternalFuncAdd::empty()
+                    }
+                );
+
+                unit.push_script(&*format!(
+                        "main(); bool {{ ;external({xcval}) }}"
+                )).unwrap();
+                let main = unit.get_fn("main").unwrap().downcast::<(), bool>();
+                assert!(main());
+            }
         }
-        ",
-    )
-    .unwrap();
-
-    unit.get_fn("call").unwrap().downcast::<(), i64>()();
-}
-
-#[test]
-fn return_from_external_4byte() {
-    pub fn ext() -> i32 {
-        1
     }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::i(32),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); i32 { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), i32>();
-    assert_eq!(consume::<i32>(main()), ext());
 }
 
-#[test]
-fn return_from_external_8byte() {
-    pub fn ext() -> i64 {
-        (i32::MAX as i64) + 20938
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::i(64),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); i64 { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), i64>();
-    assert_eq!(consume::<i64>(main()), ext());
+macro_rules! ffi_tests_int {
+    ($ty:tt) => { mod $ty {
+        ffi_test!(alone, $ty, 41, "x == 41", $ty as 41);
+        ffi_test!(one, ($ty,), (41,), "x.0 == 41", {$ty,} as {41,});
+        ffi_test!(two, ($ty, $ty), 
+                  (41,42), "x.0 == 41 && x.1 == 42", 
+                  {$ty,$ty} as {41,42});
+        ffi_test!(three, ($ty, $ty, $ty), 
+                  (41,42,43), "x.0 == 41 && x.1 == 42 && x.2 == 43", 
+                  {$ty,$ty,$ty} as {41,42,43});
+        ffi_test!(four, ($ty, $ty, $ty, $ty), 
+                  (41,42,43,44), "x.0 == 41 && x.1 == 42 && x.2 == 43 && x.3 == 44", 
+                  {$ty,$ty,$ty,$ty} as {41,42,43,44});
+        ffi_test!(five, ($ty, $ty, $ty, $ty, $ty), 
+                  (41,42,43,44,45), "x.0 == 41 && x.1 == 42 && x.2 == 43 && x.3 == 44 && x.4 == 45", 
+                  {$ty,$ty,$ty,$ty,$ty} as {41,42,43,44,45});
+    }}
 }
 
-#[test]
-fn return_from_external_8byte_sep() {
-    pub fn ext() -> (i32, i32) {
-        (4325, 3948)
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::new_tuple(vec![Type::i(32), Type::i(32)]),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); {i32, i32} { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32)>();
-    assert_eq!(consume::<(i32, i32)>(main()), ext());
+macro_rules! ffi_tests_float {
+    ($ty:tt) => { mod $ty {
+        ffi_test!(alone, $ty, 4.1, "x == 4.1", $ty as 4.1);
+        ffi_test!(one, ($ty,), (4.1,), "x.0 == 4.1", {$ty,} as {4.1,});
+        ffi_test!(two, ($ty, $ty), 
+                  (4.1,4.2), "x.0 == 4.1 && x.1 == 4.2", 
+                  {$ty,$ty} as {4.1,4.2});
+        ffi_test!(three, ($ty, $ty, $ty), 
+                  (4.1,4.2,4.3), "x.0 == 4.1 && x.1 == 4.2 && x.2 == 4.3", 
+                  {$ty,$ty,$ty} as {4.1,4.2,4.3});
+        ffi_test!(four, ($ty, $ty, $ty, $ty), 
+                  (4.1,4.2,4.3,4.4), "x.0 == 4.1 && x.1 == 4.2 && x.2 == 4.3 && x.3 == 4.4", 
+                  {$ty,$ty,$ty,$ty} as {4.1,4.2,4.3,4.4});
+        ffi_test!(five, ($ty, $ty, $ty, $ty, $ty), 
+                  (4.1,4.2,4.3,4.4,4.5), "x.0 == 4.1 && x.1 == 4.2 && x.2 == 4.3 && x.3 == 4.4 && x.4 == 4.5", 
+                  {$ty,$ty,$ty,$ty,$ty} as {4.1,4.2,4.3,4.4,4.5});
+    }}
 }
 
-#[test]
-fn return_from_external_12byte_2sep() {
-    pub fn ext() -> (i64, i32) {
-        ((i32::MAX as i64) + 98543, 43829)
-    }
+macro_rules! ffi_tests_two {
+    ($modname:ident, $a:tt, $b:tt, $aval:tt, $bval:tt) => { mod $modname {
+        #![allow(non_camel_case_types)]
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct AB($a,$b);
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct BA($b,$a);
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct AA($a,$a);
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct BB($b,$b);
 
-    let mut unit = Unit::new();
+        ffi_test!(ab, AB, AB($aval,$bval), 
+                  stringify! { x.0 == $aval && x.1 == $bval }, 
+                  {$a,$b} as {$aval,$bval});
+        ffi_test!(ba, BA, BA($bval,$aval), 
+                  stringify! { x.0 == $bval && x.1 == $aval }, 
+                  {$b,$a} as {$bval,$aval});
 
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::new_tuple(vec![Type::i(64), Type::i(32)]),
-            ..ExternalFuncAdd::empty()
-        }
-    );
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct AAB($a,$a,$b);
+        ffi_test!(aab, AAB, AAB($aval,$aval,$bval), 
+                  stringify! { x.0 == $aval && x.1 == $aval && x.2 == $bval },
+                  {$a,$a,$b} as {$aval,$aval,$bval});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct BBA($b,$b,$a);
+        ffi_test!(bba, BBA, BBA($bval,$bval,$aval), 
+                  stringify! { x.0 == $bval && x.1 == $bval && x.2 == $aval },
+                  {$b,$b,$a} as {$bval,$bval,$aval});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct ABB($a,$b,$b);
+        ffi_test!(abb, ABB, ABB($aval,$bval,$bval), 
+                  stringify! { x.0 == $aval && x.1 == $bval && x.2 == $bval },
+                  {$a,$b,$b} as {$aval,$bval,$bval});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct BAA($b,$a,$a);
+        ffi_test!(baa, BAA, BAA($bval,$aval,$aval), 
+                  stringify! { x.0 == $bval && x.1 == $aval && x.2 == $aval },
+                  {$b,$a,$a} as {$bval,$aval,$aval});
 
-    unit.push_script("main(); {i64, i32} { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i32)>();
-    assert_eq!(consume::<(i64, i32)>(main()), ext());
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct AA_B(AA,$b);
+        ffi_test!(aa_b, AA_B, AA_B(AA($aval,$aval),$bval), 
+                  stringify! { x.0.0 == $aval && x.0.1 == $aval && x.1 == $bval },
+                  {{$a,$a},$b} as {{$aval,$aval},$bval});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct BB_A(BB,$a);
+        ffi_test!(bb_a, BB_A, BB_A(BB($bval,$bval),$aval), 
+                  stringify! { x.0.0 == $bval && x.0.1 == $bval && x.1 == $aval },
+                  {{$b,$b},$a} as {{$bval,$bval},$aval});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct AB_B(AB,$b);
+        ffi_test!(ab_b, AB_B, AB_B(AB($aval,$bval),$bval), 
+                  stringify! { x.0.0 == $aval && x.0.1 == $bval && x.1 == $bval },
+                  {{$a,$b},$b} as {{$aval,$bval},$bval});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct BA_A(BA,$a);
+        ffi_test!(ba_a, BA_A, BA_A(BA($bval,$aval),$aval), 
+                  stringify! { x.0.0 == $bval && x.0.1 == $aval && x.1 == $aval },
+                  {{$b,$a},$a} as {{$bval,$aval},$aval});
+
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct A_AB($a,AB);
+        ffi_test!(a_ab, A_AB, A_AB($aval,AB($aval,$bval)), 
+                  stringify! { x.0 == $aval && x.1.0 == $aval && x.1.1 == $bval },
+                  {$a,{$a,$b}} as {$aval,{$aval,$bval}});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct B_BA($b,BA);
+        ffi_test!(b_ba, B_BA, B_BA($bval,BA($bval,$aval)), 
+                  stringify! { x.0 == $bval && x.1.0 == $bval && x.1.1 == $aval },
+                  {$b,{$b,$a}} as {$bval,{$bval,$aval}});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct A_BB($a,BB);
+        ffi_test!(a_bb, A_BB, A_BB($aval,BB($bval,$bval)), 
+                  stringify! { x.0 == $aval && x.1.0 == $bval && x.1.1 == $bval },
+                  {$a,{$b,$b}} as {$aval,{$bval,$bval}});
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        #[repr(C)]
+        struct B_AA($b,AA);
+        ffi_test!(b_aa, B_AA, B_AA($bval,AA($aval,$aval)), 
+                  stringify! { x.0 == $bval && x.1.0 == $aval && x.1.1 == $aval },
+                  {$b,{$a,$a}} as {$bval,{$aval,$aval}});
+
+    }}
 }
 
-#[test]
-fn return_from_external_12byte_3sep() {
-    pub fn ext() -> (i32, i32, i32) {
-        (4325, 3948, 43829)
-    }
+ffi_tests_int!(i8);
+ffi_tests_int!(u8);
+ffi_tests_int!(i16);
+ffi_tests_int!(u16);
+ffi_tests_int!(i32);
+ffi_tests_int!(u32);
+ffi_tests_int!(i64);
+ffi_tests_int!(u64);
+ffi_tests_float!(f32);
+ffi_tests_float!(f64);
 
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::new_tuple(vec![Type::i(32); 3]),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); {i32, i32, i32} { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32, i32)>();
-    assert_eq!(consume::<(i32, i32, i32)>(main()), ext());
-}
-
-#[test]
-fn return_from_external_16byte_4sep() {
-    pub fn ext() -> (i32, i32, i32, i32) {
-        (4325, 3948, 43829, 645089)
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::new_tuple(vec![Type::i(32); 4]),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); {i32, i32, i32, i32} { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), (i32, i32, i32, i32)>();
-    assert_eq!(consume::<(i32, i32, i32, i32)>(main()), ext());
-}
-
-#[test]
-fn return_from_external_16byte_2sep() {
-    pub fn ext() -> (i64, i64) {
-        ((i32::MAX as i64) + 98543, (i32::MAX as i64) + 57458)
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::new_tuple(vec![Type::i(64); 2]),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); {i64, i64} { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i64)>();
-    assert_eq!(consume::<(i64, i64)>(main()), ext());
-}
-
-#[test]
-fn return_from_external_32byte() {
-    pub fn ext() -> (i64, i64, i64, i64) {
-        (
-            (i32::MAX as i64) + 98543, 
-            (i32::MAX as i64) + 57458, 
-            (i32::MAX as i64) + 23903, 
-            (i32::MAX as i64) + 10948,
-        )
-    }
-
-    let mut unit = Unit::new();
-
-    unit.add_rust_func_explicit(
-        "ext",
-        ext as *const usize,
-        ExternalFuncAdd {
-            ret_type: Type::new_tuple(vec![Type::i(64); 4]),
-            ..ExternalFuncAdd::empty()
-        }
-    );
-
-    unit.push_script("main(); {i64, i64, i64, i64} { ; ext() }");
-    let main = unit.get_fn("main").unwrap().downcast::<(), (i64, i64, i64, i64)>();
-    assert_eq!(consume::<(i64, i64, i64, i64)>(main()), ext());
-}
-
-#[test]
-fn pass_to_4byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script("add_59(x: i32); i32 { ; x + 59 }").unwrap();
-    let add_59 = unit.get_fn("add_59").unwrap().downcast::<(i32,), i32>();
-    assert_eq!(consume::<i32>(add_59(41)), 100);
-}
-
-#[test]
-fn pass_to_16byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script("sum_two_add_3(x: { i64, i64 }); i64 { ; x.0 + x.1 + i64 3 }").unwrap();
-    let sum_two_add_3 = 
-        unit.get_fn("sum_two_add_3").unwrap().downcast::<((i64, i64),), i64>();
-    assert_eq!(consume::<i64>(sum_two_add_3((3i64, 90i64))), 96i64);
-}
-
-#[test]
-fn pass_to_two_16byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script(
-        "
-        sum_four_add_3(x: { i64, i64 }, y: { i64, i64 }); i64 {
-             ; x.0 + x.1 + y.0 + y.1 + i64 3
-        }
-        ")
-        .unwrap();
-    let sum_four_add_3 = 
-        unit.get_fn("sum_four_add_3").unwrap().downcast::<((i64, i64), (i64, i64)), i64>();
-    assert_eq!(consume::<i64>(sum_four_add_3((3i64, 90i64), (8i64, 23i64))), 127i64);
-}
-
-#[test]
-fn pass_to_20byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script("take_5(nums: {i32, i32, i32, i32, i32}); i32 { ; nums.3 + 2 }").unwrap();
-    let take_5 = 
-        unit.get_fn("take_5").unwrap().downcast::<((i32, i32, i32, i32, i32),), i32>();
-    assert_eq!(consume::<i32>(take_5((439, 435, 102, 4, 100))), 6);
-}
-
-#[test]
-fn pass_20byte_return_20byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script("take_5(nums: {i32, i32, i32, i32, i32}); { i32, i32, i32, i32, i32 } { ; nums }").unwrap();
-    let take_5 = 
-        unit.get_fn("take_5").unwrap().downcast::<((i32, i32, i32, i32, i32),), (i32, i32, i32, i32, i32)>();
-    let output = consume::<(i32, i32, i32, i32, i32)>(take_5((439, 435, 102, 4, 100)));
-    assert_eq!(output, (439, 435, 102, 4, 100));
-}
-
-#[test]
-fn pass_to_40byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script("take_5(nums: {i64, i64, i64, i64, i64}); i64 { ; nums.3 + i64 2 }").unwrap();
-    let take_5 = 
-        unit.get_fn("take_5").unwrap().downcast::<((i64, i64, i64, i64, i64),), i64>();
-    assert_eq!(consume::<i64>(take_5((439, 435, 102, 4, 100))), 6);
-}
-
-#[test]
-fn pass_40byte_return_40byte() {
-    let mut unit = Unit::new();
-
-    unit.push_script("take_5(nums: {i64, i64, i64, i64, i64}); {i64, i64, i64, i64, i64} { ; nums }").unwrap();
-    let take_5 = 
-        unit.get_fn("take_5").unwrap().downcast::<((i64, i64, i64, i64, i64),), (i64, i64, i64, i64, i64)>();
-    let output = consume::<(i64, i64, i64, i64, i64)>(take_5((439, 435, 102, 4, 100)));
-    assert_eq!(output, (439, 435, 102, 4, 100));
-}
-
-#[test]
-fn strings() {
-    xc_test!(
-        use StdLib;
-        r#"
-        main(); String {
-            x: String = "that's cray"
-            ; x
-        }
-        "#;
-        String::from("that's cray")
-    )
-}
-
-
+// u8 max is 255
+// u16 max is 65535
+// u32 max is 4_294_967_295
+// u64 max is 18_446_744_073_709_551_615
+// f32 example is 1.23456
+// f64 example is 1.234567890123456
+ffi_tests_two!(u8u64, u8, u64, 251, 18_446_744_073_709_551_611);
+ffi_tests_two!(u16u64, u16, u64, 65531, 18_446_744_073_709_551_611);
+ffi_tests_two!(u32u64, u32, u64, 4_294_967_291, 18_446_744_073_709_551_611);
+ffi_tests_two!(u8u32, u8, u32, 251, 4_294_967_291);
+ffi_tests_two!(u16u32, u16, u32, 65531, 4_294_967_291);
+ffi_tests_two!(u8u16, u8, u16, 251, 65531);
+ffi_tests_two!(f32f64, f32, f64, 2.23456, 1.234567890123456);

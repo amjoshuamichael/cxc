@@ -4,7 +4,7 @@ use crate::errors::TResult;
 
 use crate::{
     lex::lex,
-    parse::{self, GenericLabels, TypeDecl},
+    parse::{self, GenericLabels, TypeDecl, context::FuncParseData},
     CompData, Type, TypeName, Unit, VarName,
 };
 
@@ -25,7 +25,7 @@ pub trait XcReflect: 'static {
                 .expect("error in type decl")
                 .clone()
         } else {
-            let mut spec_lexer = lexer.split(VarName::None, GenericLabels::default());
+            let mut spec_lexer = lexer.split(FuncParseData::default(), GenericLabels::default());
 
             let name = if let Ok(possible_name) = spec_lexer.peek_tok()
                        && let Ok(name) = possible_name.clone().type_name()
@@ -76,6 +76,20 @@ macro_rules! impl_reflect_set {
         }
 
         impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for fn($($elem),+) -> R {
+            fn spec_code() -> String {
+                let mut code = String::from("ExternRust((");
+                $(
+                    code += &*$elem::spec_code();
+                    code += ", ";
+                )+
+                code += "); ";
+                code += &*R::spec_code();
+                code += "))";
+                code
+            }
+        }
+
+        impl<$($elem: XcReflect),+, R: XcReflect> XcReflect for unsafe extern "C" fn($($elem),+) -> R {
             fn spec_code() -> String {
                 let mut code = String::from("(");
                 $(
@@ -128,20 +142,18 @@ impl_reflect_generic!(Vec);
 impl_reflect_generic!(Rc);
 impl_reflect_generic!(Arc);
 
+impl<T: XcReflect> XcReflect for &'static [T] {
+    fn spec_code() -> String {
+        let mut code = String::from("Reflected = { ptr: &");
+        code += &*T::spec_code();
+        code += ", len: u64 }";
+        code
+    }
+}
+
 impl Unit {
     pub fn get_reflect_type<T: XcReflect + 'static>(&self) -> Option<Type> {
-        if let Some(typ) = self.comp_data.reflected_types.get(&TypeId::of::<T>()) {
-            return Some(typ.clone());
-        }
-
-        let decl = T::type_decl();
-
-        if decl.name == "Reflected".into() {
-            Some(self.comp_data.get_spec(&decl.typ, &()).unwrap())
-        } else {
-            type_from_decl(&self.comp_data, decl)
-        }
-
+        self.comp_data.get_reflect_type::<T>()
     }
 
     pub fn add_reflect_type<T: XcReflect>(&mut self) -> Option<Type> {
@@ -213,6 +225,25 @@ impl Unit {
     }
 }
 
+impl CompData {
+    pub fn type_of_val<T: XcReflect>(&self, _: &T) -> Type { 
+        self.get_reflect_type::<T>().unwrap() 
+    }
+
+    pub fn get_reflect_type<T: XcReflect + 'static>(&self) -> Option<Type> {
+        if let Some(typ) = self.reflected_types.get(&TypeId::of::<T>()) {
+            return Some(typ.clone());
+        }
+
+        let decl = T::type_decl();
+
+        if decl.name == "Reflected".into() {
+            Some(self.get_spec(&decl.typ, &()).unwrap())
+        } else {
+            type_from_decl(&self, decl)
+        }
+    }
+}
 
 
 fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {
@@ -232,7 +263,7 @@ fn type_from_decl(comp_data: &CompData, decl: TypeDecl) -> Option<Type> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Unit;
+    use crate::{Unit, typ::ABI};
 
     #[test]
     fn reflect_basic() {
@@ -241,6 +272,7 @@ mod tests {
         let typ = unit.get_reflect_type::<i32>().unwrap();
         assert_eq!(typ, Type::i(32));
     }
+    
 
     #[test]
     fn reflect_tuple() {
@@ -255,7 +287,7 @@ mod tests {
         let unit = Unit::new();
 
         let typ = unit.get_reflect_type::<fn(i32, f32) -> i32>().unwrap();
-        assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)]));
+        assert_eq!(typ, Type::i(32).func_with_args(vec![Type::i(32), Type::f(32)], ABI::Rust));
     }
 
     #[test]

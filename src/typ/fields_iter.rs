@@ -11,7 +11,7 @@ pub struct PrimitiveFieldsIter {
 impl PrimitiveFieldsIter {
     pub fn new(from: Type) -> Self {
         Self {
-            inner: FieldsIter::new(from),
+            inner: FieldsIter::new(Type::new_tuple(vec![from])),
             skip_ref_on_next: false,
         }
     }
@@ -112,7 +112,7 @@ impl Iterator for FieldsIter {
                 self.inner = Some(Box::new(FieldsIter::new(iterating_over.clone())));
                 iterating_over
             },
-            TypeEnum::Ref(RefType { base }) => {
+            TypeEnum::Ref(RefType { base }) | TypeEnum::Destructor(DestructorType { base, .. }) => {
                 if self.index > 0 {
                     return None;
                 };
@@ -120,7 +120,11 @@ impl Iterator for FieldsIter {
                 base
             },
             TypeEnum::Array(ArrayType { base, count }) => {
-                if self.index as u32 > *count {
+                if self.index as u32 >= *count {
+                    assert!(
+                        self.index < 100, 
+                        "over-iteration; something has gone wrong with the compiler"
+                    );
                     return None;
                 }
                 self.inner = Some(Box::new(FieldsIter::new(base.clone())));

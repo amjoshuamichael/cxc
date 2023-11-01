@@ -9,7 +9,7 @@ use crate::unit::callable::CallInput;
 use crate::{unit::XcReflectMac, FuncType};
 use crate as cxc;
 
-use super::{LowerableFunc, CallableFunc};
+use super::{CallableFunc};
 
 // A set of reusable structs for handling heap-allocated function pointers across backends
 
@@ -90,8 +90,6 @@ impl<A, R> Clone for FuncDowncasted<A, R> {
     }
 }
 
-// TODO: include name, relation, and generics in FuncInner
-
 impl Func {
     fn new(inner: FuncInner) -> Func {
         Self {
@@ -100,7 +98,10 @@ impl Func {
     }
 
     pub fn downcast<A, R>(&self) -> FuncDowncasted<A, R> where A: CallInput<R> {
-        self.lower::<A, R>()
+        FuncDowncasted {
+            inner: self.clone(),
+            _phantoms: (std::marker::PhantomData, std::marker::PhantomData),
+        }
     }
 
     pub fn new_compiled(typ: FuncType) -> Func {
@@ -140,20 +141,6 @@ impl Func {
         let inner = self.inner.read().unwrap();
 
         inner.code.pointer().unwrap()
-    }
-}
-
-impl LowerableFunc for Func {
-    type LowerTo<A, R> = FuncDowncasted<A, R>;
-
-    fn lower<A, R>(&self) -> FuncDowncasted<A, R>
-    where
-        A: CallInput<R>,
-    {
-        FuncDowncasted {
-            inner: self.clone(),
-            _phantoms: (std::marker::PhantomData, std::marker::PhantomData),
-        }
     }
 }
 

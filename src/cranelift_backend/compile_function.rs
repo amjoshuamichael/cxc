@@ -1,12 +1,12 @@
-use std::{collections::{BTreeMap, BTreeSet}, iter::once};
+use std::{collections::{BTreeMap, BTreeSet, HashMap}, iter::once};
 
 use cranelift::{codegen::{ir::{StackSlot, FuncRef, InstBuilderBase}, self}, prelude::{Variable, FunctionBuilder, Block, FunctionBuilderContext, Value as CLValue, InstBuilder, IntCC, MemFlags, StackSlotData, StackSlotKind, types as cl_types, FloatCC, Signature, isa::TargetFrontendConfig, Type as CLType}};
 use cranelift_module::Module;
 use slotmap::SecondaryMap;
 
-use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MLit, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::ReturnStyle, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
+use crate::{mir::{MIR, MLine, MExpr, MMemLoc, MOperand, MAddr, MAddrExpr, MAddrReg, MReg, MCallable}, VarName, Type, parse::Opcode, TypeEnum, FuncType, typ::{ReturnStyle, ABI}, hlr::hlr_data::{ArgIndex, VariableInfo, VarID}, cranelift_backend::variables_in, RefType, IntType, unit::FuncId};
 
-use super::{to_cl_type::{ToCLType, func_type_to_signature}, CraneliftBackend, external_function::{ExternalFuncData, build_external_func_call}, ClFunctionData, alloc_and_free::AllocAndFree};
+use super::{to_cl_type::{ToCLType, func_type_to_signature}, CraneliftBackend, external_function::ExternalFuncData, ClFunctionData, alloc_and_free::AllocAndFree};
 
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -70,7 +70,7 @@ pub fn make_fcs<'a>(
         };
 
         let mut call_sig = backend.module.make_signature();
-        func_type_to_signature(call_type, &mut call_sig, false);
+        func_type_to_signature(call_type, &mut call_sig);
 
         backend.func_signatures.insert(call_type.clone(), call_sig);
     }
@@ -138,7 +138,7 @@ pub struct FunctionCompilationState<'a> {
     reg_types: BTreeMap<MReg, Type>,
     used_functions: SecondaryMap<FuncId, FuncRef>,
     used_globals: BTreeMap<VarName, CLValue>,
-    function_signatures: &'a BTreeMap<FuncType, Signature>,
+    function_signatures: &'a HashMap<FuncType, Signature>,
     external_functions: &'a SecondaryMap<FuncId, ExternalFuncData>,
     frontend_config: &'a TargetFrontendConfig,
     alloc_and_free: &'a AllocAndFree,
@@ -202,10 +202,13 @@ impl Writeable {
                 let mut values = Vec::new();
                 let mut byte_offset = 0;
 
-                for typ in types {
+                for (t, typ) in types.iter().enumerate() {
                     let val = self.load_offset(builder, *typ, byte_offset);
                     values.push(val);
-                    byte_offset += typ.bytes();
+
+                    if t < types.len() - 1 {
+                        byte_offset += typ.bytes().next_multiple_of(types[t + 1].bytes());
+                    }
                 }
 
                 values
@@ -271,7 +274,7 @@ fn make_stack_allocas(fcs: &mut FunctionCompilationState) {
 
         if *location == VarLocation::Reg {
             let writeable = if let ArgIndex::Some(arg_index) = arg_index {
-                let raw_arg_types = typ.raw_arg_type().to_cl_type();
+                let raw_arg_types = typ.raw_arg_type(ABI::C).to_cl_type();
                 let raw_arg_type_count = raw_arg_types.len();
 
                 let writeable = Writeable::Arg { 
@@ -461,7 +464,8 @@ fn compile_mline(fcs: &mut FunctionCompilationState, line: MLine) {
         },
         MLine::Return(operand) => {
             if let Some(operand) = operand {
-                build_some_return(fcs, operand);
+                let val = compile_operand(fcs, operand);
+                fcs.builder.ins().return_(&*val);
             } else {
                 fcs.builder.ins().return_(&[]);
             }
@@ -510,84 +514,21 @@ fn write_vals_to_addr(
 ) {
     let value_count = vals.len();
 
+    let types = vals
+        .iter()
+        .map(|val| builder.ins().data_flow_graph().value_type(*val))
+        .collect::<Vec<_>>();
+
     for (v, val) in vals.into_iter().enumerate() {
         builder.ins().store(MemFlags::new(), val, addr, 0);
         
         if v != value_count - 1 {
-            let typ = builder.ins().data_flow_graph().value_type(val);
-            let offset_val = builder.ins().iconst(cl_types::I64, typ.bytes() as i64);
+            let offset = types[v].bytes().next_multiple_of(types[v + 1].bytes());
+            let offset_val = builder.ins().iconst(cl_types::I64, offset as i64);
 
             addr = builder.ins().iadd(addr, offset_val);
         }
     }
-}
-
-fn build_some_return(mut fcs: &mut FunctionCompilationState, operand: &MOperand) {
-    let return_style = fcs.ret_type.return_style();
-
-    if return_style == ReturnStyle::Direct {
-        let val = compile_operand(fcs, operand);
-        fcs.builder.ins().return_(&*val);
-
-        return;
-    } 
-
-    let mut get_val_at: Box<dyn FnMut(CLType, u32) -> CLValue> = match operand {
-        MOperand::Memloc(memloc) => {
-            match memloc {
-                MMemLoc::Reg(reg) => {
-                    let values = fcs.registers[reg].clone();
-
-                    Box::new(move |_: CLType, offset: u32| {
-                        if offset == 0 {
-                            values[0]
-                        } else {
-                            values[1]
-                        }
-                    })
-                },
-                MMemLoc::Global(_) => todo!(),
-                MMemLoc::Var(var_name) => {
-                    let writeable = fcs.variables[*var_name].clone();
-
-                    let fcs = &mut fcs;
-                    Box::new(move |typ: CLType, offset: u32| {
-                        writeable.load_offset(&mut fcs.builder, typ, offset)
-                    })
-                },
-            }
-        },
-        MOperand::Lit(_) => unreachable!(), // would be a direct return
-    };
-
-    let ret = match return_style {
-        ReturnStyle::ThroughI32 => {
-            vec![get_val_at(cl_types::I32, 0)]
-        },
-        ReturnStyle::ThroughI64 => {
-            vec![get_val_at(cl_types::I64, 0)]
-        },
-        ReturnStyle::ThroughDouble => {
-            vec![get_val_at(cl_types::F64, 0)]
-        },
-        ReturnStyle::ThroughI32I32 => {
-            vec![get_val_at(cl_types::I32, 0), get_val_at(cl_types::I32, 4)]
-        },
-        ReturnStyle::ThroughF32F32 => {
-            vec![get_val_at(cl_types::F32, 0), get_val_at(cl_types::F32, 4)]
-        },
-        ReturnStyle::ThroughI64I32 => {
-            vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I32, 8)]
-        },
-        ReturnStyle::ThroughI64I64 | ReturnStyle::MoveIntoI64I64 => {
-            vec![get_val_at(cl_types::I64, 0), get_val_at(cl_types::I64, 8)]
-        },
-        _ => unreachable!("{return_style:?}"),
-    };
-
-    std::mem::drop(get_val_at);
-
-    fcs.builder.ins().return_(&*ret);
 }
 
 fn compile_addr_expr(fcs: &mut FunctionCompilationState, r: &&MAddrExpr) -> CLValue {
@@ -641,12 +582,12 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
                 MCallable::Func(id) => {
                     if let Some(func_ref) = fcs.used_functions.get(*id) {
                         fcs.builder.ins().call(*func_ref, &*all_args)
-                    } else if let Some(ext_func_data) = fcs.external_functions.get(*id) {
-                        return Some(build_external_func_call(
-                            &mut fcs.builder, 
-                            all_args, 
-                            ext_func_data
-                        ));
+                    } else if let Some(ExternalFuncData { ptr, sig, .. }) = 
+                        fcs.external_functions.get(*id) {
+                        let sigref = fcs.builder.func.import_signature(sig.clone());
+                        let func_val = fcs.builder.ins().iconst(cl_types::I64, *ptr as i64);
+
+                        fcs.builder.ins().call_indirect(sigref, func_val, &*all_args)
                     } else {
                         panic!("{id:?}");
                     }
@@ -696,7 +637,7 @@ fn compile_expr(fcs: &mut FunctionCompilationState, expr: &MExpr, reg: Option<&M
         MExpr::Ref { on } => Some(vec![get_addr(fcs, on, 0)]),
         MExpr::Deref { to, on } => {
             let ptr = one(load_memloc(fcs, on));
-            let typ = to.to_cl_type()[0];
+            let typ = one(to.to_cl_type());
             Some(vec![fcs.builder.ins().load(typ, MemFlags::new(), ptr, 0)])
         },
     }
@@ -722,7 +663,7 @@ fn compile_unarop(
                 _ => unreachable!(),
             }
         }
-        _ => todo!("{:?}{:?}", op, ret_type),
+        _ => todo!("{:?} on {:?}", op, ret_type),
     }
 }
 
@@ -800,30 +741,26 @@ fn compile_binop(
 fn compile_operand(fcs: &mut FunctionCompilationState, operand: &MOperand) -> Vec<CLValue> {
     match operand {
         MOperand::Memloc(memloc) => load_memloc(fcs, memloc),
-        MOperand::Lit(lit) => vec![compile_lit(fcs, lit)],
-    }
-}
-
-fn compile_lit(fcs: &mut FunctionCompilationState, lit: &MLit) -> CLValue {
-    match lit {
-        MLit::Int { size, val } => {
+        MOperand::Int { size, val } => {
             let int_type = Type::i(*size).to_cl_type()[0];
-            fcs.builder.ins().iconst(int_type, *val as i64)
+            vec![fcs.builder.ins().iconst(int_type, *val as i64)]
         }
-        MLit::Float { size, val } => {
-            match size {
-                32 => fcs.builder.ins().f32const(*val as f32),
-                64 => fcs.builder.ins().f64const(*val as f64),
-                _ => todo!(),
-            }
+        MOperand::Float { size, val } => {
+            vec![
+                match size {
+                    32 => fcs.builder.ins().f32const(*val as f32),
+                    64 => fcs.builder.ins().f64const(*val as f64),
+                    _ => todo!(),
+                }
+            ]
         },
-        MLit::Bool(val) => {
+        MOperand::Bool(val) => {
             let bool_type = Type::bool().to_cl_type()[0];
-            fcs.builder.ins().iconst(bool_type, *val as i64)
+            vec![fcs.builder.ins().iconst(bool_type, *val as i64)]
         },
-        MLit::Function(func_id) => {
+        MOperand::Function(func_id) => {
             let func_ref = fcs.used_functions[*func_id];
-            fcs.builder.ins().func_addr(cl_types::I64, func_ref)
+            vec![fcs.builder.ins().func_addr(cl_types::I64, func_ref)]
         },
     }
 }

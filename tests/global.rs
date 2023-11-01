@@ -3,8 +3,7 @@ use std::rc::Rc;
 use crate::test_utils::Numbers5;
 mod test_utils;
 
-use cxc::{Unit, library::StdLib, Type, FuncType};
-use test_utils::consume;
+use cxc::{Unit, library::StdLib, Type};
 
 static mut GNUM: i32 = 90;
 
@@ -29,11 +28,14 @@ fn basic_global() {
     assert_eq!(unsafe { GNUM }, 50);
 }
 
+static mut GNUMR: i32 = 90;
+
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn read_basic_global() {
     let mut unit = Unit::new();
 
-    unit.add_global("x".into(), unsafe { &mut GNUM as *mut _ });
+    unit.add_global("x".into(), unsafe { &mut GNUMR as *mut _ });
 
     unit.push_script(
         r#"
@@ -46,7 +48,7 @@ fn read_basic_global() {
 
     let read = unit.get_fn("main").unwrap().downcast::<(), i32>()();
 
-    assert_eq!(consume::<i32>(read), 90);
+    assert_eq!(read, 90);
 }
 
 #[test]
@@ -73,6 +75,7 @@ fn big_global() {
 }
 
 #[test]
+#[cfg_attr(feature = "backend-interpreter", ignore)]
 fn read_big_global() {
     let mut unit = Unit::new();
 
@@ -91,7 +94,7 @@ fn read_big_global() {
 
     let read = unit.get_fn("main").unwrap().downcast::<(), Numbers5>()();
 
-    assert_eq!(consume::<Numbers5>(read), large_value);
+    assert_eq!(read, large_value);
 }
 
 #[test]
@@ -207,11 +210,13 @@ fn get_fn_by_ptr() {
     let add_two = unit.get_fn_by_ptr(*add_two as _).unwrap().1;
     let fifty_four = unit.get_fn_by_ptr(*fifty_four as _).unwrap().1;
 
-    assert_eq!(add_two.typ(), FuncType { args: vec![ Type::i(32) ], ret: Type::i(32) });
-    assert_eq!(fifty_four.typ(), FuncType { args: vec![], ret: Type::i(32) });
+    assert_eq!(add_two.typ().args, vec![Type::i(32)]);
+    assert_eq!(add_two.typ().ret, Type::i(32));
+    assert_eq!(fifty_four.typ().args, vec![]);
+    assert_eq!(fifty_four.typ().ret, Type::i(32));
 
     let add_two = add_two.downcast::<(i32,), i32,>();
     let fifty_four = fifty_four.downcast::<(), i32>();
 
-    assert_eq!(consume::<i32>(add_two(consume::<i32>(fifty_four()))), 56);
+    assert_eq!(add_two(fifty_four()), 56);
 }

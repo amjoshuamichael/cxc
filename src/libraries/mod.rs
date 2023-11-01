@@ -1,5 +1,6 @@
 mod crates;
 pub mod std_lib;
+pub mod core_lib;
 mod test_lib;
 mod type_interface_lib;
 pub use crates::*;

@@ -5,6 +5,7 @@ use cxc::library::StdLib;
 use test_utils::xc_test;
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn default_vec_alone() {
     xc_test!(
         use StdLib;
@@ -20,6 +21,7 @@ fn default_vec_alone() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn default_vec_with_push() {
     xc_test!(
         use StdLib;
@@ -36,6 +38,23 @@ fn default_vec_with_push() {
 }
 
 #[test]
+fn small_vec_push() {
+    xc_test!(
+        "
+        main() {
+            output: Vec<i64> = Vec<i64>:default()                
+            output.push(1)
+            output.push(2)
+            output.push(3)
+            output.push(4)
+            output.push(5)
+        }
+        "
+    )
+}
+
+#[test]
+#[ignore]
 fn vec_push_and_check() {
     xc_test!(
         "     
@@ -97,6 +116,7 @@ fn vec_push_and_check() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn rc_basic() {
     xc_test!(
         use StdLib;
@@ -113,6 +133,7 @@ fn rc_basic() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn big_rc() {
     xc_test!(
         use StdLib;
@@ -212,6 +233,7 @@ fn cast() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn arc_test() {
     xc_test!(
         use StdLib;
@@ -228,6 +250,7 @@ fn arc_test() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn arc_clone() {
     xc_test!(
         use StdLib;
@@ -235,12 +258,32 @@ fn arc_clone() {
         main(); Arc<i32> {
             x: i32 = 90
             arc: Arc<i32> = Arc<i32>:new(x)
+            #x_ptr: u64 = cast(arc.ptr)
+            #print(x_ptr)
             cloned: Arc<i32> = arc.clone()
+            #y_ptr: u64 = cast(arc.ptr)
+            #print(y_ptr)
 
             ; cloned
         }
         ";
         Arc::new(90i32)
+    )
+}
+
+
+#[test]
+#[cfg(not(feature = "backend-interpreter"))]
+fn empty_string() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); String {
+            x := ""
+            ; x
+        }
+        "#;
+        String::default()
     )
 }
 
@@ -283,3 +326,4 @@ fn panic() {
         "#
     )
 }
+

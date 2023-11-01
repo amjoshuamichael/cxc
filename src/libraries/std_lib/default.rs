@@ -2,7 +2,7 @@ use crate::{
     lex::VarName,
     libraries::Library,
     parse::{Expr, FuncCode, InitOpts, TypeSpecRelation},
-    unit::CompData, Type, TypeEnum, typ::{Field, spec_from_type::type_to_type_spec},
+    unit::CompData, Type, TypeEnum, typ::{Field, spec_from_type::type_to_type_spec, ABI},
 };
 
 pub(super) struct DefaultLib;
@@ -11,18 +11,7 @@ impl Library for DefaultLib {
     fn add_to_unit(&self, unit: &mut crate::Unit) {
         unit.add_static_deriver("default".into(), derive_default);
 
-        // TODO: write this in actual cxc code
-        unit.add_external_default::<i8>();
-        unit.add_external_default::<i16>();
-        unit.add_external_default::<i32>();
-        unit.add_external_default::<i64>();
-        unit.add_external_default::<u8>();
-        unit.add_external_default::<u16>();
-        unit.add_external_default::<u32>();
-        unit.add_external_default::<u64>();
-        unit.add_external_default::<f32>();
-        unit.add_external_default::<f64>();
-        unit.add_external_default::<bool>();
+        unit.push_script(include_str!("default.cxc"));
     }
 }
 
@@ -58,9 +47,10 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 ret_type: type_spec.clone(),
                 args: Vec::new(),
                 generic_count: 0,
-                code: struct_lit.wrap_in_block(),
+                code: struct_lit.wrap(),
                 relation,
                 is_external: false,
+                abi: ABI::C,
             })
         },
         _ => None,

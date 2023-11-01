@@ -33,12 +33,13 @@ impl<'a, T: PartialEq + Eq> IntoIterator for &'a UniqueVec<T> {
 }
 
 impl<T: PartialEq + Eq> UniqueVec<T> {
-    pub fn insert(&mut self, val: T) {
+    pub fn insert(&mut self, val: T) -> bool {
         if self.contains(&val) {
-            return; 
+            return true; 
         }
 
-        self.0.push(val)
+        self.0.push(val);
+        return false;
     }
 
     pub fn remove(&mut self, val: &T) {
