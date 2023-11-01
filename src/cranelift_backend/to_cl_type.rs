@@ -32,8 +32,7 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
     }
 
     for typ in &typ.args {
-        if typ.arg_style(abi) == ArgStyle::Pointer 
-            && cfg!(not(any(target_arch = "arm", target_arch = "aarch64"))) {
+        if typ.arg_style(abi) == ArgStyle::Pointer && crate::ARCH_x86 && cfg!(unix) {
             sig.params.push(AbiParam::special(
                 cl_types::I64, 
                 ArgumentPurpose::StructArgument(typ.size().next_multiple_of(8) as u32),
@@ -48,7 +47,7 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
 
     let raw_return = typ.ret.raw_return_type(abi).to_cl_type();
 
-    if crate::ARCH_x86 && false {
+    if crate::ARCH_x86 && cfg!(windows) {
         if (abi == ABI::Rust || abi == ABI::None) && 
             typ.ret.return_style(ABI::Rust) == ReturnStyle::Direct &&
             typ.ret.primitive_fields_iter().next().is_some() &&

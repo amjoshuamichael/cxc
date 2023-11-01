@@ -101,7 +101,7 @@ impl Type {
                 }
 
                 if crate::ARCH_x86 && cfg!(windows) {
-                    if all_floats {
+                    if abi == ABI::Rust && all_floats {
                         return ReturnStyle::Direct;
                     } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
                         return ReturnStyle::SRet;
