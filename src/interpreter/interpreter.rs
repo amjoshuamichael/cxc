@@ -270,7 +270,7 @@ fn interpret(interpreter: &mut Interpreter) -> Value {
         interpreter.current_line += 1;
 
         if (processed > 1000000) {
-            panic!();
+            panic!("some kind of loop occured in the interpreter");
         }
     }
 }

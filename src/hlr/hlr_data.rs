@@ -1,5 +1,6 @@
 use std::collections::{HashSet, HashMap};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use super::expr_tree::*;
 use super::hlr_data_output::HLR;
@@ -173,7 +174,7 @@ impl<'a> FuncRep<'a> {
         self.comp_data.get_spec(spec, &(&self.generics, &self.relation))
     }
 
-    pub fn output(mut self, from: Rc<Expr>) -> (HLR, ProcessedFuncInfo) {
+    pub fn output(mut self, from: Arc<Expr>) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
         if self.ret_type.return_style(ABI::C) == ReturnStyle::SRet {

@@ -46,7 +46,8 @@ impl NodeDataGen for Rc<dyn NodeDataGen> {
 
 impl<T: NodeDataGen> NodeDataGen for Box<T> {
     fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
-        self.put_in_id(hlr, spot)
+        let inner: &T = &**self;
+        inner.put_in_id(hlr, spot)
     }
 }
 
@@ -146,7 +147,6 @@ pub struct BinOpGen {
     pub lhs: Box<dyn NodeDataGen>,
     pub op: Opcode,
     pub rhs: Box<dyn NodeDataGen>,
-    pub ret_type: Type,
 }
 
 impl NodeDataGen for BinOpGen {
@@ -160,7 +160,7 @@ impl NodeDataGen for BinOpGen {
                 lhs,
                 rhs,
                 op: self.op,
-                ret_type: self.ret_type.clone(),
+                ret_type: hlr.tree.get_ref(lhs).ret_type(),
             },
         );
     }
@@ -262,6 +262,30 @@ impl<T: NodeDataGen> NodeDataGen for CastGen<T> {
     }
 }
 
+#[derive(Debug)]
+pub struct WhileGen<T: NodeDataGen, U: NodeDataGen> {
+    pub(crate) w: T,
+    pub(crate) d: U,
+}
+
+impl<T: NodeDataGen, U: NodeDataGen> NodeDataGen for WhileGen<T, U> {
+    fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
+        let w = self.w.add_to_expr_tree(hlr, spot);
+        let d = self.d.add_to_expr_tree(hlr, spot);
+        hlr.tree.replace(spot, HNodeData::While { w, d })
+    }
+}
+
+impl NodeDataGen for Vec<Box<dyn NodeDataGen>> {
+    fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
+        let new_stmts = self.iter().map(|gen| gen.add_to_expr_tree(hlr, spot)).collect();
+        let mut block = HNodeData::new_block();
+        let HNodeData::Block { ref mut stmts, .. } = &mut block else { unreachable!() };
+        *stmts = new_stmts;
+        hlr.tree.replace(spot, block)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct StructLitGen {
     pub var_type: Type,
@@ -294,32 +318,6 @@ impl NodeDataGen for StructLitGen {
             HNodeData::StructLit {
                 var_type,
                 fields: added_fields,
-                initialize: self.initialize,
-            },
-        );
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct ArrayLitGen {
-    pub var_type: Type,
-    pub parts: Vec<Box<dyn NodeDataGen>>,
-    pub initialize: InitOpts,
-}
-
-impl NodeDataGen for ArrayLitGen {
-    fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
-        let parts = self
-            .parts
-            .iter()
-            .map(|data| data.add_to_expr_tree(hlr, spot))
-            .collect();
-
-        hlr.tree.replace(
-            spot,
-            HNodeData::ArrayLit {
-                var_type: self.var_type.clone(),
-                parts,
                 initialize: self.initialize,
             },
         );

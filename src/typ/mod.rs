@@ -32,7 +32,7 @@ use crate as cxc;
 /// Cxc's structural type system is reflected in its compiler design. Instead of holding
 /// a type id, or the name of a type, this object holds everything needed to describe and
 /// analyze the contents of the type, including the types behind references. Internally,
-/// [`Type`] holds a `Arc<[TypeData]>`, which contains a [`TypeName`], generics, and a 
+/// [`Type`] holds a `Arc<TypeData>`, which contains a [`TypeName`], generics, and a 
 /// [`TypeEnum`]. `TypeEnum` holds the actual type information–the integer sizes, the struct 
 /// fields, etc. `TypeEnum`s containing variants like [`StructType`] and [`FuncType`] hold 
 /// their inner data, like fields and arguments, behind `Type` objects as well. In this
@@ -53,7 +53,7 @@ use crate as cxc;
 pub struct Type(Arc<TypeData>);
 
 impl Debug for Type {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result { write!(f, "{:?}", self.0) }
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result { write!(f, "{}", self.0.full_name()) }
 }
 
 impl Type {
@@ -160,6 +160,23 @@ impl Type {
         self
     }
 
+    /// Gets the inner type behind any wrappers. For example, this converts `&i32 ~ 
+    /// free(self)` to `&i32`. Works with [`DestructorType`]s. 
+    ///
+    /// This does not remove the wrappers on individual fields, so calling this on 
+    /// `{ x: &i32 ~ free(self) }` will return `{ x: &i32 ~ free(self) }`, *not* 
+    /// `{ x: &i32 }`.
+    ///
+    /// This also works recursively, so if you happen to create a type like `&i32 ~ 
+    /// free(self) ~ free(self)`, calling `remove_wrappers` on it will convert it to 
+    /// `&i32`.
+    pub fn remove_wrappers(&self) -> &Type {
+        match self.as_type_enum() {
+            TypeEnum::Destructor(DestructorType { base, .. }) => base.remove_wrappers(),
+            _ => self,
+        }
+    }
+
     /// Gets the inner TypeEnum of a type, as a referenece.
     pub fn as_type_enum(&self) -> &TypeEnum { &self.0.type_enum }
     /// Gets the inner TypeEnum of a type, as a clone.
@@ -222,27 +239,31 @@ pub(crate) struct TypeData {
     pub cached_size: Cache<usize>,
 }
 
-impl Debug for TypeData {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+impl TypeData {
+    fn full_name(&self) -> String {
         match &self.name {
             TypeName::Other(name) => {
-                write!(fmt, "{}", name)?;
+                let mut output = name.to_string();
 
-                let mut generics = self.generics.iter();
+                if !self.generics.is_empty() {
+                    for (g, generic) in self.generics.iter().enumerate() {
+                        let generic_full_name = generic.full_name();
 
-                if let Some(generic) = generics.next() {
-                    write!(fmt, "<{:?}", generic)?;
-
-                    for generic in generics {
-                        write!(fmt, "{:?}, ", generic)?;
+                        output += &*if g == 0 {
+                                format!("<{generic_full_name}")
+                            } else if g == self.generics.len() - 1 {
+                                format!("{generic_full_name}>")
+                            } else {
+                                format!("{generic_full_name}, ")
+                            };
                     }
 
-                    write!(fmt, ">")?;
+                    output += ">";
                 }
 
-                Ok(())
+                output
             },
-            _ => write!(fmt, "{:?}", self.type_enum),
+            _ => self.type_enum.full_name(),
         }
     }
 }
@@ -268,7 +289,7 @@ pub enum TypeEnum {
 
 impl Debug for TypeEnum {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(fmt, "{}", self.to_string())
+        write!(fmt, "{}", self.full_name())
     }
 }
 
@@ -386,15 +407,15 @@ impl StructType {
     }
 }
 
-#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 /// An integer data type, wrapping [`IntSize`].
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
     pub size: IntSize,
     pub signed: bool,
 }
 
-#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 /// The size of an integer type (e.g. u8, i64).
+#[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub enum IntSize {
     _8,
     _16,
@@ -432,8 +453,8 @@ impl IntType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord, XcReflect)]
 /// A floating point data type, with several variations.
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, PartialOrd, Ord, XcReflect)]
 pub enum FloatType {
     F32,
     F64,
@@ -449,31 +470,31 @@ impl From<usize> for FloatType {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, XcReflect)]
 /// A boolean data type.
+#[derive(PartialEq, Eq, Hash, Clone, Copy, XcReflect)]
 pub struct BoolType;
 
-#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 /// This represents the "Unknown" data type. By the time the compiler gets past the type
 /// inference step of the HLR passes, this should not be present. Notably, unknown
 /// is the default value for [`TypeEnum`] and [`Type`].
+#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 pub struct UnknownType();
 static UNKNOWN_STATIC: UnknownType = UnknownType();
 
-#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 /// A void data type.
+#[derive(PartialEq, Eq, Hash, Clone, XcReflect)]
 pub struct VoidType();
 static VOID_STATIC: VoidType = VoidType();
 
-#[derive(PartialEq, Hash, Eq, Clone, XcReflect)]
 /// An array data type.
+#[derive(PartialEq, Hash, Eq, Clone, XcReflect)]
 pub struct ArrayType {
     pub base: Type,
     pub count: u32,
 }
 
-#[derive(Clone, XcReflect)]
 /// A Destructor data type.
+#[derive(Clone, XcReflect)]
 pub struct DestructorType {
     pub base: Type,
     /// Notably, the destructor code is stored with the DestructorType in an Arc<HLR>, 

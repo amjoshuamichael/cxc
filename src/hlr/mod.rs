@@ -89,5 +89,6 @@ pub fn hlr(
             println!("{}: {:?} || {:?} {:?}", info.name, info.typ, var_id, info.arg_index);
         }
     }
+
     Ok(output.output(code.code.clone()))
 }

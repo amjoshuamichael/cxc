@@ -17,6 +17,8 @@ impl Library for DefaultLib {
 
 fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
     let type_spec = type_to_type_spec(typ.clone());
+    let relation = TypeSpecRelation::Static(type_spec.clone());
+
     match typ.as_type_enum() {
         TypeEnum::Struct(struct_type) => {
             let mut fields = Vec::<(VarName, Expr)>::new();
@@ -40,8 +42,6 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 Box::new(Expr::Struct(fields, InitOpts::NoFill)),
             );
 
-            let relation = TypeSpecRelation::Static(type_spec.clone());
-
             Some(FuncCode {
                 name: VarName::from("default"),
                 ret_type: type_spec.clone(),
@@ -53,6 +53,18 @@ fn derive_default(_: &CompData, typ: Type) -> Option<FuncCode> {
                 abi: ABI::C,
             })
         },
+        TypeEnum::Array(array_type) => {
+            Some(FuncCode {
+                name: VarName::from("default"),
+                ret_type: type_spec.clone(),
+                args: Vec::new(),
+                generic_count: 0,
+                code: Expr::Array(Vec::new(), InitOpts::Default).wrap(),
+                relation,
+                is_external: false,
+                abi: ABI::C,
+            })
+        }
         _ => None,
     }
 }

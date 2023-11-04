@@ -32,6 +32,7 @@ region = { version = "3", optional = true }
 libc = { version = "0.2", optional = true }
 
 cxc_derive = "0.2"
+backtrace = "0.3"
 
 [features]
 default = ["backend-cranelift", "ffi-assertions"]

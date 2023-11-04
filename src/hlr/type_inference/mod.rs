@@ -126,7 +126,8 @@ struct Usages {
     is_float: Vec<ExprID>,
     is_struct: Vec<ExprID>,
     has_fields: IndexMap<VarName, Vec<ExprID>>,
-    fulfilled: bool,
+    struct_literal_set: bool,
+    struct_type_set: bool,
 }
 
 #[derive(Default, Debug)]
@@ -1250,7 +1251,7 @@ fn solve_with_inference_step(
         for constraint_index in 0..infer_map.constraints.len() {
             let constraints = &mut infer_map.constraints[constraint_index];
 
-            if constraints.usages.fulfilled { continue }
+            if constraints.usages.struct_literal_set { continue }
 
             if constraints.usages.has_fields.is_empty() && 
                 constraints.usages.is_struct.is_empty() {
@@ -1280,6 +1281,8 @@ fn solve_with_inference_step(
                     }
                 );
             }
+
+            infer_map.constraints[constraint_index].usages.struct_literal_set = true;
         }
     }
 
@@ -1308,6 +1311,8 @@ fn solve_with_inference_step(
                 continue;
             }
 
+            if constraints.usages.struct_type_set { continue }
+
             let has_fields = std::mem::replace(
                 &mut constraints.usages.has_fields, 
                 IndexMap::default()
@@ -1335,11 +1340,12 @@ fn solve_with_inference_step(
                     method_of: None,
                 }
             );
+
+            infer_map.constraints[constraint_index].usages.struct_type_set = true;
         }
     }
 
     for constraint_id in fulfilled_usages {
-        infer_map.constraints[constraint_id].usages.fulfilled = true;
         infer_map.has_been_modified_since_last_round = true;
     }
 }

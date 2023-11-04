@@ -1,5 +1,5 @@
 use crate::{lex::Tok, TypeName, VarName, typ::ABI};
-use std::{fmt::{Debug, Display}, rc::Rc};
+use std::{fmt::{Debug, Display}, sync::Arc};
 
 use super::{Expr, FuncCode, TypeSpec, TypeSpecRelation, VarDecl};
 
@@ -46,7 +46,7 @@ impl Errable for FuncCode {
             ret_type: TypeSpec::err(),
             args: Vec::new(),
             generic_count: 0,
-            code: Rc::new(Expr::err()),
+            code: Arc::new(Expr::err()),
             relation: TypeSpecRelation::Unrelated,
             is_external: false,
             abi: ABI::C,

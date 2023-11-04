@@ -31,6 +31,12 @@ impl GenericTable for Vec<Type> {
     }
 }
 
+impl<'a> GenericTable for &'a Vec<Type> {
+    fn get_at_index(&self, index: u8) -> Option<Type> { 
+        self.get(index as usize).cloned()
+    }
+}
+
 impl GenericTable for () { }
 
 impl<T: GenericTable> GenericTable for (T, Type) {

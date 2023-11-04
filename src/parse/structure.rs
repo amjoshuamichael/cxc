@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
@@ -26,7 +28,7 @@ pub enum TypeSpec {
     TypeLevelFunc(TypeName, Vec<TypeSpec>),
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
-    Destructor(Box<TypeSpec>, Rc<Expr>),
+    Destructor(Box<TypeSpec>, Arc<Expr>),
     #[default]
     Void,
     Unknown,
@@ -79,7 +81,7 @@ pub fn parse_type(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             Expr::Block(vec![parse_expr(&mut destructor_parser)?])
         };
 
-        Ok(TypeSpec::Destructor(Box::new(atom), Rc::new(destructor)))
+        Ok(TypeSpec::Destructor(Box::new(atom), Arc::new(destructor)))
     } else {
         Ok(atom)
     }

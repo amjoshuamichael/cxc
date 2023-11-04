@@ -18,7 +18,7 @@
         }
     }
 
-    slice(range: Range<u64>); Me {
+    slice(range: Range<u64>); { +ptr: &T, +len: u64 } {
         ; Me {
             ptr = self.ptr.ptr_add(range.start),
             len = range.end - range.start,

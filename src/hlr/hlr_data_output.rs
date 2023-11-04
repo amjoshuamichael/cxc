@@ -1,4 +1,4 @@
-use std::{collections::HashSet, rc::Rc};
+use std::{collections::HashSet, sync::Arc};
 
 use slotmap::SlotMap;
 
@@ -11,7 +11,7 @@ use super::{
 
 #[derive(Clone, Debug)]
 pub struct HLR {
-    pub from: Rc<Expr>,
+    pub from: Arc<Expr>,
     pub tree: ExprTree,
     pub variables: SlotMap<VarID, VariableInfo>,
     pub func_type: FuncType,

@@ -85,10 +85,10 @@ impl Expr {
     pub fn get_ref(&self) -> Expr { Expr::UnarOp(Opcode::Ref, Box::new(self.clone())) }
 
     /// wraps self in an Rc, and in a block if self is not already a block.
-    pub fn wrap(self) -> Rc<Expr> {
+    pub fn wrap(self) -> Arc<Expr> {
         match self {
-            Expr::Block(_) => Rc::new(self),
-            _ => Rc::new(Expr::Block(vec![Expr::Return(Some(Box::new(self)))])),
+            Expr::Block(_) => Arc::new(self),
+            _ => Arc::new(Expr::Block(vec![Expr::Return(Some(Box::new(self)))])),
         }
     }
 
@@ -179,7 +179,7 @@ pub struct FuncCode {
     pub ret_type: TypeSpec,
     pub args: Vec<VarDecl>,
     pub generic_count: usize,
-    pub code: Rc<Expr>,
+    pub code: Arc<Expr>,
     pub relation: TypeSpecRelation,
     pub is_external: bool,
     pub abi: ABI,
@@ -199,7 +199,7 @@ impl FuncCode {
         }
     }
 
-    pub fn from_expr(code: Rc<Expr>) -> Self {
+    pub fn from_expr(code: Arc<Expr>) -> Self {
         Self {
             name: VarName::None,
             ret_type: TypeSpec::Unknown,

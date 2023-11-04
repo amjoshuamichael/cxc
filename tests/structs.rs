@@ -177,6 +177,58 @@ fn active_initialize_struct_strings() {
 }
 
 #[test]
+fn active_initialize_struct_arrays_1() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); { [5]u32, [5]f32 } {
+            ; { ++ }
+        }
+        "#;
+        ( [0; 5], [0.0f32; 5] )
+    );
+}
+
+#[test]
+fn active_initialize_struct_arrays_2() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); { [50]u32, [50]f32 } {
+            ; { ++ }
+        }
+        "#;
+        ( [0u32; 50], [0.0f32; 50] )
+    );
+}
+
+#[test]
+fn active_initialize_struct_arrays_3() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); { [500]u32, [500]f32 } {
+            ; { ++ }
+        }
+        "#;
+        ( [0u32; 500], [0.0f32; 500] )
+    );
+}
+
+#[test]
+fn active_initialize_struct_arrays_4() {
+    xc_test!(
+        use StdLib;
+        r#"
+        main(); { [500]f32, [500]u32 } {
+            ; { ++ }
+        }
+        "#;
+        ( [0.0f32; 500], [0u32; 500] )
+    );
+}
+
+#[test]
 fn deref() {
     xc_test!(
         "

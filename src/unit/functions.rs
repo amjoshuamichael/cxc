@@ -179,7 +179,7 @@ impl CompData {
         &self, 
         query: FuncCodeQuery
     ) -> Option<(FuncCodeId, Option<Transformation>)> {
-        if let Some(looking_for_relation) = query.relation.inner_type() {
+        if let Some(search_relation) = query.relation.inner_type() {
             let mut closest_function: Option<(FuncCodeId, Option<Transformation>)> = None;
             let mut closest_function_dist = u32::MAX;
 
@@ -188,10 +188,25 @@ impl CompData {
                     continue;
                 }
 
-                let Some(looking_at_relation) = code.relation.inner_type() else { continue };
+                let Some(check_relation_spec) = code.relation.inner_type() 
+                    else { continue };
 
                 if let Some(result) = 
-                    looking_for_relation.can_transform_to(looking_at_relation.clone()) {
+                    search_relation.can_transform_to(check_relation_spec.clone()) {
+
+                    let check_relation = 
+                        self.get_spec(check_relation_spec, &result.generics).unwrap();
+
+                    let ret_as_search = 
+                        self.get_spec(&code.ret_type, &(&result.generics, query.relation))
+                            .unwrap();
+                    let ret_as_check = 
+                        self.get_spec(&code.ret_type, &(&result.generics, check_relation))
+                            .unwrap();
+                    //dbg!(&ret_as_search, &ret_as_check);
+
+                    if ret_as_search != ret_as_check { continue }
+
                     let result_dist = transformation_steps_dist(&result.steps);
                     
                     if closest_function_dist > result_dist {
@@ -230,10 +245,10 @@ impl CompData {
             let generics = transformation.map(|t| t.generics).unwrap_or_default();
 
             for realization in realizations {
-                let realization_info = &self.processed[*realization];
-                if realization_info.generics == generics {
-                    return Some(*realization);
-                }
+                if self.processed[*realization].generics != generics { continue }
+
+
+                return Some(*realization);
             }
         }
 

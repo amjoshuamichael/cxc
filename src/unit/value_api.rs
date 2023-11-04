@@ -15,7 +15,7 @@ use super::{FuncQuery, backends::IsBackend};
 
 use crate as cxc;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 #[repr(C)]
 /// A dynamic representation of a value in cxc. Contains a [`Type`] for its data type 
 /// and a [`Box<u8>`] for its data.
@@ -84,6 +84,22 @@ impl Value {
             typ,
             data: slice,
         }
+    }
+
+    /// TODO
+    pub fn new_tuple_from_vec(items: Vec<Value>) -> Self {
+        let new_type = Type::new_tuple(items.iter().map(Value::get_type).cloned().collect());
+
+        let mut val = Value {
+            data: vec![0; new_type.size()].into_boxed_slice(),
+            typ: new_type,
+        };
+
+        for (i, item) in items.into_iter().enumerate() {
+            val.set_member(VarName::TupleIndex(i), item);
+        }
+
+        val
     }
 
     /// Converts [`Value`]s to Strings, the way they would be implemented by default.
@@ -218,7 +234,7 @@ impl Value {
     pub unsafe fn get_data_as<T>(&self) -> *const T { self.data.as_ptr() as *const T }
 
     /// Consumes the [`Value`] and returns the inner data.
-    pub unsafe fn get_data(self) -> Box<[u8]> { self.data }
+    pub fn get_data(self) -> Box<[u8]> { self.data }
 
     /// Consumes the [`Value`] and [`std::mem::transmute`]s the value to a given type.
     /// 
@@ -243,6 +259,24 @@ impl Value {
     pub fn get_type(&self) -> &Type { &self.typ }
     /// Gets the data inside the value as a slice.
     pub fn get_slice(&self) -> &[u8] { &self.data }
+
+    /// TODO
+    pub fn set_member(&mut self, field: VarName, to: Value) {
+        let TypeEnum::Struct(struct_type) = self.typ.as_type_enum()
+            else { todo!("error") };
+
+        let Some(field_index) = struct_type.get_field_index(&field)
+            else { todo!("error") };
+
+        let offset = struct_type.field_offset_in_bytes(field_index);
+        let field_size = struct_type.fields[field_index].typ.size();
+
+        assert!(to.data.len() == field_size);
+        assert!(self.data.len() == self.typ.size());
+
+        self.data[offset..(offset + field_size)].copy_from_slice(&*to.data);
+    }
+
 }
 
 impl Unit {
