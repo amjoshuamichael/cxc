@@ -250,9 +250,16 @@ fn build_as_addr_reg(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrRe
     let l = mir.new_addr_reg();
     let r = build_as_addr_expr(node, tree, mir);
 
-    mir.lines.push(MLine::SetAddr { l, r, });
+    match r {
+        MAddrExpr::Addr(MAddr::Reg(reg)) => {
+            reg
+        },
+        _ => {
+            mir.lines.push(MLine::SetAddr { l, r, });
 
-    l
+            l
+        }
+    }
 }
 
 fn build_as_addr_reg_with_normal_expr(node: HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddrReg {

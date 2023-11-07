@@ -89,6 +89,22 @@ Vec<T> = {
     }
 }
 
+# TODO: this should be a static method of Vec, but generic static methods of generic types
+# are broken
+vec_from_arr<U>(arr: U); Vec<U[]> {
+    vec := Vec<U[]> {
+        raw = cast({
+            ptr = alloc<U[]>(arr.len),
+            capacity = arr.len,
+        }),
+        len = arr.len,
+    }
+
+    memcpy(arr.ptr, vec.ptr, vec.len * size_of<U[]>())
+
+    ; vec
+}
+
 <T> &Vec<T>:. {
     drop() {
         free<T>(self.ptr)

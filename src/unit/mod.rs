@@ -2,6 +2,7 @@ use self::backends::IsBackend;
 use self::functions::DeriverFunc;
 use self::functions::DeriverInfo;
 use self::functions::TypeLevelFunc;
+use self::precalcs::Caches;
 pub use self::value_api::Value;
 use crate::FuncType;
 
@@ -18,6 +19,7 @@ use crate::mir::MIR;
 use crate::mir::mir;
 use crate::parse;
 use crate::parse::*;
+use crate::unit::precalcs::cache_type_specs;
 use crate::{XcReflect as XcReflectMac, xc_opaque};
 use crate::Type;
 pub use add_external::ExternalFuncAdd;
@@ -36,6 +38,7 @@ use std::iter::once;
 use std::pin::Pin;
 use crate::backend::Backend;
 pub use backends::function::*;
+pub(crate) use precalcs::*;
 
 mod add_external;
 pub mod callable;
@@ -44,6 +47,7 @@ pub mod get_type_spec;
 mod reflect;
 mod value_api;
 pub mod backends;
+mod precalcs;
 
 use crate as cxc;
 
@@ -68,6 +72,7 @@ pub struct CompData {
     intrinsics: HashSet<FuncCodeId>,
     processed: SlotMap<FuncId, ProcessedFuncInfo>,
     pub globals: BTreeMap<VarName, Global>,
+    pub(crate) caches: Caches,
 }
 
 #[derive(Hash, PartialEq, Eq, Debug, Clone)]
@@ -205,6 +210,8 @@ impl Unit {
     }
 
     pub fn compile_func_set(&mut self, mut set: HashSet<FuncQuery>) -> CResultMany<()> {
+        self.comp_data.caches.clear();
+
         let mut all_func_ids = HashSet::<FuncId>::new();
 
         let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
@@ -230,6 +237,7 @@ impl Unit {
                 // TODO: this is a derivation hack and will be changed when derivations are
                 // redone
                 let code = if let Some(code_id) = code_id {
+                    cache_type_specs(&mut *self.comp_data, code_id, &query);
                     Cow::Borrowed(&self.comp_data.func_code[code_id])
                 } else {
                     self.comp_data.get_code(query.code_query()).unwrap().0

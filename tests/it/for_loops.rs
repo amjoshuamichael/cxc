@@ -1,6 +1,5 @@
-mod test_utils;
+use super::test_utils::xc_test;
 use cxc::library::StdLib;
-use test_utils::xc_test;
 
 #[test]
 fn basic_for() {

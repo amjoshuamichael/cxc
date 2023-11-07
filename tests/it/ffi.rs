@@ -1,10 +1,8 @@
 #![allow(unused_must_use)]
 #![allow(unused_imports)]
-mod test_utils;
-
 use cxc::{ExternalFuncAdd, TypeRelation, library::StdLib};
 use cxc::{Type, Unit};
-use test_utils::Point2D;
+use super::test_utils::Point2D;
 use std::rc::Rc;
 
 #[test]

@@ -1,0 +1,3 @@
+new<T, U>(a: U); T {
+    ; T:new(a)
+}

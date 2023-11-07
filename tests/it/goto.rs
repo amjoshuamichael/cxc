@@ -1,5 +1,4 @@
-mod test_utils;
-use test_utils::xc_test;
+use super::test_utils::xc_test;
 use cxc::library::StdLib;
 
 #[test]

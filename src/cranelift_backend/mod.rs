@@ -91,7 +91,7 @@ impl IsBackend for CraneliftBackend {
         let mut ctx = 
             if let Some(ClFunctionData { mut ctx, .. }) = 
                 self.cl_function_data.remove(func_id) {
-                ctx.func.clear();
+                ctx.clear();
                 ctx
             } else {
                 self.module.make_context()

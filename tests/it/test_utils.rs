@@ -19,7 +19,7 @@ macro_rules! xc_test {
 
         $( $( unit.add_lib($lib); )* )?
 
-        unit.add_lib(test_utils::TestUtilsLib::new($code));
+        unit.add_lib(crate::test_utils::TestUtilsLib::new($code));
 
         let code = $code;
         if code.contains("main()") {

@@ -41,6 +41,8 @@ struct InferableConnection {
     // method of. This is that type, and it is used when doing type solving on
     // arguments and return types.
     method_of: Option<ConstraintId>,
+    // if a connection is a reversal, we don't have to re-reverse it.
+    is_reversal: bool,
 }
 
 #[derive(Default, Debug)]
@@ -75,13 +77,9 @@ impl Connections {
     }
 
     fn insert(&mut self, source: ConnectionSource, new: InferableConnection) {
-        //assert!(
-        //    !self.set.contains(&new),
-        //    "reinserted connection {source:?} from connections {:?}", self.sources,
-        //);
-
-        self.sources.insert(source);
-        self.set.push(new);
+        if self.sources.insert(source) {
+            self.set.push(new)
+        }
     }
 
     fn extend(&mut self, other: Connections) {
@@ -624,6 +622,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         spec,
                         gen_params: vec![hs_constraint_index],
                         method_of: None,
+                        is_reversal: false,
                     }
                 );
             }
@@ -652,6 +651,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                                 ),
                                 gen_params: vec![parts_constraint_index],
                                 method_of: None,
+                                is_reversal: false,
                             },
                         );
                     } else {
@@ -663,6 +663,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                                 spec: TypeSpec::ArrayElem(Box::new(TypeSpec::GenParam(0))),
                                 gen_params: vec![array_constraint_index],
                                 method_of: None,
+                                is_reversal: false,
                             }
                         );
                     }
@@ -679,6 +680,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         spec: TypeSpec::FuncReturnType(Box::new(TypeSpec::GenParam(0))),
                         gen_params: vec![f_constraint_index],
                         method_of: None,
+                        is_reversal: false,
                     }.into(),
                 );
 
@@ -689,6 +691,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                             spec: TypeSpec::FuncArgType(Box::new(TypeSpec::GenParam(0)), a),
                             gen_params: vec![f_constraint_index],
                             method_of: None,
+                            is_reversal: false,
                         }.into(),
                     );
                 }
@@ -706,6 +709,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         ),
                         gen_params: vec![object_constraint_index],
                         method_of: None,
+                        is_reversal: false,
                     }.into(),
                 );
 
@@ -723,6 +727,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         spec: TypeSpec::ArrayElem(Box::new(TypeSpec::GenParam(0))),
                         gen_params: vec![object_constraint_index],
                         method_of: None,
+                        is_reversal: false,
                     },
                 );
             },
@@ -818,6 +823,10 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap) {
         );
 
         for (c, connection) in constraints.connections.iter().enumerate() {
+            if connection.is_reversal { 
+                continue;
+            }
+
             for (param_index, param_constraint_index) in
                 connection.gen_params.iter().copied().enumerate() {
 
@@ -843,6 +852,7 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap) {
                         spec: reversed_spec.unwrap(),
                         gen_params: vec![constraint_index],
                         method_of: connection.method_of.clone(),
+                        is_reversal: true,
                     },
                 );
             }
@@ -860,14 +870,14 @@ fn type_solving_round(
     for constraint_index in 0..infer_map.constraints.len() {
         let constraints = &infer_map.constraints[constraint_index];
 
-        for (connections_index, InferableConnection { spec, gen_params, method_of }) 
+        for (connections_index, connection) 
             in constraints.connections.iter().enumerate() {
-            let gen_params = gen_params
+            let gen_params = connection.gen_params
                 .iter()
                 .map(|inferable| &infer_map.constraints[*inferable].is)
                 .collect::<Vec<&Type>>();
 
-            let method_of = method_of
+            let method_of = connection.method_of
                 .as_ref()
                 .map(|inferable| &infer_map.constraints[*inferable].is);
 
@@ -876,7 +886,7 @@ fn type_solving_round(
             {
                 let found_type = comp_data
                     .get_spec(
-                        &spec,
+                        &connection.spec,
                         &(
                             gen_params.into_iter().cloned().collect::<Vec<Type>>(),
                             method_of.cloned()
@@ -1009,6 +1019,7 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
 
                     let member_node = hlr.tree.make_one_space(ExprID::oprhaned());
                        
+                    // TODO: do all of this with just a transform step
                     let transform_node = hlr.tree.insert(
                         member_node,
                         HNodeData::Transform {
@@ -1026,7 +1037,6 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                             field: name.clone(),
                         }
                     );
-
                     
                     assert!(!aliases.contains_key(name));
                     aliases.insert(name.clone(), member_node);
@@ -1186,6 +1196,7 @@ fn fill_in_call(
                     spec: relation_type.clone(),
                     gen_params: call_generic_constraints.clone(),
                     method_of: None,
+                    is_reversal: false,
                 }
             );
         }
@@ -1196,7 +1207,11 @@ fn fill_in_call(
             infer_map.constraint_index_of_option(Inferable::Relation(*call_id));
 
         if a.len() != code.args.len() {
-            panic!("arg count mismatch!");
+            panic!(
+                "passed in {} args, but corresponding code has {} args", 
+                a.len(), 
+                code.args.len(),
+            );
         }
 
         for (arg_index, arg) in code.args.iter().enumerate() {
@@ -1206,6 +1221,7 @@ fn fill_in_call(
                     spec: arg.type_spec.clone(),
                     gen_params: call_generic_constraints.clone(),
                     method_of: relation_constraint.clone(),
+                    is_reversal: false,
                 },
             );
         }
@@ -1216,6 +1232,7 @@ fn fill_in_call(
                 spec: code.ret_type.clone(),
                 gen_params: call_generic_constraints.clone(),
                 method_of: relation_constraint.clone(),
+                is_reversal: false,
             },
         );
 
@@ -1278,6 +1295,7 @@ fn solve_with_inference_step(
                         ),
                         gen_params: vec![constraint_index],
                         method_of: None,
+                        is_reversal: false,
                     }
                 );
             }
@@ -1292,7 +1310,7 @@ fn solve_with_inference_step(
 
             constraints.is = if !constraints.usages.is_int.is_empty() {
                  Type::i(32)
-            } else if !constraints.usages.is_int.is_empty() {
+            } else if !constraints.usages.is_float.is_empty() {
                 Type::f(32)
             } else { 
                 continue;
@@ -1318,6 +1336,8 @@ fn solve_with_inference_step(
                 IndexMap::default()
             );
 
+            constraints.usages.struct_type_set = true;
+
             if constraints.is.is_known() {
                 fulfilled_usages.push(constraint_index);
                 continue;
@@ -1338,10 +1358,9 @@ fn solve_with_inference_step(
                     spec: TypeSpec::Struct(struct_fields),
                     gen_params,
                     method_of: None,
+                    is_reversal: false,
                 }
             );
-
-            infer_map.constraints[constraint_index].usages.struct_type_set = true;
         }
     }
 

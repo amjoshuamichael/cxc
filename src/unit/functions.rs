@@ -203,7 +203,6 @@ impl CompData {
                     let ret_as_check = 
                         self.get_spec(&code.ret_type, &(&result.generics, check_relation))
                             .unwrap();
-                    //dbg!(&ret_as_search, &ret_as_check);
 
                     if ret_as_search != ret_as_check { continue }
 
@@ -219,11 +218,10 @@ impl CompData {
             return closest_function;
         } else {
             for (id, code) in &self.func_code {
-                if &code.name != query.name {
-                    continue;
+                if &code.name == query.name && code.relation.inner_type().is_none() {
+                    return Some((id, None));
                 }
 
-                return Some((id, None));
             }
 
             None

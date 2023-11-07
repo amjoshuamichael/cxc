@@ -1,10 +1,7 @@
-#![feature(assert_matches)]
-
-mod test_utils;
 use cxc::error::CErr;
 use cxc::Unit;
 use std::assert_matches::assert_matches;
-use test_utils::xc_test;
+use super::test_utils::xc_test;
 
 #[test]
 #[should_panic]

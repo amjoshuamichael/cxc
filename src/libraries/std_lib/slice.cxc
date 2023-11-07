@@ -24,6 +24,10 @@
             len = range.end - range.start,
         }
     }
+
+    to_slice(); { +ptr: &T, +len: u64 } { 
+        ; self
+    }
 }
 
 SliceIter<T> = {

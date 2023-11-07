@@ -49,6 +49,7 @@ impl Library for StdLib {
 
         unit.add_lib(AtomicLib);
         unit.push_script(include_str!("arc.cxc")).unwrap();
+        unit.push_script(include_str!("new.cxc")).unwrap();
 
         unit.add_lib(UnitLib);
         unit.add_lib(ValueLib);

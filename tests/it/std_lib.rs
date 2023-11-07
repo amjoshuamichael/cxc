@@ -1,8 +1,7 @@
-mod test_utils;
 use std::{rc::Rc, sync::Arc};
 
 use cxc::library::StdLib;
-use test_utils::xc_test;
+use super::test_utils::xc_test;
 
 #[test]
 #[cfg(not(feature = "backend-interpreter"))]
@@ -54,7 +53,23 @@ fn small_vec_push() {
 }
 
 #[test]
-#[ignore]
+#[cfg(not(feature = "backend-interpreter"))]
+fn vec_from_arr() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); Vec<i64> {
+            output: Vec<i64> = vec_from_arr([6]i64 [43, 249, 98, 587, 943, 894])
+            output.push(33)
+            ; output
+        }
+        ";
+        vec![43i64, 249, 98, 587, 943, 894, 33]
+    )
+}
+
+#[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn vec_push_and_check() {
     xc_test!(
         "     
@@ -145,6 +160,21 @@ fn big_rc() {
         }
         ";
         Rc::new((90i32, 90i32))
+    )
+}
+
+#[test]
+#[cfg(not(feature = "backend-interpreter"))]
+fn new() {
+    xc_test!(
+        use StdLib;
+        "
+        main(); Rc<{i32, i32}> {
+            rc := new({ 92, 92 })
+            ; rc
+        }
+        ";
+        Rc::new((92i32, 92i32))
     )
 }
 

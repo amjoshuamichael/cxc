@@ -1,8 +1,7 @@
 #![allow(arithmetic_overflow)]
 
-mod test_utils;
 use cxc::library::StdLib;
-use test_utils::xc_test;
+use super::test_utils::xc_test;
 
 #[test]
 fn infer_i() {
@@ -368,7 +367,7 @@ fn infer_array_len() {
             supposed_to_be_big := [232, 90, ++]
             takes_a_big_array(&supposed_to_be_big)
 
-            ; (&supposed_to_be_big).len()
+            ; supposed_to_be_big.len
         }
         "#;
         200u64

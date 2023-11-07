@@ -24,6 +24,7 @@ impl Library for StringLib {
             String::new as *const usize,
             ExternalFuncAdd {
                 ret_type: string_type.clone(),
+                relation: TypeRelation::Static(string_type.clone()),
                 ..ExternalFuncAdd::empty()
             },
         );

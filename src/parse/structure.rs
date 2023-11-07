@@ -38,6 +38,49 @@ pub enum TypeSpec {
 impl TypeSpec {
     pub fn get_ref(self) -> TypeSpec { TypeSpec::Ref(Box::new(self)) }
     pub fn get_deref(self) -> TypeSpec { TypeSpec::Deref(Box::new(self)) }
+    pub fn get_names<'a>(&'a self, list: &mut Vec<&'a TypeName>) {
+        match self {
+            TypeSpec::Named(name) => list.push(name),
+            TypeSpec::Generic(name, specs) => {
+                list.push(name);
+                for spec in specs {
+                    spec.get_names(list);
+                }
+            }
+            TypeSpec::Ref(spec) |
+            TypeSpec::Deref(spec) |
+            TypeSpec::StructMember(spec, _) |
+            TypeSpec::SumMember(spec, _) |
+            TypeSpec::FuncReturnType(spec) |
+            TypeSpec::FuncArgType(spec, _) |
+            TypeSpec::ArrayElem(spec) |
+            TypeSpec::Destructor(spec, _) |
+            TypeSpec::Array(spec, _) |
+            TypeSpec::GetGeneric(spec, _) => spec.get_names(list),
+            TypeSpec::Struct(fields) => {
+                for field in fields {
+                    field.2.get_names(list);
+                }
+            },
+            TypeSpec::Sum(members) => {
+                for member in members {
+                    member.1.get_names(list);
+                }
+            },
+            TypeSpec::TypeLevelFunc(_, specs) |
+            TypeSpec::Tuple(specs) => {
+                for spec in specs {
+                    spec.get_names(list);
+                }
+            },
+            TypeSpec::Function(args, ret) => {
+                for arg in args {
+                    arg.get_names(list);
+                }
+            },
+            _ => {}
+        }
+    }
 }
 
 impl From<&str> for TypeSpec {
@@ -239,6 +282,11 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
                     );
                 },
             }
+        } else if lexer.peek_by(0) == Ok(&Tok::LBrack) && lexer.peek_by(1) == Ok(&Tok::RBrack) {
+            lexer.next_tok()?;
+            lexer.next_tok()?;
+
+            TypeSpec::ArrayElem(Box::new(type_spec))
         } else {
             break
         }

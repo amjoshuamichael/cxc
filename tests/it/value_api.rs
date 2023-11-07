@@ -1,9 +1,7 @@
-#![allow(unused_must_use)]
-mod test_utils;
 use std::rc::Rc;
 
 use cxc::{Unit, Value, library::StdLib};
-use test_utils::{Numbers4, Numbers5, Point2D, Point3D, TestUtilsLib};
+use super::test_utils::{Numbers4, Numbers5, Point2D, Point3D, TestUtilsLib};
 
 #[test]
 fn value_4_dep() {

@@ -1,7 +1,5 @@
 use cxc::{Unit, library::StdLib, Type, ExternalFuncAdd};
 
-mod test_utils;
-
 #[test]
 fn hot_reload_one() {
     let mut unit = Unit::new();
@@ -237,6 +235,59 @@ fn conversion_dependents() {
         TwoNums:.fifty(); i32 { ; 50 }
     "#).unwrap();
     assert_eq!(main(), 50);
+}
+
+#[test]
+fn change_block_count() {
+    let mut unit = Unit::new();
+
+    unit.push_script(r#"
+        fill_arr(); [300]u64 {
+            arr: [300]u64 = [--]
+            index := 0
+
+            @ index < 300 {
+                arr[index] = index
+
+                index = index + 1
+            }
+
+            ; arr
+        }
+    "#).unwrap();
+    let fill_arr = unit.get_fn("fill_arr").unwrap().downcast::<(), [u64; 300]>();
+
+    let my_arr: [u64; 300] = fill_arr();
+
+    let expected = (0..300).collect::<Vec<_>>();
+    assert_eq!(&my_arr, &*expected);
+
+    unit.push_script(r#"
+        fill_arr(); [300]u64 {
+            arr: [300]u64 = [--]
+            index := 0
+
+            @ index < 300 {
+                arr[index] = index
+
+                ? index % 5 == 0 { arr[index] = 5 } 
+                ? index % 3 == 0 { arr[index] = 3 }
+
+                index = index + 1
+            }
+
+            ; arr
+        }
+    "#).unwrap();
+
+    let my_arr: [u64; 300] = fill_arr();
+
+    let expected = (0..300).map(|x| {
+        if x % 3 == 0 { 3 }
+        else if x % 5 == 0 { 5 }
+        else { x }
+    }).collect::<Vec<_>>();
+    assert_eq!(&my_arr, &*expected);
 }
 
 #[test]

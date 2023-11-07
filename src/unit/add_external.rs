@@ -9,6 +9,7 @@ use crate::{
 
 use super::{backends::IsBackend, ProcessedFuncInfo};
 
+#[derive(Debug)]
 pub struct ExternalFuncAdd {
     pub ret_type: Type,
     pub arg_types: Vec<Type>,

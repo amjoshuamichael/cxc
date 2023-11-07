@@ -1,5 +1,4 @@
-mod test_utils;
-use test_utils::xc_test;
+use super::test_utils::xc_test;
 
 #[test]
 fn call_test_1() {

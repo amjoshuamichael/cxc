@@ -1,5 +1,3 @@
-mod test_utils;
-
 macro_rules! abi_test {
     ($testname:ident, $rtyp:ty; $($tokens:tt)+) => { mod $testname {
         const TOKENS: &str = stringify! { $($tokens)+ };

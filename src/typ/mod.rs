@@ -35,10 +35,11 @@ use crate as cxc;
 /// [`Type`] holds a `Arc<TypeData>`, which contains a [`TypeName`], generics, and a 
 /// [`TypeEnum`]. `TypeEnum` holds the actual type information–the integer sizes, the struct 
 /// fields, etc. `TypeEnum`s containing variants like [`StructType`] and [`FuncType`] hold 
-/// their inner data, like fields and arguments, behind `Type` objects as well. In this
-/// way, data types stretch out into a network of `Type`s, each pointing to each other,
-/// making type inspection trivial. For instance, if you wanted to find the first argument
-/// of a `FuncType`, you would do it like this:
+/// their inner data, like fields and arguments, behind `Type` objects as well. 
+///
+/// In this way, data types stretch out into an immutable network of `Type`s, each pointing 
+/// to each other, making type inspection trivial. For instance, if you wanted to find the 
+/// first argument of a `FuncType`, you would do it like this:
 /// 
 /// ```ignore
 /// let typ = /* something ... */;
@@ -48,7 +49,8 @@ use crate as cxc;
 ///
 /// This has minimal overhead. If you wanted to place the `first_arg` somewhere else,
 /// calling `Type::func_with_args` would not clone the inner types, and would instead
-/// create new references.
+/// create new references. Because they are just `Arc`s, `Type`s are 8 bytes wide, and 
+/// cloning has very little overhead.
 #[derive(PartialEq, Eq, Hash, Clone, Default, XcReflect)]
 pub struct Type(Arc<TypeData>);
 

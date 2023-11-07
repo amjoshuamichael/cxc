@@ -52,7 +52,7 @@ impl From<CErr> for Vec<CErr> {
 }
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TErr {
     Unknown(TypeName),
     UnknownFunc(TypeName),

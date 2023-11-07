@@ -1,7 +1,5 @@
-mod test_utils;
-
 use cxc::{library::StdLib, Unit, ExternalFuncAdd, Type};
-use test_utils::{xc_test, TwoOf};
+use super::test_utils::{xc_test, TwoOf};
 
 #[test]
 fn backwards_struct_dependency() {
@@ -232,7 +230,7 @@ fn combine_string_array() {
                 new_message := ""
                 
                 m := 0
-                @ m < message.len() {
+                @ m < message.len {
                     new_message.push_string(&message[m])
                     m = m + 1
                 }

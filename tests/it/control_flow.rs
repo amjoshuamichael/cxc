@@ -1,4 +1,4 @@
-mod test_utils;
+use super::test_utils;
 
 use test_utils::xc_test;
 

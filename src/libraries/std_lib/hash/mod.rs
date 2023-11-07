@@ -15,9 +15,3 @@ fn hash<T>(t: *const T) -> usize {
 
     s1
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    pub fn hash_numbers() {}
-}

@@ -6,61 +6,67 @@ use crate::{
 };
 use std::{fmt::Debug, sync::Arc};
 
+use super::{BorrowedCachedTypeRetrieval, CachedTypeRetrieval};
+
 pub trait GenericTable: Debug {
     fn get_at_index(&self, _: u8) -> Option<Type> { None }
-    fn get_self(&self) -> Option<Type> { None }
-
-    fn all_generics(&self) -> Vec<Type> {
-        let mut all = Vec::new();
-
-        for n in 0.. {
-            if let Some(generic) = self.get_at_index(n) {
-                all.push(generic);
-            } else {
-                break;
-            }
+    fn get_self(&self) -> Option<&Type> { None }
+    fn cached_type_retrieval<'a>(&'a self, spec: &'a TypeSpec) -> 
+        BorrowedCachedTypeRetrieval<'a> {
+        BorrowedCachedTypeRetrieval {
+            spec,
+            generics: &*self.all_generics(),
+            relation: self.get_self(),
         }
-
-        all
     }
+
+    fn all_generics(&self) -> &[Type];
 }
 
 impl GenericTable for Vec<Type> {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
         self.get(index as usize).cloned()
     }
+    fn all_generics(&self) -> &[Type] { &**self }
 }
 
 impl<'a> GenericTable for &'a Vec<Type> {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
         self.get(index as usize).cloned()
     }
+    fn all_generics(&self) -> &[Type] { &**self }
 }
 
-impl GenericTable for () { }
+impl GenericTable for () { 
+    fn all_generics(&self) -> &[Type] { &[] }
+}
 
 impl<T: GenericTable> GenericTable for (T, Type) {
     fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
-    fn get_self(&self) -> Option<Type> { Some(self.1.clone()) }
+    fn get_self(&self) -> Option<&Type> { Some(&self.1) }
+    fn all_generics(&self) -> &[Type] { self.0.all_generics() }
 }
 
 impl GenericTable for FuncQuery {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
         self.generics.get(index as usize).cloned()
     }
-    fn get_self(&self) -> Option<Type> { self.relation.inner_type().cloned() }
+    fn get_self(&self) -> Option<&Type> { self.relation.inner_type() }
+    fn all_generics(&self) -> &[Type] { &*self.generics }
 }
 
 impl GenericTable for (&Vec<Type>, &TypeRelation) {
     fn get_at_index(&self, index: u8) -> Option<Type> { 
         self.0.get(index as usize).cloned()
     }
-    fn get_self(&self) -> Option<Type> { self.1.inner_type().cloned() }
+    fn get_self(&self) -> Option<&Type> { self.1.inner_type() }
+    fn all_generics(&self) -> &[Type] { &*self.0 }
 }
 
 impl<T: GenericTable> GenericTable for (T, Option<Type>) {
     fn get_at_index(&self, index: u8) -> Option<Type> { self.0.get_at_index(index) }
-    fn get_self(&self) -> Option<Type> { self.1.clone() }
+    fn get_self(&self) -> Option<&Type> { self.1.as_ref() }
+    fn all_generics(&self) -> &[Type] { self.0.all_generics() }
 }
 
 #[derive(Debug)]
@@ -71,7 +77,22 @@ pub struct GetSpecReport {
 
 impl CompData {
     pub fn get_spec(&self, spec: &TypeSpec, generics: &impl GenericTable) -> TResult<Type> {
-        self.get_spec_report(&spec, generics).map(|re| re.typ)
+        let retriever = BorrowedCachedTypeRetrieval { 
+            spec,
+            generics: generics.all_generics(),
+            relation: generics.get_self(),
+        };
+
+        let realized_read = self.caches.realized_type_specs.read().unwrap();
+        if let Some(retrieved) = realized_read.get(&retriever as &dyn CachedTypeRetrieval) {
+            retrieved.clone()
+        } else {
+            std::mem::drop(realized_read);
+            let new_type = self.get_spec_report(&spec, generics).map(|re| re.typ);
+            let mut realized_cache = self.caches.realized_type_specs.write().unwrap();
+            realized_cache.insert(retriever.to_owned(), new_type.clone());
+            new_type
+        }
     }
 
     pub fn ty(&self, type_spec_code: &str) -> Type {
@@ -196,7 +217,7 @@ impl CompData {
             TypeSpec::GenParam(index) => {
                 generics
                 .get_at_index(*index)
-                .ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics(), *index))?
+                .ok_or(TErr::TooFewGenerics(spec.clone(), generics.all_generics().to_vec(), *index))?
             }
             TypeSpec::Array(base, count) => self.get_spec(base, generics)?.get_array(*count),
             TypeSpec::ArrayElem(array) => {
@@ -211,7 +232,7 @@ impl CompData {
                 let query = FuncQuery {
                     name: VarName::None,
                     relation: TypeRelation::Unrelated,
-                    generics: generics.all_generics(),
+                    generics: generics.all_generics().to_vec(),
                 };
 
                 let func_code = FuncCode {
@@ -234,7 +255,7 @@ impl CompData {
             TypeSpec::Unknown => Type::unknown(),
             TypeSpec::Me => {
                 if let Some(me) = generics.get_self() {
-                    me
+                    me.clone()
                 } else {
                     panic!()
                 }

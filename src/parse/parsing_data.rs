@@ -103,6 +103,50 @@ impl Expr {
     pub fn empty_block() -> Expr {
         Expr::Block(Vec::new())
     }
+
+    pub(crate) fn type_specs<'a>(&'a self, specs: &mut Vec<&'a TypeSpec>) {
+        match self {
+            Expr::SetVar(VarDecl { type_spec: spec, .. }, expr) |
+            Expr::TypedValue(spec, expr) => {
+                specs.push(spec);
+                expr.type_specs(specs);
+            },
+            Expr::Call { args: exprs, .. } | 
+            Expr::Tuple(exprs, _) | 
+            Expr::Block(exprs) | Expr::Array(exprs, _) => {
+                for expr in exprs {
+                    expr.type_specs(specs);
+                }
+            },
+            Expr::Struct(fields, _) => {
+                for (_, expr) in fields {
+                    expr.type_specs(specs);
+                }
+            },
+            Expr::BinOp(_, l, r) |
+            Expr::IfThen(l, r) |
+            Expr::While(l, r) |
+            Expr::For(l, _, r) |
+            Expr::Index(l, r) => {
+                l.type_specs(specs);
+                r.type_specs(specs);
+            },
+            Expr::IfThenElse(i, t, e) => {
+                i.type_specs(specs);
+                t.type_specs(specs);
+                e.type_specs(specs);
+            },
+            Expr::Return(Some(expr)) |
+            Expr::Enclosed(expr) |
+            Expr::WithAs(expr, _) |
+            Expr::With(expr) |
+            Expr::Member(expr, _) |
+            Expr::UnarOp(_, expr) => {
+                expr.type_specs(specs);
+            },
+            _ => {}
+        }
+    }
 }
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
@@ -225,6 +269,20 @@ impl FuncCode {
             is_external: false,
             abi: ABI::C,
         }
+    }
+
+    pub(crate) fn type_specs<'a>(&'a self, specs: &mut Vec<&'a TypeSpec>) {
+        for VarDecl { type_spec, .. } in &self.args {
+            specs.push(&type_spec);
+        }
+
+        specs.push(&self.ret_type);
+
+        if let Some(inner) = self.relation.inner_type() {
+            specs.push(&inner);
+        }
+
+        self.code.type_specs(specs);
     }
 }
 

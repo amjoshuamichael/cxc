@@ -126,19 +126,6 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
         Tok::VarName(val) => Expr::Ident(val.clone()).into(),
         Tok::Label(label) => Expr::Label(label).into(),
         opcode if opcode.is_unary_op() => Atom::Op(opcode.get_un_opcode()?),
-        Tok::LBrack => parse_array_literal(lexer)?.into(),
-        Tok::LParen => {
-            lexer.assert_next_tok_is(Tok::LParen, TokName::LParen)?;
-            let enclosed = Expr::Enclosed(Box::new(parse_math_expr(lexer)?)).into();
-            lexer.assert_next_tok_is(Tok::RParen, TokName::RParen)?;
-            enclosed
-        },
-        Tok::LCurly if lexer.peek_by(1)? == &Tok::RCurly => {
-            lexer.next_tok()?;
-            lexer.next_tok()?;
-
-            Expr::Tuple(Vec::new(), InitOpts::NoFill).into()
-        },
         _ if let Ok(type_spec) = parse_type_spec(&mut lexer.detach()) => {
             parse_type_spec(lexer)?;
 
@@ -153,6 +140,19 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
                     else { return Err(ParseError::ImproperExpression) };
                 Atom::Expr(Expr::TypedValue(type_spec, Box::new(expr)))
             }
+        },
+        Tok::LBrack => parse_array_literal(lexer)?.into(),
+        Tok::LParen => {
+            lexer.assert_next_tok_is(Tok::LParen, TokName::LParen)?;
+            let enclosed = Expr::Enclosed(Box::new(parse_math_expr(lexer)?)).into();
+            lexer.assert_next_tok_is(Tok::RParen, TokName::RParen)?;
+            enclosed
+        },
+        Tok::LCurly if lexer.peek_by(1)? == &Tok::RCurly => {
+            lexer.next_tok()?;
+            lexer.next_tok()?;
+
+            Expr::Tuple(Vec::new(), InitOpts::NoFill).into()
         },
         Tok::LCurly 
             if matches!( 

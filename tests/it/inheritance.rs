@@ -1,9 +1,7 @@
-mod test_utils;
-
 use std::rc::Rc;
 
 use cxc::{Unit, library::StdLib};
-use test_utils::xc_test;
+use super::test_utils::xc_test;
 
 #[test]
 fn auto_deref_method_1() {

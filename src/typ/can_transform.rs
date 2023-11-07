@@ -30,6 +30,13 @@ impl TransformationList {
 
         steps
     }
+
+    pub fn last_mut(&mut self) -> &mut Self {
+        match self {
+            TransformationList::Cons(_, next) => next.last_mut(),
+            TransformationList::Nil => self,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
@@ -156,14 +163,13 @@ impl Type {
                     Field { inherited: true, name: "len".into(), typ: Type::u(64) },
                 ]);
 
-                if let Some(transformation) = slice.can_transform_to(spec.clone()) {
-                    return Some(Transformation {
-                        steps: TransformationList::Cons(
-                            TransformationStep::ArrayToSlice,
-                            Box::new(transformation.steps),
-                        ),
-                        generics: transformation.generics,
-                    });
+                if let Some(mut transformation) = slice.can_transform_to(spec.clone()) {
+                    *transformation.steps.last_mut() = TransformationList::Cons(
+                        TransformationStep::ArrayToSlice,
+                        Box::new(TransformationList::Nil),
+                    );
+
+                    return Some(transformation);
                 }
             },
             TypeEnum::Destructor(DestructorType { base, .. }) => {
@@ -264,13 +270,8 @@ impl Type {
 
                 Some((
                     TransformationList::Cons(
-                        TransformationStep::Field(field),
-                        Box::new(
-                            TransformationList::Cons(
-                                TransformationStep::ArrayToSlice, 
-                                Box::new(TransformationList::Nil)
-                            )
-                        ),
+                        TransformationStep::ArrayToSlice,
+                        Box::new(TransformationList::Nil)
                     ),
                     field_typ
                 ))

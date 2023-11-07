@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
 use crate::test_utils::Numbers5;
-mod test_utils;
 
 use cxc::{Unit, library::StdLib, Type};
 

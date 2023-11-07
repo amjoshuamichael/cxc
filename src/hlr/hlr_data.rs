@@ -8,7 +8,7 @@ use crate::errors::{CResult, TResult};
 use crate::lex::VarName;
 use crate::typ::{ReturnStyle, ABI};
 use crate::{parse::*, TypeEnum};
-use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId, Global};
+use crate::unit::{CompData, FuncQuery, OwnedFuncCodeQuery, ProcessedFuncInfo, FuncCodeId, Global, OwnedCachedTypeRetrieval, BorrowedCachedTypeRetrieval, CachedTypeRetrieval};
 use crate::Type;
 use indexmap::IndexMap;
 use slotmap::SlotMap;
@@ -171,6 +171,12 @@ impl<'a> FuncRep<'a> {
     pub fn arg_count(&mut self) -> u32 { self.args().len() as u32 }
 
     pub fn get_type_spec(&self, spec: &TypeSpec) -> TResult<Type> {
+        let get_info = BorrowedCachedTypeRetrieval {
+            spec,
+            generics: &self.generics, 
+            relation: self.relation.inner_type(),
+        };
+
         self.comp_data.get_spec(spec, &(&self.generics, &self.relation))
     }
 

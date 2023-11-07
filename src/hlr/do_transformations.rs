@@ -97,7 +97,7 @@ pub fn desugar_transformation(
                 gen = Box::new(With {
                     generate: gen,
                     then: Box::new(|array_id, typ| {
-                        let TypeEnum::Array(ArrayType { base, count }) = typ.as_type_enum()
+                        let TypeEnum::Array(ArrayType { count, .. }) = typ.as_type_enum()
                             else { unreachable!() };
                         StructLitGen {
                             var_type: Type::unknown(),

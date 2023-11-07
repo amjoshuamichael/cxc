@@ -8,7 +8,7 @@ use test::Bencher;
 #[bench]
 pub fn compile_std_lib(b: &mut Bencher) {
     b.iter(|| {
-        for _ in 0..1000 {
+        for _ in 0..100 {
             let mut unit = Unit::new();
             unit.add_lib(StdLib);
             unit.push_script("
