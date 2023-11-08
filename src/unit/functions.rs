@@ -192,7 +192,7 @@ impl CompData {
                     else { continue };
 
                 if let Some(result) = 
-                    search_relation.can_transform_to(check_relation_spec.clone()) {
+                    search_relation.can_transform_to(&check_relation_spec) {
 
                     let check_relation = 
                         self.get_spec(check_relation_spec, &result.generics).unwrap();

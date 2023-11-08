@@ -7,9 +7,10 @@ use super::{
 
 pub fn array_literals(hlr: &mut FuncRep) {
     hlr.modify_many_infallible_rev(
-        |arr_id, arr_data, hlr| {
-            let HNodeData::ArrayLit { ref mut var_type, parts: part_exprs, .. } = arr_data
-                else { return };
+        |arr_id, hlr| {
+            let array_lit = hlr.tree.get(arr_id);
+            let HNodeData::ArrayLit { ref var_type, parts: ref part_exprs, .. } = 
+                array_lit else { return };
             let TypeEnum::Array(ArrayType { base, .. }) = var_type.as_type_enum() 
                 else { unreachable!() };
 
@@ -35,10 +36,10 @@ pub fn array_literals(hlr: &mut FuncRep) {
                     .inserted_id();
             }
 
-            *arr_data = HNodeData::Ident {
+            hlr.tree.replace(arr_id, HNodeData::Ident {
                 var_type: var_type.clone(),
                 var_id: new_array,
-            };
+            });
         },
     )
 }

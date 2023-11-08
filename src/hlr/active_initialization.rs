@@ -12,9 +12,10 @@ pub fn active_initialization(hlr: &mut FuncRep) {
 
 fn handle_struct_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
-        |structlit_id, structlit_data, hlr| {
-            let HNodeData::StructLit { var_type, fields: field_ids, initialize } = 
-                structlit_data else { return };
+        |structlit_id, hlr| {
+            let mut struct_data = hlr.tree.get(structlit_id);
+            let HNodeData::StructLit { ref var_type, fields: ref mut field_ids, ref initialize } = 
+                struct_data else { return };
 
             if *initialize != InitOpts::Default {
                 return;
@@ -57,15 +58,18 @@ fn handle_struct_active_initialization(hlr: &mut FuncRep) {
 
                 field_ids.push((field_name.clone(), initialized));
             }
+
+            hlr.tree.replace(structlit_id, struct_data);
         },
     );
 }
 
 fn handle_array_active_initialization(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
-        |arraylit_id, arraylit_data, hlr| {
-            let HNodeData::ArrayLit { var_type, parts: ref mut part_ids, initialize } = 
-                arraylit_data else { return };
+        |arraylit_id, hlr| {
+            let mut arraylit = hlr.tree.get(arraylit_id);
+            let HNodeData::ArrayLit { ref var_type, parts: ref mut part_ids, ref initialize } = 
+                arraylit else { return };
 
             if *initialize != InitOpts::Default {
                 return;
@@ -92,6 +96,8 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                 for _ in part_ids.len()..(array_type.count as usize) {
                     part_ids.push(new_default);
                 }
+
+                hlr.replace_quick(arraylit_id, arraylit);
             } else {
                 let array = hlr.separate_expression(arraylit_id);
                 let pos = hlr.add_variable(&Type::u(64));
@@ -141,7 +147,6 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                 );
 
                 hlr.replace_quick(arraylit_id, array);
-                *arraylit_data = hlr.tree.get(arraylit_id);
             }
         },
     );

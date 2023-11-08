@@ -4,8 +4,8 @@ use super::{hlr_data::FuncRep, expr_tree::{HNodeData, MemCpyGen, RefGen}};
 
 pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
-        |set_id, data, hlr| {
-            let HNodeData::Set { lhs, rhs } = data else { return };
+        |set_id, hlr| {
+            let HNodeData::Set { lhs, rhs } = hlr.tree.get_ref(set_id) else { return };
             
             let lhs_type = hlr.tree.get_ref(*lhs).ret_type();
             let rhs_type = hlr.tree.get_ref(*rhs).ret_type();
@@ -20,10 +20,8 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
                 rhs_type.primitive_fields_iter().skip(1).next().is_none() && 
                 lhs_type.primitive_fields_iter().skip(1).next().is_none() { return; }
 
-            hlr.tree.replace(set_id, HNodeData::zero());
-
-            let new_data = hlr.insert_quick(
-                hlr.tree.parent(set_id),
+            hlr.replace_quick(
+                set_id,
                 MemCpyGen {
                     from: RefGen(*rhs),
                     to: RefGen(*lhs),
@@ -33,8 +31,6 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
                     },
                 },
             );
-
-            *data = hlr.tree.get(new_data);
         }
     );
 }

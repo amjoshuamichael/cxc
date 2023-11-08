@@ -52,6 +52,11 @@ debug = true
 [profile.release]
 opt-level = 3
 
+[profile.bench]
+opt-level = 3
+debug = true
+debug-assertions = false
+
 [[bin]]
 path = "src/tests.rs"
 name = "tests"

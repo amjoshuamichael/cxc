@@ -1,4 +1,5 @@
 use super::{prelude::*, hlr_data::{VariableInfo, VarID}};
+use ahash::HashMapExt;
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation},
     Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation
@@ -43,6 +44,7 @@ struct InferableConnection {
     method_of: Option<ConstraintId>,
     // if a connection is a reversal, we don't have to re-reverse it.
     is_reversal: bool,
+    fulfilled: bool,
 }
 
 #[derive(Default, Debug)]
@@ -354,6 +356,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
 }
 
 fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
+    #[derive(Debug)]
     struct InferableNode {
         root: usize,
         size: usize,
@@ -361,17 +364,19 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
         known: Option<(Type, KnownBy)>,
     }
 
-    #[derive(Default)]
-    struct SimilarityGraph(Vec<InferableNode>);
+    struct SimilarityGraph {
+        nodes: Vec<InferableNode>,
+        inferable_to_index: ahash::HashMap<Inferable, usize>,
+    };
 
     impl SimilarityGraph {
         fn find_root(&mut self, v: usize) -> usize {
-            if v == self.0[v].root {
+            if v == self.nodes[v].root {
                 return v;
             }
 
-            let root = self.find_root(self.0[v].root);
-            self.0[v].root = root;
+            let root = self.find_root(self.nodes[v].root);
+            self.nodes[v].root = root;
             root
         }
 
@@ -383,58 +388,69 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             let mut r = self.find_root(r);
 
             if l != r {
-                if self.0[l].size < self.0[r].size {
+                if self.nodes[l].size < self.nodes[r].size {
                     std::mem::swap(&mut l, &mut r);
                 }
 
-                self.0[r].root = l;
-                self.0[l].size += self.0[r].size;
+                self.nodes[r].root = l;
+                self.nodes[l].size += self.nodes[r].size;
             }
         }
 
         fn index_of(&mut self, inferable: impl Into<Inferable>) -> usize {
             let inferable = inferable.into();
 
-            if let Some(index) = self.0.iter().position(|i| i.inferable == inferable) {
-                index
+            if let Some(index) = self.inferable_to_index.get(&inferable) {
+                *index
             } else {
-                self.add_to_inferables_list(inferable).unwrap()
+                self.add_to_inferables_list(inferable.clone())
             }
         }
 
         fn mark_known(&mut self, set: impl Into<Inferable>, to: Type, known_by: KnownBy) {
             let set = set.into();
             let set_index = self.index_of(set);
-            self.0[set_index].known = Some((to, known_by));
+            self.nodes[set_index].known = Some((to, known_by));
         }
 
-        fn add_to_inferables_list(&mut self, add: impl Into<Inferable>) -> Option<usize> {
+        fn add_to_inferables_list_checked(&mut self, add: impl Into<Inferable>) {
+            let inferable = add.into();
+            if !self.inferable_to_index.contains_key(&inferable) {
+                self.add_to_inferables_list(inferable);
+            }
+        }
+
+        fn add_to_inferables_list(&mut self, add: impl Into<Inferable>) -> usize {
             let add = add.into();
 
-            if self.0.iter().any(|node| node.inferable == add) {
-                return None;
-            }
+            debug_assert!(!self.nodes.iter().any(|node| node.inferable == add));
 
-            let new_index = self.0.len();
+            let new_index = self.nodes.len();
 
-            self.0.push(InferableNode {
+            self.inferable_to_index.insert(add.clone(), new_index);
+
+            self.nodes.push(InferableNode {
                 root: new_index,
                 size: 1,
                 inferable: add,
                 known: None,
             });
             
-            Some(new_index)
+            new_index
         }
 
         fn verify_all_roots(&mut self) {
-            for r in 0..self.0.len() {
-                self.0[r].root = self.find_root(r);
+            for r in 0..self.nodes.len() {
+                self.nodes[r].root = self.find_root(r);
             }
         }
     }
 
-    let mut graph = SimilarityGraph::default();
+    let likely_inferable_count = hlr.tree.nodes.len() * 2;
+    let mut graph = SimilarityGraph {
+        nodes: Vec::with_capacity(likely_inferable_count),
+        inferable_to_index: ahash::HashMap::with_capacity(likely_inferable_count),
+    };
 
     for (var, info) in &hlr.variables {
         if info.typ.is_known() {
@@ -467,7 +483,8 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
                 graph.join(expr_id, alias_inferable.clone());
 
-                if !try_replace_alias(hlr, expr_id) {
+                let successfully_replaced_alias = try_replace_alias(hlr, expr_id);
+                if !successfully_replaced_alias {
                     infer_map.unreplaced_alises.insert(expr_id);
                 }
             }
@@ -491,19 +508,19 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                 match op {
                     Opcode::Not => graph.join(expr_id, *hs),
                     Opcode::Destroy => graph.mark_known(expr_id, Type::void(), KnownBy::IsBlock),
-                    _ => { graph.add_to_inferables_list(expr_id); },
+                    _ => { graph.add_to_inferables_list_checked(expr_id); },
                 }
             },
             HNodeData::Call { query, a, .. } => {
                 infer_map.calls.insert(expr_id);
-                graph.add_to_inferables_list(expr_id);
+                graph.add_to_inferables_list_checked(expr_id);
 
                 if let Some(rel_type) = query.relation.inner_type() && rel_type.is_known() {
                     graph.mark_known(Inferable::Relation(expr_id), rel_type.clone(), KnownBy::Specified);
                 } else if query.relation.is_method() {
                     graph.join(a[0], Inferable::Relation(expr_id));
                 } else if query.relation.inner_type().is_some() {
-                    graph.add_to_inferables_list(Inferable::Relation(expr_id));
+                    graph.add_to_inferables_list_checked(Inferable::Relation(expr_id));
                 }
             },
             HNodeData::Block { .. } => {
@@ -524,21 +541,21 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         KnownBy::Specified,
                     );
                 } else {
-                    graph.add_to_inferables_list(expr_id);
+                    graph.add_to_inferables_list_checked(expr_id);
                 }
             }
             HNodeData::ArrayLit { ref parts, .. } => {
                 for ab in parts.windows(2) {
                     graph.join(ab[0], ab[1]);
                 }
-                graph.add_to_inferables_list(expr_id);
+                graph.add_to_inferables_list_checked(expr_id);
             },
             HNodeData::Set { lhs, rhs, .. } => {
                 graph.join(*lhs, *rhs);
             },
             HNodeData::Index { index, .. } => {
                 graph.mark_known(*index, Type::u(64), KnownBy::Index);
-                graph.add_to_inferables_list(expr_id);
+                graph.add_to_inferables_list_checked(expr_id);
             },
             HNodeData::Transform { .. } |
             HNodeData::Member { .. } |
@@ -546,7 +563,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             HNodeData::Number { .. } |
             HNodeData::Float { .. } |
             HNodeData::Bool { .. } => {
-                graph.add_to_inferables_list(expr_id);
+                graph.add_to_inferables_list_checked(expr_id);
             }
             HNodeData::IfThenElse { i: cond, .. } |
             HNodeData::While { w: cond, .. } => graph.mark_known(
@@ -566,10 +583,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
     let mut root_to_constraint_index = HashMap::<usize, ConstraintId>::new();
     let mut inferable_index_to_constraint_index: Vec::<ConstraintId> =
-        vec![Default::default(); graph.0.len()];
+        vec![Default::default(); graph.nodes.len()];
     let mut constraints_set = Vec::<Constraints>::default();
 
-    for (node_index, node) in graph.0.into_iter().enumerate() {
+    for (node_index, node) in graph.nodes.into_iter().enumerate() {
         let (constraints_id, constraints) =
             if let Some(constraints_id) = root_to_constraint_index.get(&node.root) {
                 (*constraints_id, &mut constraints_set[*constraints_id])
@@ -623,6 +640,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         gen_params: vec![hs_constraint_index],
                         method_of: None,
                         is_reversal: false,
+                        fulfilled: false,
                     }
                 );
             }
@@ -652,6 +670,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                                 gen_params: vec![parts_constraint_index],
                                 method_of: None,
                                 is_reversal: false,
+                                fulfilled: false,
                             },
                         );
                     } else {
@@ -664,6 +683,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                                 gen_params: vec![array_constraint_index],
                                 method_of: None,
                                 is_reversal: false,
+                                fulfilled: false,
                             }
                         );
                     }
@@ -681,6 +701,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         gen_params: vec![f_constraint_index],
                         method_of: None,
                         is_reversal: false,
+                        fulfilled: false,
                     }.into(),
                 );
 
@@ -692,6 +713,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                             gen_params: vec![f_constraint_index],
                             method_of: None,
                             is_reversal: false,
+                            fulfilled: false,
                         }.into(),
                     );
                 }
@@ -710,6 +732,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         gen_params: vec![object_constraint_index],
                         method_of: None,
                         is_reversal: false,
+                        fulfilled: false,
                     }.into(),
                 );
 
@@ -728,6 +751,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         gen_params: vec![object_constraint_index],
                         method_of: None,
                         is_reversal: false,
+                        fulfilled: false,
                     },
                 );
             },
@@ -817,10 +841,8 @@ fn spec_from_perspective_of_generic(
 
 fn introduce_reverse_constraints(infer_map: &mut InferMap) {
     for constraint_index in 0..infer_map.constraints.len() {
-        let constraints = std::mem::replace(
-            &mut infer_map.constraints[constraint_index],
-            Constraints::default()
-        );
+        let mut reversals = Vec::<(ConstraintId, ConnectionSource, InferableConnection)>::new();
+        let constraints = &infer_map.constraints[constraint_index];
 
         for (c, connection) in constraints.connections.iter().enumerate() {
             if connection.is_reversal { 
@@ -846,19 +868,25 @@ fn introduce_reverse_constraints(infer_map: &mut InferMap) {
                     continue;
                 }
 
-                infer_map.constraints[param_constraint_index].connections.insert(
+                reversals.push((
+                    param_constraint_index,
                     source,
                     InferableConnection {
                         spec: reversed_spec.unwrap(),
                         gen_params: vec![constraint_index],
                         method_of: connection.method_of.clone(),
                         is_reversal: true,
+                        fulfilled: false,
                     },
-                );
+                ));
             }
+
+            
         }
 
-        infer_map.constraints[constraint_index] = constraints;
+        for (param_constraint_index, source, connection) in reversals {
+            infer_map.constraints[param_constraint_index].connections.insert(source, connection);
+        }
     }
 }
 
@@ -870,8 +898,11 @@ fn type_solving_round(
     for constraint_index in 0..infer_map.constraints.len() {
         let constraints = &infer_map.constraints[constraint_index];
 
-        for (connections_index, connection) 
-            in constraints.connections.iter().enumerate() {
+        for (connections_index, connection) in constraints.connections.iter().enumerate() {
+            if infer_map.constraints[constraint_index].connections[connections_index].fulfilled {
+                continue;
+            }
+
             let gen_params = connection.gen_params
                 .iter()
                 .map(|inferable| &infer_map.constraints[*inferable].is)
@@ -900,6 +931,7 @@ fn type_solving_round(
                         return Err(())
                     }
                 } else {
+                    infer_map.constraints[constraint_index].connections[connections_index].fulfilled = true;
                     infer_map.constraints[constraint_index].is = found_type;
                     infer_map.constraints[constraint_index].last_set_by = 
                         LastSetBy::Connection(connections_index);
@@ -1007,11 +1039,15 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
         })
         .collect();
 
+    // TODO: store aliases and withs in a separate data structure, that get passed from
+    // FuncRep::from_code to infer_types, and then is destroyed
     hlr.modify_many_infallible(
-        |_, block, hlr| {
-            let HNodeData::Block { withs, aliases, .. } = block else { return };
+        |block_id, hlr| {
+            let mut block = hlr.tree.get(block_id);
+            let HNodeData::Block { ref withs, ref mut aliases, .. } = block
+                else { return };
 
-            for with in &*withs {
+            for with in withs {
                 let with_type = infer_map.constraint_of(*with).is.clone();
                 
                 for name in &names_to_infer {
@@ -1042,6 +1078,8 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     aliases.insert(name.clone(), member_node);
                 }
             }
+
+            hlr.tree.replace(block_id, block);
         }
     );
 
@@ -1077,7 +1115,7 @@ fn fill_in_call(
                         .relation
                         .inner_type()
                         .unwrap()
-                        .can_transform_to(relation.clone())
+                        .can_transform_to(&relation)
                         .unwrap()
                 )
             } else {
@@ -1197,6 +1235,7 @@ fn fill_in_call(
                     gen_params: call_generic_constraints.clone(),
                     method_of: None,
                     is_reversal: false,
+                    fulfilled: false,
                 }
             );
         }
@@ -1222,6 +1261,7 @@ fn fill_in_call(
                     gen_params: call_generic_constraints.clone(),
                     method_of: relation_constraint.clone(),
                     is_reversal: false,
+                    fulfilled: false,
                 },
             );
         }
@@ -1233,6 +1273,7 @@ fn fill_in_call(
                 gen_params: call_generic_constraints.clone(),
                 method_of: relation_constraint.clone(),
                 is_reversal: false,
+                fulfilled: false,
             },
         );
 
@@ -1296,6 +1337,7 @@ fn solve_with_inference_step(
                         gen_params: vec![constraint_index],
                         method_of: None,
                         is_reversal: false,
+                        fulfilled: false,
                     }
                 );
             }
@@ -1359,6 +1401,7 @@ fn solve_with_inference_step(
                     gen_params,
                     method_of: None,
                     is_reversal: false,
+                    fulfilled: false,
                 }
             );
         }

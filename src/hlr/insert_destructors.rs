@@ -8,9 +8,9 @@ use super::{hlr_data::{FuncRep, ArgIndex}, expr_tree::HNodeData, add_implicit_dr
 
 pub fn insert_destructors(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_infallible(
-        |destructor_id, destructor_data, hlr| {
-            let HNodeData::UnarOp { op: Opcode::Destroy, hs, .. } = destructor_data
-                else { return };
+        |destructor_id, hlr| {
+            let HNodeData::UnarOp { op: Opcode::Destroy, hs, .. } = 
+                hlr.tree.get_ref(destructor_id) else { return };
             let hs = *hs;
 
             let destructor_type = hlr.tree.get_ref(hs).ret_type();
@@ -21,7 +21,6 @@ pub fn insert_destructors(hlr: &mut FuncRep) -> CResultMany<()> {
                 let mut inline_arguments = HashMap::new();
                 inline_arguments.insert(ArgIndex::Some(0), hs);
                 inline(destructor, hlr, inline_arguments, destructor_id);
-                *destructor_data = hlr.tree.get(destructor_id);
             } else {
                 hlr.tree.remove_node(destructor_id);
             }

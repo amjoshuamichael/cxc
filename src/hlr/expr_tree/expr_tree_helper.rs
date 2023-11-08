@@ -17,12 +17,15 @@ impl ExprTree {
     }
 
     pub fn ids_in_order(&self) -> Vec<ExprID> {
-        self.ids_of(self.root)
+        let mut ids = Vec::with_capacity(self.nodes.len());
+        self.ids_of(self.root, &mut ids);
+        ids
     }
 
-    pub fn ids_of(&self, id: ExprID) -> Vec<ExprID> {
+    pub fn ids_of(&self, id: ExprID, ids: &mut Vec<ExprID>) {
         use HNodeData::*;
-        let rest = match self.get(id) {
+        ids.push(id);
+        let rest = match self.get_ref(id) {
             Number { .. } 
             | Float { .. } 
             | Bool { .. } 
@@ -30,23 +33,28 @@ impl ExprTree {
             | Ident { .. } 
             | AccessAlias(_) 
             | Goto(_) 
-            | GotoLabel(_) => Vec::new(),
-            StructLit { fields, .. } => fields
-                .iter()
-                .flat_map(|(_, id)| self.ids_of(*id))
-                .collect(),
+            | GotoLabel(_) => {},
+            StructLit { fields, .. } => {
+                for field in fields {
+                    self.ids_of(field.1, ids);
+                }
+            }
             ArrayLit { parts: many, .. }
             | Call { a: many, .. }
             | Block { stmts: many, .. } => {
-                many.iter().flat_map(|id| self.ids_of(*id)).collect()
+                for id in many {
+                    self.ids_of(*id, ids);
+                }
             },
             IndirectCall {
                 f: one, a: many, ..
-            } => many
-                .iter()
-                .flat_map(|id| self.ids_of(*id))
-                .chain(self.ids_of(one).drain(..))
-                .collect(),
+            } => {
+                self.ids_of(*one, ids);
+
+                for id in many {
+                    self.ids_of(*id, ids);
+                }
+            },
             BinOp { lhs: l, rhs: r, .. }
             | Set { lhs: l, rhs: r, .. }
             | While { w: l, d: r, .. }
@@ -54,28 +62,24 @@ impl ExprTree {
                 object: l,
                 index: r,
                 ..
-            } => self.ids_of(l)
-                .drain(..)
-                .chain(self.ids_of(r).drain(..))
-                .collect(),
+            } => {
+                self.ids_of(*l, ids);
+                self.ids_of(*r, ids);
+            },
             UnarOp { hs: one, .. }
             | Transform { hs: one, .. }
-            | Member { object: one, .. } => self.ids_of(one),
-            IfThenElse { i, t, e, .. } => self.ids_of(i)
-                .drain(..)
-                .chain(self.ids_of(t).drain(..))
-                .chain(self.ids_of(e).drain(..))
-                .collect(),
+            | Member { object: one, .. } => self.ids_of(*one, ids),
+            IfThenElse { i, t, e, .. } => {
+                self.ids_of(*i, ids);
+                self.ids_of(*t, ids);
+                self.ids_of(*e, ids);
+            }
             Return { to_return, .. } => {
                 if let Some(to_return) = to_return {
-                    self.ids_of(to_return)
-                } else {
-                    Vec::new()
+                    self.ids_of(*to_return, ids)
                 }
             },
         };
-
-        [id].into_iter().chain(rest.into_iter()).collect()
     }
     
     pub fn ids_unordered(&self) -> slotmap::basic::Keys<ExprID, ExprNode> {
@@ -155,46 +159,39 @@ impl ExprTree {
 impl<'a> FuncRep<'a> {
     pub fn modify_many(
         &mut self,
-        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
-        self.modify_many_inner(self.tree.ids_in_order().drain(..), |a, b, c| { modifier(a, b, c) })
+        self.modify_many_inner(self.tree.ids_in_order().drain(..), |a, c| { modifier(a, c) })
     }
 
     pub fn modify_many_rev(
         &mut self,
-        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
-        self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), |a, b, c| { modifier(a, b, c) })
+        self.modify_many_inner(self.tree.ids_in_order().drain(..).rev(), |a, c| { modifier(a, c) })
     }
 
     pub fn modify_many_infallible(
         &mut self,
-        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep),
+        mut modifier: impl FnMut(ExprID, &mut FuncRep),
     ) {
-        self.modify_many(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
+        self.modify_many(|a, c| { modifier(a, c); Ok(()) }).unwrap();
     }
 
     pub fn modify_many_infallible_rev(
         &mut self,
-        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep),
+        mut modifier: impl FnMut(ExprID, &mut FuncRep),
     ) {
-        self.modify_many_rev(|a, b, c| { modifier(a, b, c); Ok(()) }).unwrap();
+        self.modify_many_rev(|a, c| { modifier(a, c); Ok(()) }).unwrap();
     }
 
     fn modify_many_inner(
         &mut self,
         id_iterator: impl Iterator<Item = ExprID>,
-        mut modifier: impl FnMut(ExprID, &mut HNodeData, &mut FuncRep) -> CResultMany<()>,
+        mut modifier: impl FnMut(ExprID, &mut FuncRep) -> CResultMany<()>,
     ) -> CResultMany<()> {
         for id in id_iterator {
-            let mut data_copy = self.tree.get(id);
-
-            modifier(id, &mut data_copy, self)?;
-
-            // TODO: remove this??
-            if self.tree.nodes.contains_key(id) {
-                self.tree.replace(id, data_copy);
-            }
+            modifier(id, self)?;
         }
 
         Ok(())

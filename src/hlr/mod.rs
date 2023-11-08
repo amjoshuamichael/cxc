@@ -69,10 +69,6 @@ pub fn hlr(
     // the following hlr passes are nescessary, not just optimization
 
     infer_types(&mut output);
-    #[cfg(feature = "xc-debug")]
-    if info.name != VarName::None {
-        println!("{}", &output.to_string());
-    }
     do_transformations(&mut output)?;
     active_initialization(&mut output);
     struct_literals(&mut output);

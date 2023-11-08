@@ -326,7 +326,8 @@ fn next_use_of_var(
                 return Ok(NextUseOfVar::IfThenElse(search, Box::new(l), Box::new(r)));
             },
             HNodeData::Return { to_return: Some(to_return), .. } if !skip_returns => {
-                let to_return_ids = hlr.tree.ids_of(search);
+                let mut to_return_ids = Vec::new();
+                hlr.tree.ids_of(search, &mut to_return_ids);
 
                 if let Ok(use_in_var) = next_use_of_var(value, *to_return, hlr, true) {
                     return Ok(use_in_var);

@@ -7,19 +7,19 @@ use super::{
 
 pub fn struct_literals(hlr: &mut FuncRep) {
     hlr.modify_many_infallible_rev(
-        |structlit, struct_data, hlr| {
-            let HNodeData::StructLit { ref mut var_type, fields: field_exprs, .. } = struct_data 
-                else { return };
+        |structlit_id, hlr| {
+            let HNodeData::StructLit { var_type, fields: field_exprs, .. } = 
+                hlr.tree.get(structlit_id) else { return };
+
+            hlr.tree.replace(structlit_id, HNodeData::zero());
 
             if field_exprs.len() == 0 {
-                *struct_data = HNodeData::zero();
                 return;
             }
-            
-            hlr.tree.replace(structlit, HNodeData::zero());
+
             let new_struct = hlr.add_variable(&var_type);
 
-            let mut current_statement = structlit;
+            let mut current_statement = structlit_id;
 
             for (field_name, field_expr) in field_exprs.iter().rev() {
                 current_statement = hlr
@@ -36,10 +36,10 @@ pub fn struct_literals(hlr: &mut FuncRep) {
                     .inserted_id();
             }
 
-            *struct_data = HNodeData::Ident {
-                var_type: var_type.clone(),
+            hlr.tree.replace(structlit_id, HNodeData::Ident {
+                var_type,
                 var_id: new_struct,
-            };
+            });
         },
     )
 }

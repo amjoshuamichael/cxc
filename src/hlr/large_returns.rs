@@ -34,8 +34,9 @@ fn handle_own_return(hlr: &mut FuncRep) {
 
 fn return_by_small_cast(hlr: &mut FuncRep, load_as: Type) {
     hlr.modify_many_infallible(
-        move |_, data, hlr| {
-            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
+        move |return_id, hlr| {
+            let HNodeData::Return { to_return: Some(ref to_return), .. } = 
+                hlr.tree.get_ref(return_id) else { return };
 
             hlr.replace_quick(*to_return, CastGen {
                 cast: hlr.tree.get(*to_return),
@@ -49,15 +50,17 @@ fn return_by_big_cast(hlr: &mut FuncRep, load_as: Type) {
     let casted_ret = hlr.add_variable(&load_as);
 
     hlr.modify_many_infallible(
-        move |return_id, data, hlr| {
-            let HNodeData::Return { to_return: Some(ref mut to_return), .. } = data else { return };
+        move |return_id, hlr| {
+            let HNodeData::Return { to_return: Some(ref to_return), .. } = 
+                hlr.tree.get_ref(return_id) else { return };
+            let to_return = *to_return;
 
             hlr.insert_statement_before(return_id, SetGen {
                 lhs: casted_ret.clone(),
-                rhs: hlr.tree.get(*to_return),
+                rhs: hlr.tree.get(to_return),
             });
 
-            hlr.replace_quick(*to_return, casted_ret.clone());
+            hlr.replace_quick(to_return, casted_ret.clone());
         }
     );
 }
@@ -70,15 +73,14 @@ fn return_by_pointer(hlr: &mut FuncRep) {
     });
 
     hlr.modify_many_infallible(
-        |return_id, data, hlr| {
-            let HNodeData::Return { ref mut to_return, .. } = data else { return };
-
-            let Some(ref mut to_return_inner) = to_return else { return };
+        |return_id, hlr| {
+            let HNodeData::Return { to_return: Some(ref to_return), .. } = 
+                hlr.tree.get_ref(return_id) else { return };
 
             hlr.insert_statement_before(
                 return_id,
                 MemCpyGen {
-                    from: RefGen(hlr.tree.get(*to_return_inner)),
+                    from: RefGen(hlr.tree.get(*to_return)),
                     to: output_var,
                     size: HNodeData::Number {
                         lit_type: Type::i(64),
@@ -87,6 +89,8 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                 }
             );
 
+            let HNodeData::Return { ref mut to_return, .. } = 
+                hlr.tree.get_mut(return_id) else { return };
             *to_return = None;
         },
     );

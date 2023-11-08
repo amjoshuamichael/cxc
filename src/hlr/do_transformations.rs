@@ -9,21 +9,26 @@ use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, No
 
 pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_infallible_rev(
-        |member_id, member_data, hlr| {
-            let HNodeData::Member { object, field, .. } = member_data
+        |member_id, hlr| {
+            let HNodeData::Member { object, field, .. } = hlr.tree.get_ref(member_id)
                 else { return };
             let object_type = hlr.tree.get_ref(*object).ret_type();
 
             if let Some((steps, _)) = object_type.route_to(field.clone()) {
                 if steps == TransformationList::Nil { return }
 
-                *object = hlr.insert_quick(
+                let new_route = hlr.insert_quick(
                     member_id,
                     TransformationGen {
                         object: *object,
                         steps,
                     }
                 );
+
+                let HNodeData::Member { object, .. } = hlr.tree.get_mut(member_id)
+                    else { return };
+
+                *object = new_route;
             }
         }
     );
@@ -35,18 +40,17 @@ pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
 
 pub fn desugar_transformation(
     transform_id: ExprID, 
-    transform_data: &mut HNodeData, 
     hlr: &mut FuncRep,
 ) {
-    let HNodeData::Transform { ref mut hs, steps, ret_type, } = transform_data 
+    let HNodeData::Transform { hs, steps, ret_type, } = hlr.tree.get_ref(transform_id) 
         else { return };
 
     let steps = if let Some(existing_stpes) = steps {
         existing_stpes.clone().to_vec()
     } else {
         let transforms_to = type_to_type_spec(ret_type.clone());
-        let from = hlr.tree.get(*hs).ret_type();
-        from.can_transform_to(transforms_to).unwrap().steps.to_vec()
+        let from = hlr.tree.get_ref(*hs).ret_type();
+        from.can_transform_to(&transforms_to).unwrap().steps.to_vec()
     };
 
     let mut gen: Box::<dyn NodeDataGen> = Box::new(GenSlot);
@@ -138,5 +142,4 @@ pub fn desugar_transformation(
         then: gen,
     });
     hlr.replace_quick(transform_id, gen);
-    *transform_data = hlr.tree.get(transform_id);
 }

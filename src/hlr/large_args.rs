@@ -47,13 +47,14 @@ fn arg_by_ints_or_floats(hlr: &mut FuncRep, og_arg: VarID) {
     stmts.insert(0, set_arg_load_var);
 
     hlr.modify_many_infallible(
-        |var_id, var_data, hlr| {
-            let HNodeData::Ident { var_id: name, .. } = var_data else { return };
-
+        |var_id, hlr| {
             if hlr.tree.parent(var_id) == set_arg_load_var {
                 // we don't want to change the inital loading into new_arg_load_var
                 return;
             }
+
+            let HNodeData::Ident { var_id: ref mut name, .. } = hlr.tree.get_mut(var_id) 
+                else { return };
 
             if name == &og_arg {
                 *name = new_arg_load_var.clone()
@@ -68,8 +69,8 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_id: VarID) {
      //hlr.variables[arg_id].typ = arg_type_reffed.clone();
 
     hlr.modify_many_infallible_rev(
-        move |ident_id, mut var_data, hlr| {
-            let HNodeData::Ident { var_id, var_type, .. } = &mut var_data
+        move |ident_id, hlr| {
+            let HNodeData::Ident { var_id, var_type, .. } = &mut hlr.tree.get_mut(ident_id)
                 else { return };
             if arg_id != *var_id { return }
 
@@ -79,16 +80,22 @@ fn arg_by_pointer(hlr: &mut FuncRep, arg_id: VarID) {
                     var_type: arg_type_reffed.clone(),
                 },
             ));
-
-            *var_data = hlr.tree.get(ident_id);
         }
     );
 }
 
 fn handle_other_calls(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
-        move |call_id, data, hlr| {
-            let HNodeData::Call { a: args, query, .. } = data else { return };
+        move |call_id, hlr| {
+            let call_data = hlr.tree.get_ref(call_id) else { return };
+
+            if !matches!(call_data, HNodeData::Call { .. }) {
+                return;
+            }
+            let mut call_data = call_data.clone();
+
+            let HNodeData::Call { a: ref mut args, ref query, .. } = call_data
+                else { unreachable!() };
 
             if &*query.name == "cast" {
                 return;
@@ -123,6 +130,8 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                     args[a] = hlr.insert_quick(call_id, new_arg);
                 }
             }
+
+            hlr.tree.replace(call_id, call_data);
         }
     );
 }

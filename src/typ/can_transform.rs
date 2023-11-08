@@ -64,7 +64,7 @@ pub fn transformation_steps_dist(list: &TransformationList) -> u32 {
 impl Type {
     pub(crate) fn can_transform_to(
         &self, 
-        spec: TypeSpec, 
+        spec: &TypeSpec, 
     ) -> Option<Transformation> {
         match self.as_type_enum() {
             TypeEnum::Ref(RefType { base }) => {
@@ -76,7 +76,7 @@ impl Type {
                     reference_count += 1;
                 }
 
-                return base.can_transform_to(spec.clone()).map(|equivalence| {
+                return base.can_transform_to(spec).map(|equivalence| {
                     Transformation {
                         steps: TransformationList::Cons(
                             TransformationStep::Ref(-reference_count), 
@@ -105,7 +105,7 @@ impl Type {
                                  continue;
                             }
 
-                            if let Some(transformation) = field.typ.can_transform_to(spec.clone()) {
+                            if let Some(transformation) = field.typ.can_transform_to(spec) {
                                 // merge generics
                                 if transformation.generics.len() > generics.len() {
                                     generics.resize(
@@ -146,7 +146,7 @@ impl Type {
                 for Field { inherited, name, typ } in &struct_type.fields {
                     if !inherited { continue }
                     
-                    if let Some(transformation) = typ.can_transform_to(spec.clone()) {
+                    if let Some(transformation) = typ.can_transform_to(spec) {
                         return Some(Transformation {
                             steps: TransformationList::Cons(
                                 TransformationStep::Field(name.clone()),
@@ -163,7 +163,7 @@ impl Type {
                     Field { inherited: true, name: "len".into(), typ: Type::u(64) },
                 ]);
 
-                if let Some(mut transformation) = slice.can_transform_to(spec.clone()) {
+                if let Some(mut transformation) = slice.can_transform_to(spec) {
                     *transformation.steps.last_mut() = TransformationList::Cons(
                         TransformationStep::ArrayToSlice,
                         Box::new(TransformationList::Nil),
@@ -173,7 +173,7 @@ impl Type {
                 }
             },
             TypeEnum::Destructor(DestructorType { base, .. }) => {
-                if let Some(transformation) = base.can_transform_to(spec.clone()) {
+                if let Some(transformation) = base.can_transform_to(spec) {
                     return Some(Transformation {
                         steps: TransformationList::Cons(
                            TransformationStep::RemoveDestructor,
@@ -186,15 +186,16 @@ impl Type {
             _ => { }
         }
 
-        if let TypeSpec::Ref(mut spec) = spec {
+        if let TypeSpec::Ref(ref spec) = spec {
+            let mut spec: &TypeSpec = spec;
             let mut reference_count = 1;
 
-            while let TypeSpec::Ref(base) = *spec {
+            while let TypeSpec::Ref(base) = &*spec {
                 reference_count += 1;
                 spec = base;
             }
 
-            return self.can_transform_to(*spec).map(|equivalence| 
+            return self.can_transform_to(&spec).map(|equivalence| 
                 Transformation {
                     steps: TransformationList::Cons(
                         TransformationStep::Ref(reference_count), 
@@ -293,21 +294,21 @@ impl Type {
 
     fn is_equivalent(
         &self, 
-        spec: TypeSpec, 
+        spec: &TypeSpec, 
         generics: &mut Vec<Type>,
     ) -> bool {
         let type_enum = self.as_type_enum();
 
         match spec {
             TypeSpec::Int(size) => 
-                type_enum == &TypeEnum::Int(IntType::new(size, true)),
+                type_enum == &TypeEnum::Int(IntType::new(*size, true)),
             TypeSpec::UInt(size) => 
-                type_enum == &TypeEnum::Int(IntType::new(size, false)),
+                type_enum == &TypeEnum::Int(IntType::new(*size, false)),
             TypeSpec::Float(float_type) => 
-                type_enum == &TypeEnum::Float(float_type),
-            TypeSpec::Named(name) => self.name() == &name,
+                type_enum == &TypeEnum::Float(*float_type),
+            TypeSpec::Named(name) => self.name() == name,
             TypeSpec::Generic(name, set_generics) => {
-                if self.name() != &name {
+                if self.name() != name {
                     return false;
                 }
 
@@ -321,7 +322,7 @@ impl Type {
                 return true;
             },
             TypeSpec::GenParam(index) => {
-                let index = index as usize;
+                let index = *index as usize;
 
                 if let Some(found_generic) = generics.get(index)
                     && found_generic != &Type::unknown()
@@ -340,7 +341,7 @@ impl Type {
             TypeSpec::Ref(spec) => {
                 let TypeEnum::Ref(RefType { base }) = self.as_type_enum() 
                     else { return false };
-                base.is_equivalent(*spec, generics)
+                base.is_equivalent(&*spec, generics)
             },
             TypeSpec::Struct(field_specs) => {
                 let TypeEnum::Struct(StructType { fields, .. }) = type_enum 
@@ -355,7 +356,7 @@ impl Type {
                     (_, field_spec_name, field_spec)
                 ) in fields.iter().zip(field_specs.into_iter()) {
 
-                    if field_name != &field_spec_name {
+                    if field_name != field_spec_name {
                         return false;
                     }
 
@@ -400,7 +401,7 @@ impl Type {
                     return false;
                 }
 
-                if !ret.is_equivalent(*ret_spec, generics) {
+                if !ret.is_equivalent(&*ret_spec, generics) {
                     return false;
                 }
 
@@ -416,7 +417,7 @@ impl Type {
                 let TypeEnum::Array(ArrayType { base, count }) = type_enum 
                     else { return false };
 
-                *count == count_spec && base.is_equivalent(*base_spec, generics)
+                count == count_spec && base.is_equivalent(&*base_spec, generics)
             },
             TypeSpec::Destructor(_, _) => panic!(),
             TypeSpec::Void => type_enum == &TypeEnum::Void,
@@ -452,7 +453,7 @@ mod tests {
 
         let comp = |code, spec| 
             to_typ(code)
-            .can_transform_to(TypeSpec::from(spec))
+            .can_transform_to(&TypeSpec::from(spec))
             .map(|Transformation { generics, steps }| (generics, steps.to_vec()));
 
         let refstp = |ref_count| TransformationStep::Ref(ref_count);

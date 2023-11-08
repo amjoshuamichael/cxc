@@ -23,7 +23,7 @@ Rc<T> = {
     }
 }
 
-<T> Rc<T>:: { 
+<T> Rc<T>:: {
     new(value: T); Rc<T> {
         box: &RcBox<T> = alloc< RcBox<T> >( i64 1 )
 
@@ -49,7 +49,7 @@ Rc<T> = {
         ; self.value.to_string()
     }
 
-    clone(); *Me {
+    clone(); Rc<T> {
         self.box.inc_strong()
         ; *self
     }

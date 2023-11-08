@@ -1,6 +1,54 @@
-HashMap<T, S> = RustHashMap<T, S>
-
-RustHashMap<T, S> = { 
-    a_ptr: &u8,
-    other_data: [5]i64,
-}
+#AHasher = {
+#    enc: u128,
+#    sum: u128,
+#    key: u128,
+#}
+#
+#AHasher:. {
+#    write_u8(i: u8) {
+#        self.write_u64(as<u64>(i))
+#    }
+#
+#    write_u16(i: u16) {
+#        self.write_u64(as<u64>(i))
+#    }
+#
+#    write_u32(i: u32) {
+#        self.write_u64(as<u64>(i))
+#    }
+#
+#    write_u128(i: u128) {
+#        self.hash_in(i)
+#    }
+#
+#    write_usize(i: usize) {
+#        self.write_u64(as<u64>(i))
+#    }
+#
+#    write_u64(i: u64) {
+#        self.write_u128(as<u128>(i))
+#    }
+#
+#    write(input: Slice<u8>) {
+#        data := input
+#        length := data.len
+#        add_in_length(&self.enc, as<u64>(length))
+#
+#        ? data.len <= 8 {
+#            value: = read_small(data)
+#            self.hash_in(value.convert())
+#        }
+#    }
+#
+#    finish(); u64 {
+#        combined := aesenc(self.sum, self.enc)
+#        result: [u64; 2] = aesdec(aesdec(combined, self.key), combined).convert()
+#        ; result[0]
+#    }
+#}
+#
+#aesenc(value: u128, xor: u128); u128 {
+#    let res = unsafe { vaesmcq_u8(vaeseq_u8(transmute!(value), transmute!(0u128))) };
+#    let value: u128 = transmute!(res);
+#    xor ^ value
+#}

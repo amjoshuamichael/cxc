@@ -202,6 +202,8 @@ impl Type {
         match Arc::try_unwrap(self.0) {
             Ok(mut type_data) => {
                 function(&mut type_data);
+                type_data.cached_hash.clear();
+                type_data.cached_size.clear();
                 Self(Arc::from(type_data))
             },
             Err(arc) => {
@@ -232,13 +234,28 @@ impl Type {
     }
 }
 
-#[derive(PartialEq, Eq, Default, Hash, Clone, XcReflect)]
+#[derive(PartialEq, Eq, Default, Clone, XcReflect)]
 #[xc_opaque]
 pub(crate) struct TypeData {
     pub type_enum: TypeEnum,
     pub name: TypeName,
     pub generics: Vec<Type>,
     pub cached_size: Cache<usize>,
+    pub cached_hash: Cache<u64>,
+}
+
+impl Hash for TypeData {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let mini_hash = self.cached_hash.retrieve_or_call(|| {
+            let mut hasher = ahash::AHasher::default();
+            self.type_enum.hash(&mut hasher);
+            self.name.hash(&mut hasher);
+            self.generics.hash(&mut hasher);
+            hasher.finish()
+        });
+
+        mini_hash.hash(state)
+    }
 }
 
 impl TypeData {

@@ -1,4 +1,4 @@
-use std::{sync::RwLock, cmp::Ordering};
+use std::{sync::{RwLock, RwLockReadGuard}, cmp::Ordering};
 
 use crate::XcReflect;
 
@@ -42,19 +42,30 @@ impl<T> PartialOrd for Cache<T> {
 impl<T> Eq for Cache<T> { }
 impl<T> Ord for Cache<T> { fn cmp(&self, _: &Self) -> Ordering { Ordering::Equal } }
 
-impl<T: Copy> Cache<T> {
+impl<T: Clone + PartialEq + std::fmt::Debug> Cache<T> {
     pub fn retrieve_or_call(&self, call: impl FnOnce() -> T) -> T {
         if let Ok(lock) = self.calculated.try_read() &&
-            let Some(cached) = *lock {
-            cached
+            let Some(cached) = &*lock {
+
+            cached.clone()
         } else {
             let calculated = call();
 
             if let Ok(mut lock) = self.calculated.try_write() {
-                *lock = Some(calculated)
+                *lock = Some(calculated.clone())
             }
 
             calculated
         }
+    }
+}
+
+impl <T> Cache<T> {
+    pub fn clear(&self) {
+        *self.calculated.write().unwrap() = None;
+    }
+
+    pub fn get(&self) -> RwLockReadGuard<Option<T>> {
+        self.calculated.read().unwrap()
     }
 }

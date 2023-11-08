@@ -75,7 +75,7 @@ pub struct CompData {
     pub(crate) caches: Caches,
 }
 
-#[derive(Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Hash, PartialEq, Clone, Eq, Debug)]
 pub enum Global {
     Value {
         name: VarName,

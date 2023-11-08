@@ -388,13 +388,13 @@ impl<T: NodeDataGen> NodeDataGen for TransformationGen<T> {
     fn put_in_id(&self, hlr: &mut FuncRep, spot: ExprID) {
         let hs = self.object.add_to_expr_tree(hlr, spot);
 
-        let mut transform_data = HNodeData::Transform {
+        hlr.tree.replace(spot, HNodeData::Transform {
             hs,
             steps: Some(self.steps.clone()),
             ret_type: Type::unknown(),
-        };
+        });
 
-        desugar_transformation(spot, &mut transform_data, hlr);
+        desugar_transformation(spot, hlr);
     }
 }
 
