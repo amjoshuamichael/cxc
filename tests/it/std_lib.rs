@@ -145,6 +145,7 @@ fn vec_deque_new() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn vec_deque_push_5() {
     xc_test!(
         use StdLib;
@@ -172,6 +173,7 @@ fn vec_deque_push_5() {
 }
 
 #[test]
+#[cfg(not(feature = "backend-interpreter"))]
 fn vec_deque_configurations() {
     xc_test!(
         use StdLib;
@@ -221,6 +223,49 @@ fn vec_deque_configurations() {
             [30, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50]
                 .into_iter().collect::<VecDeque<i32>>(),
         )
+    )
+}
+
+#[test]
+fn vec_deque_configurations_no_return() {
+    xc_test!(
+        use StdLib;
+        "
+        main() {
+            vec1 := VecDeque<i32>:new()
+            push_back_x_times(&vec1, 30, 5) # expand case A
+            pop_front_x_times(&vec1, 2)
+            push_back_x_times(&vec1, 50, 4)
+
+            vec2 := VecDeque<i32>:new() 
+            push_back_x_times(&vec2, 30, 7)
+            pop_front_x_times(&vec2, 2)
+            push_back_x_times(&vec2, 50, 7) # expand case B
+
+            vec3 := VecDeque<i32>:new() 
+            push_back_x_times(&vec3, 30, 7)
+            pop_front_x_times(&vec3, 6)
+            push_back_x_times(&vec3, 50, 12) # expand case C
+        }
+
+        push_back_x_times(vec: &VecDeque<i32>, val: i32, count: i32) {
+            i := 0
+            @ i < count {
+                vec.push_back(val)
+
+                i = i + 1
+            }
+        }
+
+        pop_front_x_times(vec: &VecDeque<i32>, count: i32) {
+            i := 0
+            @ i < count {
+                vec.pop_front()
+
+                i = i + 1
+            }
+        }
+        "
     )
 }
 

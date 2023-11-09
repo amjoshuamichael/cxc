@@ -313,6 +313,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
 
         infer_calls(&mut infer_map, hlr).unwrap();
+        infer_aliases(&mut infer_map, hlr);
 
         introduce_reverse_constraints(&mut infer_map);
 
@@ -325,7 +326,6 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
 
         solve_with_inference_step(step, &mut infer_map);
-        infer_aliases(&mut infer_map, hlr);
 
         if !infer_map.has_been_modified_since_last_round {
             advance_inference_step(&mut step);
@@ -431,10 +431,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             let add = add.into();
 
             debug_assert!(!self.nodes.iter().any(|node| node.inferable == add));
-
-            if matches!(add, Inferable::Alias { .. }) {
-                dbg!(&add);
-            }
 
             let new_index = self.nodes.len();
 
@@ -1124,12 +1120,7 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
         }
     );
 
-    for alias in infer_map.unreplaced_alises.drain(..) {
-        assert!(
-            try_replace_alias(hlr, alias), 
-            "could not find var {:?}", hlr.tree.get(alias)
-        );
-    }
+    infer_map.unreplaced_alises.retain(|alias| !try_replace_alias(hlr, *alias));
 }
 
 fn fill_in_call(
