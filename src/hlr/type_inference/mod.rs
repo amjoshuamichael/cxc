@@ -2,7 +2,7 @@ use super::{prelude::*, hlr_data::{VariableInfo, VarID}};
 use ahash::HashMapExt;
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation},
-    Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation
+    Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation, TypeRelation
 };
 use indexmap::IndexMap;
 use std::{hash::Hash, collections::{HashMap, HashSet}};
@@ -148,11 +148,18 @@ impl InferMap {
         &mut self.constraints[constraint_index]
     }
 
+    pub fn constraint_of_option(&mut self, inferable: impl Into<Inferable>) -> 
+        Option<&mut Constraints> {
+        let constraint_index = self.constraint_index_of_option(inferable)?;
+        Some(&mut self.constraints[constraint_index])
+    }
+
     pub fn constraint_index_of(&self, inferable: impl Into<Inferable>) -> ConstraintId {
         self.constraint_index_of_option(inferable).unwrap()
     }
 
-    pub fn constraint_index_of_option(&self, inferable: impl Into<Inferable>) -> Option<ConstraintId> {
+    pub fn constraint_index_of_option(&self, inferable: impl Into<Inferable>) -> 
+        Option<ConstraintId> {
         let inferable = inferable.into();
 
         let inferable_index = self.inferables.iter().position(|i| i == &inferable)?;
@@ -311,7 +318,6 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
         if infer_map.constraints.iter().all(|constraint| constraint.is.is_known())
             && infer_map.calls.is_empty() {
-            infer_aliases(&mut infer_map, hlr);
             assert!(infer_map.unreplaced_alises.is_empty());
 
             set_types_in_hlr(infer_map, hlr);
@@ -319,6 +325,7 @@ pub fn infer_types(hlr: &mut FuncRep) {
         }
 
         solve_with_inference_step(step, &mut infer_map);
+        infer_aliases(&mut infer_map, hlr);
 
         if !infer_map.has_been_modified_since_last_round {
             advance_inference_step(&mut step);
@@ -424,6 +431,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             let add = add.into();
 
             debug_assert!(!self.nodes.iter().any(|node| node.inferable == add));
+
+            if matches!(add, Inferable::Alias { .. }) {
+                dbg!(&add);
+            }
 
             let new_index = self.nodes.len();
 
@@ -1049,8 +1060,12 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
 
             for with in withs {
                 let with_type = infer_map.constraint_of(*with).is.clone();
+
+                if with_type.is_unknown() {
+                    continue;
+                }
                 
-                for name in &names_to_infer {
+                'names: for name in &names_to_infer {
                     let Some(route) = with_type.route_to(name.clone()) else { continue };
 
                     let member_node = hlr.tree.make_one_space(ExprID::oprhaned());
@@ -1068,7 +1083,7 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     hlr.tree.replace(
                         member_node, 
                         HNodeData::Member {
-                            ret_type: route.1,
+                            ret_type: route.1.clone(),
                             object: transform_node,
                             field: name.clone(),
                         }
@@ -1076,6 +1091,32 @@ fn infer_aliases(infer_map: &mut InferMap, hlr: &mut FuncRep) {
                     
                     assert!(!aliases.contains_key(name));
                     aliases.insert(name.clone(), member_node);
+
+                    let mut ids_in_block = Vec::new();
+                    hlr.tree.ids_of(block_id, &mut ids_in_block);
+
+                    let mut found_constraints_with_this_alias = Vec::<ConstraintId>::new();
+
+                    for id in ids_in_block {
+                        if !matches!(hlr.tree.get_ref(id), HNodeData::Block { .. }) {
+                            continue;
+                        }
+
+                        let inferable = Inferable::Alias { 
+                            name: name.clone(), 
+                            block: id,
+                        };
+
+                        if let Some(constraints_index) = 
+                            infer_map.constraint_index_of_option(inferable) {
+                            infer_map.constraints[constraints_index].is = route.1.clone();
+                            found_constraints_with_this_alias.push(constraints_index);
+                        }
+                    }
+
+                    debug_assert!(!found_constraints_with_this_alias.is_empty());
+
+                    infer_map.join_constraints(found_constraints_with_this_alias);
                 }
             }
 
@@ -1200,6 +1241,10 @@ fn fill_in_call(
             .collect::<Vec<_>>();
 
         if code.relation.is_method() {
+            if matches!(func_query.relation, TypeRelation::Static(_)) {
+                todo!("error");
+            }
+
             let HNodeData::Call { a, .. } = hlr.tree.get(*call_id) 
                 else { unreachable!() };
 

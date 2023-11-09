@@ -1,32 +1,51 @@
 Vec<T> = {
-    +raw: {
-        +ptr: &T,
-        capacity: u64,
-    } ~ ? self.capacity != 0 { free(self.ptr) },
+    +raw: RawVec<T>,
     +len: u64,
+}
+
+RawVec<T> = {
+    +ptr: &T,
+    capacity: u64,
+} ~ ? self.capacity != 0 { free(self.ptr) }
+
+<T> &RawVec<T>:. {
+    expand() {
+        old_cap := self.capacity
+        # reallocate memory
+        self.capacity = self.capacity * u64 2
+        
+        new_ptr: &T = alloc<T>(self.capacity)
+        memmove<T>(+self.ptr, new_ptr, old_cap * size_of<T>())
+        free<T>(+self.ptr)
+        
+        self.ptr = cast(new_ptr)
+    }
+}
+
+<T> RawVec<T>:: {
+    empty(); Me {
+        ; cast({-Me} { capacity = 0, -- })
+    }
+
+    alloc_count(count: u64); Me {
+        ; cast({-Me} {
+            ptr = alloc(count),
+            capacity = 4,
+        })
+    }
 }
 
 <T> &Vec<T>:. {
     push(val: T) {
         ? self.capacity == u64 0 {
             *self = Vec<T> {
-                raw = cast({
-                    ptr = alloc<T>(u64 4),
-                    capacity = u64 4,
-                }),
-                len = u64 0,
+                raw = RawVec<T>:alloc_count(4),
+                len = 0,
             }
         }
 
         ? self.len >= self.capacity {
-            # reallocate memory
-            self.capacity = self.capacity * u64 2
-            
-            new_ptr: &T = alloc<T>(self.capacity)
-            memmove<T>(+self.ptr, new_ptr, self.len * size_of<T>())
-            free<T>(+self.ptr)
-            
-            self.ptr = cast(new_ptr)
+            self.expand()            
         }
 
         ptr: &T = self.ptr.ptr_add(self.len)

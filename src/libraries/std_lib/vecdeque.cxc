@@ -1,0 +1,98 @@
+VecDeque<T> = {
+    +buf: RawVec<T>,
+    head: u64,
+    len: u64,
+}
+
+<T> &VecDeque<T>:. {
+    push_back(val: T) {
+        with self
+
+        self.init_if_uninit()
+
+        ? len == capacity {
+            old_capacity := capacity
+
+            buf.expand()
+
+            # Move the shortest contiguous section of the ring buffer
+            #
+            # In the following diagrams, H is head, and L is the last element.
+            #
+            #
+            #         H             L
+            # Case A [o o o o o o o o ]
+            #         H             L
+            #        [o o o o o o o o . . . . . . . . ]
+            #
+            #             L H
+            # Case B [o o o o o o o o ]
+            #               H             L
+            #        [. . . o o o o o o o o . . . . . ]
+            #
+            #                   L H
+            # Case C [o o o o o o o o ]
+            #                   L                 H
+            #        [o o o o o o . . . . . . . . o o ]
+
+            ? head == 0 {
+                # Case A, do nothing    
+            } : {
+                head_len := old_capacity - head
+                tail_len := len - head_len
+
+                ? head_len > tail_len && capacity - old_capacity >= tail_len {
+                    # Case B, move tail
+                    cpy_end := ptr.ptr_add(old_capacity)
+                    memcpy(ptr, cpy_end, tail_len * size_of<T>())
+                } : {
+                    # Case C, move head
+                    new_head := capacity - head_len
+
+                    cpy_from := ptr.ptr_add(self.head)
+                    cpy_to := ptr.ptr_add(new_head)
+
+                    memcpy(cpy_from, cpy_to, head_len * size_of<T>())
+
+                    self.head = new_head
+                }
+            }
+        }
+
+        set_ptr := ptr.ptr_add((head + len) % capacity)
+        *set_ptr = val
+
+        len = len + 1
+    }
+
+    pop_front() {
+        self.head = (self.head + 1) % self.capacity
+        self.len = self.len - 1
+    }
+
+    init_if_uninit() {
+        ? self.capacity == 0 {
+            *self = {
+                len = 0,
+                head = 0,
+                buf = RawVec<T>:alloc_count(4),
+            }
+        }
+    }
+    
+    get(index: u64); T {
+        pos := (self.head + index) % self.capacity
+        ptr := self.ptr.ptr_add(pos)
+        ; *ptr
+    }
+}
+
+<T> VecDeque<T>:: {
+    new(); Me {
+        ; {
+            len = 0,
+            head = 0,
+            buf = RawVec<T>:empty(),
+        }
+    }
+}

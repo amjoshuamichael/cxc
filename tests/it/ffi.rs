@@ -16,7 +16,8 @@ fn basic_pointer() {
             *num = *num * *num
         }
         ",
-    );
+    )
+    .unwrap();
 
     let mut num = 4;
     unit.get_fn("square")

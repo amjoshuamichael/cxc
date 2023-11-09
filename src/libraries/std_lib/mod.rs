@@ -32,6 +32,7 @@ impl Library for StdLib {
         unit.add_lib(ArrayHelperLib);
 
         unit.push_script(include_str!("vec.cxc")).unwrap();
+        unit.push_script(include_str!("vecdeque.cxc")).unwrap();
         unit.push_script(include_str!("hashmap.cxc")).unwrap();
         unit.push_script(include_str!("rc.cxc")).unwrap();
         unit.push_script(include_str!("lucid.cxc")).unwrap();

@@ -17,7 +17,6 @@ mod inference;
 mod inheritance;
 mod large_code;
 mod live;
-mod parse_errors;
 mod std_lib;
 mod structs;
 mod structural_types;

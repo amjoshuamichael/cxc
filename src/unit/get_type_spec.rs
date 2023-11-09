@@ -226,6 +226,10 @@ impl CompData {
                     else { return Err(TErr::NotAnArray(array)) };
                 base.clone()
             },
+            TypeSpec::RemoveWrappers(spec) => {
+                let with_wrappers = self.get_spec(spec, generics)?;
+                with_wrappers.remove_wrappers().clone()
+            }
             TypeSpec::Destructor(base_spec, code) => {
                 let base = self.get_spec(base_spec, generics)?;
 

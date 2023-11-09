@@ -4,9 +4,12 @@ use std::{cell::RefCell, rc::Rc};
 use crate::lex::{Tok, TypeName, VarName};
 use passable::Pass;
 
-use super::{ParseErrorSpanned, TokenSpan};
+use super::ParseErrorSpanned;
 
-pub type GlobalParseContext = ParseContext<()>;
+#[derive(Default, Debug, Clone)]
+pub struct GlobalParseData {
+    pub code: Box<str>,
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct FuncParseData {
@@ -14,6 +17,7 @@ pub struct FuncParseData {
     pub has_return: bool,
 }
 
+pub type GlobalParseContext = ParseContext<GlobalParseData>;
 pub type FuncParseContext = ParseContext<FuncParseData>;
 pub type TypeParseContext = ParseContext<TypeName>;
 
@@ -42,10 +46,11 @@ pub struct ParseContext<N> {
 }
 
 impl GlobalParseContext {
-    pub fn new(tokens: Vec<Tok>, spans: Vec<(usize, usize)>) -> Self {
+    pub fn new(tokens: Vec<Tok>, spans: Vec<(usize, usize)>, code: Box<str>) -> Self {
         Self {
             tokens: Rc::new(tokens),
             spans: Rc::new(spans),
+            inner_data: GlobalParseData { code },
             ..Default::default()
         }
     }
@@ -240,7 +245,7 @@ impl<N: Clone> ParseContext<N> {
                     error,
                     start: char_start,
                     end: char_end,
-                    tokens_between: TokenSpan::new(&self.tokens, tok_start, tok_end),
+                    at: self.spans[starting_pos].0,
                 };
 
                 self.errors.deref_mut().unwrap().push(spanned);

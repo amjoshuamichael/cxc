@@ -430,6 +430,7 @@ impl Type {
             TypeSpec::ArrayElem(_) |
             TypeSpec::TypeLevelFunc(_, _) |
             TypeSpec::Unknown |
+            TypeSpec::RemoveWrappers(_) |
             TypeSpec::Me => panic!(), // TODO: error
         }
     }

@@ -84,38 +84,30 @@ impl ParseError {
     }
 }
 
+impl Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::IncorrectBeginningOfDeclaration => 
+                write!(f, "Declaration cannot begin like this"),
+            ParseError::UnexpectedEndOfFile => 
+                write!(f, "Unexpected end of file"),
+            ParseError::UnexpectedTok { got, expected } => 
+                write!(f, "Got a bad token, expected {expected:?} got {got:?}"),
+            ParseError::ImproperExpression =>
+                write!(f, "Bad expression"),
+            ParseError::ArgListWithImproperPredecessor => todo!(),
+            ParseError::BadVariantName(name) => 
+                write!(f, "name {name} is not a valid variant name"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseErrorSpanned {
     pub error: ParseError,
     pub start: usize,
     pub end: usize,
-    pub tokens_between: TokenSpan,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TokenSpan(pub Vec<Tok>);
-
-impl TokenSpan {
-    pub fn new(all: &Vec<Tok>, start: usize, end: usize) -> Self {
-        Self(
-            all[start..end.min(all.len())]
-                .iter()
-                .map(|tok| tok.clone())
-                .collect(),
-        )
-    }
-}
-
-impl Display for ParseErrorSpanned {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self.error)?;
-
-        for tok in &self.tokens_between.0 {
-            write!(f, "{}", &*tok.to_string())?;
-        }
-
-        Ok(())
-    }
+    pub at: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

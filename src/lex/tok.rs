@@ -325,6 +325,7 @@ impl Tok {
             Tok::AmpersandSet(_) => Ok(Opcode::Ref),
             Tok::Bang => Ok(Opcode::Not),
             Tok::Plus => Ok(Opcode::Transform),
+            Tok::Minus => Ok(Opcode::Negate),
             Tok::Tilde => Ok(Opcode::Destroy),
             _ => Err(ParseError::UnexpectedTok {
                 got: self.clone(),

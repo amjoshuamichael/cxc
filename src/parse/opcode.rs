@@ -3,6 +3,7 @@ pub enum Opcode {
     #[default]
     Plus,
     Minus,
+    Negate,
     Multiplier,
     Divider,
     Modulus,
@@ -41,7 +42,7 @@ impl Opcode {
         match self {
             Ref | Deref => Some(4),
             Not => Some(3),
-            Transform => Some(2),
+            Transform | Negate => Some(2),
             Destroy => Some(1),
             _ => None,
         }
@@ -77,6 +78,7 @@ impl ToString for Opcode {
         match self {
             Plus => "+",
             Minus => "-",
+            Negate => "-",
             Multiplier => "*",
             Divider => "/",
             Modulus => "%",

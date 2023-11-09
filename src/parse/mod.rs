@@ -1,4 +1,4 @@
-use crate::{lex::{Tok, TypeName, VarName}, typ::ABI};
+use crate::{lex::{Tok, TypeName, VarName}, typ::ABI, errors::ParseErrorReport};
 
 pub use context::{FuncParseContext, GlobalParseContext, ParseContext, TypeParseContext};
 pub use opcode::Opcode;
@@ -23,23 +23,28 @@ pub(super) use structure::*;
 
 use self::context::FuncParseData;
 
-pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, Vec<ParseErrorSpanned>> {
+pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, ParseErrorReport> {
     let script = file(&mut lexer);
 
-    let errors = lexer.errors.deref().unwrap();
+    let errors = lexer.errors.deref_mut().unwrap();
 
-    if errors.is_empty() {
-        match script {
-            Ok(script) => Ok(script),
-            Err(error) => Err(vec![ParseErrorSpanned {
+    if errors.is_empty() && let Ok(script) = script {
+        Ok(script)
+    } else {
+        if let Err(script_error) = script {
+            errors.push(ParseErrorSpanned {
                 start: 0,
                 end: lexer.spans.last().unwrap().1,
-                tokens_between: TokenSpan::new(&lexer.tokens, 0, lexer.tokens.len()),
-                error,
-            }]),
+                error: script_error,
+                at: 0,
+            })
         }
-    } else {
-        Err(errors.clone())
+
+        // TODO: implement a way to do this without cloning the errors
+        Err(ParseErrorReport {
+            parse_errors: errors.clone(),
+            code: lexer.inner_data.code,
+        })
     }
 }
 

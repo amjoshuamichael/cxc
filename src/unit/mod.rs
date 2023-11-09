@@ -36,6 +36,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::iter::once;
 use std::pin::Pin;
+use anyhow::Error;
 use crate::backend::Backend;
 pub use backends::function::*;
 pub(crate) use precalcs::*;
@@ -144,17 +145,10 @@ impl Unit {
         new
     }
 
-    pub fn push_script(&mut self, script: &str) -> CResultMany<Vec<FuncQuery>> {
+    pub fn push_script(&mut self, script: &str) -> Result<Vec<FuncQuery>, Error> {
         let lexed = lex(script);
 
-        let parsed = parse::parse(lexed).map_err(|errs| {
-            #[cfg(feature = "xc-debug")]
-            for err in &errs {
-                println!("{err}");
-            }
-
-            { errs }.drain(..).map(CErr::Parse).collect::<Vec<_>>()
-        })?;
+        let parsed = parse::parse(lexed)?;
 
         let has_comp_script = parsed.comp_script.is_some();
 
@@ -200,7 +194,7 @@ impl Unit {
             funcs_to_compile
         };
 
-        self.compile_func_set(funcs_to_process.iter().cloned().collect())?;
+        self.compile_func_set(funcs_to_process.iter().cloned().collect()).expect("failure");
 
         if has_comp_script {
             self.run_comp_script();
@@ -209,7 +203,7 @@ impl Unit {
         Ok(funcs_to_process)
     }
 
-    pub fn compile_func_set(&mut self, mut set: HashSet<FuncQuery>) -> CResultMany<()> {
+    pub fn compile_func_set(&mut self, mut set: HashSet<FuncQuery>) -> Result<(), ()> {
         self.comp_data.caches.clear();
 
         let mut all_func_ids = HashSet::<FuncId>::new();
@@ -217,19 +211,14 @@ impl Unit {
         let mut hlrs = SecondaryMap::<FuncId, HLR>::new();
 
         loop {
-            set = set
-                .into_iter()
-                .map(|query| {
-                   if query.generics.is_empty() && query.relation.inner_type().is_none() {
-                        self.comp_data.globals.insert(
-                            query.name.clone(),
-                            Global::Func(query.clone()),
-                        );
-                    }
-
-                    Ok(query)
-                })
-                .collect::<Result<_, CErr>>()?;
+            for query in &set {
+                if query.generics.is_empty() && query.relation.inner_type().is_none() {
+                    self.comp_data.globals.insert(
+                        query.name.clone(),
+                        Global::Func(query.clone()),
+                    );
+                }
+            }
 
             for query in set.drain() {
                 let code_id = self.comp_data.query_for_code(query.code_query());
@@ -244,7 +233,7 @@ impl Unit {
                 };
 
                 let (hlr, processed_func_info) = 
-                    hlr(query.clone(), &self.comp_data, code.as_ref())?;
+                    hlr(query.clone(), &self.comp_data, code.as_ref()).expect("");
 
                 let possibly_existing_id = self.comp_data.query_for_id(&FuncQuery {
                     name: processed_func_info.name.clone(),

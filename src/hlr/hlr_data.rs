@@ -762,6 +762,7 @@ impl<'a> FuncRep<'a> {
                 let HNodeData::Block { withs, .. } = self.tree.get_mut(block)
                     else { unreachable!() };
                 withs.insert(realized_expr);
+                dbg!(&withs);
 
                 realized_expr
             },

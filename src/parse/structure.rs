@@ -29,6 +29,7 @@ pub enum TypeSpec {
     Array(Box<TypeSpec>, u32),
     ArrayElem(Box<TypeSpec>),
     Destructor(Box<TypeSpec>, Arc<Expr>),
+    RemoveWrappers(Box<TypeSpec>),
     #[default]
     Void,
     Unknown,
@@ -215,6 +216,10 @@ fn parse_type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
 
             TypeSpec::Array(Box::new(parse_type(lexer)?), count.try_into().unwrap())
         },
+        Tok::Minus => {
+            lexer.next_tok()?;
+            TypeSpec::RemoveWrappers(Box::new(parse_type(lexer)?))
+        }
         Tok::TypeName(name) => {
             lexer.next_tok()?;
 

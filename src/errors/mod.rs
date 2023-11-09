@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, error::Error};
 
 use crate::{
     parse::{ParseErrorSpanned, TypeSpec}, Type, TypeName, VarName, hlr::expr_tree::ExprID, TypeRelation, TypeEnum,
@@ -14,17 +14,6 @@ pub enum CErr {
     Type(TErr),
     Func(FErr),
     Usage(UErr),
-}
-
-impl Display for CErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Self::Parse(parse_error) => write!(f, "{parse_error}"),
-            Self::Type(type_error) => write!(f, "{type_error:?}"),
-            Self::Func(func_error) => write!(f, "{func_error:?}"),
-            Self::Usage(func_error) => write!(f, "{func_error:?}"),
-        }
-    }
 }
 
 impl From<TErr> for CErr {
@@ -78,3 +67,33 @@ pub enum UErr {
     NoReturn,
     BadTypeOfStructLit(ExprID),
 }
+
+#[derive(Default, Debug)]
+pub struct ParseErrorReport {
+    pub parse_errors: Vec<ParseErrorSpanned>,
+    pub code: Box<str>,
+}
+
+impl Display for ParseErrorReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for err in &self.parse_errors {
+            writeln!(f, "{}", err.error);
+            let mut line_start = err.start;
+
+            for line in self.code[err.start..err.end].lines() {
+                let line_end = line_start + line.len();
+                
+                writeln!(f, "{line}");
+                if line_start < err.at && err.at < line_end {
+                    writeln!(f, "{}", "^".repeat(line.len()));
+                }
+
+                line_start += line.len();    
+            }
+            writeln!(f, "-------------------")?;
+        }
+
+        Ok(())
+    }
+}
+impl Error for ParseErrorReport { }
