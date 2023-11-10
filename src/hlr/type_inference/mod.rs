@@ -695,8 +695,6 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                         );
                     }
                 }
-
-                
             },
             HNodeData::IndirectCall { f, a: args, .. } => {
                 let f_constraint_index = infer_map.constraint_index_of(*f);
@@ -790,7 +788,7 @@ fn spec_from_perspective_of_generic(
     let mut lhs = GenParam(0);
     let mut rhs = spec.clone();
 
-    while !matches!(rhs, GenParam(index) if index == generic_index as u8) {
+    'solve: while !matches!(rhs, GenParam(index) if index == generic_index as u8) {
         match &rhs {
             GenParam(_) => return None, // gen param is not equal to the one we're looking for
             Ref(elem) | Deref(elem) | Array(elem, _) => {
@@ -838,6 +836,25 @@ fn spec_from_perspective_of_generic(
                 if !found_field {
                     return None;
                 }
+            },
+            Function(arg_specs, ret_spec) => {
+                for (a, arg_spec) in arg_specs.iter().enumerate() {
+                    if spec_from_perspective_of_generic(arg_spec, generic_index).is_some() {
+                        lhs = FuncArgType(Box::new(lhs), a);
+                        rhs = arg_spec.clone();
+
+                        continue 'solve;
+                    }
+                }
+
+                if spec_from_perspective_of_generic(ret_spec, generic_index).is_some() {
+                    lhs = FuncReturnType(Box::new(lhs));
+                    rhs = *ret_spec.clone();
+
+                    continue 'solve;
+                }
+
+                return None;
             },
             _ => return None,
         }

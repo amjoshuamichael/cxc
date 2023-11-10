@@ -63,5 +63,6 @@ SliceIterCopy<T> = {
     next() {
         self.inner.ptr = self.inner.ptr.ptr_add(1)
         self.it = *self.inner.ptr
+        print(self.it)
     }
 }

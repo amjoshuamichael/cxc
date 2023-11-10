@@ -194,17 +194,21 @@ impl CompData {
                 if let Some(result) = 
                     search_relation.can_transform_to(&check_relation_spec) {
 
-                    let check_relation = 
-                        self.get_spec(check_relation_spec, &result.generics).unwrap();
-
-                    let ret_as_search = 
+                    // TODO: these should only "continue" if there is a "too few/many 
+                    // generics" error. Otherwise, these should return a compile error.
+                    let Ok(check_relation) = 
+                        self.get_spec(check_relation_spec, &result.generics)
+                            else { continue };
+                    let Ok(ret_as_search) = 
                         self.get_spec(&code.ret_type, &(&result.generics, query.relation))
-                            .unwrap();
-                    let ret_as_check = 
+                            else { continue };
+                    let Ok(ret_as_check) = 
                         self.get_spec(&code.ret_type, &(&result.generics, check_relation))
-                            .unwrap();
+                            else { continue };
 
                     if ret_as_search != ret_as_check { continue }
+
+                    
 
                     let result_dist = transformation_steps_dist(&result.steps);
                     

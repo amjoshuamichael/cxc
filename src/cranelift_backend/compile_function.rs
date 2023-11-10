@@ -708,7 +708,7 @@ fn compile_binop(
                 BitOR => ins.bor(l, r),
                 BitXOR => ins.bxor(l, r),
                 And => ins.band(l, r),
-                Or => ins.band(l, r),
+                Or => ins.bor(l, r),
                 _ => todo!(),
             }
         }

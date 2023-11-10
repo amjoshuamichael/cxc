@@ -226,6 +226,7 @@ fn vec_deque_configurations() {
     )
 }
 
+// This test is here to check frees under the interpreter
 #[test]
 fn vec_deque_configurations_no_return() {
     xc_test!(

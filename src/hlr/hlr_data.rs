@@ -503,7 +503,7 @@ impl<'a> FuncRep<'a> {
                     while_,
                     CallGen {
                         query: FuncQuery { 
-                            name: "still_iterating".into(),
+                            name: "still_iterating".into(), //TODO: rename to "iterating"
                             relation: TypeRelation::MethodOf(Type::unknown()),
                             generics: Vec::new(),
                         },

@@ -1,0 +1,55 @@
+Tally<T> = {
+    +inner: T,
+    it_index: u64,
+}
+
+tally<T>(iter: T); Tally<T> {
+    ; {
+        inner = iter,
+        it_index = 0,
+    }
+}
+
+<T> &Tally<T>:. {
+    still_iterating(); bool {
+        ; self.inner.still_iterating()
+    }
+
+    next() {
+        self.inner.next()
+        self.it_index = self.it_index + 1
+    }
+
+}
+
+<T> Tally<T> :. { into_iter(); Tally<T> { ; self } }
+
+map<T, U>(iter: T, function: (T.it); U); Map<T, U> {
+    ; {
+        inner = iter,
+        function = function,
+    }
+}
+
+Map<T, U> = {
+    +inner: T,
+    function: (T.it); U,
+    it: U,
+}
+
+<T, U> &Map<T, U>:. {
+    still_iterating(); bool {
+        ? self.inner.still_iterating() {
+            self.it = (self.function)(self.inner.it)
+            ; true
+        } : {
+            ; false
+        }
+    }
+
+    next() {
+        self.inner.next()
+    }
+}
+
+<T, U> Map<T, U> :. { into_iter(); Map<T, U> { ; self } }
