@@ -1,6 +1,8 @@
 #![feature(assert_matches)]
 #![allow(unused)]
 
+mod test_utils;
+
 mod abi;
 mod arrays;
 mod basic_functions;
@@ -20,7 +22,7 @@ mod live;
 mod std_lib;
 mod structs;
 mod structural_types;
-mod test_utils;
 mod tuples;
+mod unions;
 mod value_api;
 mod with;

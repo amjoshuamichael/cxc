@@ -208,8 +208,6 @@ impl CompData {
 
                     if ret_as_search != ret_as_check { continue }
 
-                    
-
                     let result_dist = transformation_steps_dist(&result.steps);
                     
                     if closest_function_dist > result_dist {

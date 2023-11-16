@@ -1,6 +1,6 @@
-use crate::{Type, parse::TypeSpec, TypeEnum, StructType, IntType, RefType, FuncType, ArrayType, TypeName};
+use crate::{Type, parse::{TypeSpec, FieldSpec}, TypeEnum, StructType, IntType, RefType, FuncType, ArrayType, TypeName};
 
-use super::{Field, ABI, DestructorType};
+use super::{Field, ABI, DestructorType, UnionType};
 
 pub fn type_to_type_spec(typ: Type) -> TypeSpec {
     if typ.name() != &TypeName::Anonymous {
@@ -19,11 +19,18 @@ pub fn type_to_type_spec(typ: Type) -> TypeSpec {
         TypeEnum::Int(IntType { signed: false, size }) => TypeSpec::UInt(size.to_num() as u32),
         TypeEnum::Float(float_type) => TypeSpec::Float(*float_type),
         TypeEnum::Struct(StructType { fields, .. }) => TypeSpec::Struct(
-            fields.iter().map(|Field { name, typ, inherited }| (
-                *inherited,
-                name.clone(),
-                type_to_type_spec(typ.clone()),
-            )).collect()
+            fields.iter().map(|Field { name, typ, inherited }| FieldSpec {
+                inherited: *inherited,
+                name: name.clone(),
+                type_spec: type_to_type_spec(typ.clone()),
+            }).collect()
+        ),
+        TypeEnum::Union(UnionType { fields, .. }) => TypeSpec::Union(
+            fields.iter().map(|Field { name, typ, inherited }| FieldSpec {
+                inherited: *inherited,
+                name: name.clone(),
+                type_spec: type_to_type_spec(typ.clone()),
+            }).collect()
         ),
         TypeEnum::Ref(RefType { base }) => TypeSpec::Ref(
             Box::new(type_to_type_spec(base.clone()))

@@ -330,40 +330,42 @@ fn make_blocks(fcs: &mut FunctionCompilationState, lines: &Vec<MLine>) {
         goes_to: Set<usize>,
     }
 
-    let mut entry_block_data = BData::default();
     let mut other_block_data = Vec::<BData>::new();
+    let mut entry_block_data = BData::default();
 
-    let mut on_entry_block = true;
-    let mut processing_bdata = BData::default();
+    {
+        let mut on_entry_block = true;
+        let mut processing_bdata = BData::default();
 
-    for line in lines.iter().chain(once(&MLine::Marker(0))) {
-        if matches!(line, MLine::Marker(_)) {
-            if on_entry_block {
-                entry_block_data = processing_bdata;
+        for line in lines.iter().chain(once(&MLine::Marker(0))) {
+            if matches!(line, MLine::Marker(_)) {
+                if on_entry_block {
+                    entry_block_data = processing_bdata;
 
-                on_entry_block = false;
+                    on_entry_block = false;
+                } else {
+                    other_block_data.push(processing_bdata);
+                }
+
+                processing_bdata = BData::default();
+            } else if let MLine::Goto(loc) = line {
+                processing_bdata.goes_to.insert(*loc as usize);
+            } else if let MLine::Branch { yes, no, .. } = line {
+                processing_bdata.goes_to.insert(*yes as usize);
+                processing_bdata.goes_to.insert(*no as usize);
             } else {
-                other_block_data.push(processing_bdata);
+                processing_bdata.variables.extend(
+                    variables_in::variables_in_line(line)
+                        .into_iter()
+                        .filter(|id| {
+                            if let Some(loc) = fcs.var_locations.get(*id) {
+                                loc.1.arg_index == ArgIndex::None
+                            } else {
+                                false
+                            }
+                        })
+                );
             }
-
-            processing_bdata = BData::default();
-        } else if let MLine::Goto(loc) = line {
-            processing_bdata.goes_to.insert(*loc as usize);
-        } else if let MLine::Branch { yes, no, .. } = line {
-            processing_bdata.goes_to.insert(*yes as usize);
-            processing_bdata.goes_to.insert(*no as usize);
-        } else {
-            processing_bdata.variables.extend(
-                variables_in::variables_in_line(line)
-                    .into_iter()
-                    .filter(|id| {
-                        if let Some(loc) = fcs.var_locations.get(*id) {
-                            loc.1.arg_index == ArgIndex::None
-                        } else {
-                            false
-                        }
-                    })
-            );
         }
     }
 
@@ -660,6 +662,12 @@ fn compile_unarop(
                     let true_ = fcs.builder.ins().iconst(cl_types::I8, 1);
                     fcs.builder.ins().bxor(hs, true_)
                 }
+                _ => unreachable!(),
+            }
+        }
+        TypeEnum::Int(_) => {
+            match op {
+                Negate => fcs.builder.ins().ineg(hs),
                 _ => unreachable!(),
             }
         }

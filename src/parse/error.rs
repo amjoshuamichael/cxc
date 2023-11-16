@@ -73,6 +73,7 @@ pub enum ParseError {
     IncorrectBeginningOfDeclaration,
     UnexpectedEndOfFile,
     UnexpectedTok { got: Tok, expected: Vec<TokName> },
+    ImproperObjectDelimiters,
     ImproperExpression,
     ArgListWithImproperPredecessor,
     BadVariantName(TypeName),
@@ -96,6 +97,8 @@ impl Display for ParseError {
             ParseError::ImproperExpression =>
                 write!(f, "Bad expression"),
             ParseError::ArgListWithImproperPredecessor => todo!(),
+            ParseError::ImproperObjectDelimiters => 
+                write!(f, "Mixed delimiters for object type. Use either only `,` for structs, or only `|` for unions."),
             ParseError::BadVariantName(name) => 
                 write!(f, "name {name} is not a valid variant name"),
         }
@@ -113,6 +116,7 @@ pub struct ParseErrorSpanned {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokName {
     Comma,
+    Bar,
     Semicolon,
     Bang,
 

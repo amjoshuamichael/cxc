@@ -1,9 +1,16 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::Field;
 use crate::lex::{lex, Tok};
 use crate::typ::FloatType;
 
+#[derive(Hash, Default, Debug, Clone, PartialEq, Eq)]
+pub struct FieldSpec {
+    pub inherited: bool,
+    pub name: VarName,
+    pub type_spec: TypeSpec,
+}
 
 #[derive(Hash, Default, Debug, Clone, PartialEq, Eq)]
 pub enum TypeSpec {
@@ -19,7 +26,8 @@ pub enum TypeSpec {
     Deref(Box<TypeSpec>),
     StructMember(Box<TypeSpec>, VarName),
     SumMember(Box<TypeSpec>, TypeName),
-    Struct(Vec<(bool, VarName, TypeSpec)>),
+    Struct(Vec<FieldSpec>),
+    Union(Vec<FieldSpec>),
     Sum(Vec<(TypeName, TypeSpec)>),
     Tuple(Vec<TypeSpec>),
     Function(Vec<TypeSpec>, Box<TypeSpec>),
@@ -60,7 +68,7 @@ impl TypeSpec {
             TypeSpec::GetGeneric(spec, _) => spec.get_names(list),
             TypeSpec::Struct(fields) => {
                 for field in fields {
-                    field.2.get_names(list);
+                    field.type_spec.get_names(list);
                 }
             },
             TypeSpec::Sum(members) => {
@@ -316,9 +324,15 @@ pub fn parse_type_decl(mut lexer: TypeParseContext) -> Result<TypeDecl, ParseErr
 }
 
 pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    fn parse_field(
-        lexer: &mut TypeParseContext
-    ) -> ParseResult<(bool, VarName, TypeSpec)> {
+    let mut fields = Vec::<FieldSpec>::new();
+
+    #[derive(PartialEq)]
+    enum ObjectKind { Struct, Union, Unknown };
+    let mut parsing = ObjectKind::Unknown;
+
+    lexer.assert_next_tok_is(Tok::LCurly, TokName::LCurly)?;
+
+    while !lexer.move_on(Tok::RCurly) {
         let inherited = if lexer.peek_tok()? == &Tok::Plus {
             lexer.next_tok()?;
             true 
@@ -326,18 +340,46 @@ pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             false
         };
 
-        let field_name = lexer.next_tok()?.var_name()?;
+        let name = lexer.next_tok()?.var_name()?;
 
         lexer.assert_next_tok_is(Tok::Colon, TokName::Colon)?;
 
-        let typ = lexer.recover(parse_type);
+        let type_spec = lexer.recover(parse_type);
 
-        Ok((inherited, field_name, typ))
+        match lexer.peek_tok()? {
+            Tok::RCurly => { 
+                lexer.next_tok()?; 
+                fields.push(FieldSpec { inherited, name, type_spec });
+                break 
+            },
+
+            Tok::Comma if parsing == ObjectKind::Unknown => parsing = ObjectKind::Struct,
+            Tok::Comma if parsing == ObjectKind::Struct => {},
+            Tok::Bar if parsing == ObjectKind::Unknown => parsing = ObjectKind::Union,
+            Tok::Bar if parsing == ObjectKind::Union => {},
+
+            Tok::Bar if parsing == ObjectKind::Struct => 
+                return Err(ParseError::ImproperObjectDelimiters),
+            Tok::Comma if parsing == ObjectKind::Union => 
+                return Err(ParseError::ImproperObjectDelimiters),
+
+            got if parsing == ObjectKind::Struct => 
+                return ParseError::unexpected(got, vec![TokName::Comma]),
+            got if parsing == ObjectKind::Union => 
+                return ParseError::unexpected(got, vec![TokName::Bar]),
+            got => 
+                return ParseError::unexpected(got, vec![TokName::Comma, TokName::Bar]),
+        }
+
+        lexer.next_tok()?;
+        fields.push(FieldSpec { inherited, name, type_spec });
     }
 
-    let fields = parse_list(Tok::curlys(), COMMAS, parse_field, lexer)?;
-
-    Ok(TypeSpec::Struct(fields))
+    if parsing == ObjectKind::Struct || parsing == ObjectKind::Unknown {
+        Ok(TypeSpec::Struct(fields))
+    } else {
+        Ok(TypeSpec::Union(fields))
+    }
 }
 
 pub fn parse_sum(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {

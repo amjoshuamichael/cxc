@@ -1,6 +1,6 @@
 use crate::{
     errors::{TErr, TResult},
-    parse::{TypeSpec, FuncCode, VarDecl},
+    parse::{TypeSpec, FuncCode, VarDecl, FieldSpec},
     ArrayType, CompData, FuncType, Type, TypeEnum, TypeRelation, FuncQuery,
     VarName, typ::{Field, can_transform::TransformationList, ABI, DestructorType},
 };
@@ -145,17 +145,21 @@ impl CompData {
             TypeSpec::SumMember(_sum_type, _type_name) => {
                 todo!()
             },
-            TypeSpec::Struct(fields) => {
-                Type::new_struct(
-                    fields
-                        .iter()
-                        .map(|&(inherited, ref name, ref typ)| Ok(Field {
-                            name: name.clone(),
-                            typ: self.get_spec(&typ, generics)?,
-                            inherited,
-                        }))
-                        .collect::<Result<_, _>>()?
-                )
+            TypeSpec::Struct(fields) | TypeSpec::Union(fields) => {
+                let realized = fields
+                    .iter()
+                    .map(|FieldSpec { inherited, ref name, ref type_spec }| Ok(Field {
+                        name: name.clone(),
+                        typ: self.get_spec(&type_spec, generics)?,
+                        inherited: *inherited,
+                    }))
+                    .collect::<Result<_, _>>()?;
+                
+                if matches!(spec, TypeSpec::Struct(_)) {
+                    Type::new_struct(realized)
+                } else {
+                    Type::new_union(realized)
+                }
             },
             TypeSpec::Sum(_variants) => {
                 todo!()

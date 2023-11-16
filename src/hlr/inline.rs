@@ -108,7 +108,7 @@ pub fn inline_node(
             } else if let Some(argument) = inline_info.arguments.get(&arg_index) {
                 let argument_type = inline_info.base_tree.tree.get_ref(*argument).ret_type();
                 match argument_type.arg_style(ABI::C) {
-                    ArgStyle::Direct | ArgStyle::Ints(..) | ArgStyle::Floats(..) => {
+                    ArgStyle::Direct | ArgStyle::Ints(..) | ArgStyle::Floats(..) | ArgStyle::Void => {
                         node_data = inline_info.base_tree.tree.get(*argument);
                     },
                     ArgStyle::Pointer => {

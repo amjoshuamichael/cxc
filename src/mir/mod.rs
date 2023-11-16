@@ -1,13 +1,15 @@
 use std::{collections::{BTreeMap, HashMap}, rc::Rc};
 
-use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::ABI};
+use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree, ExprID}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::ABI};
 
 pub use self::mir_data::*;
 
 mod mir_data;
 mod remove_post_return_statements;
+mod remove_redundant_gotos;
 
 use remove_post_return_statements::remove_post_return_statements;
+use remove_redundant_gotos::remove_redundant_gotos;
 use slotmap::SecondaryMap;
 
 impl MIR {
@@ -46,6 +48,7 @@ pub fn mir(hlr: HLR, dependencies: HashMap<FuncQuery, FuncId>) -> MIR {
     mir.from_tree = hlr.tree;
 
     remove_post_return_statements(&mut mir);
+    remove_redundant_gotos(&mut mir);
 
     #[cfg(feature = "mir-debug")]
     {
@@ -69,99 +72,103 @@ fn build_block(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) {
     for stmt in stmts {
         mir.dbg_map.insert(mir.lines.len() + 1, *stmt);
 
-        match tree.get_ref(*stmt) {
-            HNodeData::Number { .. } | HNodeData::Float { .. } | HNodeData::Bool { .. } | HNodeData::Ident { .. } => {},
-            HNodeData::Set { lhs, rhs, .. } => {
-                let lhs = build_as_addr(tree.get_ref(*lhs), &tree, mir);
-                let rhs = build_as_operand(tree.get_ref(*rhs), &tree, mir);
+        build_stmt(*stmt, tree, mir);
+    }
+}
 
-                mir.lines.push(MLine::Store { l: lhs, val: rhs });
-            },
-            HNodeData::Return { to_return: Some(expr), .. } => {
-                let operand = build_as_operand(tree.get_ref(*expr), &tree, mir);
-                mir.lines.push(MLine::Return(Some(operand)));
-            },
-            HNodeData::Return { to_return: None, .. } => {
-                mir.lines.push(MLine::Return(None));
-            },
-            HNodeData::GotoLabel(name) => {
-                let block_id = mir.block_labels[&name];
+fn build_stmt(stmt: ExprID, tree: &ExprTree, mir: &mut MIR) {
+    match tree.get_ref(stmt) {
+        HNodeData::Number { .. } | HNodeData::Float { .. } | HNodeData::Bool { .. } | HNodeData::Ident { .. } => {},
+        HNodeData::Set { lhs, rhs, .. } => {
+            let lhs = build_as_addr(tree.get_ref(*lhs), &tree, mir);
+            let rhs = build_as_operand(tree.get_ref(*rhs), &tree, mir);
 
-                mir.lines.push(MLine::Goto(block_id));
-                mir.lines.push(MLine::Marker(block_id));
-            },
-            HNodeData::Goto(name) => {
-                let mut block = tree.block_of(*stmt);
-                loop {
-                    let HNodeData::Block { goto_labels, .. } = tree.get_ref(block)
-                        else { unreachable!() };
+            mir.lines.push(MLine::Store { l: lhs, val: rhs });
+        },
+        HNodeData::Return { to_return: Some(expr), .. } => {
+            let operand = build_as_operand(tree.get_ref(*expr), &tree, mir);
+            mir.lines.push(MLine::Return(Some(operand)));
+        },
+        HNodeData::Return { to_return: None, .. } => {
+            mir.lines.push(MLine::Return(None));
+        },
+        HNodeData::GotoLabel(name) => {
+            let block_id = mir.block_labels[&name];
 
-                    if let Some(goto_label_id) = goto_labels.get(&name) {
-                        let block_id = mir.block_labels[goto_label_id];
-                        mir.lines.push(MLine::Goto(block_id));
-                        break;
-                    }
+            mir.lines.push(MLine::Goto(block_id));
+            mir.lines.push(MLine::Marker(block_id));
+        },
+        HNodeData::Goto(name) => {
+            let mut block = tree.block_of(stmt);
+            loop {
+                let HNodeData::Block { goto_labels, .. } = tree.get_ref(block)
+                    else { unreachable!() };
 
-                    let parent_block = tree.statement_and_block(block).1;
-
-                    if parent_block == block { panic!() }
-                    block = parent_block;
+                if let Some(goto_label_id) = goto_labels.get(&name) {
+                    let block_id = mir.block_labels[goto_label_id];
+                    mir.lines.push(MLine::Goto(block_id));
+                    break;
                 }
+
+                let parent_block = tree.statement_and_block(block).1;
+
+                if parent_block == block { panic!() }
+                block = parent_block;
             }
-            HNodeData::While { w, d } => {
-                let beginwhile = mir.new_block_id();
-                let whilecode = mir.new_block_id();
-                let pastwhile = mir.new_block_id();
-
-                mir.lines.push(MLine::Goto(beginwhile));
-                mir.lines.push(MLine::Marker(beginwhile));
-
-                let w = build_as_operand(tree.get_ref(*w), tree, mir);
-
-                mir.lines.push(MLine::Branch { 
-                    if_: w, 
-                    yes: whilecode,
-                    no: pastwhile,
-                });
-
-                mir.lines.push(MLine::Marker(whilecode));
-
-                build_block(tree.get_ref(*d), tree, mir);
-
-                mir.lines.push(MLine::Goto(beginwhile));
-
-                mir.lines.push(MLine::Marker(pastwhile));
-            },
-            HNodeData::IfThenElse { i, t, e, .. } => {
-                let i = build_as_operand(tree.get_ref(*i), tree, mir);
-
-                let then = mir.new_block_id();
-                let else_ = mir.new_block_id();
-                let after = mir.new_block_id();
-
-                mir.lines.push(MLine::Branch { 
-                    if_: i, 
-                    yes: then,
-                    no: else_,
-                });
-
-                mir.lines.push(MLine::Marker(then));
-                build_block(tree.get_ref(*t), tree, mir);
-                mir.lines.push(MLine::Goto(after));
-
-                mir.lines.push(MLine::Marker(else_));
-                build_block(tree.get_ref(*e), tree, mir);
-                mir.lines.push(MLine::Goto(after));
-
-                mir.lines.push(MLine::Marker(after));
-            }
-            HNodeData::Block { .. } => build_block(tree.get_ref(*stmt), tree, mir),
-            _ => {
-                if let Some(expr) = build_as_expr(tree.get_ref(*stmt), tree, mir) {
-                    mir.lines.push(MLine::Expr(expr));
-                }
-            },
         }
+        HNodeData::While { w, d } => {
+            let beginwhile = mir.new_block_id();
+            let whilecode = mir.new_block_id();
+            let pastwhile = mir.new_block_id();
+
+            mir.lines.push(MLine::Goto(beginwhile));
+            mir.lines.push(MLine::Marker(beginwhile));
+
+            let w = build_as_operand(tree.get_ref(*w), tree, mir);
+
+            mir.lines.push(MLine::Branch { 
+                if_: w, 
+                yes: whilecode,
+                no: pastwhile,
+            });
+
+            mir.lines.push(MLine::Marker(whilecode));
+
+            build_block(tree.get_ref(*d), tree, mir);
+
+            mir.lines.push(MLine::Goto(beginwhile));
+
+            mir.lines.push(MLine::Marker(pastwhile));
+        },
+        HNodeData::IfThenElse { i, t, e, .. } => {
+            let i = build_as_operand(tree.get_ref(*i), tree, mir);
+
+            let then = mir.new_block_id();
+            let else_ = mir.new_block_id();
+            let after = mir.new_block_id();
+
+            mir.lines.push(MLine::Branch { 
+                if_: i, 
+                yes: then,
+                no: else_,
+            });
+
+            mir.lines.push(MLine::Marker(then));
+            build_stmt(*t, tree, mir);
+            mir.lines.push(MLine::Goto(after));
+
+            mir.lines.push(MLine::Marker(else_));
+            build_stmt(*e, tree, mir);
+            mir.lines.push(MLine::Goto(after));
+
+            mir.lines.push(MLine::Marker(after));
+        }
+        HNodeData::Block { .. } => build_block(tree.get_ref(stmt), tree, mir),
+        _ => {
+            if let Some(expr) = build_as_expr(tree.get_ref(stmt), tree, mir) {
+                mir.lines.push(MLine::Expr(expr));
+            }
+        },
     }
 }
 
@@ -411,16 +418,22 @@ pub fn build_as_addr_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> M
             let object_type = object_node.ret_type();
             let object = build_as_addr(object_node, tree, mir);
 
-            let TypeEnum::Struct(struct_type) = 
-                object_type.as_type_enum() else { unreachable!() };
-            let field_index = struct_type.get_field_index(&field).unwrap() as u32;
+            match object_type.as_type_enum() {
+                TypeEnum::Struct(struct_type) => {
+                    let field_index = struct_type.get_field_index(&field).unwrap() as u32;
 
-            if field_index == 0 {
-                // Since this is the first field, we don't have to add an offset to the
-                // pointer in order to access it.
-                MAddrExpr::Addr(object)
-            } else {
-                MAddrExpr::Member { object_type, object, field_index }
+                    if field_index == 0 {
+                        // Since this is the first field, we don't have to add an offset 
+                        // to the pointer in order to access it.
+                        MAddrExpr::Addr(object)
+                    } else {
+                        MAddrExpr::Member { object_type, object, field_index }
+                    }
+                },
+                TypeEnum::Union(union_type) => {
+                    MAddrExpr::Addr(object)
+                },
+                _ => unreachable!(),
             }
         },
         HNodeData::Index { object, index, .. } => {

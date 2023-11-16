@@ -40,19 +40,43 @@ impl TypeEnumVariant for StructType {
         output += "{ ";
 
         if self.is_tuple() {
-            for (f, Field { typ, .. }) in fields_iter {
+            for (f, Field { inherited, typ, .. }) in fields_iter {
                 if f != 0 { output += ", "; }
 
+                if *inherited { output += "+"; }
                 output += &*format!("{}", &*typ.full_name());
             }
         } else {
-            for (f, Field { name, typ, .. }) in fields_iter {
+            for (f, Field { name, inherited, typ, }) in fields_iter {
                 if f != 0 { output += ", "; }
 
+                if *inherited { output += "+"; }
                 let type_name = typ.full_name();
 
                 output += &*format!("{name}: {type_name}");
             }
+        }
+
+        output += " }";
+
+        output
+    }
+}
+
+impl TypeEnumVariant for UnionType {
+    fn full_name(&self) -> String {
+        let mut output = String::new();
+        let fields_iter = self.fields.iter().enumerate();
+
+        output += "{ ";
+
+        for (f, Field { name, inherited, typ, }) in fields_iter {
+            if f != 0 { output += " | "; }
+
+            if *inherited { output += "+"; }
+            let type_name = typ.full_name();
+
+            output += &*format!("{name}: {type_name}");
         }
 
         output += " }";

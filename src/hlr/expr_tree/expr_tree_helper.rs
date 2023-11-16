@@ -138,7 +138,7 @@ impl ExprTree {
 
     pub fn remove_node(&mut self, remove_id: ExprID) -> Result<(), ()> {
         let parent = self.get_mut(self.parent(remove_id));
-        match parent {
+        match dbg!(parent) {
             Block { stmts, .. } => {
                 let old_len = stmts.len();
                 stmts.retain(|id| *id != remove_id);
@@ -146,7 +146,6 @@ impl ExprTree {
             }
             _ => return Err(()),
         };
-        self.nodes.remove(remove_id);
         Ok(())
     }
 

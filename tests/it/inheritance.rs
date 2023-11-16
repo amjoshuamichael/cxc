@@ -117,3 +117,43 @@ fn big_rc_to_string() {
         String::from("{0 = 90, 1 = 90}")
     )
 }
+
+#[test]
+fn union_inheritance() {
+    xc_test!(
+        "
+        Point = {
+            x: f32,
+            y: f32,
+        }
+
+        Shape = {
+            tag: u8,
+            +union: {
+                +line: {
+                    start: Point,
+                    end: Point,
+                } |
+                +square: {
+                    sides: [4]i32
+                }
+            }
+        }
+
+        main(); { Shape.union.square, Shape.union.line, } {
+            square: Shape = {--}
+            square.tag = 0
+            square.sides = [0, 1, 2, 3]
+
+            line: Shape = {--}
+            line.tag = 1
+            line.start.x = 0.0
+            line.start.y = 1.0
+            line.end = { x = 2.0, y = 3.0 }
+
+            ; { square.union.square, line.union.line }
+        }
+        ";
+        ([0, 1, 2, 3], (0.0f32, 1.0f32, 2.0f32, 3.0f32))
+    )
+}
