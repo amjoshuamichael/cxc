@@ -199,12 +199,12 @@ impl IsBackend for LLVMBackend {
         let mut arg_vals: Vec<BasicMetadataValueEnum> =
             function.get_params().iter().map(|p| (*p).into()).collect();
 
-        if ret_type.return_style(func_type.abi) == ReturnStyle::SRet {
+        if ret_type.return_style(func_type.abi) == ReturnStyle::Pointer {
             let mut out =
                 builder.build_indirect_call(calling_func_type, llvm_func_ptr, &arg_vals, "call");
             add_sret_attribute_to_call_site(&mut out, self.context, &ret_type);
             builder.build_return(None);
-        } else if ret_type.return_style(func_type.abi) == ReturnStyle::SRet {
+        } else if ret_type.return_style(func_type.abi) == ReturnStyle::Pointer {
             let i64i64 = Type::new_tuple(vec![Type::i(64); 2]).to_basic_type(self.context);
 
             let call_out = builder.build_alloca(i64i64, "call_out");

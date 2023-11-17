@@ -4,7 +4,6 @@ use inkwell::types::{BasicMetadataTypeEnum, FunctionType};
 use std::collections::btree_map::BTreeMap;
 
 use crate::*;
-use crate::typ::{UnknownType, VoidType, ReturnStyle, DestructorType};
 use inkwell::AddressSpace;
 use inkwell::context::Context;
 use inkwell::types::{AnyTypeEnum, BasicTypeEnum, AnyType, BasicType};
@@ -29,6 +28,7 @@ impl ToLLVMType for TypeEnum {
             TypeEnum::Int(t) => t.to_any_type(context),
             TypeEnum::Float(t) => t.to_any_type(context),
             TypeEnum::Struct(t) => t.to_any_type(context),
+            TypeEnum::Union(t) => t.to_any_type(context),
             TypeEnum::Ref(t) => t.to_any_type(context),
             TypeEnum::Func(t) => t.to_any_type(context),
             TypeEnum::Array(t) => t.to_any_type(context),
@@ -65,7 +65,7 @@ impl FuncType {
     pub fn llvm_func_type<'f>(&self, context: &'static Context) -> FunctionType<'f> {
         let return_style = self.ret.return_style(self.abi);
 
-        if return_style != ReturnStyle::SRet {
+        if return_style != ReturnStyle::Pointer {
             let args: Vec<BasicMetadataTypeEnum> = self
                 .args
                 .iter()
@@ -104,6 +104,14 @@ impl ToLLVMType for StructType {
             .as_any_type_enum()
     }
 }
+
+impl ToLLVMType for UnionType {
+    fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
+        let size = self.largest_field().map(Type::size).unwrap_or(0);
+        context.i8_type().array_type(size as u32).as_any_type_enum()
+    }
+}
+
 
 impl ToLLVMType for IntType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
