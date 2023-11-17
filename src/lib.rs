@@ -12,9 +12,10 @@
 #![feature(concat_idents)]
 
 // HOW THE DEBUG FlAGS WORK:
-// 1. xc-debug: enables debug printing for the compiler itself
-// 2. backend-debug: enables debug printing for backend, like LLVM or Cranelift
-// 3. show-bytes: enables debug printing for the bytes of each type, during
+// 1. xc-debug: enables debug printing for the lexer, parser, and HLR
+// 2. mir-debug: enables debug printing for the MIR
+// 3. backend-debug: enables debug printing for backend
+// 4. show-bytes: enables debug printing for the bytes of each type, during
 // tests using the xc_test! macro
 
 pub use lex::{TypeName, VarName};
@@ -57,7 +58,7 @@ mod llvm_backend;
 mod cranelift_backend;
 
 #[cfg(feature = "backend-interpreter")]
-mod interpreter;
+pub mod interpreter;
 
 mod backend {
     #[cfg(feature = "backend-llvm")]
