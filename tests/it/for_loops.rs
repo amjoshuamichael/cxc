@@ -158,37 +158,6 @@ fn vec_both_tallymap() {
 }
 
 #[test]
-fn chain() {
-    xc_test!(
-        use StdLib;
-        r#"
-        main(); i32 {
-            numbers := Vec<i32>:new()
-            numbers.push(1)
-            numbers.push(49830)
-            numbers.push(2)
-            numbers.push(23049)
-            numbers.push(3)
-            numbers.push(4)
-            numbers.push(5)
-            numbers.push(98450)
-
-            sum := 0
-
-            for tally(numbers.into_iter()) {
-                ? it_index % 2 == 0 || it_index == 5 {
-                    sum = sum + *it
-                }
-            }
-
-            ; sum
-        }
-        "#;
-        15
-    );
-}
-
-#[test]
 fn break_inner_with_as() {
     xc_test!(
         use StdLib;

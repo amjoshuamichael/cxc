@@ -1,6 +1,6 @@
-use crate::{typ::TypeSpec, *};
+use crate::{typ::TypeSpec, *, parse::FieldSpec};
 
-use super::{Field, DestructorType};
+use super::{Field, DestructorType, UnionType};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransformationStep {
@@ -88,10 +88,10 @@ impl Type {
             },
             TypeEnum::Struct(struct_type) => {
                 if let TypeSpec::Struct(field_specs) = spec.clone()
-                    && field_specs.iter().all(|(inherited, _, _)| *inherited) 
+                    && field_specs.iter().all(|FieldSpec { inherited, .. }| *inherited) 
                     && (
                         field_specs.len() != struct_type.fields.len() ||
-                        !field_specs.iter().all(|(_, name, _)| struct_type.has_field(name)) 
+                        !field_specs.iter().all(|FieldSpec { name, .. }| struct_type.has_field(name)) 
                     ) {
                     let mut generics = Vec::new();
 
@@ -99,7 +99,7 @@ impl Type {
 
                     let mut failure = false;
 
-                    for (_, name, spec) in &field_specs {
+                    for FieldSpec { name, type_spec: spec, .. } in &field_specs {
                         for field in &struct_type.fields {
                             if !field.inherited {
                                  continue;
@@ -235,7 +235,7 @@ impl Type {
                     )
                 )
             },
-            TypeEnum::Struct(StructType { fields, .. }) => {
+            TypeEnum::Struct(StructType { fields, .. }) | TypeEnum::Union(UnionType { fields, .. }) => {
                 for Field { name, typ, .. } in fields {
                     if typ.is_void() {
                         panic!();
@@ -343,8 +343,9 @@ impl Type {
                     else { return false };
                 base.is_equivalent(&*spec, generics)
             },
-            TypeSpec::Struct(field_specs) => {
-                let TypeEnum::Struct(StructType { fields, .. }) = type_enum 
+            TypeSpec::Struct(field_specs) | TypeSpec::Union(field_specs) => {
+                let (TypeEnum::Struct(StructType { fields, .. }) 
+                     | TypeEnum::Union(UnionType { fields, .. })) = type_enum 
                     else { return false };
 
                 if fields.len() != field_specs.len() {
@@ -353,7 +354,7 @@ impl Type {
 
                 for (
                     Field { name: field_name, typ: field, .. }, 
-                    (_, field_spec_name, field_spec)
+                    FieldSpec { name: field_spec_name, type_spec: field_spec, .. },
                 ) in fields.iter().zip(field_specs.into_iter()) {
 
                     if field_name != field_spec_name {

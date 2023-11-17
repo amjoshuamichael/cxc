@@ -139,6 +139,18 @@ impl<'a> FuncRep<'a> {
             *stmts = statment_ids;
         }
 
+        new.modify_many_infallible_rev(|block_id, hlr| {
+            let HNodeData::Block { withs, .. } = hlr.tree.get_ref(block_id)
+                else { return };
+
+            for with_id in withs.clone() { 
+                // TODO: this is a hack until with rules are solidified
+                if matches!(hlr.tree.get_ref(hlr.tree.parent(with_id)), HNodeData::Block { .. }) {
+                    hlr.tree.remove_node(with_id); 
+                }
+            }
+        });
+
         Ok(new)
     }
 
@@ -183,7 +195,7 @@ impl<'a> FuncRep<'a> {
     pub fn output(mut self, from: Arc<Expr>) -> (HLR, ProcessedFuncInfo) {
         let mut func_arg_types = self.arg_types();
 
-        if self.ret_type.return_style(ABI::C) == ReturnStyle::SRet {
+        if self.ret_type.return_style(ABI::C) == ReturnStyle::Pointer {
             func_arg_types.remove(0);
         }
 

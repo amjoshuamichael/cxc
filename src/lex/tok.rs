@@ -174,7 +174,7 @@ pub enum Tok {
     #[token("%")]
     Modulus,
     #[token("|")]
-    BitOR,
+    Bar,
     #[token("^")]
     BitXOR,
     #[token(">>")]
@@ -344,7 +344,7 @@ impl Tok {
             Tok::Slash => Ok(Opcode::Divider),
             Tok::Modulus => Ok(Opcode::Modulus),
             Tok::AmpersandSet(1) => Ok(Opcode::BitAND),
-            Tok::BitOR => Ok(Opcode::BitOR),
+            Tok::Bar => Ok(Opcode::BitOR),
             Tok::BitXOR => Ok(Opcode::BitXOR),
             Tok::BitShiftR => Ok(Opcode::BitShiftR),
             Tok::BitShiftL => Ok(Opcode::BitShiftL),
@@ -419,7 +419,7 @@ impl ToString for Tok {
             AsterickSet(count) => return "*".repeat(*count as _),
             Slash => "/",
             Modulus => "%",
-            BitOR => "|",
+            Bar => "|",
             BitXOR => "^",
             BitShiftR => ">>",
             BitShiftL => "<<",

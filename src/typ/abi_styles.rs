@@ -17,7 +17,7 @@ pub enum ReturnStyle {
     ThroughF32F32,
     ThroughF64F32,
     ThroughF64F64,
-    SRet,
+    Pointer,
     Void,
 }
 
@@ -27,6 +27,7 @@ pub enum ArgStyle {
     Ints(IntSize, Option<IntSize>),
     Floats(FloatType, Option<FloatType>),
     Pointer,
+    Void,
 }
 
 pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
@@ -40,7 +41,7 @@ pub fn realize_return_style(return_style: ReturnStyle, on: &Type) -> Type {
         ReturnStyle::ThroughF32F32 => Type::new_tuple(vec![Type::f(32); 2]),
         ReturnStyle::ThroughF64F32 => Type::new_tuple(vec![Type::f(64), Type::f(32)]),
         ReturnStyle::ThroughF64F64 => Type::new_tuple(vec![Type::f(64), Type::f(64)]),
-        ReturnStyle::SRet | ReturnStyle::Void => Type::void(),
+        ReturnStyle::Pointer | ReturnStyle::Void => Type::void(),
         ReturnStyle::Direct => on.clone(),
     }
 }
@@ -59,6 +60,7 @@ pub fn realize_arg_style(arg_style: ArgStyle, on: &Type) -> Type {
             Type::new(TypeEnum::Float(l)),
             Type::new(TypeEnum::Float(r)),
         ]),
+        ArgStyle::Void => todo!(),
     }
 }
 
@@ -82,7 +84,7 @@ impl Type {
 
                 if abi == ABI::Rust {
                     if size > 8 && fields.len() >= 3 {
-                        return ReturnStyle::SRet;
+                        return ReturnStyle::Pointer;
                     } else if fields.len() <= 2 {
                         return ReturnStyle::Direct;
                     }
@@ -96,14 +98,14 @@ impl Type {
                 }
 
                 if size > MAX_REG_SIZE {
-                    return ReturnStyle::SRet;
+                    return ReturnStyle::Pointer;
                 }
 
                 if crate::ARCH_x86 && cfg!(windows) {
                     if abi == ABI::Rust && all_floats {
                         return ReturnStyle::Direct;
                     } else if abi == ABI::C && size % 4 != 0 && fields.len() >= 3 {
-                        return ReturnStyle::SRet;
+                        return ReturnStyle::Pointer;
                     }
                 }
                  
@@ -125,6 +127,20 @@ impl Type {
                     }
                 }
             },
+            Union(union_type) => {
+                if union_type.fields.len() == 1 {
+                    return union_type.fields[0].typ.return_style(abi);
+                }
+
+                let size = self.size();
+                match size {
+                    0 => ReturnStyle::Void,
+                    1..=8 => ReturnStyle::ThroughI64,
+                    9..=12 => ReturnStyle::ThroughI64I32,
+                    13..=16 => ReturnStyle::ThroughI64I64,
+                    17.. => ReturnStyle::Pointer,
+                }
+            },
             Void => ReturnStyle::Void,
             Destructor(DestructorType { base, .. }) => base.return_style(abi),
             Unknown => panic!("cannot return unknown type"),
@@ -136,7 +152,7 @@ impl Type {
 
         match self.as_type_enum() {
             Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
-            _ => {
+            Struct(_) | Array(_) => {
                 let size = self.size();
 
                 // only take five to avoid spending time 
@@ -149,10 +165,7 @@ impl Type {
                         0..=2 => {
                             match size {
                                 0..=16 => ArgStyle::Direct,
-                                17.. => {
-                                    ArgStyle::Pointer
-                                },
-                                _ => unreachable!()
+                                17.. => ArgStyle::Pointer,
                             }
                         },
                         3.. => {
@@ -162,18 +175,15 @@ impl Type {
                                     let int_size = (size * 8).next_power_of_two();
                                     ArgStyle::Ints(IntSize::from_num(int_size), None)
                                 },
-                                9.. => {
-                                    ArgStyle::Pointer
-                                }
-                                _ => unreachable!()
+                                9.. => ArgStyle::Pointer,
                             }
                         },
-                        _ => unreachable!()
                     }
                 } else {
                     let all_floats = fields.iter().all(Type::is_float);
 
                     match self.size() {
+                        0 => ArgStyle::Void,
                         _ if fields.len() == 0 || fields.len() == 1 => ArgStyle::Direct,
                         s if crate::ARCH_x86 && cfg!(windows) && s % 4 != 0 && fields.len() >= 3 => {
                             ArgStyle::Pointer
@@ -183,9 +193,8 @@ impl Type {
                             fields.len() <= 4 => {
                             ArgStyle::Direct
                         },
-                        s if s > MAX_REG_SIZE => {
-                            ArgStyle::Pointer
-                        },
+                        s if s > MAX_REG_SIZE => ArgStyle::Pointer,
+                        17.. => ArgStyle::Pointer,
                         1..=8 => {
                             let first_size = (size * 8).next_power_of_two();
 
@@ -210,10 +219,26 @@ impl Type {
                                 )
                             }
                         },
-                        _ => unreachable!(),
                     }
                 }
-            }
+            },
+            Union(union_type) => {
+                if union_type.fields.len() == 1 {
+                    return union_type.fields[0].typ.arg_style(abi);
+                }
+
+                let size = self.size();
+                match size {
+                    0 => ArgStyle::Void,
+                    1..=8 => ArgStyle::Ints(IntSize::_64, None),
+                    9..=12 => ArgStyle::Ints(IntSize::_64, Some(IntSize::_32)),
+                    13..=16 => ArgStyle::Ints(IntSize::_64, Some(IntSize::_64)),
+                    17.. => ArgStyle::Pointer,
+                }
+            },
+            Void => ArgStyle::Void,
+            Destructor(DestructorType { base, .. }) => base.arg_style(abi),
+            Unknown => panic!("cannot return unknown type"),
         }
     }
 

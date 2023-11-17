@@ -12,13 +12,13 @@ RawVec<T> = {
     expand() {
         old_cap := self.capacity
         # reallocate memory
-        self.capacity = self.capacity * u64 2
+        self.capacity = self.capacity * 2
         
         new_ptr: &T = alloc<T>(self.capacity)
-        memmove<T>(+self.ptr, new_ptr, old_cap * size_of<T>())
-        free<T>(+self.ptr)
+        memmove<T>(self.ptr, new_ptr, old_cap * size_of<T>())
+        free<T>(self.ptr)
         
-        self.ptr = cast(new_ptr)
+        self.ptr = new_ptr
     }
 }
 

@@ -245,7 +245,7 @@ impl<N: Clone> ParseContext<N> {
                     error,
                     start: char_start,
                     end: char_end,
-                    at: self.spans[starting_pos].0,
+                    at: self.spans[starting_pos.min(self.spans.len() - 1)].0,
                 };
 
                 self.errors.deref_mut().unwrap().push(spanned);

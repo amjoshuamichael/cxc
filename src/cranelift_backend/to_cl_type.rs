@@ -14,6 +14,7 @@ use crate::typ::ArgStyle;
 use crate::typ::DestructorType;
 use crate::typ::Field;
 use crate::typ::ReturnStyle;
+use crate::typ::UnionType;
 use crate::typ::UnknownType;
 use crate::typ::VoidType;
 use crate::{Type, IntType, FloatType, StructType};
@@ -26,7 +27,7 @@ pub fn func_type_to_signature(typ: &FuncType, sig: &mut Signature) {
 
     let return_style = typ.ret.return_style(abi);
 
-    if return_style == ReturnStyle::SRet {
+    if return_style == ReturnStyle::Pointer {
         let sret_abi = AbiParam::special(cl_types::I64, ArgumentPurpose::StructReturn);
         sig.params.push(sret_abi);
     }
@@ -83,6 +84,7 @@ impl ToCLType for TypeEnum {
             TypeEnum::Int(t) => t.to_cl_type(),
             TypeEnum::Float(t) => t.to_cl_type(),
             TypeEnum::Struct(t) => t.to_cl_type(),
+            TypeEnum::Union(t) => t.to_cl_type(),
             TypeEnum::Ref(t) => t.to_cl_type(),
             TypeEnum::Func(t) => t.to_cl_type(),
             TypeEnum::Array(t) => t.to_cl_type(),
@@ -130,6 +132,13 @@ impl ToCLType for StructType {
             .map(|Field { typ, .. }| typ.to_cl_type())
             .flatten()
             .collect()
+    }
+}
+
+impl ToCLType for UnionType {
+    fn to_cl_type(&self) -> Vec<ClType> {
+        let size = self.largest_field().map(Type::size).unwrap_or(0);
+        std::iter::once(cl_types::I8).cycle().take(size).collect()
     }
 }
 

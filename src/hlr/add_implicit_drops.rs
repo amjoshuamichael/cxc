@@ -2,7 +2,7 @@ use std::{any::Any, rc::Rc, collections::HashMap};
 
 use slotmap::{SlotMap, DefaultKey};
 
-use crate::{parse::Opcode, FuncQuery, TypeRelation, Type, StructType, TypeEnum, hlr::expr_tree::{MemberGen, GenSlot}, VarName, ArrayType};
+use crate::{parse::Opcode, FuncQuery, TypeRelation, Type, StructType, TypeEnum, hlr::expr_tree::{MemberGen, GenSlot}, VarName, ArrayType, typ::UnionType};
 
 use super::{hlr_data::{FuncRep, VarID, ArgIndex}, expr_tree::{HNodeData, CallGen, UnarOpGen, SetGen, ExprID, NodeDataGen, IndexGen, SetGenSlot}};
 
@@ -533,6 +533,20 @@ pub fn destructor_paths(typ: &Type) -> Vec<DestructorPath> {
                 destructor_paths(&field.typ)
                     .into_iter()
                     .map(|mut path| {
+                        path.bits.push(DestructorPathBit::Member(field.name.clone()));
+                        path
+                    })
+            })
+            .flatten()
+            .collect::<Vec<_>>()
+        },
+        Union(UnionType { fields, .. }) => {
+            fields.iter()
+            .map(|field| {
+                destructor_paths(&field.typ)
+                    .into_iter()
+                    .map(|mut path| {
+                        todo!();
                         path.bits.push(DestructorPathBit::Member(field.name.clone()));
                         path
                     })

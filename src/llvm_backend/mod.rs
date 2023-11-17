@@ -67,7 +67,7 @@ pub fn add_nescessary_attributes_to_func(
     context: &'static Context,
     func_type: &FuncType,
 ) {
-    if func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
+    if func_type.ret.return_style(ABI::C) == ReturnStyle::Pointer {
         let sret_id = Attribute::get_named_enum_kind_id("sret");
         let sret_attribute = context.create_type_attribute(
             sret_id, 
@@ -275,7 +275,7 @@ pub fn compile_expr(
                 &*reg.map(MReg::to_string).unwrap_or_default(),
             );
 
-            if typ.ret.return_style(ABI::C) == ReturnStyle::SRet {
+            if typ.ret.return_style(ABI::C) == ReturnStyle::Pointer {
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
             }
 
@@ -302,7 +302,7 @@ pub fn compile_expr(
                 &*reg.map(MReg::to_string).unwrap_or_default(),
             );
 
-            if typ.ret.return_style(ABI::C) == ReturnStyle::SRet {
+            if typ.ret.return_style(ABI::C) == ReturnStyle::Pointer {
                 add_sret_attribute_to_call_site(&mut callsite, fcs.context, &typ.ret);
             }
 
@@ -393,7 +393,7 @@ pub fn load_memloc(fcs: &FunctionCompilationState, memloc: &MMemLoc) -> BasicVal
             match &fcs.mir.variables[*var_id] {
                 VariableInfo { arg_index: ArgIndex::Some(arg_index), .. } => {
                     let param_index = 
-                        if fcs.mir.func_type.ret.return_style(ABI::C) == ReturnStyle::SRet {
+                        if fcs.mir.func_type.ret.return_style(ABI::C) == ReturnStyle::Pointer {
                             *arg_index + 1
                         } else {
                             *arg_index

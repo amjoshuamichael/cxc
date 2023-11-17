@@ -120,6 +120,14 @@ impl Type {
         }))
     }
 
+    /// Creates a new union, with the given [`Field`]s.
+    pub fn new_union(fields: Vec<Field>) -> Type {
+        Type::new(TypeEnum::Union(UnionType {
+            fields,
+            repr: Repr::default(),
+        }))
+    }
+
     /// Creates a new empty struct type, with no fields.
     pub fn empty_struct() -> Type { Type::new_struct(Vec::new()) }
 
@@ -289,12 +297,13 @@ impl TypeData {
 
 #[derive(PartialEq, Eq, Default, Hash, Clone, XcReflect)]
 /// The inner data of a type. This exists as a wrapper over the various types that
-/// implement [TypeEnumVariant]. You can access a given [Type]'s inner TypeEnum using
-/// [Type::as_type_enum] and [Type::clone_type_enum].
+/// implement [`TypeEnumVariant`]. You can access a given [`Type`]'s inner TypeEnum using
+/// [`Type::as_type_enum`] and [`Type::clone_type_enum`].
 pub enum TypeEnum {
     Int(IntType),
     Float(FloatType),
     Struct(StructType),
+    Union(UnionType),
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
@@ -321,6 +330,7 @@ impl Deref for TypeEnum {
             TypeEnum::Float(t) => t,
             TypeEnum::Func(t) => t,
             TypeEnum::Struct(t) => t,
+            TypeEnum::Union(t) => t,
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
             TypeEnum::Destructor(t) => t,
@@ -338,16 +348,19 @@ pub struct RefType {
 }
 
 /// The ABI of a function, similar to the possible strings after rust's `extern` keyword.
-/// See [the Rust documentation](https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier) for more explanation.
+
 #[derive(Copy, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, Debug, XcReflect)]
 pub enum ABI {
     /// Works like extern "Rust".
+    /// See [the Rust documentation](https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier) for more explanation.
     Rust,
-    /// Works like extern "C"– happens to be the cxc default when declaring functions.
+    /// Works like extern "C". also happens to be the current cxc default when declaring 
+    /// functions. See [the Rust documentation](https://doc.rust-lang.org/beta/reference/items/functions.html#extern-function-qualifier) for more explanation.
     C,
     /// No ABI, arguments are passed in as-is. This is used in function types when they
     /// have moved past the ABI steps in the compiler. It is very unsafe to use in 
     /// practice.
+    // TODO: remove
     None,
 }
 
@@ -371,18 +384,18 @@ pub enum Repr {
 }
 
 #[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
-/// A struct data type, including the [Repr].
-pub struct StructType {
-    pub fields: Vec<Field>,
-    pub repr: Repr,
-}
-
-#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
 /// The individual field of a [StructType].
 pub struct Field {
     pub name: VarName,
     pub typ: Type,
     pub inherited: bool,
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
+/// A struct data type, including the [Repr].
+pub struct StructType {
+    pub fields: Vec<Field>,
+    pub repr: Repr,
 }
 
 impl StructType {
@@ -415,14 +428,27 @@ impl StructType {
 
     /// Checks if this Struct is a tuple by analyzing its field names. Here, the empty 
     /// struct classifies as a tuple.
-    pub fn is_tuple(&self) -> bool { 
+    pub fn is_tuple(&self) -> bool {
         self.fields.is_empty() || 
-            matches!(self.fields[0].name, VarName::TupleIndex(0)) 
+            matches!(self.fields[0].name, VarName::TupleIndex(0))
     }
 
     /// Checks if this field exists on this [`StructType`].
     pub fn has_field(&self, check_name: &VarName) -> bool {
         self.fields.iter().any(|Field { name, .. }| check_name == name)
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
+/// A union data type, including the [Repr].
+pub struct UnionType {
+    pub fields: Vec<Field>,
+    pub repr: Repr,
+}
+
+impl UnionType {
+    pub fn largest_field(&self) -> Option<&Type> {
+        self.fields.iter().map(|field| &field.typ).max_by_key(|typ| typ.size())
     }
 }
 

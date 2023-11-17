@@ -181,3 +181,43 @@ fn basic_nested_with() {
         439 + 54
     )
 }
+
+#[test]
+fn union_with() {
+    xc_test!(
+        "
+        Point = {
+            x: f32,
+            y: f32,
+        }
+
+        Shape = {
+            tag: u8,
+            union: {
+                line: {
+                    start: Point,
+                    end: Point,
+                } |
+                square: {
+                    sides: [4]i32
+                }
+            }
+        }
+
+        main(); { Shape.union.square, Shape.union.line, } {
+            square: Shape = {--}
+            with square.union.square
+            sides = [0, 1, 2, 3]
+
+            line: Shape = {--}
+            with line.union.line
+            start.x = 0.0
+            start.y = 1.0
+            end = { x = 2.0, y = 3.0 }
+
+            ; { square.union.square, line.union.line }
+        }
+        ";
+        ([0, 1, 2, 3], (0.0f32, 1.0f32, 2.0f32, 3.0f32))
+    )
+}

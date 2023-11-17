@@ -271,6 +271,10 @@ fn parse_stmt(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             }
         }
 
+        if lexer.peek_tok()? == &Tok::LCurly {
+            return parse_block(lexer);            
+        }
+
         let lhs = parse_expr(lexer)?;
 
         if matches!(lhs, Expr::Ident(_)) && lexer.peek_tok()? == &Tok::Colon {
@@ -372,12 +376,12 @@ fn parse_while(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
 
 fn parse_if(ctx: &mut FuncParseContext) -> ParseResult<Expr> {
     let i = parse_expr(ctx)?;
-    let t = parse_block(ctx)?;
+    let t = parse_stmt(ctx)?;
 
     if ctx.peek_tok()? == &Tok::Colon {
         ctx.next_tok()?;
 
-        let e = parse_block(ctx)?;
+        let e = parse_stmt(ctx)?;
 
         Ok(Expr::IfThenElse(Box::new(i), Box::new(t), Box::new(e)))
     } else {

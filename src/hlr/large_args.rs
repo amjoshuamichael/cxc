@@ -24,6 +24,7 @@ fn handle_own_args(hlr: &mut FuncRep) {
             ArgStyle::Direct => {},
             ArgStyle::Ints(..) | ArgStyle::Floats(..) => arg_by_ints_or_floats(hlr, id),
             ArgStyle::Pointer => arg_by_pointer(hlr, id),
+            ArgStyle::Void => todo!(),
         }
     }
 }

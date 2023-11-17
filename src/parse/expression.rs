@@ -32,7 +32,16 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
     let mut last_atom = Atom::Op(Opcode::Plus);
 
     while let Ok(next) = lexer.peek_tok().cloned() {
-        let atom = if matches!(last_atom, Atom::Op(_)) {
+        let atom = if matches!(&last_atom, (Atom::Expr(Expr::Ident(_) | Expr::Member(..))))
+            && matches!(&next, Tok::LBrack) {
+            lexer.next_tok()?;
+            let index = parse_expr(lexer)?;
+            lexer.assert_next_tok_is(Tok::RBrack, TokName::RBrack)?;
+
+            let object = atoms.pop().unwrap().unwrap_expr()?;
+
+            Expr::Index(Box::new(object), Box::new(index)).into()
+        } else if matches!(last_atom, Atom::Op(_)) {
             // if the last atom was an operator, we expect these
             match parse_atom_after_op(lexer)? {
                 Some(atom) => atom,
@@ -49,15 +58,7 @@ pub fn parse_math_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
             parse_call(&mut atoms, generics, lexer)?
         } else if matches!(next, Tok::LParen) && !lexer.next_is_whitespace() {
             parse_call(&mut atoms, Vec::new(), lexer)?
-        } else if matches!((&last_atom, &next), (Atom::Expr(Expr::Ident(_)), Tok::LBrack)) {
-            lexer.next_tok()?;
-            let index = parse_expr(lexer)?;
-            lexer.assert_next_tok_is(Tok::RBrack, TokName::RBrack)?;
-
-            let object = atoms.pop().unwrap().unwrap_expr()?;
-
-            Expr::Index(Box::new(object), Box::new(index)).into()
-        } else if matches!(next, Tok::DottedNum(..)) {
+        }  else if matches!(next, Tok::DottedNum(..)) {
             lexer.next_tok()?;
             // parse tuple index
             let object = atoms.pop().unwrap().unwrap_expr()?;

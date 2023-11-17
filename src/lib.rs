@@ -21,7 +21,7 @@
 pub use lex::{TypeName, VarName};
 pub use parse::{TypeDecl, TypeRelation};
 pub use typ::{
-    ArrayType, BoolType, FloatType, FuncType, IntType, TypeEnumVariant, RefType, Repr, StructType, Type, TypeEnum, Field, ABI, fields_iter
+    ArrayType, BoolType, FloatType, FuncType, IntType, UnknownType, VoidType, ReturnStyle, DestructorType, UnionType, TypeEnumVariant, RefType, Repr, StructType, Type, TypeEnum, Field, ABI, fields_iter
 };
 pub use unit::{
     CompData, ExternalFuncAdd, Func, FuncDowncasted, FuncQuery, Unit, XcReflect, Value, FuncId, FuncCodeId

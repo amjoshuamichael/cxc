@@ -1,7 +1,7 @@
 use super::{prelude::*, hlr_data::{VariableInfo, VarID}};
 use ahash::HashMapExt;
 use crate::{
-    parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation},
+    parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation, FieldSpec},
     Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation, TypeRelation
 };
 use indexmap::IndexMap;
@@ -319,7 +319,9 @@ pub fn infer_types(hlr: &mut FuncRep) {
 
         if infer_map.constraints.iter().all(|constraint| constraint.is.is_known())
             && infer_map.calls.is_empty() {
-            assert!(infer_map.unreplaced_alises.is_empty());
+            if !infer_map.unreplaced_alises.is_empty() {
+                break;
+            }
 
             set_types_in_hlr(infer_map, hlr);
             return;
@@ -822,7 +824,7 @@ fn spec_from_perspective_of_generic(
             Struct(fields) => {
                 let mut found_field = false;
 
-                for (_, field_name, field_spec) in fields {
+                for FieldSpec { name: field_name, type_spec: field_spec, .. } in fields {
                     if spec_from_perspective_of_generic(field_spec, generic_index).is_some() {
                         lhs = StructMember(Box::new(lhs), field_name.clone());
                         rhs = field_spec.clone();
@@ -1438,12 +1440,16 @@ fn solve_with_inference_step(
                 continue;
             }
 
-            let mut struct_fields = Vec::<(bool, VarName, TypeSpec)>::new();
+            let mut struct_fields = Vec::<FieldSpec>::new();
             let mut gen_params = Vec::<ConstraintId>::new();
 
             for (f, (name, ids)) in has_fields.into_iter().enumerate() {
                 let field_constraint_index = infer_map.constraint_index_of(ids[0]);
-                struct_fields.push((false, name.clone(), TypeSpec::GenParam(f as u8)));
+                struct_fields.push(FieldSpec {
+                    inherited: false, 
+                    name: name.clone(), 
+                    type_spec: TypeSpec::GenParam(f as u8)
+                });
                 gen_params.push(field_constraint_index);
             }
 

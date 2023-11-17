@@ -157,6 +157,7 @@ impl Value {
 
                 output
             }
+            Union(union_type) => todo!(),
             Bool => {
                 if self.data[0] == 0 {
                     "false".into()
@@ -350,7 +351,7 @@ impl Unit {
                         let out: [u8; 16] = transmute(new_func());
                         Value::new_from_arr(ret_type.clone(), out)
                     },
-                    ReturnStyle::SRet => {
+                    ReturnStyle::Pointer => {
                         let new_func = func_addr.downcast::<(), MaxBytes>();
 
                         let data_vec = {

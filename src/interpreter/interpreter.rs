@@ -123,7 +123,7 @@ pub(crate) fn run_with_args(
     };
 
     let return_style = mir.func_type.ret.return_style(mir.func_type.abi);
-    let sret_allocation = (return_style == ReturnStyle::SRet).then(|| {
+    let sret_allocation = (return_style == ReturnStyle::Pointer).then(|| {
         let new_allocation = vec![0u8; mir.func_type.ret.size()].into_boxed_slice();
         let alloc_pointer = new_allocation.as_ptr() as usize;
 

@@ -1,6 +1,6 @@
 use crate::{Type, IntType, TypeEnum, FloatType, ArrayType, StructType, TypeName};
 
-use super::{Field, DestructorType};
+use super::{Field, DestructorType, UnionType};
 
 pub(super) fn size_of_type(typ: Type) -> usize {
     let base_size = match typ.as_type_enum() {
@@ -26,6 +26,9 @@ pub(super) fn size_of_type(typ: Type) -> usize {
             let alignment = size_of_largest_field_in(&typ);
             size_sum.next_multiple_of(alignment)
         },
+        TypeEnum::Union(UnionType { fields, .. }) => {
+            fields.iter().map(|Field { typ, .. }| typ.size()).max().unwrap_or(0)
+        }
         TypeEnum::Ref(_) => 8,
         TypeEnum::Func(_) => 8,
         TypeEnum::Array(ArrayType { base, count }) => {
