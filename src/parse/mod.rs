@@ -324,6 +324,7 @@ pub fn parse_expr(lexer: &mut FuncParseContext) -> ParseResult<Expr> {
         | Tok::Label(_)
         | Tok::TypeName(_)
         | Tok::Int(_)
+        | Tok::Variant(_)
         | Tok::DottedNum(_)
         | Tok::Float(_)
         | Tok::Bool(_)

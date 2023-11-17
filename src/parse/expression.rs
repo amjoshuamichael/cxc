@@ -123,6 +123,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             Expr::Float(ParsedFloat { l, r, exp: None }).into()
         },
         Tok::Bool(val) => Expr::Bool(val).into(),
+        Tok::Variant(val) => Expr::Variant(val).into(),
         Tok::Strin(val) => Expr::String(val.clone()).into(),
         Tok::VarName(val) => Expr::Ident(val.clone()).into(),
         Tok::Label(label) => Expr::Label(label).into(),
@@ -185,6 +186,7 @@ fn parse_atom_after_op(lexer: &mut FuncParseContext) -> ParseResult<Option<Atom>
             | Atom::Expr(Expr::String(_))
             | Atom::Expr(Expr::Ident(_))
             | Atom::Expr(Expr::Label(_))
+            | Atom::Expr(Expr::Variant(_))
             | Atom::Op(_)
     ) {
         lexer.next_tok()?;

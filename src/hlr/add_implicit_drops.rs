@@ -527,7 +527,7 @@ fn value_source(
 pub fn destructor_paths(typ: &Type) -> Vec<DestructorPath> {
     use TypeEnum::*;
     match typ.as_type_enum() {
-        Int(_) | Ref(_) | Float(_) | Func(_) | Bool | Void => Vec::new(),
+        Int(_) | Ref(_) | Float(_) | Func(_) | Bool | Void | Enum(_) => Vec::new(),
         Unknown => panic!(),
         Struct(StructType { fields, .. }) => {
             fields.iter()

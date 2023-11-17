@@ -124,6 +124,7 @@ enum KnownBy {
 struct Usages {
     is_int: Vec<ExprID>,
     is_float: Vec<ExprID>,
+    is_variant: Vec<ExprID>,
     is_struct: Vec<ExprID>,
     has_fields: IndexMap<VarName, Vec<ExprID>>,
     struct_literal_set: bool,
@@ -629,6 +630,9 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             }
             HNodeData::Lit { lit: HLit::Float(_), .. } => {
                 infer_map.constraint_of(id).usages.is_float.push(id);
+            }
+            HNodeData::Lit { lit: HLit::Variant(_), .. } => {
+                infer_map.constraint_of(id).usages.is_variant.push(id);
             }
             HNodeData::UnarOp { op, hs, .. } => {
                 let spec = match op {

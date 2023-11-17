@@ -12,6 +12,7 @@ use crate::RefType;
 use crate::TypeEnum;
 use crate::typ::ArgStyle;
 use crate::typ::DestructorType;
+use crate::typ::EnumType;
 use crate::typ::Field;
 use crate::typ::ReturnStyle;
 use crate::typ::UnionType;
@@ -85,6 +86,7 @@ impl ToCLType for TypeEnum {
             TypeEnum::Float(t) => t.to_cl_type(),
             TypeEnum::Struct(t) => t.to_cl_type(),
             TypeEnum::Union(t) => t.to_cl_type(),
+            TypeEnum::Enum(t) => t.to_cl_type(),
             TypeEnum::Ref(t) => t.to_cl_type(),
             TypeEnum::Func(t) => t.to_cl_type(),
             TypeEnum::Array(t) => t.to_cl_type(),
@@ -139,6 +141,12 @@ impl ToCLType for UnionType {
     fn to_cl_type(&self) -> Vec<ClType> {
         let size = self.largest_field().map(Type::size).unwrap_or(0);
         std::iter::once(cl_types::I8).cycle().take(size).collect()
+    }
+}
+
+impl ToCLType for EnumType {
+    fn to_cl_type(&self) -> Vec<ClType> {
+        self.to_int_type().to_cl_type()
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashMap}, rc::Rc};
 
-use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree, ExprID, HCallable, HLit}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::ABI};
+use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree, ExprID, HCallable, HLit}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::{ABI, EnumType}};
 
 pub use self::mir_data::*;
 
@@ -225,6 +225,12 @@ fn build_as_operand(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> MOperan
             MOperand::Float { size: var_type.size() as u32 * 8, val: (*value).into() }
         },
         HNodeData::Lit { lit: HLit::Bool(value), .. } => MOperand::Bool(*value),
+        HNodeData::Lit { lit: HLit::Variant(name), var_type, .. } => {
+            let TypeEnum::Enum(EnumType { variants, .. }) = var_type.as_type_enum()
+                else { unreachable!() };
+            let value = variants.iter().position(|n| n == name).unwrap();
+            MOperand::Int { size: var_type.size() as u32 * 8, val: value as u64 }
+        },
         HNodeData::GlobalLoad { global: Global::Func(func_query), .. } => {
             let func_id = mir.dependencies[&func_query];
             MOperand::Function(func_id)

@@ -1,7 +1,7 @@
 #![allow(arithmetic_overflow)]
 
 use cxc::library::StdLib;
-use super::test_utils::xc_test;
+use super::test_utils::{xc_test, Color};
 
 #[test]
 fn infer_i() {
@@ -373,3 +373,56 @@ fn infer_array_len() {
         200u64
     )
 }
+
+#[test]
+fn infer_enum() {
+    xc_test!(
+        r#"
+            Color = { Red / Green / Blue }
+
+            main(); [3]Color {
+                ; [/Red, /Green, /Blue]
+            }
+        "#;
+        [Color::Red, Color::Green, Color::Blue]
+    )
+}
+
+macro_rules! infer_enum_size_test {
+    ($size:tt, $int:ty, $name:ident) => {
+        #[test]
+        fn $name() {
+            let mut code = String::new();
+            code += "MyEnum = { ";
+
+            for n in 0..$size {
+                code += &*format!("A{n} / ");
+            }
+
+            code += "} main(); [";
+            code += stringify!($size);
+            code += "]MyEnum { ; [";
+
+            for n in 0..$size {
+                code += &*format!("/A{n}, ");
+            }
+
+            code += "] }";
+
+            let mut unit = cxc::Unit::new();
+            println!("{code}");
+            unit.push_script(&*code).unwrap();
+            let main = unit.get_fn("main").unwrap().downcast::<(), [$int; $size]>();
+            let arr = main();
+
+            for n in 0..$size {
+                assert_eq!(n as $int, arr[n]);
+            }
+        }
+    }
+}
+
+infer_enum_size_test!(255, u8, infer_enums_255);
+infer_enum_size_test!(256, u8, infer_enums_256);
+infer_enum_size_test!(257, u16, infer_enums_257);
+infer_enum_size_test!(6000, u16, infer_enums_6000);

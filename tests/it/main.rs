@@ -8,6 +8,7 @@ mod arrays;
 mod basic_functions;
 mod control_flow;
 mod drop;
+mod enums;
 mod expressions;
 mod external_function_utils;
 mod ffi;

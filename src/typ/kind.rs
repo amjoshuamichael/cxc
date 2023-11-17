@@ -85,6 +85,25 @@ impl TypeEnumVariant for UnionType {
     }
 }
 
+impl TypeEnumVariant for EnumType {
+    fn full_name(&self) -> String {
+        let mut output = String::new();
+        let fields_iter = self.variants.iter().enumerate();
+
+        output += "{ ";
+
+        for (n, name) in self.variants.iter().enumerate() {
+            if n != 0 { output += " / "; }
+
+            output += &*name;
+        }
+
+        output += " }";
+
+        output
+    }
+}
+
 impl TypeEnumVariant for IntType {
     fn full_name(&self) -> String {
         let prefix = if self.signed { 'i' } else { 'u' };

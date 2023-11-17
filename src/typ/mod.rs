@@ -128,6 +128,13 @@ impl Type {
         }))
     }
 
+    /// Creates a new enum, given a set of variants.
+    pub fn new_enum(variants: Vec<TypeName>) -> Type {
+        Type::new(TypeEnum::Enum(EnumType {
+            variants,
+        }))
+    }
+
     /// Creates a new empty struct type, with no fields.
     pub fn empty_struct() -> Type { Type::new_struct(Vec::new()) }
 
@@ -304,6 +311,7 @@ pub enum TypeEnum {
     Float(FloatType),
     Struct(StructType),
     Union(UnionType),
+    Enum(EnumType),
     Ref(RefType),
     Func(FuncType),
     Array(ArrayType),
@@ -331,6 +339,7 @@ impl Deref for TypeEnum {
             TypeEnum::Func(t) => t,
             TypeEnum::Struct(t) => t,
             TypeEnum::Union(t) => t,
+            TypeEnum::Enum(t) => t,
             TypeEnum::Ref(t) => t,
             TypeEnum::Array(t) => t,
             TypeEnum::Destructor(t) => t,
@@ -452,7 +461,30 @@ impl UnionType {
     }
 }
 
-/// An integer data type, wrapping [`IntSize`].
+#[derive(PartialEq, Eq, Hash, Debug, Default, Clone, XcReflect)]
+/// An enum data type.
+pub struct EnumType {
+    pub variants: Vec<TypeName>,
+}
+
+impl EnumType {
+    pub fn size_in_bytes(&self) -> u32 {
+        match self.variants.len() {
+            0..=256 => 1,
+            256..=65536 => 2,
+            _ => 4
+        }
+    }
+
+    pub fn to_int_type(&self) -> IntType {
+        IntType { 
+            signed: false,
+            size: IntSize::from_num(self.size_in_bytes() as usize * 8),
+        }
+    }
+}
+
+/// An integer data type, signed or unsigned. Uses [`IntSize`] to represent its size.
 #[derive(Copy, Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord, XcReflect)]
 pub struct IntType {
     pub size: IntSize,

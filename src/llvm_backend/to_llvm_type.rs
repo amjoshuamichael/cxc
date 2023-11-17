@@ -29,6 +29,7 @@ impl ToLLVMType for TypeEnum {
             TypeEnum::Float(t) => t.to_any_type(context),
             TypeEnum::Struct(t) => t.to_any_type(context),
             TypeEnum::Union(t) => t.to_any_type(context),
+            TypeEnum::Enum(t) => t.to_any_type(context),
             TypeEnum::Ref(t) => t.to_any_type(context),
             TypeEnum::Func(t) => t.to_any_type(context),
             TypeEnum::Array(t) => t.to_any_type(context),
@@ -112,6 +113,11 @@ impl ToLLVMType for UnionType {
     }
 }
 
+impl ToLLVMType for EnumType {
+    fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {
+        self.to_int_type().to_any_type(context)
+    }
+}
 
 impl ToLLVMType for IntType {
     fn to_any_type(&self, context: &'static Context) -> AnyTypeEnum<'static> {

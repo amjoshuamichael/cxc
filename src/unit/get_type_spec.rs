@@ -161,8 +161,8 @@ impl CompData {
                     Type::new_union(realized)
                 }
             },
-            TypeSpec::Sum(_variants) => {
-                todo!()
+            TypeSpec::Enum(variants) => {
+                Type::new_enum(variants.clone())
             },
             TypeSpec::Tuple(types) => {
                 Type::new_struct(

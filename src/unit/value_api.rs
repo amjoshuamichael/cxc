@@ -158,6 +158,7 @@ impl Value {
                 output
             }
             Union(union_type) => todo!(),
+            Enum(enum_type) => todo!(),
             Bool => {
                 if self.data[0] == 0 {
                     "false".into()

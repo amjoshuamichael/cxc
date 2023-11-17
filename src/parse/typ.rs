@@ -28,7 +28,7 @@ pub enum TypeSpec {
     SumMember(Box<TypeSpec>, TypeName),
     Struct(Vec<FieldSpec>),
     Union(Vec<FieldSpec>),
-    Sum(Vec<(TypeName, TypeSpec)>),
+    Enum(Vec<TypeName>),
     Tuple(Vec<TypeSpec>),
     Function(Vec<TypeSpec>, Box<TypeSpec>),
     FuncReturnType(Box<TypeSpec>),
@@ -69,11 +69,6 @@ impl TypeSpec {
             TypeSpec::Struct(fields) => {
                 for field in fields {
                     field.type_spec.get_names(list);
-                }
-            },
-            TypeSpec::Sum(members) => {
-                for member in members {
-                    member.1.get_names(list);
                 }
             },
             TypeSpec::TypeLevelFunc(_, specs) |
@@ -147,9 +142,7 @@ fn type_atom(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
             (Ok(Tok::VarName(_)), Ok(Tok::Colon), _) |
             (Ok(Tok::Plus), Ok(Tok::VarName(_)), Ok(Tok::Colon))
                 => parse_struct(lexer)?,
-            (Ok(Tok::TypeName(_)), Ok(Tok::Colon), _) |
-            (Ok(Tok::Plus), Ok(Tok::TypeName(_)), Ok(Tok::Colon))
-                => parse_sum(lexer)?,
+            (Ok(Tok::TypeName(_)), Ok(Tok::Slash), _) => parse_enum(lexer)?,
             _ => {
                 lexer.next_tok()?;
 
@@ -382,23 +375,19 @@ pub fn parse_struct(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
     }
 }
 
-pub fn parse_sum(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
-    fn parse_variant(lexer: &mut TypeParseContext) -> ParseResult<(TypeName, TypeSpec)> {
+pub fn parse_enum(lexer: &mut TypeParseContext) -> ParseResult<TypeSpec> {
+    fn parse_variant(lexer: &mut TypeParseContext) -> ParseResult<TypeName> {
         let variant_name = lexer.next_tok()?.type_name()?;
 
         if !matches!(variant_name, TypeName::Other(_)) {
             return Err(ParseError::BadVariantName(variant_name));
         }
 
-        lexer.assert_next_tok_is(Tok::Colon, TokName::Colon)?;
-
-        let typ = typ(lexer)?;
-
-        Ok((variant_name, typ))
+        Ok(variant_name)
     }
 
-    let fields = 
+    let variants = 
         parse_list(Tok::curlys(), Some((Tok::Slash, TokName::Slash)), parse_variant, lexer)?;
 
-    Ok(TypeSpec::Sum(fields))
+    Ok(TypeSpec::Enum(variants))
 }

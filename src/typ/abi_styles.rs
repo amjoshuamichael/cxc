@@ -72,7 +72,7 @@ impl Type {
         use TypeEnum::*;
 
         match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ReturnStyle::Direct,
+            Int(_) | Ref(_) | Float(_) | Bool | Func(_) | Enum(_) => ReturnStyle::Direct,
             Struct(_) | Array(_) => {
                 // only take five to avoid spending time 
                 // taking huge chunks of large arrays
@@ -151,7 +151,7 @@ impl Type {
         use TypeEnum::*;
 
         match self.as_type_enum() {
-            Int(_) | Ref(_) | Float(_) | Bool | Func(_) => ArgStyle::Direct,
+            Int(_) | Ref(_) | Float(_) | Bool | Func(_) | Enum(_) => ArgStyle::Direct,
             Struct(_) | Array(_) => {
                 let size = self.size();
 

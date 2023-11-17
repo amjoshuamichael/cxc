@@ -44,6 +44,7 @@ pub enum Expr {
     Number(u64),
     Float(ParsedFloat),
     Bool(bool),
+    Variant(TypeName),
     String(Arc<str>),
     Ident(VarName),
     Label(VarName),

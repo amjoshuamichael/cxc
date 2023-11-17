@@ -92,7 +92,38 @@ pub enum TypeName {
     Anonymous,
 }
 
+impl std::ops::Deref for TypeName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            TypeName::Other(o) => &**o,
+            TypeName::I(8) => "i8",
+            TypeName::I(16) => "i16",
+            TypeName::I(32) => "i32",
+            TypeName::I(64) => "i64",
+            TypeName::I(128) => "i128",
+            TypeName::I(_) => "i__",
+            TypeName::U(8) => "u8",
+            TypeName::U(16) => "u16",
+            TypeName::U(32) => "u32",
+            TypeName::U(64) => "u64",
+            TypeName::U(128) => "u128",
+            TypeName::U(_) => "u__",
+            TypeName::F64 => "f64",
+            TypeName::F32 => "f32",
+            TypeName::Bool => "bool",
+            TypeName::Me => "Me",
+            TypeName::Anonymous => "",
+        }
+    }
+}
+
 impl TypeName {
+    fn from_tok_variant(t: &mut Lexer<Tok>) -> Self {
+        TypeName::Other(Arc::from(&t.slice()[1..]))
+    }
+
     fn from_tok(t: &mut Lexer<Tok>) -> Self {
         match t.slice().chars().next() {
             Some('i') => match &t.slice()[1..] {
@@ -278,6 +309,13 @@ pub enum Tok {
     TypeName(TypeName),
 
     #[regex(
+        "/([A-Z][A-Za-z0-9]+|[A-Z])",
+        TypeName::from_tok_variant,
+        priority = 2
+    )]
+    Variant(TypeName),
+
+    #[regex(
         "0b[01][01_]*|\
         0o[0-8][0-8_]*|\
         0x[0-9abcdef][0-9abcdef_]*|\
@@ -454,6 +492,7 @@ impl ToString for Tok {
             RArrow => "->",
             Assignment => "=",
             VarName(name) => return name.to_string(),
+            Variant(name) => return format!("/{name}"),
             Label(name) => return format!(":{name}"),
             TypeName(name) => return name.to_string(),
             Int(value) => return value.to_string(),

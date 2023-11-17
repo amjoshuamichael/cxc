@@ -69,6 +69,9 @@ impl Point2D {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Color { Red, Green, Blue }
+
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TwoOf<T: 'static> {
     pub one: T,

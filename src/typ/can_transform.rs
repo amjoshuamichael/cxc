@@ -1,6 +1,6 @@
 use crate::{typ::TypeSpec, *, parse::FieldSpec};
 
-use super::{Field, DestructorType, UnionType};
+use super::{Field, DestructorType, UnionType, EnumType};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransformationStep {
@@ -393,7 +393,10 @@ impl Type {
 
                 return true;
             },
-            TypeSpec::Sum(_) => todo!(),
+            TypeSpec::Enum(spec_variants) => {
+                let TypeEnum::Enum(EnumType { variants }) = type_enum else { return false };
+                spec_variants == variants
+            },
             TypeSpec::Function(arg_specs, ret_spec) => {
                 let TypeEnum::Func(FuncType { ret, args, .. }) = type_enum 
                     else { return false };

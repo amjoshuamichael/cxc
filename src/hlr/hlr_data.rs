@@ -257,6 +257,10 @@ impl<'a> FuncRep<'a> {
                 parent, 
                 HNodeData::Lit { lit: HLit::Bool(*value), var_type: Type::bool() }
             ),
+            Expr::Variant(name) => self.tree.insert(
+                parent, 
+                HNodeData::Lit { lit: HLit::Variant(name.clone()), var_type: Type::unknown() }
+            ),
             Expr::String(value) => {
                 let call_space = self.tree.make_one_space(parent);
                 let ref_space = self.tree.make_one_space(call_space);

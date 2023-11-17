@@ -97,6 +97,7 @@ pub enum HLit {
     Int(u64),
     Float(ParsedFloat),
     Bool(bool),
+    Variant(TypeName),
 }
 
 impl Display for HLit {
@@ -105,6 +106,7 @@ impl Display for HLit {
             HLit::Int(num) => write!(f, "{num}"),
             HLit::Float(float) => write!(f, "{}", <ParsedFloat as Into<f64>>::into(*float)),
             HLit::Bool(bool) => write!(f, "{bool}"),
+            HLit::Variant(name) => write!(f, "/{name}"),
         }
     }
 }
