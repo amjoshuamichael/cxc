@@ -106,9 +106,9 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                     arraylit_id,
                     SetGen {
                         lhs: Box::new(pos),
-                        rhs: Box::new(HNodeData::Number { 
-                            lit_type: Type::u(64), 
-                            value: 0,
+                        rhs: Box::new(HNodeData::Lit {
+                            lit: HLit::Int(0),
+                            var_type: Type::u(64),
                         }),
                     }
                 );
@@ -119,9 +119,9 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                         w: BinOpGen {
                             lhs: Box::new(pos),
                             op: Opcode::LessThan,
-                            rhs: Box::new(HNodeData::Number { 
-                                lit_type: Type::u(64), 
-                                value: array_type.count as u64
+                            rhs: Box::new(HNodeData::Lit {
+                                lit: HLit::Int(array_type.count as u64),
+                                var_type: Type::u(64), 
                             }),
                         },
                         d: {
@@ -135,9 +135,9 @@ fn handle_array_active_initialization(hlr: &mut FuncRep) {
                                 rhs: BinOpGen {
                                     lhs: Box::new(pos),
                                     op: Opcode::Plus,
-                                    rhs: Box::new(HNodeData::Number {
-                                        lit_type: Type::u(64),
-                                        value: 1
+                                    rhs: Box::new(HNodeData::Lit {
+                                        lit: HLit::Int(1),
+                                        var_type: Type::u(64),
                                     })
                                 }
                             }));

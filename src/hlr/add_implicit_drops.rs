@@ -2,7 +2,7 @@ use std::{any::Any, rc::Rc, collections::HashMap};
 
 use slotmap::{SlotMap, DefaultKey};
 
-use crate::{parse::Opcode, FuncQuery, TypeRelation, Type, StructType, TypeEnum, hlr::expr_tree::{MemberGen, GenSlot}, VarName, ArrayType, typ::UnionType};
+use crate::{parse::Opcode, FuncQuery, TypeRelation, Type, StructType, TypeEnum, hlr::expr_tree::{MemberGen, GenSlot, HCallable}, VarName, ArrayType, typ::UnionType};
 
 use super::{hlr_data::{FuncRep, VarID, ArgIndex}, expr_tree::{HNodeData, CallGen, UnarOpGen, SetGen, ExprID, NodeDataGen, IndexGen, SetGenSlot}};
 
@@ -424,14 +424,16 @@ fn value_destination(
                 info,
             })
         },
-        Call { .. } => {
-            // Since Srets haven't been set yet, this must be an argument
-            Ok(ValueDestination {
-                kind: ValueDestinationKind::GoesToAnotherFunction,
-                info,
-            })
+        Call { call, .. } => {
+            if let HCallable::Indirect(id) = call && *id == value {
+                Err(info)
+            } else {
+                Ok(ValueDestination {
+                    kind: ValueDestinationKind::GoesToAnotherFunction,
+                    info,
+                })
+            }
         }
-        IndirectCall { ret_type, f, a, sret } => todo!(),
         Member { ret_type, object, field } => {
             if let Some(last) = info.path.bits.last() && 
                 last == &DestructorPathBit::Member(field.clone()) {
@@ -482,7 +484,7 @@ fn value_destination(
                 Err(info)
             }
         },
-        Number { .. } | Float { .. } | Bool { .. } | BinOp { .. } | UnarOp { .. } | 
+        Lit { .. } | BinOp { .. } | UnarOp { .. } | 
         AccessAlias(_) | GotoLabel(_) | Goto(_) | GlobalLoad { .. } => unreachable!(),
         _ => Err(info),
     }
@@ -572,7 +574,6 @@ fn first_exec_in(id: ExprID, hlr: &FuncRep) -> ExprID {
         HNodeData::StructLit { fields, .. } => first_exec_in(fields[0].1, hlr),
         HNodeData::ArrayLit { parts: many, .. } |
         HNodeData::Call { a: many, .. } |
-        HNodeData::IndirectCall { a: many, .. } |
         HNodeData::Block { stmts: many, .. } => {
             if many.len() == 0 {
                 id
@@ -621,8 +622,7 @@ fn node_after(id: ExprID, hlr: &FuncRep) -> NodeAfter {
         },
         HNodeData::ArrayLit { parts: many, .. } |
         HNodeData::Block { stmts: many, .. } |
-        HNodeData::Call { a: many, .. } |
-        HNodeData::IndirectCall { a: many, .. } => {
+        HNodeData::Call { a: many, .. } => {
             if let Some(next) = many.iter().skip_while(|fid| **fid != id).skip(1).next() {
                 first_exec_in(*next, hlr)
             } else {

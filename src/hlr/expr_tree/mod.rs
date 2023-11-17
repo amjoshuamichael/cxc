@@ -61,13 +61,10 @@ impl ExprNode {
     #[allow(dead_code)]
     fn to_string(&self, variables: &SlotMap<VarID, super::hlr_data::VariableInfo>) -> String {
         let code = match &self.data {
-            Number { value, .. } => format!("{value}"),
-            Float { value, .. } => format!("{value:?}"),
-            Bool { value, .. } => format!("{value:?}"),
+            Lit { lit, .. } => format!("{lit}"),
             StructLit { var_type, fields, .. } => format!("{var_type:?} {{ {fields:?} }}"),
             ArrayLit { parts, .. } => format!("{parts:?}"),
-            Call { query, a, .. } => format!("{:?}({:?})", query.name, a),
-            IndirectCall { f, a, .. } => format!("{f:?}({a:?})"),
+            Call { call, a, .. } => format!("{:?}({:?})", call, a),
             Ident { var_id: id, .. } => format!("{}", variables[*id].name),
             AccessAlias(name) => format!("{name}"),
             GotoLabel(name) => format!(":{name:?}"),
@@ -90,17 +87,33 @@ impl ExprNode {
 }
 
 #[derive(Clone, Debug)]
+pub enum HCallable {
+    Indirect(ExprID),
+    Direct(FuncQuery),
+}
+
+#[derive(Clone, Debug)]
+pub enum HLit {
+    Int(u64),
+    Float(ParsedFloat),
+    Bool(bool),
+}
+
+impl Display for HLit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HLit::Int(num) => write!(f, "{num}"),
+            HLit::Float(float) => write!(f, "{}", <ParsedFloat as Into<f64>>::into(*float)),
+            HLit::Bool(bool) => write!(f, "{bool}"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum HNodeData {
-    Number {
-        lit_type: Type,
-        value: u64,
-    },
-    Float {
-        lit_type: Type,
-        value: ParsedFloat,
-    },
-    Bool {
-        value: bool,
+    Lit {
+        lit: HLit,
+        var_type: Type,
     },
     StructLit {
         var_type: Type,
@@ -129,13 +142,7 @@ pub enum HNodeData {
     },
     Call {
         ret_type: Type,
-        query: FuncQuery,
-        a: Vec<ExprID>,
-        sret: Option<ExprID>,
-    },
-    IndirectCall {
-        ret_type: Type,
-        f: ExprID,
+        call: HCallable,
         a: Vec<ExprID>,
         sret: Option<ExprID>,
     },
@@ -192,8 +199,7 @@ pub enum HNodeData {
 impl HNodeData {
     pub fn ret_type(&self) -> Type {
         match self {
-            Number { lit_type, .. } | Float { lit_type, .. } => lit_type.clone(),
-            Bool { .. } => Type::bool(),
+            Lit { var_type, .. } => var_type.clone(),
             While { .. } | Set { .. } | GotoLabel { .. } | Goto { .. } => Type::void(),
             AccessAlias { .. } => Type::unknown(),
             Ident { var_type, .. }
@@ -206,7 +212,6 @@ impl HNodeData {
             | Transform { ret_type, .. }
             | IfThenElse { ret_type, .. }
             | Call { ret_type, .. }
-            | IndirectCall { ret_type, .. }
             | Block { ret_type, .. }
             | Index { ret_type, .. }
             | Member { ret_type, .. } => ret_type.clone(),
@@ -215,9 +220,7 @@ impl HNodeData {
 
     pub fn ret_type_mut(&mut self) -> Option<&mut Type> {
         match self {
-            Number { ref mut lit_type, .. }
-            | Float { ref mut lit_type, .. } => Some(lit_type),
-            Bool { .. } 
+            Lit { ref mut var_type, .. } => Some(var_type),
             | While { .. } 
             | Set { .. } 
             | AccessAlias { .. } 
@@ -233,7 +236,6 @@ impl HNodeData {
             | Transform { ref mut ret_type, .. }
             | IfThenElse { ref mut ret_type, .. }
             | Call { ref mut ret_type, .. }
-            | IndirectCall { ref mut ret_type, .. }
             | Block { ref mut ret_type, .. }
             | Index { ref mut ret_type, .. }
             | Member { ref mut ret_type, .. } => Some(ret_type),
@@ -252,9 +254,7 @@ impl HNodeData {
         const MAGENTA: &str = "\x1b[95m";
         const WHITE: &str = "\x1b[37m";
         match self {
-            Number { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
-            Float { value, lit_type } => format!("{MAGENTA}{value}{lit_type:?}{WHITE}"),
-            Bool { value, .. } => format!("{MAGENTA}{value}{WHITE}"),
+            Lit { lit, var_type } => format!("{MAGENTA}{lit}{var_type:?}{WHITE}"),
             Ident { var_id: id, .. } => {
                 if let Some(info) = variables.get(*id) && let VarName::Other(name) = &info.name {
                     format!("{BLUE}{name}{WHITE}")
@@ -331,66 +331,62 @@ impl HNodeData {
             },
             Call {
                 a: args,
-                query,
+                call,
                 sret,
                 ..
             } => {
-                let mut call = match &query.relation {
-                    TypeRelation::Static(typ) => format!("{typ:?}") + "::",
-                    TypeRelation::MethodOf(typ) => format!("({typ:?})") + ".",
-                    TypeRelation::Unrelated => String::default(),
-                };
+                let mut output = String::new();
+                match call {
+                    HCallable::Indirect(f) => {
+                        output += "(";
+                        output += &*tree.get(*f).to_string(tree, variables);
+                        output += ")";
+                    },
+                    HCallable::Direct(query) => {
+                        let mut call = match &query.relation {
+                            TypeRelation::Static(typ) => format!("{typ:?}") + "::",
+                            TypeRelation::MethodOf(typ) => format!("({typ:?})") + ".",
+                            TypeRelation::Unrelated => String::default(),
+                        };
 
-                call += GREEN;
-                call += &*query.name;
-                call += WHITE;
+                        output += GREEN;
+                        output += &*query.name;
+                        output += WHITE;
 
-                if !query.generics.is_empty() && !matches!(&*query.name, "memmove" | "memcpy") {
-                    call += WHITE;
-                    call += "<";
-                    for (g, generic) in query.generics.iter().enumerate() {
-                        if g > 0 {
-                            call += ", ";
+                        if !query.generics.is_empty() && 
+                            !matches!(&*query.name, "memmove" | "memcpy") {
+                            output += WHITE;
+                            output += "<";
+                            for (g, generic) in query.generics.iter().enumerate() {
+                                if g > 0 {
+                                    output += ", ";
+                                }
+                                output += &*format!("{:?}", generic);
+                            }
+                            output += WHITE;
+                            output += ">";
                         }
-                        call += &*format!("{:?}", generic);
-                    }
-                    call += WHITE;
-                    call += ">";
+                    },
                 }
 
-                call += "(";
+                output += "(";
 
                 if let Some(sret) = sret {
-                    call += "-> ";
-                    call += &*tree.get(*sret).to_string(tree, variables);
-                    call += " | ";
+                    output += "-> ";
+                    output += &*tree.get(*sret).to_string(tree, variables);
+                    output += " | ";
                 }
 
                 for (a, arg) in args.iter().enumerate() {
                     if a > 0 {
-                        call += ", ";
+                        output += ", ";
                     }
-                    call += &*tree.get(*arg).to_string(tree, variables);
-                    call += WHITE;
+                    output += &*tree.get(*arg).to_string(tree, variables);
+                    output += WHITE;
                 }
 
-                call += ")";
-                call
-            },
-            IndirectCall { f, a: args, .. } => {
-                let mut call = "(".into();
-                call += &*tree.get(*f).to_string(tree, variables);
-                call += ")";
-
-                call += "(";
-                for (a, arg) in args.iter().enumerate() {
-                    if a > 0 {
-                        call += ", ";
-                    }
-                    call += &*tree.get(*arg).to_string(tree, variables);
-                }
-                call += ")";
-                call
+                output += ")";
+                output
             },
             Member { object, field, .. } => {
                 let mut member = WHITE.to_string();
@@ -511,7 +507,7 @@ impl HNodeData {
     }
 
     pub fn zero() -> Self {
-        HNodeData::Number { lit_type: Type::i(32), value: 0 }
+        HNodeData::Lit { var_type: Type::i(32), lit: HLit::Int(0) }
     }
 
     pub fn new_block() -> Self {

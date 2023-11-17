@@ -82,9 +82,9 @@ fn return_by_pointer(hlr: &mut FuncRep) {
                 MemCpyGen {
                     from: RefGen(hlr.tree.get(*to_return)),
                     to: output_var,
-                    size: HNodeData::Number {
-                        lit_type: Type::i(64),
-                        value: hlr.ret_type.size() as u64,
+                    size: HNodeData::Lit {
+                        lit: HLit::Int(hlr.ret_type.size() as u64),
+                        var_type: Type::i(64),
                     }
                 }
             );
@@ -108,29 +108,26 @@ fn handle_other_calls(hlr: &mut FuncRep) {
     for call_id in calls {
         let data = hlr.tree.get(call_id);
 
-        if let HNodeData::Call { ref query, .. } = data 
-            && !hlr.comp_data.name_is_intrinsic(&query.name) {
-            let abi = if let Some(id) = hlr.comp_data.query_for_code(query.code_query()) {
-                hlr.comp_data.func_code[id].abi
-            } else {
-                ABI::C
-            };
+        if let HNodeData::Call { call: HCallable::Direct(ref query), .. } = data &&
+            hlr.comp_data.name_is_intrinsic(&query.name) {
+                continue;
+        }
+        let abi = hlr.abi_of_call(call_id);
 
-            match data.ret_type().return_style(abi) {
-                ReturnStyle::Pointer => format_call_returning_pointer(hlr, call_id),
-                ReturnStyle::ThroughI32
-                | ReturnStyle::ThroughI64
-                | ReturnStyle::ThroughF64
-                | ReturnStyle::ThroughI32I32
-                | ReturnStyle::ThroughF32F32
-                | ReturnStyle::ThroughF64F64
-                | ReturnStyle::ThroughF64F32
-                | ReturnStyle::ThroughI64I32
-                | ReturnStyle::ThroughI64I64 => {
-                    format_call_returning_struct(hlr, call_id, abi);
-                },
-                ReturnStyle::Direct | ReturnStyle::Void => {},
-            }
+        match data.ret_type().return_style(abi) {
+            ReturnStyle::Pointer => format_call_returning_pointer(hlr, call_id),
+            ReturnStyle::ThroughI32
+            | ReturnStyle::ThroughI64
+            | ReturnStyle::ThroughF64
+            | ReturnStyle::ThroughI32I32
+            | ReturnStyle::ThroughF32F32
+            | ReturnStyle::ThroughF64F64
+            | ReturnStyle::ThroughF64F32
+            | ReturnStyle::ThroughI64I32
+            | ReturnStyle::ThroughI64I64 => {
+                format_call_returning_struct(hlr, call_id, abi);
+            },
+            ReturnStyle::Direct | ReturnStyle::Void => {},
         }
     }
 }
@@ -162,9 +159,9 @@ fn format_call_returning_struct(hlr: &mut FuncRep, og_call: ExprID, abi: ABI) {
             var_type: casted_var_type.clone(),
             var_id: casted_var_name.clone(),
         }),
-        size: HNodeData::Number {
-            lit_type: Type::i(64),
-            value: casted_var_type.size().min(raw_ret_var_type.size()) as u64,
+        size: HNodeData::Lit {
+            lit: HLit::Int(casted_var_type.size().min(raw_ret_var_type.size()) as u64),
+            var_type: Type::i(64),
         },
     });
 

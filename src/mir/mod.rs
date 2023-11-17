@@ -1,6 +1,6 @@
 use std::{collections::{BTreeMap, HashMap}, rc::Rc};
 
-use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree, ExprID}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::ABI};
+use crate::{parse::Opcode, hlr::{hlr_data_output::HLR, expr_tree::{HNodeData, ExprTree, ExprID, HCallable, HLit}}, FuncType, TypeEnum, ArrayType, unit::{FuncId, Global}, FuncQuery, typ::ABI};
 
 pub use self::mir_data::*;
 
@@ -78,7 +78,7 @@ fn build_block(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) {
 
 fn build_stmt(stmt: ExprID, tree: &ExprTree, mir: &mut MIR) {
     match tree.get_ref(stmt) {
-        HNodeData::Number { .. } | HNodeData::Float { .. } | HNodeData::Bool { .. } | HNodeData::Ident { .. } => {},
+        HNodeData::Lit { .. } | HNodeData::Ident { .. } => {},
         HNodeData::Set { lhs, rhs, .. } => {
             let lhs = build_as_addr(tree.get_ref(*lhs), &tree, mir);
             let rhs = build_as_operand(tree.get_ref(*rhs), &tree, mir);
@@ -218,21 +218,23 @@ fn build_as_addr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> MAddr {
 
 fn build_as_operand(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> MOperand {
     match node {
-        HNodeData::Number { lit_type, value } => {
-            MOperand::Int { size: lit_type.size() as u32 * 8, val: *value }
+        HNodeData::Lit { lit: HLit::Int(value), var_type } => {
+            MOperand::Int { size: var_type.size() as u32 * 8, val: *value }
         },
-        HNodeData::Float { lit_type, value } => {
-            MOperand::Float { size: lit_type.size() as u32 * 8, val: (*value).into() }
+        HNodeData::Lit { lit: HLit::Float(value), var_type } => {
+            MOperand::Float { size: var_type.size() as u32 * 8, val: (*value).into() }
         },
-        HNodeData::Bool { value } => MOperand::Bool(*value),
+        HNodeData::Lit { lit: HLit::Bool(value), .. } => MOperand::Bool(*value),
         HNodeData::GlobalLoad { global: Global::Func(func_query), .. } => {
             let func_id = mir.dependencies[&func_query];
             MOperand::Function(func_id)
         }
-        HNodeData::Call { ref query, .. } if &*query.name.to_string() == "size_of" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), .. } 
+            if &*query.name.to_string() == "size_of" => {
             MOperand::Int { size: 64, val: query.generics[0].size() as u64 }
         },
-        HNodeData::Call { ref query, .. } if &*query.name.to_string() == "typeobj" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), .. } 
+            if &*query.name.to_string() == "typeobj" => {
             MOperand::Int { 
                 size: 64, 
                 val: unsafe { std::mem::transmute(query.generics[0].clone()) },
@@ -313,7 +315,8 @@ pub fn build_as_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option
                 },
             }
         },
-        HNodeData::Call { ref query, ref a, .. } if &*query.name == "cast" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), ref a, .. } 
+            if &*query.name == "cast" => {
             let from_type = query.generics[0].clone();
             let to_type = query.generics[1].clone();
 
@@ -332,7 +335,8 @@ pub fn build_as_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option
                 MExpr::MemLoc(MMemLoc::Var(new_cast_out))
             }
         },
-        HNodeData::Call { ref query, ref a, .. } if &*query.name == "memcpy" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), ref a, .. } 
+            if &*query.name == "memcpy" => {
             let from = build_as_addr_reg_with_normal_expr(tree.get_ref(a[0]), tree, mir);
             let to = build_as_addr_reg_with_normal_expr(tree.get_ref(a[1]), tree, mir);
             let len = build_as_operand(tree.get_ref(a[2]), tree, mir);
@@ -345,7 +349,8 @@ pub fn build_as_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option
 
             return None;
         },
-        HNodeData::Call { ref query, ref a, .. } if &*query.name == "memmove" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), ref a, .. } 
+            if &*query.name == "memmove" => {
             let from = build_as_operand(tree.get_ref(a[0]), tree, mir);
             let to = build_as_operand(tree.get_ref(a[1]), tree, mir);
             let len = build_as_operand(tree.get_ref(a[2]), tree, mir);
@@ -358,15 +363,17 @@ pub fn build_as_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option
 
             return None;
         },
-        HNodeData::Call { ref query, ref a, .. } if &*query.name == "free" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), ref a, .. } 
+            if &*query.name == "free" => {
             let ptr = build_as_operand(tree.get_ref(a[0]), tree, mir);
             MExpr::Free { ptr }
         },
-        HNodeData::Call { ref query, ref a, .. } if &*query.name == "intrinsic_alloc" => {
+        HNodeData::Call { call: HCallable::Direct(ref query), ref a, .. } 
+            if &*query.name == "intrinsic_alloc" => {
             let len = build_as_operand(tree.get_ref(a[0]), tree, mir);
             MExpr::Alloc { len }
         },
-        HNodeData::Call { ref query, ref a, ref ret_type, ref sret, .. } => {
+        HNodeData::Call { call: HCallable::Direct(ref query), ref a, ref ret_type, ref sret, .. } => {
             let func_id = mir.dependencies[&query];
 
             let typ = FuncType {
@@ -380,7 +387,7 @@ pub fn build_as_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> Option
 
             MExpr::Call { typ, f: MCallable::Func(func_id), a, sret }
         },
-        HNodeData::IndirectCall { ref f, ref a, ref ret_type, ref sret, .. } => {
+        HNodeData::Call { call: HCallable::Indirect(ref f), ref a, ref ret_type, ref sret, .. } => {
             let f = build_as_memloc(tree.get_ref(*f), tree, mir);
 
             let typ = FuncType {
@@ -451,9 +458,7 @@ pub fn build_as_addr_expr(node: &HNodeData, tree: &ExprTree, mir: &mut MIR) -> M
         HNodeData::UnarOp { op, hs, .. } if *op == Opcode::RemoveTypeWrapper =>
             return build_as_addr_expr(tree.get_ref(*hs), tree, mir),
         HNodeData::ArrayLit { .. } 
-        | HNodeData::Number { .. } 
-        | HNodeData::Float { .. } 
-        | HNodeData::Bool { .. } 
+        | HNodeData::Lit { .. } 
         | HNodeData::Call { .. } 
         | HNodeData::GlobalLoad { .. } 
         | HNodeData::UnarOp { .. } 

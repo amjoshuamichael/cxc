@@ -7,7 +7,7 @@ use crate::{
     Type, FuncQuery, typ::{spec_from_type::type_to_type_spec, can_transform::TransformationList}, TypeRelation, ArrayType, TypeEnum, Field,
 };
 
-use super::{ExprID, HNodeData};
+use super::{ExprID, HNodeData, HCallable};
 
 impl<'a> FuncRep<'a> {
     pub fn insert_quick(&mut self, parent: ExprID, gen: impl NodeDataGen) -> ExprID {
@@ -56,9 +56,7 @@ impl NodeDataGen for HNodeData {
         use HNodeData::*;
         let mut data = self.clone();
         match &mut data {
-            Number { .. } | 
-            Float { .. } | 
-            Bool { .. } | 
+            Lit { .. } | 
             GlobalLoad { .. } | 
             AccessAlias(_) | 
             GotoLabel(_) | 
@@ -76,7 +74,7 @@ impl NodeDataGen for HNodeData {
                     *id = hlr.tree.get(*id).add_to_expr_tree(hlr, spot);
                 }
             },
-            Call { a, sret, .. } | IndirectCall { a, sret, .. } => {
+            Call { a, sret, .. } => {
                 for a in a {
                     *a = hlr.tree.get(*a).add_to_expr_tree(hlr, spot);
                 }
@@ -226,7 +224,7 @@ impl NodeDataGen for CallGen {
         hlr.tree.replace(
             spot,
             HNodeData::Call {
-                query: self.query.clone(),
+                call: HCallable::Direct(self.query.clone()),
                 ret_type,
                 a: args,
                 sret,
@@ -249,11 +247,11 @@ impl<T: NodeDataGen> NodeDataGen for CastGen<T> {
         hlr.tree.replace(
             spot,
             HNodeData::Call {
-                query: FuncQuery {
+                call: HCallable::Direct(FuncQuery {
                     name: "cast".into(),
                     relation: TypeRelation::Unrelated,
                     generics: vec![from_type, self.to.clone()],
-                },
+                }),
                 ret_type: self.to.clone(),
                 a: vec![cast],
                 sret: None,
@@ -459,11 +457,11 @@ impl<T: NodeDataGen, U: NodeDataGen, V: NodeDataGen> NodeDataGen for MemCpyGen<T
         hlr.tree.replace(
             spot,
             HNodeData::Call {
-                query: FuncQuery {
+                call: HCallable::Direct(FuncQuery {
                     name: "memcpy".into(),
                     relation: TypeRelationGeneric::Unrelated,
                     generics,
-                },
+                }),
                 ret_type: Type::void(),
                 a: vec![from, to, size],
                 sret: None,

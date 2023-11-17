@@ -3,7 +3,7 @@ use std::{fmt::{Debug, Display}, sync::Arc};
 
 use super::{Expr, FuncCode, TypeSpec, TypeSpecRelation, VarDecl};
 
-pub trait Errable {
+pub trait Errable: Debug {
     fn err() -> Self;
 }
 

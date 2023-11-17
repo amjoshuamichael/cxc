@@ -1,6 +1,6 @@
 use crate::{Type, parse::Opcode};
 
-use super::{hlr_data::FuncRep, expr_tree::{HNodeData, MemCpyGen, RefGen}};
+use super::{hlr_data::FuncRep, expr_tree::{HNodeData, MemCpyGen, RefGen, HLit}};
 
 pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
     hlr.modify_many_infallible(
@@ -25,9 +25,9 @@ pub fn large_set_to_memcpy(hlr: &mut FuncRep) {
                 MemCpyGen {
                     from: RefGen(*rhs),
                     to: RefGen(*lhs),
-                    size: HNodeData::Number {
-                        lit_type: Type::i(64),
-                        value: min_set_size as u64,
+                    size: HNodeData::Lit {
+                        lit: HLit::Int(min_set_size as u64), 
+                        var_type: Type::u(64),
                     },
                 },
             );

@@ -39,9 +39,7 @@ pub fn inline_node(
     use HNodeData::*;
     let mut node_data = inline_info.new_tree.tree.get(og_id);
     match &mut node_data {
-        Number { .. } | 
-        Float { .. } | 
-        Bool { .. } | 
+        Lit { .. } | 
         GlobalLoad { .. } | 
         AccessAlias(_) | 
         GotoLabel(_) | 
@@ -62,14 +60,6 @@ pub fn inline_node(
             replace_with_new_id(rhs, new_id, inline_info);
         },
         Call { a, sret, .. } => {
-            for a in a {
-                replace_with_new_id(a, new_id, inline_info);
-            }
-            if let Some(sret) = sret {
-                replace_with_new_id(sret, new_id, inline_info);
-            }
-        },
-        IndirectCall { a, sret, .. } => {
             for a in a {
                 replace_with_new_id(a, new_id, inline_info);
             }

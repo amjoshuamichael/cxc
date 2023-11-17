@@ -11,7 +11,6 @@ pub mod string;
 mod to_string;
 mod type_helpers;
 mod unit_lib;
-mod drop_lib;
 mod value_lib;
 mod array_helper_funcs_lib;
 use atomic_lib::AtomicLib;

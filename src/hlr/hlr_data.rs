@@ -213,7 +213,7 @@ impl<'a> FuncRep<'a> {
 
         for (_call_id, call_data) in self.tree.iter() {
             let (
-                HNodeData::Call { query, .. } 
+                HNodeData::Call { call: HCallable::Direct(query), .. } 
                 | HNodeData::GlobalLoad { global: Global::Func(query), .. }
             ) = call_data else { continue };
             dependencies.insert(query.clone());
@@ -241,19 +241,22 @@ impl<'a> FuncRep<'a> {
         match expr {
             Expr::Number(value) => self.tree.insert(
                 parent,
-                HNodeData::Number {
-                    value: *value,
-                    lit_type: Type::unknown(),
+                HNodeData::Lit {
+                    lit: HLit::Int(*value),
+                    var_type: Type::unknown(),
                 },
             ),
             Expr::Float(value) => self.tree.insert(
                 parent,
-                HNodeData::Float {
-                    value: (*value).into(),
-                    lit_type: Type::unknown(),
+                HNodeData::Lit {
+                    lit: HLit::Float((*value).into()),
+                    var_type: Type::unknown(),
                 },
             ),
-            Expr::Bool(value) => self.tree.insert(parent, HNodeData::Bool { value: *value }),
+            Expr::Bool(value) => self.tree.insert(
+                parent, 
+                HNodeData::Lit { lit: HLit::Bool(*value), var_type: Type::bool() }
+            ),
             Expr::String(value) => {
                 let call_space = self.tree.make_one_space(parent);
                 let ref_space = self.tree.make_one_space(call_space);
@@ -263,9 +266,9 @@ impl<'a> FuncRep<'a> {
                 for b in value.bytes() {
                     let byte_id = self.tree.insert(
                         array_space,
-                        HNodeData::Number {
-                            lit_type: Type::i(8),
-                            value: b as u64,
+                        HNodeData::Lit {
+                            lit: HLit::Int(b as u64),
+                            var_type: Type::i(8),
                         },
                     );
 
@@ -293,9 +296,9 @@ impl<'a> FuncRep<'a> {
 
                 let len_arg = self.tree.insert(
                     call_space,
-                    HNodeData::Number {
-                        lit_type: Type::i(64),
-                        value: byte_ids.len() as u64,
+                    HNodeData::Lit {
+                        lit: HLit::Int(byte_ids.len() as u64),
+                        var_type: Type::i(64),
                     },
                 );
 
@@ -304,11 +307,11 @@ impl<'a> FuncRep<'a> {
                 let call_data = HNodeData::Call {
                     ret_type: string_type.clone(),
                     a: vec![ref_space, len_arg],
-                    query: FuncQuery {
+                    call: HCallable::Direct(FuncQuery {
                         name: "from_bytes".into(),
                         relation: TypeRelationGeneric::Static(string_type),
                         generics: vec![arr_type.clone()],
-                    },
+                    }),
                     sret: None,
                 };
 
@@ -622,11 +625,11 @@ impl<'a> FuncRep<'a> {
 
                     HNodeData::Call {
                         ret_type: Type::unknown(),
-                        query: FuncQuery {
+                        call: HCallable::Direct(FuncQuery {
                             name: func_name.clone(),
                             generics,
                             relation,
-                        },
+                        }),
                         a: arg_ids,
                         sret: None,
                     }
@@ -636,19 +639,19 @@ impl<'a> FuncRep<'a> {
 
                     HNodeData::Call {
                         ret_type: Type::unknown(),
-                        query: FuncQuery {
+                        call: HCallable::Direct(FuncQuery {
                             name: func_name.clone(),
                             generics: generics.clone(),
                             relation: TypeRelation::Static(type_origin),
-                        },
+                        }),
                         a: arg_ids,
                         sret: None,
                     }
                 } else {
                     let f = self.add_expr(&**name, space);
-                    HNodeData::IndirectCall {
+                    HNodeData::Call {
                         ret_type: Type::unknown(),
-                        f,
+                        call: HCallable::Indirect(f),
                         a: arg_ids,
                         sret: None,
                     }

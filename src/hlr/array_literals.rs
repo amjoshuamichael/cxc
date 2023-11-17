@@ -1,7 +1,7 @@
 use crate::{Type, TypeEnum, ArrayType};
 
 use super::{
-    expr_tree::{HNodeData, SetGen, IndexGen},
+    expr_tree::{HNodeData, SetGen, IndexGen, HLit},
     hlr_data::FuncRep,
 };
 
@@ -25,9 +25,9 @@ pub fn array_literals(hlr: &mut FuncRep) {
                         SetGen {
                             lhs: IndexGen {
                                 object: new_array.clone(),
-                                index: HNodeData::Number {
-                                    lit_type: Type::i(64),
-                                    value: index as u64,
+                                index: HNodeData::Lit {
+                                    lit: HLit::Int(index as u64),
+                                    var_type: Type::i(64),
                                 },
                             },
                             rhs: *part_expr,

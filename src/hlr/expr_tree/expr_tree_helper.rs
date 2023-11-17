@@ -1,8 +1,8 @@
 use crate::errors::CResultMany;
 use crate::hlr::hlr_data::{FuncRep, VariableInfo, ArgIndex, VarID, GotoLabelID};
-use crate::{Type, VarName};
+use crate::{Type, VarName, ABI, TypeEnum, FuncType};
 
-use super::{ExprID, ExprTree, HNodeData, NodeDataGen, SetGen};
+use super::{ExprID, ExprTree, HNodeData, NodeDataGen, SetGen, HCallable, HLit};
 use super::{ExprNode, HNodeData::*};
 
 impl ExprTree {
@@ -26,9 +26,7 @@ impl ExprTree {
         use HNodeData::*;
         ids.push(id);
         let rest = match self.get_ref(id) {
-            Number { .. } 
-            | Float { .. } 
-            | Bool { .. } 
+            Lit { .. } 
             | GlobalLoad { .. }
             | Ident { .. } 
             | AccessAlias(_) 
@@ -39,18 +37,16 @@ impl ExprTree {
                     self.ids_of(field.1, ids);
                 }
             }
-            ArrayLit { parts: many, .. }
-            | Call { a: many, .. }
-            | Block { stmts: many, .. } => {
-                for id in many {
+            Call { call: HCallable::Indirect(f), a, .. } => {
+                self.ids_of(*f, ids);
+
+                for id in a {
                     self.ids_of(*id, ids);
                 }
             },
-            IndirectCall {
-                f: one, a: many, ..
-            } => {
-                self.ids_of(*one, ids);
-
+            ArrayLit { parts: many, .. }
+            | Call { a: many, .. }
+            | Block { stmts: many, .. } => {
                 for id in many {
                     self.ids_of(*id, ids);
                 }
@@ -97,9 +93,9 @@ impl ExprTree {
     pub fn make_one_space(&mut self, parent: ExprID) -> ExprID {
         self.nodes.insert(ExprNode {
             parent,
-            data: HNodeData::Number {
-                value: 0,
-                lit_type: Type::i(32),
+            data: HNodeData::Lit {
+                lit: HLit::Int(0),
+                var_type: Type::i(32),
             },
         })
     }
@@ -138,7 +134,7 @@ impl ExprTree {
 
     pub fn remove_node(&mut self, remove_id: ExprID) -> Result<(), ()> {
         let parent = self.get_mut(self.parent(remove_id));
-        match dbg!(parent) {
+        match parent {
             Block { stmts, .. } => {
                 let old_len = stmts.len();
                 stmts.retain(|id| *id != remove_id);
@@ -267,7 +263,7 @@ impl<'a> FuncRep<'a> {
         let expr_data = self.tree.get(expression);
         
         use HNodeData::*;
-        if matches!(expr_data, Ident { .. } | Number { .. } | Float { .. } | Bool { .. }) {
+        if matches!(expr_data, Ident { .. } | Lit { .. }) {
             return expression;
         }
 
@@ -279,6 +275,27 @@ impl<'a> FuncRep<'a> {
         });
         self.replace_quick(expression, new_var);
         self.insert_quick(expression, new_var)
+    }
+
+    pub fn abi_of_call(&self, call: ExprID) -> ABI {
+        let HNodeData::Call { ref call, .. } = self.tree.get_ref(call)
+            else { panic!("tried to find abi of non-call") };
+
+        match call {
+            HCallable::Indirect(f) => {
+                let typ = self.tree.get_ref(*f).ret_type();
+                let TypeEnum::Func(FuncType { abi, .. }) = typ.as_type_enum()
+                    else { unreachable!() };
+                *abi
+            },
+            HCallable::Direct(query) => {
+                if let Some(id) = self.comp_data.query_for_code(query.code_query()) {
+                    self.comp_data.func_code[id].abi
+                } else {
+                    ABI::C
+                }
+            },
+        }
     }
 }
 

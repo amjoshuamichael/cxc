@@ -2,7 +2,7 @@ use super::{prelude::*, hlr_data::{VariableInfo, VarID}};
 use ahash::HashMapExt;
 use crate::{
     parse::{InitOpts, Opcode, TypeSpec, VarDecl, TypeSpecRelation, FieldSpec},
-    Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation, TypeRelation
+    Type, FuncQuery, VarName, CompData, errors::TResult, typ::can_transform::Transformation, TypeRelation, hlr::expr_tree::{HCallable, HLit}
 };
 use indexmap::IndexMap;
 use std::{hash::Hash, collections::{HashMap, HashSet}};
@@ -520,7 +520,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     _ => { graph.add_to_inferables_list_checked(expr_id); },
                 }
             },
-            HNodeData::Call { query, a, .. } => {
+            HNodeData::Call { call: HCallable::Direct(query), a, .. } => {
                 infer_map.calls.insert(expr_id);
                 graph.add_to_inferables_list_checked(expr_id);
 
@@ -568,10 +568,8 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
             },
             HNodeData::Transform { .. } |
             HNodeData::Member { .. } |
-            HNodeData::IndirectCall { .. } |
-            HNodeData::Number { .. } |
-            HNodeData::Float { .. } |
-            HNodeData::Bool { .. } => {
+            HNodeData::Call { .. } |
+            HNodeData::Lit { .. } => {
                 graph.add_to_inferables_list_checked(expr_id);
             }
             HNodeData::IfThenElse { i: cond, .. } |
@@ -626,10 +624,10 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
 
     for id in node_ids.iter().copied().rev() {
         match hlr.tree.get_ref(id) {
-            HNodeData::Number { .. } => {
+            HNodeData::Lit { lit: HLit::Int(_), .. } => {
                 infer_map.constraint_of(id).usages.is_int.push(id);
             }
-            HNodeData::Float { .. } => {
+            HNodeData::Lit { lit: HLit::Float(_), .. } => {
                 infer_map.constraint_of(id).usages.is_float.push(id);
             }
             HNodeData::UnarOp { op, hs, .. } => {
@@ -698,7 +696,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     }
                 }
             },
-            HNodeData::IndirectCall { f, a: args, .. } => {
+            HNodeData::Call { call: HCallable::Indirect(f), a: args, .. } => {
                 let f_constraint_index = infer_map.constraint_index_of(*f);
 
                 infer_map.constraint_of(id).connections.insert(
@@ -762,7 +760,7 @@ fn setup_initial_constraints(hlr: &mut FuncRep, infer_map: &mut InferMap) {
                     },
                 );
             },
-            HNodeData::Bool { .. } 
+            | HNodeData::Lit { lit: HLit::Bool(_), .. } 
             | HNodeData::Ident { .. } 
             | HNodeData::GlobalLoad { .. } 
             | HNodeData::GotoLabel { .. } 
@@ -990,13 +988,13 @@ fn set_types_in_hlr(infer_map: InferMap, hlr: &mut FuncRep) {
                 },
                 Inferable::ReturnType => hlr.ret_type = set,
                 Inferable::Relation(id) => {
-                    let HNodeData::Call { ref mut query, .. } = hlr.tree.get_mut(*id) 
-                        else { unreachable!() };
+                    let HNodeData::Call { call: HCallable::Direct(ref mut query), .. } = 
+                        hlr.tree.get_mut(*id) else { unreachable!() };
                     *query.relation.inner_type_mut().unwrap() = set;
                 },
                 Inferable::CallGeneric(id, index) => {
-                    let HNodeData::Call { ref mut query, .. } = hlr.tree.get_mut(*id) 
-                        else { unreachable!() };
+                    let HNodeData::Call { call: HCallable::Direct(ref mut query), .. } = 
+                        hlr.tree.get_mut(*id) else { unreachable!() };
                     query.generics[*index] = set;
                 },
                 Inferable::Alias { .. } => { },
@@ -1034,8 +1032,9 @@ fn try_replace_alias(hlr: &mut FuncRep, alias_id: ExprID) -> bool {
 fn infer_calls(infer_map: &mut InferMap, hlr: &mut FuncRep) -> TResult<()> {
     for call_id in infer_map.calls.clone() {
         let node_data = hlr.tree.get(call_id);
-        let HNodeData::Call { query: FuncQuery { name, relation, generics }, .. } = node_data 
-            else { unreachable!() };
+        let HNodeData::Call { 
+            call: HCallable::Direct(FuncQuery { name, relation, generics }), .. 
+        } = node_data else { unreachable!() };
 
         let relation_typ = infer_map.constraint_index_of_option(Inferable::Relation(call_id))
             .map(|constraint_index| infer_map.constraints[constraint_index].is.clone());
@@ -1237,8 +1236,8 @@ fn fill_in_call(
         hlr.specified_dependencies.insert(func_query.code_query().to_owned_fcq());
 
         {
-            let HNodeData::Call { ref mut query, .. } = hlr.tree.get_mut(*call_id) 
-                else { unreachable!() };
+            let HNodeData::Call { call: HCallable::Direct(ref mut query), .. } = 
+                hlr.tree.get_mut(*call_id) else { unreachable!() };
 
             query.generics.resize(code.generic_count as usize, Type::unknown());
         }

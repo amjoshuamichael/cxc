@@ -5,7 +5,7 @@ use crate::{
     errors::CResultMany, typ::{can_transform::{TransformationStep, TransformationList}, spec_from_type::type_to_type_spec, DestructorType}, VarName, Type, Field, TypeEnum, ArrayType, hlr::expr_tree::GenSlot, FuncQuery, TypeRelation,
 };
 
-use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, TransformationGen, ExprID, SetGenSlot, CastGen, With, UnarOpGen}, hlr_data::FuncRep};
+use super::{expr_tree::{HNodeData, MemberGen, RefGen, DerefGen, StructLitGen, NodeDataGen, TransformationGen, ExprID, SetGenSlot, CastGen, With, UnarOpGen, HLit}, hlr_data::FuncRep};
 
 pub fn do_transformations(hlr: &mut FuncRep) -> CResultMany<()> {
     hlr.modify_many_infallible_rev(
@@ -109,9 +109,9 @@ pub fn desugar_transformation(
                                 ("ptr".into(), Box::new(RefGen(array_id))),
                                 (
                                     "len".into(), 
-                                    Box::new(HNodeData::Number { 
-                                        lit_type: Type::u(64),
-                                        value: *count as u64,
+                                    Box::new(HNodeData::Lit { 
+                                        lit: HLit::Int(*count as u64),
+                                        var_type: Type::u(64),
                                     })
                                 ),
                             ],

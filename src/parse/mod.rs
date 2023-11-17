@@ -11,7 +11,7 @@ mod expression;
 mod list;
 mod opcode;
 mod parsing_data;
-mod structure;
+mod typ;
 
 pub use error::ParseError;
 pub(super) use error::*;
@@ -19,7 +19,7 @@ pub(super) use expression::*;
 pub(super) use list::*;
 pub use opcode::*;
 pub use parsing_data::*;
-pub(super) use structure::*;
+pub(super) use typ::*;
 
 use self::context::FuncParseData;
 
@@ -51,7 +51,7 @@ pub fn parse(mut lexer: GlobalParseContext) -> Result<Script, ParseErrorReport> 
 pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
     let mut script = Script::default();
 
-    if lexer.peek_tok().is_err() {
+    if lexer.peek_tok() == Err(ParseError::UnexpectedEndOfFile) {
         // file is empty
         return Ok(Script::default());
     }
@@ -115,32 +115,38 @@ pub fn file(lexer: &mut GlobalParseContext) -> ParseResult<Script> {
                         Ok(())
                     });
                 } else {
-                    let method_of = {
-                        let mut method_of_parser = lexer
-                            .split(TypeName::Anonymous, generic_labels.clone());
-                        parse_type(&mut method_of_parser)?
-                    };
+                    lexer.recover(|lexer| {
+                        let method_of = {
+                            let mut method_of_parser = lexer
+                                .split(TypeName::Anonymous, generic_labels.clone());
+                            typ(&mut method_of_parser)?
+                        };
 
-                    let relation = match lexer.next_tok()? {
-                        Tok::ColonDot => TypeRelationGeneric::MethodOf(method_of.clone()),
-                        Tok::DoubleColon => TypeRelationGeneric::Static(method_of.clone()),
-                        got => {
-                            return ParseError::unexpected(got, vec![TokName::Assignment, TokName::ColonDot, TokName::DoubleColon]);
-                        },
-                    };
+                        let relation = match lexer.next_tok()? {
+                            Tok::ColonDot => 
+                                TypeRelationGeneric::MethodOf(method_of.clone()),
+                            Tok::DoubleColon => 
+                                TypeRelationGeneric::Static(method_of.clone()),
+                            got => {
+                                return ParseError::unexpected(got, vec![TokName::Assignment, TokName::ColonDot, TokName::DoubleColon]);
+                            },
+                        };
 
-                    let methods = parse_one_or_list(
-                        Tok::curlys(),
-                        None,
-                        move |lexer| {
-                            parse_func(lexer, relation.clone(), generic_labels.clone())
-                        },
-                        lexer,
-                    )?;
+                        let methods = parse_one_or_list(
+                            Tok::curlys(),
+                            None,
+                            |lexer| {
+                                parse_func(lexer, relation.clone(), generic_labels.clone())
+                            },
+                            lexer,
+                        )?;
 
-                    for method in methods {
-                        script.funcs.push(method);
-                    }
+                        for method in methods {
+                            script.funcs.push(method);
+                        }
+
+                        Ok(())
+                    });
                 }
             },
         }

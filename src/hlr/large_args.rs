@@ -1,6 +1,6 @@
 use super::hlr_data::{VarID, ArgIndex};
 use super::prelude::*;
-use crate::Type;
+use crate::{Type, TypeEnum, FuncType};
 use crate::hlr::expr_tree::*;
 
 use crate::typ::{ArgStyle, ABI};
@@ -90,23 +90,16 @@ fn handle_other_calls(hlr: &mut FuncRep) {
         move |call_id, hlr| {
             let call_data = hlr.tree.get_ref(call_id) else { return };
 
-            if !matches!(call_data, HNodeData::Call { .. }) {
-                return;
-            }
-            let mut call_data = call_data.clone();
+            let HNodeData::Call { a: ref args, ref call, .. } = 
+                call_data else { return };
 
-            let HNodeData::Call { a: ref mut args, ref query, .. } = call_data
-                else { unreachable!() };
-
-            if &*query.name == "cast" {
+            if let HCallable::Direct(query) = call && &*query.name == "cast" {
                 return;
             }
 
-            let abi = if let Some(id) = hlr.comp_data.query_for_code(query.code_query()) {
-                hlr.comp_data.func_code[id].abi
-            } else {
-                ABI::C
-            };
+            let mut args = args.clone();
+
+            let abi = hlr.abi_of_call(call_id);
 
             for (a, arg) in args.clone().into_iter().enumerate() {
                 let old_arg_type = hlr.tree.get(arg).ret_type();
@@ -115,22 +108,27 @@ fn handle_other_calls(hlr: &mut FuncRep) {
                 if arg_style == ArgStyle::Pointer {
                     args[a] = hlr.insert_quick(call_id, RefGen(arg));
                 } else if let ArgStyle::Ints(..) | ArgStyle::Floats(..) = arg_style {
-                    let _new_arg_name = format!("{}_arg_{}", query.name, a);
                     let raw_arg_type = old_arg_type.raw_arg_type(abi);
                     let new_arg = hlr.add_variable(&raw_arg_type);
 
                     hlr.insert_statement_before(call_id, MemCpyGen {
                         from: RefGen(arg),
                         to: RefGen(new_arg),
-                        size: HNodeData::Number {
-                            lit_type: Type::i(64),
-                            value: hlr.tree.get_ref(arg).ret_type().size() as u64,
-                        }
+                        size: HNodeData::Lit {
+                            lit: HLit::Int(hlr.tree.get_ref(arg).ret_type().size() as u64),
+                            var_type: Type::i(64),
+                        },
                     });
 
                     args[a] = hlr.insert_quick(call_id, new_arg);
                 }
             }
+
+            let mut call_data = hlr.tree.get(call_id) else { return };
+            let HNodeData::Call { a: ref mut oargs, .. } = &mut call_data 
+                else { unreachable!() };
+
+            *oargs = args;
 
             hlr.tree.replace(call_id, call_data);
         }

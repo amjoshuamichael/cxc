@@ -45,7 +45,7 @@ RawVec<T> = {
         }
 
         ? self.len >= self.capacity {
-            self.expand()            
+            self.expand()
         }
 
         ptr: &T = self.ptr.ptr_add(self.len)
